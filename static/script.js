@@ -475,6 +475,18 @@ document.addEventListener('DOMContentLoaded', () => {
         sourceText.focus();
     });
 
+    const sendToStudyButton = document.getElementById('send-to-study-btn');
+    if (sendToStudyButton) {
+        sendToStudyButton.addEventListener('click', () => {
+            const textToStudy = outputText.value.trim() || sourceText.value.trim();
+            if (!textToStudy) {
+                setStatus('请先生成或输入需要拆解复述的法语文本。', 'error');
+                return;
+            }
+            window.location.href = `/study?text=${encodeURIComponent(textToStudy)}`;
+        });
+    }
+
     copyOutputButton.addEventListener('click', async () => {
         if (!outputText.value.trim()) {
             setStatus('当前没有可复制的法语文本。', 'error');

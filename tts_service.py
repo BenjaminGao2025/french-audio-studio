@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import datetime
+import hashlib
+import json
 import os
 import re
 import uuid
@@ -166,6 +168,11 @@ class ConnectionTestRequest(BaseModel):
 class SpeechRequest(BaseModel):
     text: str = Field(min_length=1, max_length=MAX_TEXT_CHARS)
     voice: str = "fr-FR-DeniseNeural"
+
+
+class AnalyzeRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=MAX_TEXT_CHARS)
+    model: TransformModel = PERPLEXITY_MODEL
 
 
 app = FastAPI(title="French Audio Studio", version="2.0.0")
@@ -651,14 +658,162 @@ async def request_french_transform(
     raise RuntimeError("Unreachable transform retry state")
 
 
+def _analyze_payload(request: AnalyzeRequest) -> dict:
+    prompt = (
+        "You are an expert French linguist and phonetician. "
+        "Analyze the following French text and break it down for language learners into sentences and lexical units.\n"
+        "Requirements:\n"
+        "1. Split the text into complete French sentences.\n"
+        "2. For each sentence, provide clear English and accurate Chinese translations.\n"
+        "3. Break down the sentence into words, compound prepositions, and idiomatic expressions (e.g. 'de temps en temps', 'avoir peur', 'au fur et à mesure', 'il y a', 'en retard'). Group multi-word idiomatic expressions together as single tokens when appropriate.\n"
+        "4. For each token/unit, provide:\n"
+        "   - 'token': the word or phrase exactly as it appears in the sentence\n"
+        "   - 'lemma': dictionary canonical base form (infinitive for verbs, masculine singular for nouns/adjectives, uncontracted components like 'de + le' for 'du')\n"
+        "   - 'pos': part of speech abbreviation (e.g. 'v.', 'n.m.', 'n.f.', 'adj.', 'adv.', 'prep.', 'art.', 'pron.', 'loc. adv.', 'expr.')\n"
+        "   - 'phonetic': accurate IPA phonetic transcription (e.g. '/vɛ/', '/maʁ.ʃe/')\n"
+        "   - 'explanation_en': concise English explanation of this token in context (meaning, tense, agreement, nuance)\n"
+        "   - 'explanation_cn': concise Chinese explanation and grammar notes (中文释义、时态、人称、配合、固定搭配)\n"
+        "5. Output STRICT JSON ONLY, with no markdown code fences (no ```json), no prefix, and no suffix, matching this schema:\n"
+        "{\n"
+        '  "sentences": [\n'
+        '    {\n'
+        '      "original": "Je vais au marché de temps en temps.",\n'
+        '      "translation_en": "I go to the market from time to time.",\n'
+        '      "translation_cn": "我有时去市场。",\n'
+        '      "tokens": [\n'
+        '        {\n'
+        '          "token": "vais",\n'
+        '          "lemma": "aller",\n'
+        '          "pos": "v.",\n'
+        '          "phonetic": "/vɛ/",\n'
+        '          "explanation_en": "go (1st person singular present of aller)",\n'
+        '          "explanation_cn": "去，走（aller 第一人称现在时）"\n'
+        '        }\n'
+        '      ]\n'
+        '    }\n'
+        '  ]\n'
+        '}'
+    )
+    return {
+        "model": request.model,
+        "messages": [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": f"Analyze this French text:\n\n{request.text}"},
+        ],
+        "stream": False,
+        "temperature": 0.1,
+    }
+
+
+def _parse_analysis_json(raw_text: str, fallback_text: str) -> dict:
+    cleaned = raw_text.strip()
+    if cleaned.startswith("```"):
+        lines = cleaned.splitlines()
+        if len(lines) >= 3:
+            cleaned = "\n".join(lines[1:-1]).strip()
+
+    parsed_data = None
+    try:
+        parsed_data = json.loads(cleaned)
+    except Exception:
+        first_brace = cleaned.find("{")
+        last_brace = cleaned.rfind("}")
+        if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+            try:
+                parsed_data = json.loads(cleaned[first_brace : last_brace + 1])
+            except Exception:
+                pass
+
+    if (
+        isinstance(parsed_data, dict)
+        and "sentences" in parsed_data
+        and isinstance(parsed_data["sentences"], list)
+    ):
+        valid_sentences = []
+        for s in parsed_data["sentences"]:
+            if isinstance(s, dict) and "original" in s:
+                tokens = []
+                for tok in s.get("tokens", []):
+                    if isinstance(tok, dict) and "token" in tok:
+                        tokens.append(
+                            {
+                                "token": str(tok.get("token", "")),
+                                "lemma": str(tok.get("lemma", tok.get("token", ""))),
+                                "pos": str(tok.get("pos", "")),
+                                "phonetic": str(tok.get("phonetic", "")),
+                                "explanation_en": str(tok.get("explanation_en", "")),
+                                "explanation_cn": str(tok.get("explanation_cn", "")),
+                            }
+                        )
+                valid_sentences.append(
+                    {
+                        "original": str(s.get("original", "")),
+                        "translation_en": str(s.get("translation_en", "")),
+                        "translation_cn": str(s.get("translation_cn", "")),
+                        "tokens": tokens,
+                    }
+                )
+        if valid_sentences:
+            return {"sentences": valid_sentences}
+
+    # Fallback heuristic segmenter
+    raw_sentences = [
+        sent.strip()
+        for sent in re.split(r"(?<=[.!?。！？])\s+", fallback_text)
+        if sent.strip()
+    ]
+    if not raw_sentences:
+        raw_sentences = [fallback_text.strip()]
+
+    fallback_sentences = []
+    for sent in raw_sentences:
+        raw_words = re.findall(r"[\w'’\-]+|[^\w\s]", sent)
+        fallback_tokens = [
+            {
+                "token": word,
+                "lemma": word.lower(),
+                "pos": "word" if re.match(r"[\w'’\-]+", word) else "punct",
+                "phonetic": "",
+                "explanation_en": "",
+                "explanation_cn": "",
+            }
+            for word in raw_words
+        ]
+        fallback_sentences.append(
+            {
+                "original": sent,
+                "translation_en": "",
+                "translation_cn": "",
+                "tokens": fallback_tokens,
+            }
+        )
+    return {"sentences": fallback_sentences}
+
+
+async def request_french_analysis(request: AnalyzeRequest, api_key: str) -> dict:
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = _analyze_payload(request)
+    async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
+        _, raw_text = await _post_chat(client, payload, headers)
+        return _parse_analysis_json(raw_text, request.text)
+
+
 def _timestamp() -> str:
     now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     return f"{now}_{uuid.uuid4().hex[:6]}"
 
 
-def _safe_timestamp(value: str | None) -> str:
+def _safe_timestamp(
+    value: str | None, text: str | None = None, voice: str | None = None
+) -> str:
     if value and re.fullmatch(r"[0-9A-Za-z_-]{1,48}", value):
         return value
+    if text and voice and len(text) <= 150:
+        h = hashlib.sha256(f"{voice}:{text.strip()}".encode("utf-8")).hexdigest()[:16]
+        return f"snip_{h}"
     return _timestamp()
 
 
@@ -673,7 +828,7 @@ async def create_speech_files(
 ) -> tuple[str, str]:
     content = _normalized_text(text)
     selected_voice = _validate_voice(voice)
-    job_timestamp = _safe_timestamp(timestamp)
+    job_timestamp = _safe_timestamp(timestamp, text=content, voice=selected_voice)
     safe_voice = selected_voice.replace("/", "_").replace("\\", "_")
     base_filename = f"TTS_{safe_voice}_{job_timestamp}"
     audio_filename = f"{base_filename}.mp3"
@@ -824,16 +979,32 @@ async def get_output_file(filename: str, download: bool = Query(default=False)):
     return _output_file(filename, download=download)
 
 
+@app.get("/study")
+async def study():
+    return FileResponse(STATIC_DIR / "study.html")
+
+
+@app.post("/api/analyze")
+async def analyze_french(
+    request: AnalyzeRequest,
+    authorization: str | None = Header(default=None),
+):
+    api_key = _authorization_token(authorization)
+    result = await request_french_analysis(request, api_key)
+    return result
+
+
 @app.get("/tts")
 async def generate_tts(
     text: str,
-    voice: str = "en-US-AvaNeural",
+    voice: str = "fr-FR-DeniseNeural",
     t: str | None = None,
     format: Literal["mp3", "srt"] = "mp3",
+    download: bool = False,
 ):
     audio_filename, srt_filename = await create_speech_files(text, voice, t)
     filename = srt_filename if format == "srt" else audio_filename
-    return _output_file(filename, download=True)
+    return _output_file(filename, download=download)
 
 
 if __name__ == "__main__":

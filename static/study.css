@@ -1,0 +1,625 @@
+/* ==========================================================================
+   French Audio Studio - Study & Shadowing Workbench Styles
+   ========================================================================== */
+
+/* Top Navigation Tabs */
+.nav-tabs {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: #f1f5f9;
+    padding: 0.25rem;
+    border-radius: 9999px;
+    border: 1px solid #e2e8f0;
+}
+
+.nav-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.45rem 0.95rem;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #475569;
+    text-decoration: none;
+    border-radius: 9999px;
+    transition: all 0.2s ease;
+}
+
+.nav-tab i {
+    width: 1rem;
+    height: 1rem;
+}
+
+.nav-tab:hover {
+    color: #0f172a;
+    background: #ffffff88;
+}
+
+.nav-tab.active {
+    color: #0f172a;
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* Study Input Card */
+.study-input-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    margin-bottom: 1.5rem;
+}
+
+.input-actions-quick {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn-ghost {
+    background: transparent;
+    border: 1px solid #cbd5e1;
+    color: #475569;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.85rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    transition: all 0.15s ease;
+}
+
+.btn-ghost:hover {
+    background: #f8fafc;
+    color: #0f172a;
+    border-color: #94a3b8;
+}
+
+.study-input-card textarea {
+    width: 100%;
+    min-height: 120px;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.75rem;
+    padding: 1rem;
+    font-size: 1.05rem;
+    line-height: 1.6;
+    color: #1e293b;
+    resize: vertical;
+    font-family: inherit;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+
+.study-input-card textarea:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.study-input-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+/* Deck Section & Sentence Cards */
+.deck-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.25rem;
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.3rem 0.75rem;
+    border-radius: 9999px;
+    background: #e2e8f0;
+    color: #334155;
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+.sentences-container {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.sentence-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 1rem;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+    overflow: hidden;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sentence-card:hover {
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.07);
+}
+
+/* Sentence Header */
+.sentence-hero {
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border-bottom: 1px solid #e2e8f0;
+    padding: 1.25rem 1.5rem;
+}
+
+.sentence-meta-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.6rem;
+}
+
+.sentence-index-pill {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: #0f172a;
+    color: #ffffff;
+    padding: 0.2rem 0.6rem;
+    border-radius: 0.35rem;
+}
+
+.sentence-text-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.sentence-french-text {
+    font-size: 1.35rem;
+    font-weight: 600;
+    line-height: 1.5;
+    color: #0f172a;
+    margin: 0;
+    letter-spacing: -0.01em;
+}
+
+.btn-speak-round {
+    flex-shrink: 0;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    background: #2563eb;
+    color: #ffffff;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 5px rgba(37, 99, 235, 0.3);
+    transition: all 0.2s ease;
+}
+
+.btn-speak-round:hover {
+    background: #1d4ed8;
+    transform: scale(1.05);
+}
+
+.sentence-translations {
+    margin-top: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    font-size: 0.92rem;
+}
+
+.translation-en {
+    color: #475569;
+}
+
+.translation-cn {
+    color: #1e293b;
+    font-weight: 500;
+}
+
+/* ==========================================================================
+   Shadowing & Follow-along Scoring (跟读打分面板)
+   ========================================================================== */
+.shadowing-panel {
+    background: #fafafa;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 1.25rem 1.5rem;
+}
+
+.shadowing-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.85rem;
+}
+
+.shadowing-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.shadowing-title i {
+    color: #e11d48;
+}
+
+.shadowing-body {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.btn-record {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.65rem 1.25rem;
+    background: #ffffff;
+    border: 1.5px solid #e11d48;
+    color: #e11d48;
+    border-radius: 9999px;
+    font-size: 0.92rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-record:hover {
+    background: #fff1f2;
+}
+
+.btn-record.recording {
+    background: #e11d48;
+    color: #ffffff;
+    animation: recordPulse 1.4s infinite;
+}
+
+@keyframes recordPulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.4);
+    }
+    70% {
+        box-shadow: 0 0 0 12px rgba(225, 29, 72, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(225, 29, 72, 0);
+    }
+}
+
+.btn-record i {
+    width: 1.1rem;
+    height: 1.1rem;
+}
+
+.shadowing-guide {
+    font-size: 0.88rem;
+    color: #64748b;
+}
+
+/* Scoring Results Card */
+.score-result-card {
+    margin-top: 1rem;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    padding: 1rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
+.score-summary-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.score-badge-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.score-number-pill {
+    font-size: 1.5rem;
+    font-weight: 800;
+    padding: 0.2rem 0.8rem;
+    border-radius: 0.5rem;
+    line-height: 1.2;
+}
+
+.score-number-pill.excellent {
+    background: #ecfdf5;
+    color: #059669;
+    border: 1px solid #a7f3d0;
+}
+
+.score-number-pill.good {
+    background: #eff6ff;
+    color: #2563eb;
+    border: 1px solid #bfdbfe;
+}
+
+.score-number-pill.pass {
+    background: #fffbeb;
+    color: #d97706;
+    border: 1px solid #fde68a;
+}
+
+.score-number-pill.needs-work {
+    background: #fff1f2;
+    color: #e11d48;
+    border: 1px solid #fecdd3;
+}
+
+.score-rating-text {
+    font-weight: 700;
+    font-size: 1rem;
+    color: #1e293b;
+}
+
+.score-metrics {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.85rem;
+    color: #64748b;
+}
+
+.score-metrics strong {
+    color: #0f172a;
+}
+
+/* Audio Playback Controls for comparison */
+.shadow-audio-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+}
+
+.btn-audio-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.85rem;
+    border-radius: 9999px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    border: 1px solid #cbd5e1;
+    background: #f8fafc;
+    color: #334155;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-audio-pill:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+
+.btn-audio-pill i {
+    width: 0.95rem;
+    height: 0.95rem;
+}
+
+/* Word-by-word diff output */
+.diff-result-box {
+    background: #f8fafc;
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    font-size: 1.05rem;
+    line-height: 1.8;
+}
+
+.diff-word {
+    display: inline-block;
+    padding: 0.1rem 0.4rem;
+    margin: 0.1rem;
+    border-radius: 0.35rem;
+    font-weight: 600;
+    transition: background-color 0.2s;
+}
+
+.diff-word.correct {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.diff-word.acceptable {
+    background: #fef3c7;
+    color: #b45309;
+}
+
+.diff-word.missed {
+    background: #ffe4e6;
+    color: #be123c;
+    text-decoration: underline wavy #e11d48;
+}
+
+.diff-legend {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.78rem;
+    color: #64748b;
+    margin-top: 0.4rem;
+}
+
+.diff-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.diff-dot {
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50%;
+}
+
+.diff-dot.dot-green { background: #22c55e; }
+.diff-dot.dot-yellow { background: #f59e0b; }
+.diff-dot.dot-red { background: #ef4444; }
+
+/* ==========================================================================
+   Three-Column Breakdown Table (三列拆解解析)
+   ========================================================================== */
+.table-wrapper {
+    overflow-x: auto;
+}
+
+.breakdown-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.92rem;
+    text-align: left;
+}
+
+.breakdown-table th {
+    background: #f8fafc;
+    color: #475569;
+    font-weight: 700;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.85rem 1.25rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.breakdown-table th:first-child {
+    width: 32%;
+}
+
+.breakdown-table th:nth-child(2) {
+    width: 33%;
+}
+
+.breakdown-table th:nth-child(3) {
+    width: 35%;
+}
+
+.breakdown-table td {
+    padding: 0.9rem 1.25rem;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: top;
+    line-height: 1.55;
+}
+
+.breakdown-table tr:last-child td {
+    border-bottom: none;
+}
+
+.breakdown-table tr:hover td {
+    background-color: #fafbfc;
+}
+
+/* Column 1: Token, Pronunciation & Lemma */
+.token-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.token-main-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.token-word {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.btn-token-speak {
+    width: 1.65rem;
+    height: 1.65rem;
+    border-radius: 50%;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #2563eb;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: all 0.15s ease;
+}
+
+.btn-token-speak:hover {
+    background: #eff6ff;
+    border-color: #2563eb;
+    transform: scale(1.1);
+}
+
+.btn-token-speak i {
+    width: 0.85rem;
+    height: 0.85rem;
+}
+
+.token-details {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    font-size: 0.8rem;
+}
+
+.pos-tag {
+    background: #f1f5f9;
+    color: #475569;
+    padding: 0.1rem 0.4rem;
+    border-radius: 0.25rem;
+    font-family: ui-monospace, monospace;
+    font-weight: 600;
+}
+
+.phonetic-tag {
+    color: #64748b;
+    font-family: "Lucida Sans Unicode", "Segoe UI", sans-serif;
+}
+
+.lemma-tag {
+    color: #0284c7;
+    font-weight: 500;
+}
+
+/* Column 2: English Explanation */
+.explanation-en-cell {
+    color: #334155;
+    font-size: 0.92rem;
+}
+
+/* Column 3: Chinese Explanation */
+.explanation-cn-cell {
+    color: #0f172a;
+    font-weight: 500;
+    font-size: 0.92rem;
+}
+
+/* Responsive adjustment */
+@media (max-width: 768px) {
+    .breakdown-table th:first-child,
+    .breakdown-table th:nth-child(2),
+    .breakdown-table th:nth-child(3) {
+        width: auto;
+    }
+    
+    .sentence-french-text {
+        font-size: 1.15rem;
+    }
+}

@@ -80,6 +80,46 @@ input[type="radio"] + span {
     border-bottom: 1px solid var(--line);
 }
 
+.nav-tabs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface-muted);
+    padding: 4px;
+    border-radius: 9999px;
+    border: 1px solid var(--line);
+}
+
+.nav-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--muted);
+    text-decoration: none;
+    border-radius: 9999px;
+    transition: all 0.2s ease;
+}
+
+.nav-tab i,
+.nav-tab svg {
+    width: 15px;
+    height: 15px;
+}
+
+.nav-tab:hover {
+    color: var(--ink);
+    background: rgba(255, 255, 255, 0.6);
+}
+
+.nav-tab.active {
+    color: var(--primary);
+    background: var(--surface);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
 .brand-block,
 .brand-block > div:last-child,
 .panel-heading > div,

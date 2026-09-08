@@ -23,6 +23,17 @@
                 </div>
             </div>
 
+            <nav class="nav-tabs" aria-label="页面切换">
+                <a href="/" class="nav-tab active" aria-current="page">
+                    <i data-lucide="headphones" aria-hidden="true"></i>
+                    <span>音频工作台</span>
+                </a>
+                <a href="/study" class="nav-tab">
+                    <i data-lucide="sparkles" aria-hidden="true"></i>
+                    <span>拆解与复述</span>
+                </a>
+            </nav>
+
             <details class="connection-settings">
                 <summary>
                     <i data-lucide="key-round" aria-hidden="true"></i>
@@ -127,6 +138,9 @@
                         <div class="panel-tools">
                             <span id="task-used" class="task-used" data-state="pending">待判断</span>
                             <span id="model-used" class="model-used" data-quality="pending">Grok 4.6 · 待生成</span>
+                            <button id="send-to-study-btn" class="icon-btn" type="button" title="发送到拆解与复述学习" aria-label="发送到拆解与复述学习">
+                                <i data-lucide="book-open"></i>
+                            </button>
                             <button id="copy-output" class="icon-btn" type="button" title="复制法语文本" aria-label="复制法语文本">
                                 <i data-lucide="copy"></i>
                             </button>

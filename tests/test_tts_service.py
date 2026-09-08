@@ -620,9 +620,77 @@ class FrenchAudioStudioTests(unittest.TestCase):
             "/api/speech",
             json={"text": "Bonjour.", "voice": "unknown-voice"},
         )
-
         self.assertEqual(response.status_code, 422)
         self.assertEqual(response.json()["detail"], "不支持所选语音。")
+
+    def test_study_endpoint_serves_html(self):
+        response = self.client.get("/study")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("法语拆解与跟读复述", response.text)
+
+    def test_analyze_requires_api_key(self):
+        response = self.client.post(
+            "/api/analyze",
+            json={"text": "Je vais au marché.", "model": "grok-4.6"},
+        )
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["detail"]["code"], "missing_api_key")
+
+    @patch(
+        "tts_service.request_french_analysis",
+        new_callable=AsyncMock,
+        return_value={
+            "sentences": [
+                {
+                    "original": "Je vais au marché.",
+                    "translation_en": "I go to the market.",
+                    "translation_cn": "我去集市。",
+                    "tokens": [
+                        {
+                            "token": "vais",
+                            "lemma": "aller",
+                            "pos": "v.",
+                            "phonetic": "/vɛ/",
+                            "explanation_en": "go (1st person present)",
+                            "explanation_cn": "去，走（现在时）",
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    def test_analyze_returns_structured_breakdown(self, analyze_mock):
+        response = self.client.post(
+            "/api/analyze",
+            headers={"Authorization": "Bearer test-key"},
+            json={"text": "Je vais au marché.", "model": "grok-4.6"},
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("sentences", data)
+        self.assertEqual(len(data["sentences"]), 1)
+        self.assertEqual(data["sentences"][0]["original"], "Je vais au marché.")
+        self.assertEqual(data["sentences"][0]["tokens"][0]["lemma"], "aller")
+
+    def test_parse_analysis_json_handles_code_fences(self):
+        raw = '```json\n{"sentences": [{"original": "Bonjour.", "translation_en": "Hello.", "translation_cn": "你好。", "tokens": []}]}\n```'
+        parsed = tts_service._parse_analysis_json(raw, "Bonjour.")
+        self.assertIn("sentences", parsed)
+        self.assertEqual(parsed["sentences"][0]["original"], "Bonjour.")
+
+    def test_parse_analysis_json_fallback_on_corrupt_output(self):
+        raw = "Sorry I cannot output JSON today."
+        parsed = tts_service._parse_analysis_json(raw, "Bonjour le monde.")
+        self.assertIn("sentences", parsed)
+        self.assertEqual(len(parsed["sentences"]), 1)
+        self.assertEqual(parsed["sentences"][0]["original"], "Bonjour le monde.")
+        self.assertTrue(len(parsed["sentences"][0]["tokens"]) > 0)
+
+    def test_safe_timestamp_snippets_hashing(self):
+        ts1 = tts_service._safe_timestamp(None, text="bonjour", voice="fr-FR-DeniseNeural")
+        ts2 = tts_service._safe_timestamp(None, text="bonjour", voice="fr-FR-DeniseNeural")
+        self.assertEqual(ts1, ts2)
+        self.assertTrue(ts1.startswith("snip_"))
 
 
 if __name__ == "__main__":
