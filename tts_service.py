@@ -189,24 +189,43 @@ def _normalized_text(value: str) -> str:
     return text
 
 
+SERVER_WEB2API_KEY = os.getenv("WEB2API_API_KEY", "0PK32TX5M-q3UA6bGALY_Sw_tL77bZKL")
+
+
 def _authorization_token(authorization: str | None) -> str:
-    if not authorization or not authorization.lower().startswith("bearer "):
+    if not authorization:
         raise HTTPException(
             status_code=401,
             detail={
                 "code": "missing_api_key",
-                "message": "请先填写 Perplexity web2api 的 API Key。",
+                "message": "请先登录账号（新注册享 60 天免费）或在设置中填写 API Key。",
             },
         )
-    token = authorization[7:].strip()
+    parts = authorization.split(" ", 1)
+    token = parts[1].strip() if len(parts) == 2 and parts[0].lower() == "bearer" else authorization.strip()
     if not token:
         raise HTTPException(
             status_code=401,
             detail={
                 "code": "missing_api_key",
-                "message": "请先填写 Perplexity web2api 的 API Key。",
+                "message": "请先登录账号（新注册享 60 天免费）或在设置中填写 API Key。",
             },
         )
+
+    # Check if this token is an internal user session token
+    user_payload = auth_db.verify_token(token)
+    if user_payload:
+        user_info = auth_db.get_user_status(user_payload["sub"])
+        if not user_info or not user_info.get("is_valid"):
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "trial_expired",
+                    "message": "您的 60 天免费试用期已结束。您可以填写自定义 API Key 继续使用，或联系站长续期。",
+                },
+            )
+        return SERVER_WEB2API_KEY
+
     return token
 
 
@@ -661,9 +680,10 @@ async def request_french_transform(
     raise RuntimeError("Unreachable transform retry state")
 
 
+import auth_db
 TRIVIAL_SINGLE_WORDS = {
     "je", "tu", "il", "elle", "on", "nous", "vous", "ils", "elles",
-    "ce", "c'", "c’", "ça", "de", "d'", "d’", "à", "au", "aux", "sur",
+    "ce", "c'", "c’", "ça", "de", "d'", "d’", "à", "au", "aux",
     "dans", "en", "par", "pour", "avec", "sans", "sous",
     "un", "une", "des", "du", "le", "la", "les", "l'", "l’",
     "et", "ou", "mais", "donc", "or", "ni", "car",
@@ -704,36 +724,31 @@ def _filter_sentence_tokens(tokens: list[dict]) -> list[dict]:
 
 def _analyze_payload(request: AnalyzeRequest) -> dict:
     prompt = (
-        "You are an elite French pedagogical lexicographer and linguist for intermediate learners.\n"
+        "You are an elite French pedagogical lexicographer and teacher dedicated to A1 beginners who know almost zero French.\n"
         "Analyze the French text and output a valid JSON object strictly matching the schema below.\n\n"
-        "STRICT PEDAGOGICAL & CHUNKING RULES:\n"
-        "1. LEARNER VOCABULARY BASELINE (DO NOT EXTRACT ELEMENTARY WORDS):\n"
-        "   - The learner already knows ~200 elementary French words.\n"
-        "   - NEVER create entries for isolated pronouns: 'je', 'tu', 'il', 'elle', 'on', 'nous', 'vous', 'ils', 'elles', 'ce', 'c''.\n"
-        "   - NEVER create entries for isolated prepositions: 'de', 'd'', 'à', 'sur', 'dans', 'en', 'par', 'pour', 'avec', 'sans'.\n"
-        "   - NEVER create entries for isolated articles: 'le', 'la', 'les', 'l'', 'un', 'une', 'des', 'du'.\n"
-        "   - NEVER create entries for isolated conjunctions: 'et', 'ou', 'mais'.\n"
-        "   - NEVER create entries for isolated numbers/digits: '40', '1', '10'.\n"
-        "   - NEVER create entries for punctuation marks: '.', ',', '!', '?', ';', ':', '-', '«', '»'.\n\n"
-        "2. COLLOCATIONS & PHRASAL CHUNKING (CRITICAL):\n"
-        "   - Multi-word idioms, compound prepositions, verbal expressions, and set phrases MUST be grouped together into a SINGLE entry.\n"
-        "   - Example: 'de la vie quotidienne' MUST be kept as ONE single phrase (token: 'de la vie quotidienne', pos: 'loc. adj.', meaning 'of daily life / 日常生活中的').\n"
-        "   - Example: 'portant sur' MUST be kept as ONE single phrase (token: 'portant sur', pos: 'loc. verb.', meaning 'focusing on, dealing with / 涉及，关于').\n"
-        "   - Example: 'au fur et à mesure' MUST be kept as ONE single phrase (token: 'au fur et à mesure', pos: 'loc. adv.').\n"
-        "   - Example: 'de temps en temps' MUST be kept as ONE single phrase (token: 'de temps en temps', pos: 'loc. adv.').\n\n"
-        "3. WHAT TO INCLUDE:\n"
-        "   - Meaningful verbs (with their infinitive lemma, tense, person).\n"
-        "   - Key content nouns, adjectives, and adverbs.\n"
-        "   - Idiomatic expressions, compound prepositions, verbal phrases, and collocations.\n"
-        "   - Aim for 3 to 6 high-value, meaningful entries per sentence. Quality over quantity!\n\n"
-        "4. FOR EACH TOKEN:\n"
-        "   - 'token': the word or multi-word phrase exactly as it appears in the sentence\n"
-        "   - 'lemma': dictionary canonical base form (infinitive for verbs, masculine singular for nouns/adjectives)\n"
-        "   - 'pos': part of speech abbreviation ('v.', 'n.m.', 'n.f.', 'adj.', 'adv.', 'loc. adv.', 'loc. verb.', 'loc. adj.', 'expr.')\n"
-        "   - 'phonetic': accurate IPA phonetic transcription\n"
-        "   - 'explanation_en': concise, natural English gloss and nuance in this context\n"
-        "   - 'explanation_cn': accurate, natural Chinese explanation and grammatical note (词义、时态、固定搭配用法)\n\n"
-        "5. REQUIRED JSON SCHEMA (Output a valid JSON object ONLY):\n"
+        "STRICT PEDAGOGICAL RULES FOR A1 BEGINNERS:\n"
+        "1. FINE-GRAINED WORD-LEVEL ANALYSIS (NO CLAUSES OR LONG PHRASES):\n"
+        "   - The user is an A1 beginner. They DO NOT understand long multi-word clauses.\n"
+        "   - NEVER bundle verb phrases, clauses, or verb+noun+adjective combinations into a single entry!\n"
+        "   - BAD: 'ayant des objectifs différents' (Too complex! The beginner cannot tell what 'ayant' or 'objectifs' means).\n"
+        "   - MUST BREAK DOWN INDIVIDUALLY:\n"
+        "     * 'ayant': explain that this is the present participle (participe présent) of verb 'avoir' (to have / 具有，拥有).\n"
+        "     * 'objectifs': noun (objectives, goals / 目标，目的).\n"
+        "     * 'différents': adjective (different, various / 不同的).\n"
+        "2. SHORT INSEPARABLE COLLOCATIONS (2-3 words only):\n"
+        "   - Only group very short, fixed prepositional links or idioms:\n"
+        "     * 'portant sur' (loc. verb., meaning 'dealing with, focusing on / 涉及，关于')\n"
+        "     * 'de la vie quotidienne' (loc. adj., meaning 'of daily life / 日常生活的')\n"
+        "     * 'de temps en temps' (loc. adv., meaning 'from time to time / 有时')\n"
+        "   - Never include the following content nouns or verbs in these phrases (e.g. 'documents' must be its own entry).\n"
+        "3. VERBS & GRAMMAR FOR A1 LEARNERS:\n"
+        "   - For every conjugated verb or participle (e.g. 'comprend', 'ayant', 'va', 'suis'), ALWAYS provide the infinitive base lemma (comprendre, avoir, aller, être) and explain the tense, person, and form clearly in Chinese!\n"
+        "4. EXCLUDE GRAMMATICAL FLUFF & NOISE:\n"
+        "   - NEVER create entries for punctuation (., ,, !, ?).\n"
+        "   - NEVER create entries for numbers (40, 1).\n"
+        "   - NEVER create entries for isolated elementary articles/conjunctions standing alone ('et', 'des', 'la').\n"
+        "5. Output JSON object ONLY matching the schema.\n\n"
+        "SCHEMA:\n"
         "{\n"
         '  "sentences": [\n'
         '    {\n'
@@ -746,23 +761,23 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
         '          "lemma": "se rendre compte de",\n'
         '          "pos": "loc. verb.",\n'
         '          "phonetic": "/sə ʁɑ̃dʁ kɔ̃t də/",\n'
-        '          "explanation_en": "to realize, to become aware of (reflexive verbal expression)",\n'
-        '          "explanation_cn": "意识到，发觉（复合反身代词动词短语）"\n'
+        '          "explanation_en": "to realize, to become aware of",\n'
+        '          "explanation_cn": "意识到，发觉（动词短语）"\n'
         '        },\n'
         '        {\n'
         '          "token": "absence",\n'
         '          "lemma": "absence",\n'
         '          "pos": "n.f.",\n'
         '          "phonetic": "/ap.sɑ̃s/",\n'
-        '          "explanation_en": "absence, non-attendance (feminine singular noun)",\n'
-        '          "explanation_cn": "不在，缺席（阴性单数名词）"\n'
+        '          "explanation_en": "absence, non-attendance",\n'
+        '          "explanation_cn": "不在，缺席（名词）"\n'
         '        },\n'
         '        {\n'
         '          "token": "au fur et à mesure",\n'
         '          "lemma": "au fur et à mesure",\n'
         '          "pos": "loc. adv.",\n'
         '          "phonetic": "/o fyʁ e a mə.zyʁ/",\n'
-        '          "explanation_en": "gradually, progressively, as time goes on",\n'
+        '          "explanation_en": "gradually, as time goes on",\n'
         '          "explanation_cn": "逐渐地，随着……的进行（固定副词短语）"\n'
         '        },\n'
         '        {\n'
@@ -771,7 +786,7 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
         '          "pos": "v.",\n'
         '          "phonetic": "/pa.sɛ/",\n'
         '          "explanation_en": "passed, was passing (imparfait tense of passer)",\n'
-        '          "explanation_cn": "流逝，过去（passer 未完成过去时第三人称单数）"\n'
+        '          "explanation_cn": "流逝，过去（动词 passer 未完成过去时）"\n'
         '        }\n'
         '      ]\n'
         '    }\n'
@@ -782,7 +797,7 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
         "model": request.model,
         "messages": [
             {"role": "system", "content": prompt},
-            {"role": "user", "content": f"Analyze this French text:\n\n{request.text}"},
+            {"role": "user", "content": f"Analyze this French text for an A1 beginner:\n\n{request.text}"},
         ],
         "response_format": {"type": "json_object"},
         "stream": False,
@@ -1119,7 +1134,46 @@ async def generate_tts(
     return _output_file(filename, download=download)
 
 
+class AuthRequest(BaseModel):
+    email: str
+    password: str
+
+
+@app.post("/api/auth/register")
+async def register_account(req: AuthRequest):
+    try:
+        res = auth_db.register_user(req.email, req.password)
+        return res
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail={"message": str(e)})
+
+
+@app.post("/api/auth/login")
+async def login_account(req: AuthRequest):
+    try:
+        res = auth_db.login_user(req.email, req.password)
+        return res
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail={"message": str(e)})
+
+
+@app.get("/api/auth/me")
+async def get_current_user(authorization: str | None = Header(default=None)):
+    if not authorization:
+        raise HTTPException(status_code=401, detail={"message": "请先登录"})
+    parts = authorization.split(" ", 1)
+    token = parts[1].strip() if len(parts) == 2 and parts[0].lower() == "bearer" else authorization.strip()
+    payload = auth_db.verify_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail={"message": "登录凭据已失效，请重新登录"})
+    status = auth_db.get_user_status(payload["sub"])
+    if not status:
+        raise HTTPException(status_code=404, detail={"message": "账号不存在"})
+    return status
+
+
 if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=8000)
+

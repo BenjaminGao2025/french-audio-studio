@@ -243,8 +243,12 @@
             let tsv = '#separator:tab\n#html:true\n#tags column:3\n';
 
             this.cards.forEach(c => {
+                const audioUrl = `https://tts.gaoyuze.com/tts?text=${encodeURIComponent(c.token)}&voice=fr-FR-DeniseNeural`;
+                const soundTag = `[sound:${audioUrl}]`;
+
                 const front = `<div style="font-size: 24px; font-weight: bold; color: #1c2821;">${escapeHtml(c.token)}</div>` +
-                    (c.phonetic ? `<div style="color: #6b7770; font-size: 14px; margin-top: 4px;">${escapeHtml(c.phonetic)}</div>` : '');
+                    (c.phonetic ? `<div style="color: #6b7770; font-size: 14px; margin-top: 4px;">${escapeHtml(c.phonetic)}</div>` : '') +
+                    ` ${soundTag}`;
 
                 let back = `<div style="margin-bottom: 8px;">`;
                 if (c.pos) back += `<span style="background: #eef1ed; color: #49544d; padding: 2px 6px; border-radius: 4px; font-size: 12px; font-weight: bold; margin-right: 6px;">${escapeHtml(c.pos)}</span>`;
@@ -258,13 +262,17 @@
                     back += `<div style="color: #6b7770; font-size: 13px; margin-top: 4px;"><em>${escapeHtml(c.explanation_en)}</em></div>`;
                 }
 
+                back += `<div style="margin-top: 10px;"><audio controls style="height: 32px; width: 100%; max-width: 320px;" src="${audioUrl}"></audio></div>`;
+
                 if (c.sentence) {
+                    const sentenceAudioUrl = `https://tts.gaoyuze.com/tts?text=${encodeURIComponent(c.sentence)}&voice=fr-FR-DeniseNeural`;
                     const highlighted = highlightTokenInSentence(c.sentence, c.token);
                     back += `<hr style="border: none; border-top: 1px solid #d7ddd8; margin: 12px 0 8px;">`;
                     back += `<div style="font-size: 13px; line-height: 1.5; color: #2c3831;">例句: ${highlighted}</div>`;
                     if (c.sentence_cn) {
                         back += `<div style="font-size: 12px; color: #6b7770; margin-top: 2px;">${escapeHtml(c.sentence_cn)}</div>`;
                     }
+                    back += `<div style="margin-top: 6px;"><a href="${sentenceAudioUrl}" style="color: #08776a; font-size: 12px; text-decoration: none;">🔊 收听整句例句发音</a> [sound:${sentenceAudioUrl}]</div>`;
                 }
 
                 const cleanFront = front.replace(/\t/g, ' ').replace(/\n/g, '<br>');

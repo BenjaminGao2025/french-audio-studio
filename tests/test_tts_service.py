@@ -729,6 +729,58 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertIn("de la vie quotidienne", token_names)
 
 
+    def test_auth_register_and_login_flow(self):
+        test_email = f"test_user_{int(asyncio.get_event_loop().time() * 1000)}@example.com"
+        # 1. Register
+        reg_res = self.client.post(
+            "/api/auth/register",
+            json={"email": test_email, "password": "securepassword123"},
+        )
+        self.assertEqual(reg_res.status_code, 200)
+        data = reg_res.json()
+        self.assertIn("token", data)
+        self.assertEqual(data["user"]["email"], test_email)
+        self.assertEqual(data["user"]["plan"], "trial")
+        self.assertEqual(data["user"]["days_left"], 60)
+        token = data["token"]
+
+        # 2. Get /api/auth/me
+        me_res = self.client.get(
+            "/api/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        self.assertEqual(me_res.status_code, 200)
+        me_data = me_res.json()
+        self.assertEqual(me_data["email"], test_email)
+        self.assertTrue(me_data["is_valid"])
+        self.assertEqual(me_data["days_left"], 60)
+
+        # 3. Login
+        login_res = self.client.post(
+            "/api/auth/login",
+            json={"email": test_email, "password": "securepassword123"},
+        )
+        self.assertEqual(login_res.status_code, 200)
+        self.assertIn("token", login_res.json())
+
+        # 4. Duplicate register fails
+        dup_res = self.client.post(
+            "/api/auth/register",
+            json={"email": test_email, "password": "securepassword123"},
+        )
+        self.assertEqual(dup_res.status_code, 400)
+
+    def test_authorization_token_resolves_user_session_token(self):
+        import auth_db
+        test_email = f"session_test_{int(asyncio.get_event_loop().time() * 1000)}@example.com"
+        reg = auth_db.register_user(test_email, "mypassword123")
+        token = reg["token"]
+
+        # Passing user token into _authorization_token should resolve to SERVER_WEB2API_KEY
+        resolved = tts_service._authorization_token(f"Bearer {token}")
+        self.assertEqual(resolved, tts_service.SERVER_WEB2API_KEY)
+
+
 if __name__ == "__main__":
     unittest.main()
 

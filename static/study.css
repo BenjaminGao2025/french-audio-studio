@@ -1082,3 +1082,368 @@
         align-items: flex-end;
     }
 }
+
+/* ==========================================================================
+   User Authentication & Trial System
+   ========================================================================== */
+.user-auth-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-weight: 600;
+    font-size: 13px;
+    padding: 7px 13px;
+    border-radius: var(--radius-sm);
+    transition: all 0.2s ease;
+}
+
+.trial-badge {
+    background: linear-gradient(135deg, #0d9488, #0f766e);
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 999px;
+    letter-spacing: 0.2px;
+}
+
+.count-badge {
+    background: var(--surface-subtle);
+    color: var(--primary);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 999px;
+    border: 1px solid var(--primary-soft);
+}
+
+.modal-auth-dialog {
+    max-width: 480px;
+}
+
+.auth-modal-body {
+    padding: 20px 24px 24px;
+}
+
+.auth-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    background: var(--surface-subtle);
+    padding: 4px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 20px;
+}
+
+.auth-tab {
+    padding: 9px 12px;
+    font-size: 13px;
+    font-weight: 650;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.auth-tab.active {
+    background: var(--surface);
+    color: var(--primary);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.auth-notice {
+    background: var(--primary-soft);
+    border: 1px solid #b2e2d9;
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--ink);
+    margin-bottom: 16px;
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.auth-error-msg {
+    background: #fdf2f2;
+    border: 1px solid #f87171;
+    color: #991b1b;
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    font-size: 13px;
+}
+
+.auth-actions {
+    margin-top: 6px;
+}
+
+.btn-full {
+    width: 100%;
+    justify-content: center;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 650;
+}
+
+/* User Profile in Auth Modal */
+.profile-card {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.profile-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--line);
+}
+
+.profile-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--primary-soft);
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.profile-avatar svg {
+    width: 24px;
+    height: 24px;
+}
+
+.profile-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow: hidden;
+}
+
+.profile-info h4 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.profile-meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.profile-meta-item {
+    background: var(--surface-subtle);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.meta-label {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.meta-value {
+    font-size: 15px;
+    color: var(--ink);
+    font-weight: 700;
+}
+
+.meta-value.highlight {
+    color: var(--primary);
+    font-size: 17px;
+}
+
+.profile-perks {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--ink);
+    background: #f8fafc;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+}
+
+.profile-perks p {
+    margin: 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.perk-icon {
+    width: 16px;
+    height: 16px;
+    color: var(--success);
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+.profile-actions {
+    margin-top: 6px;
+}
+
+/* ==========================================================================
+   Query History Drawer / Modal
+   ========================================================================== */
+.modal-history-dialog {
+    max-width: 680px;
+    max-height: 85vh;
+}
+
+.history-modal-body {
+    padding: 16px 20px 24px;
+    max-height: 65vh;
+    overflow-y: auto;
+}
+
+.history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.history-item {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: all 0.2s ease;
+}
+
+.history-item:hover {
+    border-color: var(--primary);
+    box-shadow: 0 3px 8px rgba(0,0,0,0.04);
+}
+
+.history-item-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.history-time-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.history-stats-group {
+    display: flex;
+    gap: 8px;
+}
+
+.history-stat-tag {
+    background: var(--surface-subtle);
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-weight: 600;
+    color: var(--ink);
+}
+
+.history-snippet {
+    font-family: var(--font-serif);
+    font-size: 14.5px;
+    color: var(--ink);
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    background: #faf8f5;
+    padding: 8px 12px;
+    border-left: 3px solid var(--accent);
+    border-radius: 0 4px 4px 0;
+}
+
+.history-item-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.history-empty {
+    text-align: center;
+    padding: 40px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.history-empty h4 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--ink);
+}
+
+.history-empty p {
+    margin: 0;
+    font-size: 13.5px;
+    color: var(--muted);
+    max-width: 420px;
+    line-height: 1.6;
+}
+
+/* ==========================================================================
+   Flashcard Back Enhancements
+   ========================================================================== */
+.card-back-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+}
+
+.tags-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.quote-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+.btn-xs {
+    padding: 3px 8px;
+    font-size: 11.5px;
+    gap: 4px;
+    border-radius: 4px;
+}
+

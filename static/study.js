@@ -42,6 +42,39 @@ document.addEventListener('DOMContentLoaded', () => {
     const openDeckBtn = document.getElementById('open-deck-btn');
     const dueCardBadge = document.getElementById('due-card-badge');
 
+    // DOM Elements - User Auth & Trial
+    const userAuthBtn = document.getElementById('user-auth-btn');
+    const userAuthStatusText = document.getElementById('user-auth-status-text');
+    const userTrialBadge = document.getElementById('user-trial-badge');
+    const authModal = document.getElementById('auth-modal');
+    const closeAuthModalBtn = document.getElementById('close-auth-modal-btn');
+    const authFormContainer = document.getElementById('auth-form-container');
+    const authUserProfile = document.getElementById('auth-user-profile');
+    const tabRegisterBtn = document.getElementById('tab-register-btn');
+    const tabLoginBtn = document.getElementById('tab-login-btn');
+    const authTabNotice = document.getElementById('auth-tab-notice');
+    const authForm = document.getElementById('auth-form');
+    const authEmailInput = document.getElementById('auth-email');
+    const authPasswordInput = document.getElementById('auth-password');
+    const authErrorMsg = document.getElementById('auth-error-msg');
+    const authSubmitBtn = document.getElementById('auth-submit-btn');
+    const authSubmitLabel = document.getElementById('auth-submit-label');
+    const profileEmail = document.getElementById('profile-email');
+    const profileBadge = document.getElementById('profile-badge');
+    const profileDaysLeft = document.getElementById('profile-days-left');
+    const profileExpiresAt = document.getElementById('profile-expires-at');
+    const logoutBtn = document.getElementById('logout-btn');
+
+    // DOM Elements - Query History
+    const historyToggleBtn = document.getElementById('history-toggle-btn');
+    const historyCountBadge = document.getElementById('history-count-badge');
+    const historyModal = document.getElementById('history-modal');
+    const historyTotalBadge = document.getElementById('history-total-badge');
+    const clearHistoryBtn = document.getElementById('clear-history-btn');
+    const closeHistoryModalBtn = document.getElementById('close-history-modal-btn');
+    const historyList = document.getElementById('history-list');
+    const historyEmpty = document.getElementById('history-empty');
+
     // DOM Elements - Flashcard Review Modal
     const flashcardModal = document.getElementById('flashcard-modal');
     const modalProgressBadge = document.getElementById('review-progress-badge');
@@ -64,6 +97,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const cardBackCn = document.getElementById('card-back-cn');
     const cardBackEn = document.getElementById('card-back-en');
     const cardSentenceCn = document.getElementById('card-sentence-cn');
+    const cardBackSpeakBtn = document.getElementById('card-back-speak-btn');
+    const cardSentenceSpeakBtn = document.getElementById('card-sentence-speak-btn');
 
     const deckEmptyScreen = document.getElementById('deck-empty-screen');
     const emptyScreenTitle = document.getElementById('empty-screen-title');
@@ -109,10 +144,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (apiKeyInput.value.trim()) {
             setConnectionState('idle', 'Key 已加载', '点击测试实际连接');
         } else {
-            setConnectionState('idle', '未填写 Key', '在右上角连接设置填写 Key');
+            setConnectionState('idle', '未填写 Key', '在右上角连接设置填写 Key 或登录账号直接使用');
         }
 
         updateDeckBadge();
+        updateHistoryBadges();
+        checkCurrentUser();
     }
 
     function saveApiKey() {
@@ -131,16 +168,29 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem(modelKeyName, modelSelect.value);
     }
 
-    function requireApiKey() {
+    function getEffectiveAuthToken() {
         const key = apiKeyInput.value.trim();
-        if (!key) {
-            const details = document.querySelector('.connection-settings');
-            if (details) details.open = true;
-            apiKeyInput.focus();
-            throw new Error('请先在顶部【连接设置】中填写 web2api API Key。');
+        if (key) return key;
+        const userToken = localStorage.getItem(userTokenKey);
+        if (userToken) return userToken;
+        return null;
+    }
+
+    function requireAuthToken() {
+        const token = getEffectiveAuthToken();
+        if (!token) {
+            openAuthModal();
+            throw new Error('请先登录账号（新用户免费赠送 60 天试用）或在【连接设置】中填写 API Key。');
         }
-        saveApiKey();
-        return key;
+        if (apiKeyInput.value.trim()) {
+            saveApiKey();
+        }
+        return token;
+    }
+
+    // Alias for backwards compatibility
+    function requireApiKey() {
+        return requireAuthToken();
     }
 
     function setConnectionState(state, title, detail) {
@@ -160,16 +210,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function testConnection() {
         try {
-            const apiKey = requireApiKey();
+            const token = requireAuthToken();
             const model = modelSelect.value;
-            setConnectionState('testing', '正在测试', '正在验证 API Key 与模型连通性...');
+            setConnectionState('testing', '正在测试', '正在验证 API Key / 用户权益与模型连通性...');
             testConnectionButton.disabled = true;
 
             const res = await fetch('/api/connection/test', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`,
+                    'Authorization': `Bearer ${token}`,
                 },
                 body: JSON.stringify({ model }),
             });
@@ -475,6 +525,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Compute estimated interval labels for 4 grade buttons based on SM-2
         updateGradeButtonIntervals(currentCard);
+
+        // Auto-play pronunciation of the French word
+        if (currentCard.token) {
+            try {
+                playFrenchSpeech(currentCard.token);
+            } catch (e) {
+                console.warn('Auto play speech prevented:', e);
+            }
+        }
 
         refreshIcons();
     }
@@ -905,7 +964,282 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // -------------------------------------------------------------------------
-    // 6. Text Analysis Request
+    // 6. User Account & 60-day Free Trial Manager
+    // -------------------------------------------------------------------------
+    const userTokenKey = 'frenchStudio.userToken';
+    let currentAuthTab = 'register';
+    let currentAuthUser = null;
+
+    function openAuthModal() {
+        if (authErrorMsg) authErrorMsg.hidden = true;
+        if (currentAuthUser) {
+            if (authFormContainer) authFormContainer.hidden = true;
+            if (authUserProfile) authUserProfile.hidden = false;
+        } else {
+            if (authFormContainer) authFormContainer.hidden = false;
+            if (authUserProfile) authUserProfile.hidden = true;
+            switchAuthTab(currentAuthTab);
+        }
+        if (authModal) authModal.hidden = false;
+        refreshIcons();
+    }
+
+    function closeAuthModal() {
+        if (authModal) authModal.hidden = true;
+    }
+
+    function switchAuthTab(tab) {
+        currentAuthTab = tab;
+        if (authErrorMsg) authErrorMsg.hidden = true;
+        if (tab === 'register') {
+            if (tabRegisterBtn) tabRegisterBtn.classList.add('active');
+            if (tabLoginBtn) tabLoginBtn.classList.remove('active');
+            if (authTabNotice) {
+                authTabNotice.innerHTML = '🎉 <strong>新用户专属福利</strong>：注册即送 <strong>60 天（2个月）全功能免费试用</strong>，免配置 API Key 畅享高保真发音、Grok 4.6 深度语法精析与 Anki 记忆卡系统！';
+            }
+            if (authSubmitLabel) authSubmitLabel.textContent = '立即注册并领取 60 天免费试用';
+        } else {
+            if (tabRegisterBtn) tabRegisterBtn.classList.remove('active');
+            if (tabLoginBtn) tabLoginBtn.classList.add('active');
+            if (authTabNotice) {
+                authTabNotice.innerHTML = '✨ 欢迎回来！登录您的账号以同步使用免费试用额度与高级功能。';
+            }
+            if (authSubmitLabel) authSubmitLabel.textContent = '登录账号';
+        }
+        refreshIcons();
+    }
+
+    async function checkCurrentUser() {
+        const token = localStorage.getItem(userTokenKey);
+        if (!token) {
+            updateAuthUI(null);
+            return;
+        }
+        try {
+            const res = await fetch('/api/auth/me', {
+                headers: { 'Authorization': `Bearer ${token}` },
+            });
+            if (!res.ok) {
+                localStorage.removeItem(userTokenKey);
+                updateAuthUI(null);
+                return;
+            }
+            const user = await res.json();
+            currentAuthUser = user;
+            updateAuthUI(user);
+        } catch (e) {
+            console.warn('Check user failed:', e);
+        }
+    }
+
+    function updateAuthUI(user) {
+        if (user) {
+            currentAuthUser = user;
+            const shortName = user.email.split('@')[0];
+            if (userAuthStatusText) userAuthStatusText.textContent = shortName;
+            if (userTrialBadge) {
+                userTrialBadge.textContent = user.plan === 'pro' ? 'VIP 会员' : `试用剩 ${user.days_left} 天`;
+                userTrialBadge.hidden = false;
+            }
+            if (profileEmail) profileEmail.textContent = user.email;
+            if (profileBadge) profileBadge.textContent = user.plan === 'pro' ? 'VIP 终身会员' : `60天试用期中`;
+            if (profileDaysLeft) profileDaysLeft.textContent = user.plan === 'pro' ? '永久有效' : `${user.days_left} 天`;
+            if (profileExpiresAt) {
+                const dateStr = user.trial_expires_at ? user.trial_expires_at.split('T')[0] : '--';
+                profileExpiresAt.textContent = dateStr;
+            }
+        } else {
+            currentAuthUser = null;
+            if (userAuthStatusText) userAuthStatusText.textContent = '登录 / 注册';
+            if (userTrialBadge) {
+                userTrialBadge.textContent = '赠60天';
+                userTrialBadge.hidden = false;
+            }
+        }
+        refreshIcons();
+    }
+
+    async function handleAuthSubmit(e) {
+        e.preventDefault();
+        const email = authEmailInput ? authEmailInput.value.trim() : '';
+        const password = authPasswordInput ? authPasswordInput.value.trim() : '';
+        if (!email || !password) return;
+
+        if (authErrorMsg) authErrorMsg.hidden = true;
+        if (authSubmitBtn) authSubmitBtn.disabled = true;
+
+        const endpoint = currentAuthTab === 'register' ? '/api/auth/register' : '/api/auth/login';
+
+        try {
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.detail?.message || data.detail || '操作失败');
+            }
+
+            localStorage.setItem(userTokenKey, data.token);
+            updateAuthUI(data.user);
+            closeAuthModal();
+            statusMessage.className = 'status-message status-success';
+            statusMessage.textContent = currentAuthTab === 'register'
+                ? '恭喜注册成功！已为您开通 60 天全功能免费试用，无需配置 API Key 即可使用！'
+                : '登录成功！欢迎回来。';
+        } catch (err) {
+            if (authErrorMsg) {
+                authErrorMsg.textContent = err.message;
+                authErrorMsg.hidden = false;
+            }
+        } finally {
+            if (authSubmitBtn) authSubmitBtn.disabled = false;
+        }
+    }
+
+    function handleLogout() {
+        localStorage.removeItem(userTokenKey);
+        updateAuthUI(null);
+        closeAuthModal();
+        statusMessage.className = 'status-message status-info';
+        statusMessage.textContent = '已退出登录。';
+    }
+
+    // -------------------------------------------------------------------------
+    // 7. Query History Manager
+    // -------------------------------------------------------------------------
+    const historyStorageKey = 'frenchStudio.queryHistory';
+
+    function getHistory() {
+        try {
+            return JSON.parse(localStorage.getItem(historyStorageKey) || '[]');
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function saveHistoryItem(text, sentences) {
+        if (!text || !sentences || sentences.length === 0) return;
+        let list = getHistory();
+        // Remove duplicate of same trimmed text
+        list = list.filter(item => item.text.trim() !== text.trim());
+        const totalTokens = sentences.reduce((acc, s) => acc + (s.tokens ? s.tokens.length : 0), 0);
+        const now = new Date();
+        const timeFormatted = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+        const newItem = {
+            id: 'hist_' + Date.now(),
+            timestamp: Date.now(),
+            timeFormatted,
+            text,
+            sentences,
+            sentenceCount: sentences.length,
+            tokenCount: totalTokens,
+        };
+        list.unshift(newItem);
+        if (list.length > 50) list = list.slice(0, 50);
+        localStorage.setItem(historyStorageKey, JSON.stringify(list));
+        updateHistoryBadges();
+    }
+
+    function updateHistoryBadges() {
+        const list = getHistory();
+        const count = list.length;
+        if (historyCountBadge) {
+            historyCountBadge.textContent = `${count}`;
+            historyCountBadge.hidden = count === 0;
+        }
+        if (historyTotalBadge) {
+            historyTotalBadge.textContent = `共 ${count} 条`;
+        }
+    }
+
+    function openHistoryModal() {
+        renderHistoryList();
+        if (historyModal) historyModal.hidden = false;
+        refreshIcons();
+    }
+
+    function closeHistoryModal() {
+        if (historyModal) historyModal.hidden = true;
+    }
+
+    function clearHistory() {
+        if (confirm('确定要清空全部查询历史记录吗？')) {
+            localStorage.removeItem(historyStorageKey);
+            renderHistoryList();
+            updateHistoryBadges();
+        }
+    }
+
+    function renderHistoryList() {
+        if (!historyList || !historyEmpty) return;
+        const list = getHistory();
+        updateHistoryBadges();
+        if (list.length === 0) {
+            historyList.innerHTML = '';
+            historyEmpty.hidden = false;
+            return;
+        }
+        historyEmpty.hidden = true;
+        historyList.innerHTML = list.map(item => `
+            <div class="history-item" data-id="${escapeHtml(item.id)}">
+                <div class="history-item-header">
+                    <div class="history-time-group">
+                        <i data-lucide="clock" style="width: 13px; height: 13px;"></i>
+                        <span>${escapeHtml(item.timeFormatted)}</span>
+                    </div>
+                    <div class="history-stats-group">
+                        <span class="history-stat-tag">${item.sentenceCount} 句子</span>
+                        <span class="history-stat-tag">${item.tokenCount} 词汇/短语</span>
+                    </div>
+                </div>
+                <div class="history-snippet">${escapeHtml(item.text)}</div>
+                <div class="history-item-actions">
+                    <button class="btn btn-secondary btn-sm btn-delete-history" data-id="${escapeHtml(item.id)}" type="button" title="删除此条记录">
+                        <i data-lucide="trash-2"></i>
+                        <span>删除</span>
+                    </button>
+                    <button class="btn btn-primary btn-sm btn-restore-history" data-id="${escapeHtml(item.id)}" type="button" title="恢复文本与已解析卡片">
+                        <i data-lucide="rotate-ccw"></i>
+                        <span>恢复并学习</span>
+                    </button>
+                </div>
+            </div>
+        `).join('');
+
+        // Wire buttons
+        historyList.querySelectorAll('.btn-restore-history').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = btn.dataset.id;
+                const found = getHistory().find(x => x.id === id);
+                if (found) {
+                    frenchInput.value = found.text;
+                    charCounter.textContent = `${found.text.length} / 15000`;
+                    renderStudyDeck(found.sentences);
+                    closeHistoryModal();
+                    statusMessage.className = 'status-message status-success';
+                    statusMessage.textContent = `已成功恢复历史记录（共 ${found.sentenceCount} 句，${found.tokenCount} 个词汇），无需重复调用大模型。`;
+                    window.scrollTo({ top: studyDeckSection.offsetTop - 80, behavior: 'smooth' });
+                }
+            });
+        });
+
+        historyList.querySelectorAll('.btn-delete-history').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = btn.dataset.id;
+                let cur = getHistory().filter(x => x.id !== id);
+                localStorage.setItem(historyStorageKey, JSON.stringify(cur));
+                renderHistoryList();
+            });
+        });
+
+        refreshIcons();
+    }
+
+    // -------------------------------------------------------------------------
+    // 8. Text Analysis Request
     // -------------------------------------------------------------------------
     async function startAnalysis() {
         const text = frenchInput.value.trim();
@@ -917,7 +1251,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            const apiKey = requireApiKey();
+            const token = requireAuthToken();
             const model = modelSelect.value;
 
             analyzeButton.classList.add('is-loading');
@@ -930,7 +1264,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`,
+                    'Authorization': `Bearer ${token}`,
                 },
                 body: JSON.stringify({ text, model }),
             });
@@ -941,6 +1275,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             renderStudyDeck(data.sentences || []);
+            saveHistoryItem(text, data.sentences || []);
+
             statusMessage.className = 'status-message status-success';
             statusMessage.textContent = '拆解完成！您可以查阅释义、点击 ⭐ 存入 Anki 生词卡、点击 🔊 即时发音，或进行跟读打分。';
         } catch (err) {
@@ -954,7 +1290,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // -------------------------------------------------------------------------
-    // 7. Event Bindings
+    // 9. Event Bindings
     // -------------------------------------------------------------------------
     initSettings();
 
@@ -995,6 +1331,29 @@ document.addEventListener('DOMContentLoaded', () => {
         refreshIcons();
     });
 
+    // Auth Modal Bindings
+    if (userAuthBtn) userAuthBtn.addEventListener('click', openAuthModal);
+    if (closeAuthModalBtn) closeAuthModalBtn.addEventListener('click', closeAuthModal);
+    if (authModal) {
+        authModal.addEventListener('click', (e) => {
+            if (e.target === authModal) closeAuthModal();
+        });
+    }
+    if (tabRegisterBtn) tabRegisterBtn.addEventListener('click', () => switchAuthTab('register'));
+    if (tabLoginBtn) tabLoginBtn.addEventListener('click', () => switchAuthTab('login'));
+    if (authForm) authForm.addEventListener('submit', handleAuthSubmit);
+    if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
+
+    // History Modal Bindings
+    if (historyToggleBtn) historyToggleBtn.addEventListener('click', openHistoryModal);
+    if (closeHistoryModalBtn) closeHistoryModalBtn.addEventListener('click', closeHistoryModal);
+    if (historyModal) {
+        historyModal.addEventListener('click', (e) => {
+            if (e.target === historyModal) closeHistoryModal();
+        });
+    }
+    if (clearHistoryBtn) clearHistoryBtn.addEventListener('click', clearHistory);
+
     // Flashcard Deck Modal Open/Close
     if (openDeckBtn) {
         openDeckBtn.addEventListener('click', () => openDeckModal('due'));
@@ -1025,6 +1384,26 @@ document.addEventListener('DOMContentLoaded', () => {
             if (reviewQueue.length > 0 && currentQueueIndex < reviewQueue.length) {
                 const cur = reviewQueue[currentQueueIndex];
                 if (cur && cur.token) playFrenchSpeech(cur.token);
+            }
+        });
+    }
+
+    if (cardBackSpeakBtn) {
+        cardBackSpeakBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (reviewQueue.length > 0 && currentQueueIndex < reviewQueue.length) {
+                const cur = reviewQueue[currentQueueIndex];
+                if (cur && cur.token) playFrenchSpeech(cur.token);
+            }
+        });
+    }
+
+    if (cardSentenceSpeakBtn) {
+        cardSentenceSpeakBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (reviewQueue.length > 0 && currentQueueIndex < reviewQueue.length) {
+                const cur = reviewQueue[currentQueueIndex];
+                if (cur && cur.sentence) playFrenchSpeech(cur.sentence);
             }
         });
     }
@@ -1069,6 +1448,16 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // 'R' or 'r' key to replay audio
+        if (e.key === 'r' || e.key === 'R') {
+            e.preventDefault();
+            if (reviewQueue.length > 0 && currentQueueIndex < reviewQueue.length) {
+                const cur = reviewQueue[currentQueueIndex];
+                if (cur && cur.token) playFrenchSpeech(cur.token);
+            }
+            return;
+        }
+
         if (e.code === 'Space') {
             e.preventDefault();
             if (!isCardFlipped) {
@@ -1091,7 +1480,7 @@ document.addEventListener('DOMContentLoaded', () => {
         frenchInput.value = decodeURIComponent(prefillText);
         charCounter.textContent = `${frenchInput.value.length} / 15000`;
         setTimeout(() => {
-            if (apiKeyInput.value.trim()) {
+            if (getEffectiveAuthToken()) {
                 startAnalysis();
             }
         }, 300);

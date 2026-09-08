@@ -6,11 +6,11 @@
     <meta name="color-scheme" content="light">
     <title>法语拆解与跟读复述 - 1000H French</title>
     <link rel="icon" href="/favicon.ico?v=2" sizes="any">
-    <link rel="stylesheet" href="/static/style.css?v=6.0">
-    <link rel="stylesheet" href="/static/study.css?v=6.0">
+    <link rel="stylesheet" href="/static/style.css?v=7.0">
+    <link rel="stylesheet" href="/static/study.css?v=7.0">
     <script src="https://unpkg.com/lucide@1.34.0/dist/umd/lucide.min.js" defer></script>
-    <script src="/static/anki.js?v=6.0" defer></script>
-    <script src="/static/study.js?v=6.0" defer></script>
+    <script src="/static/anki.js?v=7.0" defer></script>
+    <script src="/static/study.js?v=7.0" defer></script>
 </head>
 <body>
     <div class="app-shell">
@@ -37,6 +37,12 @@
             </nav>
 
             <div class="topbar-actions">
+                <button id="user-auth-btn" class="btn btn-secondary user-auth-btn" type="button" title="账号与免费试用状态">
+                    <i data-lucide="user" aria-hidden="true"></i>
+                    <span id="user-auth-status-text">登录 / 注册</span>
+                    <span id="user-trial-badge" class="badge trial-badge" title="免费试用天数" hidden>赠60天</span>
+                </button>
+
                 <button id="open-deck-btn" class="btn btn-secondary nav-deck-btn" type="button" title="打开生词卡 (Anki 间隔复习)">
                     <i data-lucide="layers" aria-hidden="true"></i>
                     <span>生词卡</span>
@@ -102,6 +108,11 @@
                         <h2>输入待拆解与复述的法语文本</h2>
                     </div>
                     <div class="panel-tools">
+                        <button id="history-toggle-btn" class="btn btn-secondary" type="button" title="查看并恢复过往查询历史">
+                            <i data-lucide="history" aria-hidden="true"></i>
+                            <span>查询历史</span>
+                            <span id="history-count-badge" class="badge count-badge" hidden>0</span>
+                        </button>
                         <button id="fill-example-btn" class="btn btn-secondary" type="button" title="填入经典法语示例">
                             <i data-lucide="lightbulb" aria-hidden="true"></i>
                             <span>填入示例</span>
@@ -193,8 +204,13 @@
                     <div class="card-face card-back" id="card-back-face" hidden>
                         <div class="card-context-pill">背面 · 详解与语法</div>
                         <div class="card-back-header">
-                            <span id="card-back-pos" class="pos-tag"></span>
-                            <span id="card-back-lemma" class="lemma-tag"></span>
+                            <div class="tags-group">
+                                <span id="card-back-pos" class="pos-tag"></span>
+                                <span id="card-back-lemma" class="lemma-tag"></span>
+                            </div>
+                            <button id="card-back-speak-btn" class="btn-token-speak btn-card-speak" type="button" title="重播发音 (快捷键 R)">
+                                <i data-lucide="volume-2" aria-hidden="true"></i>
+                            </button>
                         </div>
                         <div class="card-explanations">
                             <div class="card-exp-row">
@@ -207,7 +223,13 @@
                             </div>
                         </div>
                         <div id="card-sentence-trans-box" class="card-sentence-trans-box">
-                            <div class="quote-label">例句译文：</div>
+                            <div class="quote-label-row">
+                                <span class="quote-label">例句译文：</span>
+                                <button id="card-sentence-speak-btn" class="btn btn-secondary btn-xs" type="button" title="播放此例句发音">
+                                    <i data-lucide="volume-2" aria-hidden="true"></i>
+                                    <span>例句发音</span>
+                                </button>
+                            </div>
                             <div id="card-sentence-cn" class="sentence-cn-text"></div>
                         </div>
                     </div>
@@ -259,6 +281,120 @@
                     </button>
                 </div>
             </footer>
+        </div>
+    </div>
+
+    <!-- Query History Modal Dialog -->
+    <div id="history-modal" class="modal-backdrop" hidden>
+        <div class="modal-dialog modal-history-dialog" role="dialog" aria-labelledby="history-modal-title" aria-modal="true">
+            <header class="modal-header">
+                <div class="modal-title-group">
+                    <i data-lucide="history" class="modal-icon" aria-hidden="true"></i>
+                    <h3 id="history-modal-title">法语精析历史记录</h3>
+                    <span id="history-total-badge" class="badge">共 0 条</span>
+                </div>
+                <div class="modal-header-actions">
+                    <button id="clear-history-btn" class="btn btn-secondary btn-sm" type="button" title="清空全部查询历史">
+                        <i data-lucide="trash-2" aria-hidden="true"></i>
+                        <span>清空历史</span>
+                    </button>
+                    <button id="close-history-modal-btn" class="icon-btn modal-close-btn" type="button" title="关闭 (Esc)">
+                        <i data-lucide="x" aria-hidden="true"></i>
+                    </button>
+                </div>
+            </header>
+            <div class="modal-body history-modal-body">
+                <div id="history-list" class="history-list"></div>
+                <div id="history-empty" class="history-empty" hidden>
+                    <div class="empty-icon-box">⏳</div>
+                    <h4>暂无查询历史</h4>
+                    <p>您每次拆解分析的法语文本和精析卡片都会自动保存在这里，随时可以一键恢复，无需重复耗费 API 资源。</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Account & 60-day Free Trial Auth Modal -->
+    <div id="auth-modal" class="modal-backdrop" hidden>
+        <div class="modal-dialog modal-auth-dialog" role="dialog" aria-labelledby="auth-modal-title" aria-modal="true">
+            <header class="modal-header">
+                <div class="modal-title-group">
+                    <i data-lucide="user-check" class="modal-icon" aria-hidden="true"></i>
+                    <h3 id="auth-modal-title">用户账号与专属权益</h3>
+                </div>
+                <button id="close-auth-modal-btn" class="icon-btn modal-close-btn" type="button" title="关闭 (Esc)">
+                    <i data-lucide="x" aria-hidden="true"></i>
+                </button>
+            </header>
+            <div class="modal-body auth-modal-body">
+                <!-- Unauthenticated State: Register & Login Tabs -->
+                <div id="auth-form-container">
+                    <div class="auth-tabs" role="tablist">
+                        <button id="tab-register-btn" class="auth-tab active" type="button" role="tab" aria-selected="true">
+                            注册新账号 (赠60天免费)
+                        </button>
+                        <button id="tab-login-btn" class="auth-tab" type="button" role="tab" aria-selected="false">
+                            登录已有账号
+                        </button>
+                    </div>
+                    <form id="auth-form" class="auth-form" autocomplete="off">
+                        <div class="auth-notice" id="auth-tab-notice">
+                            🎉 <strong>新用户专属福利</strong>：注册即送 <strong>60 天（2个月）全功能免费试用</strong>，免配置 API Key 畅享高保真发音、Grok 4.6 深度语法精析与 Anki 记忆卡系统！
+                        </div>
+                        <div class="connection-field">
+                            <label for="auth-email">电子邮箱</label>
+                            <input id="auth-email" type="email" placeholder="name@example.com" required autocomplete="email">
+                        </div>
+                        <div class="connection-field">
+                            <label for="auth-password">密码</label>
+                            <input id="auth-password" type="password" placeholder="请输入密码（至少 6 位）" required autocomplete="current-password">
+                        </div>
+                        <div id="auth-error-msg" class="auth-error-msg" hidden role="alert"></div>
+                        <div class="auth-actions">
+                            <button id="auth-submit-btn" class="btn btn-primary btn-full" type="submit">
+                                <i data-lucide="sparkles" aria-hidden="true"></i>
+                                <span id="auth-submit-label">立即注册并领取 60 天免费试用</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Authenticated State: User Status Profile -->
+                <div id="auth-user-profile" hidden>
+                    <div class="profile-card">
+                        <div class="profile-header">
+                            <div class="profile-avatar">
+                                <i data-lucide="user" aria-hidden="true"></i>
+                            </div>
+                            <div class="profile-info">
+                                <h4 id="profile-email">user@example.com</h4>
+                                <span id="profile-badge" class="badge trial-badge">60天试用期中</span>
+                            </div>
+                        </div>
+                        <div class="profile-meta-grid">
+                            <div class="profile-meta-item">
+                                <span class="meta-label">剩余权益天数</span>
+                                <strong id="profile-days-left" class="meta-value highlight">60 天</strong>
+                            </div>
+                            <div class="profile-meta-item">
+                                <span class="meta-label">试用有效期至</span>
+                                <strong id="profile-expires-at" class="meta-value">2026-11-07</strong>
+                            </div>
+                        </div>
+                        <div class="profile-perks">
+                            <p><i data-lucide="check-circle" class="perk-icon"></i> <strong>免配置 API Key</strong>：自动调用服务器大模型精析与跟读评测</p>
+                            <p><i data-lucide="check-circle" class="perk-icon"></i> <strong>Anki 生词包自动发音</strong>：导出即用，带真实在线发音与词根原型</p>
+                            <p><i data-lucide="check-circle" class="perk-icon"></i> <strong>查询历史无限保存</strong>：随时翻阅复述过往句子与词汇库</p>
+                        </div>
+                        <div class="profile-actions">
+                            <button id="logout-btn" class="btn btn-secondary btn-full" type="button">
+                                <i data-lucide="log-out" aria-hidden="true"></i>
+                                <span>退出当前账号</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </body>
