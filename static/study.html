@@ -6,10 +6,11 @@
     <meta name="color-scheme" content="light">
     <title>法语拆解与跟读复述 - 1000H French</title>
     <link rel="icon" href="/favicon.ico?v=2" sizes="any">
-    <link rel="stylesheet" href="/static/style.css?v=5.0">
-    <link rel="stylesheet" href="/static/study.css?v=5.0">
+    <link rel="stylesheet" href="/static/style.css?v=6.0">
+    <link rel="stylesheet" href="/static/study.css?v=6.0">
     <script src="https://unpkg.com/lucide@1.34.0/dist/umd/lucide.min.js" defer></script>
-    <script src="/static/study.js?v=5.0" defer></script>
+    <script src="/static/anki.js?v=6.0" defer></script>
+    <script src="/static/study.js?v=6.0" defer></script>
 </head>
 <body>
     <div class="app-shell">
@@ -35,53 +36,61 @@
                 </a>
             </nav>
 
-            <details class="connection-settings">
-                <summary>
-                    <i data-lucide="key-round" aria-hidden="true"></i>
-                    <span class="summary-label">连接设置</span>
-                    <span id="connection-summary-state" class="connection-summary-state" data-state="idle" title="连接尚未验证">
-                        <span class="connection-dot" aria-hidden="true"></span>
-                        <span class="connection-summary-text">未验证</span>
-                    </span>
-                    <i data-lucide="chevron-down" class="summary-chevron" aria-hidden="true"></i>
-                </summary>
-                <form class="connection-popover" autocomplete="off">
-                    <div class="connection-field">
-                        <label for="api-key">Perplexity web2api API Key</label>
-                        <div class="password-row">
-                            <input id="api-key" type="password" autocomplete="off" spellcheck="false">
-                            <button id="toggle-key" class="icon-btn" type="button" title="显示或隐藏 API Key" aria-label="显示或隐藏 API Key">
-                                <i data-lucide="eye"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="connection-field">
-                        <label for="model-select">分析模型</label>
-                        <select id="model-select">
-                            <option value="grok-4.6" selected>Grok 4.6 · 推荐</option>
-                            <option value="grok-4.6-thinking">Grok 4.6 Thinking</option>
-                            <option value="sonar-2">Sonar 2 · 备用</option>
-                        </select>
-                    </div>
-                    <label class="check-row" for="remember-key">
-                        <input id="remember-key" type="checkbox">
-                        <span>记住在此设备</span>
-                    </label>
-                    <div class="connection-test-row">
-                        <div id="connection-result" class="connection-result" data-state="idle" role="status" aria-live="polite">
+            <div class="topbar-actions">
+                <button id="open-deck-btn" class="btn btn-secondary nav-deck-btn" type="button" title="打开生词卡 (Anki 间隔复习)">
+                    <i data-lucide="layers" aria-hidden="true"></i>
+                    <span>生词卡</span>
+                    <span id="due-card-badge" class="deck-badge" title="待复习卡片数">0</span>
+                </button>
+
+                <details class="connection-settings">
+                    <summary>
+                        <i data-lucide="key-round" aria-hidden="true"></i>
+                        <span class="summary-label">连接设置</span>
+                        <span id="connection-summary-state" class="connection-summary-state" data-state="idle" title="连接尚未验证">
                             <span class="connection-dot" aria-hidden="true"></span>
-                            <div>
-                                <strong id="connection-result-title">尚未测试</strong>
-                                <span id="connection-result-detail">填写 Key 后测试实际连接</span>
+                            <span class="connection-summary-text">未验证</span>
+                        </span>
+                        <i data-lucide="chevron-down" class="summary-chevron" aria-hidden="true"></i>
+                    </summary>
+                    <form class="connection-popover" autocomplete="off">
+                        <div class="connection-field">
+                            <label for="api-key">Perplexity web2api API Key</label>
+                            <div class="password-row">
+                                <input id="api-key" type="password" autocomplete="off" spellcheck="false">
+                                <button id="toggle-key" class="icon-btn" type="button" title="显示或隐藏 API Key" aria-label="显示或隐藏 API Key">
+                                    <i data-lucide="eye"></i>
+                                </button>
                             </div>
                         </div>
-                        <button id="test-connection" class="btn btn-test" type="button">
-                            <i data-lucide="plug-zap" aria-hidden="true"></i>
-                            <span>测试连接</span>
-                        </button>
-                    </div>
-                </form>
-            </details>
+                        <div class="connection-field">
+                            <label for="model-select">分析模型</label>
+                            <select id="model-select">
+                                <option value="grok-4.6" selected>Grok 4.6 · 推荐</option>
+                                <option value="grok-4.6-thinking">Grok 4.6 Thinking</option>
+                                <option value="sonar-2">Sonar 2 · 备用</option>
+                            </select>
+                        </div>
+                        <label class="check-row" for="remember-key">
+                            <input id="remember-key" type="checkbox">
+                            <span>记住在此设备</span>
+                        </label>
+                        <div class="connection-test-row">
+                            <div id="connection-result" class="connection-result" data-state="idle" role="status" aria-live="polite">
+                                <span class="connection-dot" aria-hidden="true"></span>
+                                <div>
+                                    <strong id="connection-result-title">尚未测试</strong>
+                                    <span id="connection-result-detail">填写 Key 后测试实际连接</span>
+                                </div>
+                            </div>
+                            <button id="test-connection" class="btn btn-test" type="button">
+                                <i data-lucide="plug-zap" aria-hidden="true"></i>
+                                <span>测试连接</span>
+                            </button>
+                        </div>
+                    </form>
+                </details>
+            </div>
         </header>
 
         <main>
@@ -97,12 +106,13 @@
                             <i data-lucide="lightbulb" aria-hidden="true"></i>
                             <span>填入示例</span>
                         </button>
-                        <button id="clear-input-btn" class="icon-btn" type="button" title="清空内容" aria-label="清空内容">
-                            <i data-lucide="trash-2"></i>
+                        <button id="clear-input-btn" class="btn btn-secondary" type="button" title="清空输入框" aria-label="清空输入框">
+                            <i data-lucide="trash-2" aria-hidden="true"></i>
+                            <span>清空</span>
                         </button>
                     </div>
                 </div>
-                <textarea id="french-input" maxlength="15000" placeholder="粘贴或输入一段法语文本（可包含单句或多句），系统将逐句切分、三列深度解析每个单词/短语并支持语音即时跟读打分..." spellcheck="true"></textarea>
+                <textarea id="french-input" maxlength="15000" placeholder="粘贴或输入一段法语文本（可包含单句或多句），系统将基于 B1 核心词汇标准切分词组/搭配并支持发音与跟读评测..." spellcheck="true"></textarea>
                 <div class="editor-footer">
                     <span id="char-counter">0 / 15000</span>
                 </div>
@@ -134,6 +144,122 @@
                 </div>
             </section>
         </main>
+    </div>
+
+    <!-- Flashcard Review Modal Dialog (Anki SM-2) -->
+    <div id="flashcard-modal" class="modal-backdrop" hidden>
+        <div class="modal-dialog" role="dialog" aria-labelledby="modal-card-title" aria-modal="true">
+            <header class="modal-header">
+                <div class="modal-title-group">
+                    <i data-lucide="layers" class="modal-icon" aria-hidden="true"></i>
+                    <h3 id="modal-card-title">Anki 生词卡复习</h3>
+                    <span id="review-progress-badge" class="badge">0 / 0</span>
+                </div>
+                <div class="modal-header-actions">
+                    <button id="export-deck-btn" class="btn btn-secondary btn-sm" type="button" title="导出为 Anki 电脑/手机端支持的 .tsv 文件">
+                        <i data-lucide="download" aria-hidden="true"></i>
+                        <span>导出 Anki</span>
+                    </button>
+                    <button id="close-modal-btn" class="icon-btn modal-close-btn" type="button" title="关闭 (Esc)">
+                        <i data-lucide="x" aria-hidden="true"></i>
+                    </button>
+                </div>
+            </header>
+
+            <div class="modal-body">
+                <!-- Active Card Stage -->
+                <div id="card-stage" class="card-stage" tabindex="0" role="button" title="点击或按空格键翻转卡片">
+                    <!-- Front Side -->
+                    <div class="card-face card-front" id="card-front-face">
+                        <div class="card-context-pill">正面 · 识记与发音</div>
+                        <div class="card-main-word-row">
+                            <h2 id="card-front-word" class="card-front-word">--</h2>
+                            <button id="card-speak-btn" class="btn-token-speak btn-card-speak" type="button" title="点击发音">
+                                <i data-lucide="volume-2" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <div id="card-front-phonetic" class="card-phonetic"></div>
+                        <div class="card-sentence-quote" id="card-quote-box">
+                            <span class="quote-label">语境例句：</span>
+                            <p id="card-front-sentence" class="quote-text"></p>
+                        </div>
+                        <div class="card-flip-prompt">
+                            <i data-lucide="rotate-3d" aria-hidden="true"></i>
+                            <span>点击卡片或按【空格键】翻看背面释义</span>
+                        </div>
+                    </div>
+
+                    <!-- Back Side -->
+                    <div class="card-face card-back" id="card-back-face" hidden>
+                        <div class="card-context-pill">背面 · 详解与语法</div>
+                        <div class="card-back-header">
+                            <span id="card-back-pos" class="pos-tag"></span>
+                            <span id="card-back-lemma" class="lemma-tag"></span>
+                        </div>
+                        <div class="card-explanations">
+                            <div class="card-exp-row">
+                                <span class="exp-lang-tag">中文释义</span>
+                                <p id="card-back-cn" class="card-exp-cn"></p>
+                            </div>
+                            <div class="card-exp-row">
+                                <span class="exp-lang-tag">英文解释</span>
+                                <p id="card-back-en" class="card-exp-en"></p>
+                            </div>
+                        </div>
+                        <div id="card-sentence-trans-box" class="card-sentence-trans-box">
+                            <div class="quote-label">例句译文：</div>
+                            <div id="card-sentence-cn" class="sentence-cn-text"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Empty / Completion Screen -->
+                <div id="deck-empty-screen" class="deck-empty-screen" hidden>
+                    <div class="empty-icon-box">🎉</div>
+                    <h3 id="empty-screen-title">今日待复习生词已全部完成！</h3>
+                    <p id="empty-screen-desc">遵循 Anki SM-2 间隔记忆算法，已复习的卡片将在未来最佳艾宾浩斯复习节点再次出现。</p>
+                    <div class="empty-screen-actions">
+                        <button id="study-all-cards-btn" class="btn btn-secondary" type="button">
+                            <i data-lucide="refresh-cw" aria-hidden="true"></i>
+                            <span>复习全部生词卡 (<span id="total-card-count">0</span>)</span>
+                        </button>
+                        <button id="export-deck-btn-2" class="btn btn-primary" type="button">
+                            <i data-lucide="download" aria-hidden="true"></i>
+                            <span>导出到 Anki 格式 (.tsv)</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer with SM-2 Grading Buttons (shown when card is flipped to back) -->
+            <footer id="modal-rating-footer" class="modal-footer" hidden>
+                <div class="footer-hint-row">
+                    <span class="footer-hint">根据回忆难度评分（键盘快捷键 1 - 4）：</span>
+                </div>
+                <div class="rating-buttons-grid">
+                    <button class="btn-grade grade-1" data-grade="1" type="button">
+                        <span class="grade-key">1</span>
+                        <span class="grade-name">重来 (Again)</span>
+                        <span class="grade-interval">&lt;1天</span>
+                    </button>
+                    <button class="btn-grade grade-2" data-grade="2" type="button">
+                        <span class="grade-key">2</span>
+                        <span class="grade-name">困难 (Hard)</span>
+                        <span class="grade-interval">1~2天</span>
+                    </button>
+                    <button class="btn-grade grade-3" data-grade="3" type="button">
+                        <span class="grade-key">3</span>
+                        <span class="grade-name">良好 (Good)</span>
+                        <span class="grade-interval">3~6天</span>
+                    </button>
+                    <button class="btn-grade grade-4" data-grade="4" type="button">
+                        <span class="grade-key">4</span>
+                        <span class="grade-name">简单 (Easy)</span>
+                        <span class="grade-interval">7+天</span>
+                    </button>
+                </div>
+            </footer>
+        </div>
     </div>
 </body>
 </html>

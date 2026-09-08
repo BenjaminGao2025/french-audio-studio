@@ -660,34 +660,75 @@ async def request_french_transform(
 
 def _analyze_payload(request: AnalyzeRequest) -> dict:
     prompt = (
-        "You are an expert French linguist and phonetician. "
-        "Analyze the following French text and break it down for language learners into sentences and lexical units.\n"
-        "Requirements:\n"
-        "1. Split the text into complete French sentences.\n"
-        "2. For each sentence, provide clear English and accurate Chinese translations.\n"
-        "3. Break down the sentence into words, compound prepositions, and idiomatic expressions (e.g. 'de temps en temps', 'avoir peur', 'au fur et à mesure', 'il y a', 'en retard'). Group multi-word idiomatic expressions together as single tokens when appropriate.\n"
+        "You are an elite French linguist, lexicographer, and pedagogical coach for intermediate learners.\n"
+        "Analyze the provided French text and break it down into clean, high-value learning units.\n\n"
+        "STRICT PEDAGOGICAL RULES (CRITICAL):\n"
+        "1. LEARNER VOCABULARY BASELINE: The user already knows ~200 elementary French words (basic subject pronouns like 'je, tu, il, elle, on, nous, vous, ils, elles, ce, c'', basic prepositions standing alone like 'de, d', à, sur, dans, en', basic isolated articles like 'le, la, l', les, un, une, des, du', basic conjunctions like 'et, ou, mais', and basic numbers like '40').\n"
+        "   - DO NOT create separate entries for isolated, trivial words (e.g. NEVER list 'Elle', 'et', 'sur', 'des', '40' by themselves).\n"
+        "2. CHUNKING & COLLOCATIONS (意群与搭配绑定):\n"
+        "   - Group multi-word expressions, prepositional phrases, and natural collocations together as a SINGLE entry instead of splitting them.\n"
+        "   - Example: 'de la vie quotidienne' MUST be kept as ONE single phrase ('de la vie quotidienne', pos: 'loc. adj.', meaning 'of daily life / 日常生活中的').\n"
+        "   - Example: 'portant sur' MUST be kept as ONE phrase ('portant sur', pos: 'loc. verb.', meaning 'focusing on, dealing with / 涉及，关于').\n"
+        "   - Example: 'ayant des objectifs différents' or 'objectifs différents' should be treated as a coherent phrase.\n"
+        "3. WHAT TO INCLUDE:\n"
+        "   - Meaningful verbs (with their infinitive lemma, tense, person).\n"
+        "   - Key nouns, adjectives, and adverbs.\n"
+        "   - Idiomatic expressions, compound prepositions, verbal phrases, and collocations.\n"
+        "   - Aim for 3 to 6 high-value, meaningful entries per sentence. Quality over quantity!\n"
         "4. For each token/unit, provide:\n"
-        "   - 'token': the word or phrase exactly as it appears in the sentence\n"
-        "   - 'lemma': dictionary canonical base form (infinitive for verbs, masculine singular for nouns/adjectives, uncontracted components like 'de + le' for 'du')\n"
-        "   - 'pos': part of speech abbreviation (e.g. 'v.', 'n.m.', 'n.f.', 'adj.', 'adv.', 'prep.', 'art.', 'pron.', 'loc. adv.', 'expr.')\n"
-        "   - 'phonetic': accurate IPA phonetic transcription (e.g. '/vɛ/', '/maʁ.ʃe/')\n"
-        "   - 'explanation_en': concise English explanation of this token in context (meaning, tense, agreement, nuance)\n"
-        "   - 'explanation_cn': concise Chinese explanation and grammar notes (中文释义、时态、人称、配合、固定搭配)\n"
-        "5. Output STRICT JSON ONLY, with no markdown code fences (no ```json), no prefix, and no suffix, matching this schema:\n"
+        "   - 'token': the word or multi-word phrase exactly as it appears in the sentence\n"
+        "   - 'lemma': dictionary canonical base form (infinitive for verbs, masculine singular for nouns/adjectives)\n"
+        "   - 'pos': part of speech abbreviation ('v.', 'n.m.', 'n.f.', 'adj.', 'adv.', 'loc. adv.', 'loc. verb.', 'loc. adj.', 'expr.')\n"
+        "   - 'phonetic': accurate IPA phonetic transcription\n"
+        "   - 'explanation_en': concise, natural English gloss and nuance in this context\n"
+        "   - 'explanation_cn': accurate, natural Chinese explanation and grammatical note (词义、时态、固定搭配用法)\n"
+        "5. Output STRICT JSON ONLY (no markdown code blocks, no ```json, no extra text):\n"
         "{\n"
         '  "sentences": [\n'
         '    {\n'
-        '      "original": "Je vais au marché de temps en temps.",\n'
-        '      "translation_en": "I go to the market from time to time.",\n'
-        '      "translation_cn": "我有时去市场。",\n'
+        '      "original": "Elle comprend 40 questions portant sur des documents de la vie quotidienne et ayant des objectifs différents.",\n'
+        '      "translation_en": "It comprises 40 questions dealing with documents of daily life and having different objectives.",\n'
+        '      "translation_cn": "它包含40道关于日常生活中各类材料并具有不同目标的问题。",\n'
         '      "tokens": [\n'
         '        {\n'
-        '          "token": "vais",\n'
-        '          "lemma": "aller",\n'
+        '          "token": "comprend",\n'
+        '          "lemma": "comprendre",\n'
         '          "pos": "v.",\n'
-        '          "phonetic": "/vɛ/",\n'
-        '          "explanation_en": "go (1st person singular present of aller)",\n'
-        '          "explanation_cn": "去，走（aller 第一人称现在时）"\n'
+        '          "phonetic": "/kɔ̃.pʁɑ̃/",\n'
+        '          "explanation_en": "comprises, includes (3rd person singular present of comprendre)",\n'
+        '          "explanation_cn": "包含，包括（comprendre 第三人称单数现在时）"\n'
+        '        },\n'
+        '        {\n'
+        '          "token": "portant sur",\n'
+        '          "lemma": "porter sur",\n'
+        '          "pos": "loc. verb.",\n'
+        '          "phonetic": "/pɔʁ.tɑ̃ syʁ/",\n'
+        '          "explanation_en": "focusing on, dealing with (present participle)",\n'
+        '          "explanation_cn": "涉及，关于（现在分词短语）"\n'
+        '        },\n'
+        '        {\n'
+        '          "token": "de la vie quotidienne",\n'
+        '          "lemma": "de la vie quotidienne",\n'
+        '          "pos": "loc. adj.",\n'
+        '          "phonetic": "/də la vi kɔ.ti.djɛn/",\n'
+        '          "explanation_en": "of daily life, everyday (idiomatic phrase)",\n'
+        '          "explanation_cn": "日常生活中的（常见搭配，形容日常场景）"\n'
+        '        },\n'
+        '        {\n'
+        '          "token": "objectifs",\n'
+        '          "lemma": "objectif",\n'
+        '          "pos": "n.m.",\n'
+        '          "phonetic": "/ɔb.ʒɛk.tif/",\n'
+        '          "explanation_en": "objectives, aims, targets (plural)",\n'
+        '          "explanation_cn": "目标，目的（阳性名词复数）"\n'
+        '        },\n'
+        '        {\n'
+        '          "token": "différents",\n'
+        '          "lemma": "différent",\n'
+        '          "pos": "adj.",\n'
+        '          "phonetic": "/di.fe.ʁɑ̃/",\n'
+        '          "explanation_en": "different, distinct, various (masculine plural)",\n'
+        '          "explanation_cn": "不同的，各异的（阳性复数形容词）"\n'
         '        }\n'
         '      ]\n'
         '    }\n'

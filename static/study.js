@@ -1,5 +1,6 @@
 /* ==========================================================================
    French Audio Studio - Study & Shadowing Workbench Script
+   Includes Spaced-Repetition Flashcard (Anki SM-2) Deck Manager
    ========================================================================== */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -7,6 +8,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const localKeyName = 'frenchStudio.perplexityApiKey';
     const sessionKeyName = 'frenchStudio.sessionApiKey';
     const modelKeyName = 'frenchStudio.perplexityModel';
+
+    // Initialize Anki Deck Manager
+    const deckManager = window.AnkiDeck ? new window.AnkiDeck.DeckManager() : null;
 
     // DOM Elements - Connection
     const apiKeyInput = document.getElementById('api-key');
@@ -34,11 +38,46 @@ document.addEventListener('DOMContentLoaded', () => {
     const sentenceCountBadge = document.getElementById('sentence-count-badge');
     const sentencesContainer = document.getElementById('sentences-container');
 
+    // DOM Elements - Topbar & Deck Launcher
+    const openDeckBtn = document.getElementById('open-deck-btn');
+    const dueCardBadge = document.getElementById('due-card-badge');
+
+    // DOM Elements - Flashcard Review Modal
+    const flashcardModal = document.getElementById('flashcard-modal');
+    const modalProgressBadge = document.getElementById('review-progress-badge');
+    const exportDeckBtn = document.getElementById('export-deck-btn');
+    const exportDeckBtn2 = document.getElementById('export-deck-btn-2');
+    const closeModalBtn = document.getElementById('close-modal-btn');
+    const studyAllCardsBtn = document.getElementById('study-all-cards-btn');
+    const totalCardCountSpan = document.getElementById('total-card-count');
+
+    const cardStage = document.getElementById('card-stage');
+    const cardFrontFace = document.getElementById('card-front-face');
+    const cardBackFace = document.getElementById('card-back-face');
+    const cardFrontWord = document.getElementById('card-front-word');
+    const cardSpeakBtn = document.getElementById('card-speak-btn');
+    const cardFrontPhonetic = document.getElementById('card-front-phonetic');
+    const cardQuoteBox = document.getElementById('card-quote-box');
+    const cardFrontSentence = document.getElementById('card-front-sentence');
+    const cardBackPos = document.getElementById('card-back-pos');
+    const cardBackLemma = document.getElementById('card-back-lemma');
+    const cardBackCn = document.getElementById('card-back-cn');
+    const cardBackEn = document.getElementById('card-back-en');
+    const cardSentenceCn = document.getElementById('card-sentence-cn');
+
+    const deckEmptyScreen = document.getElementById('deck-empty-screen');
+    const emptyScreenTitle = document.getElementById('empty-screen-title');
+    const emptyScreenDesc = document.getElementById('empty-screen-desc');
+    const modalRatingFooter = document.getElementById('modal-rating-footer');
+    const gradeButtons = document.querySelectorAll('.btn-grade');
+
+    // Flashcard Session State
+    let reviewQueue = [];
+    let currentQueueIndex = 0;
+    let isCardFlipped = false;
+
     // Speech Recognition API Detection
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition || null;
-
-    // Audio Caches & Player State
-    const activeAudios = new Map();
 
     function refreshIcons() {
         if (window.lucide && typeof window.lucide.createIcons === 'function') {
@@ -46,7 +85,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Initialize icons immediately and on full window load
     refreshIcons();
     window.addEventListener('load', refreshIcons);
 
@@ -73,6 +111,8 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             setConnectionState('idle', '未填写 Key', '在右上角连接设置填写 Key');
         }
+
+        updateDeckBadge();
     }
 
     function saveApiKey() {
@@ -153,7 +193,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!text || !text.trim()) return;
         const cleanText = text.trim();
 
-        // Use cached audio object or create a new one
         const audioUrl = `/tts?text=${encodeURIComponent(cleanText)}&voice=fr-FR-DeniseNeural`;
         const audio = new Audio(audioUrl);
 
@@ -162,7 +201,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         audio.addEventListener('error', () => {
-            // Fallback to browser Web Speech API if Edge-TTS backend is temporarily unreachable
             if ('speechSynthesis' in window) {
                 window.speechSynthesis.cancel();
                 const utterance = new SpeechSynthesisUtterance(cleanText);
@@ -179,7 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         audio.play().catch(e => {
-            console.warn('Audio play interrupted or failed, attempting Web Speech API:', e);
+            console.warn('Audio play interrupted, falling back to Web Speech:', e);
             if ('speechSynthesis' in window) {
                 const utterance = new SpeechSynthesisUtterance(cleanText);
                 utterance.lang = 'fr-FR';
@@ -230,7 +268,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function evaluateFrenchPronunciation(targetSentence, spokenTranscript) {
-        // Extract words from target sentence
         const rawTargetWords = targetSentence.match(/[\w'’\-À-ÿ]+|[^\s\w]/g) || [];
         const targetWords = rawTargetWords
             .map(w => ({ raw: w, clean: cleanFrenchToken(w) }))
@@ -247,69 +284,56 @@ document.addEventListener('DOMContentLoaded', () => {
             };
         }
 
-        // Extract words from user speech transcript
-        const rawSpokenWords = (spokenTranscript || '').match(/[\w'’\-À-ÿ]+/g) || [];
-        const spokenCleanWords = rawSpokenWords.map(w => cleanFrenchToken(w)).filter(w => w.length > 0);
+        const spokenWords = (spokenTranscript || '')
+            .split(/\s+/)
+            .map(cleanFrenchToken)
+            .filter(w => w.length > 0);
 
         const wordResults = [];
         let totalScoreSum = 0;
-        let matchedWordCount = 0;
-        const usedSpokenIndices = new Set();
+        let matchedCount = 0;
 
         targetWords.forEach(target => {
             let bestSim = 0;
-            let bestIndex = -1;
+            spokenWords.forEach(spoken => {
+                const sim = calculateLevenshteinSimilarity(target.clean, spoken);
+                if (sim > bestSim) bestSim = sim;
+            });
 
-            for (let j = 0; j < spokenCleanWords.length; j++) {
-                if (usedSpokenIndices.has(j)) continue;
-                const sim = calculateLevenshteinSimilarity(target.clean, spokenCleanWords[j]);
-                if (sim > bestSim) {
-                    bestSim = sim;
-                    bestIndex = j;
-                }
-            }
-
-            let wordScore = 0;
             let status = 'missed';
-
-            if (bestSim >= 0.85) {
-                wordScore = 100;
+            if (bestSim >= 0.82) {
                 status = 'correct';
-                matchedWordCount++;
-                if (bestIndex !== -1) usedSpokenIndices.add(bestIndex);
-            } else if (bestSim >= 0.60) {
-                wordScore = Math.round(bestSim * 100);
+                matchedCount++;
+            } else if (bestSim >= 0.55) {
                 status = 'acceptable';
-                matchedWordCount++;
-                if (bestIndex !== -1) usedSpokenIndices.add(bestIndex);
-            } else {
-                wordScore = 0;
-                status = 'missed';
+                matchedCount += 0.5;
             }
 
+            const wordScore = Math.round(bestSim * 100);
             totalScoreSum += wordScore;
+
             wordResults.push({
                 word: target.raw,
                 score: wordScore,
-                status,
+                status: status,
             });
         });
 
         const accuracy = Math.round(totalScoreSum / targetWords.length);
-        const completeness = Math.min(100, Math.round((matchedWordCount / targetWords.length) * 100));
-        const overallScore = Math.min(100, Math.max(0, Math.round(accuracy * 0.75 + completeness * 0.25)));
+        const completeness = Math.min(100, Math.round((matchedCount / targetWords.length) * 100));
+        const overallScore = Math.round(accuracy * 0.7 + completeness * 0.3);
 
-        let ratingText = '需加强 (À répéter)';
+        let ratingText = '有待提高 (À travailler)';
         let ratingClass = 'needs-work';
 
         if (overallScore >= 90) {
-            ratingText = '🌟 卓越 (Excellent !)';
+            ratingText = '卓越 (Excellent !)';
             ratingClass = 'excellent';
         } else if (overallScore >= 75) {
-            ratingText = '👍 良好 (Bien joué !)';
+            ratingText = '良好 (Très bien !)';
             ratingClass = 'good';
         } else if (overallScore >= 60) {
-            ratingText = '💪 及格 (Pas mal)';
+            ratingText = '及格 (Passable)';
             ratingClass = 'pass';
         }
 
@@ -324,78 +348,258 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // -------------------------------------------------------------------------
-    // 4. Render Sentence Cards with 3-Column Table and Shadowing
+    // 4. Anki Spaced Repetition (SM-2) Deck Integration
+    // -------------------------------------------------------------------------
+    function updateDeckBadge() {
+        if (!deckManager || !dueCardBadge) return;
+        const dueCount = deckManager.countDue();
+        const totalCount = deckManager.countTotal();
+
+        dueCardBadge.textContent = `${dueCount}`;
+        if (dueCount > 0) {
+            dueCardBadge.className = 'deck-badge has-due';
+            dueCardBadge.title = `今日有 ${dueCount} 张卡片待复习 (总计 ${totalCount} 张)`;
+        } else {
+            dueCardBadge.className = 'deck-badge all-done';
+            dueCardBadge.title = `今日复习已完成 (总计 ${totalCount} 张)`;
+        }
+    }
+
+    function highlightToken(sentence, token) {
+        if (!sentence || !token) return escapeHtml(sentence || '');
+        try {
+            const regex = new RegExp(`(${token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+            return escapeHtml(sentence).replace(regex, '<strong style="color: var(--primary); text-decoration: underline;">$1</strong>');
+        } catch (e) {
+            return escapeHtml(sentence);
+        }
+    }
+
+    function openDeckModal(mode = 'due') {
+        if (!deckManager || !flashcardModal) return;
+
+        if (mode === 'due') {
+            reviewQueue = deckManager.getDueCards();
+        } else {
+            reviewQueue = deckManager.getAllCards();
+        }
+
+        currentQueueIndex = 0;
+        isCardFlipped = false;
+        flashcardModal.hidden = false;
+        displayCurrentCard();
+    }
+
+    function closeDeckModal() {
+        if (!flashcardModal) return;
+        flashcardModal.hidden = true;
+        updateDeckBadge();
+        updateTableStarStates();
+    }
+
+    function updateTableStarStates() {
+        if (!deckManager) return;
+        const starBtns = document.querySelectorAll('.btn-token-star');
+        starBtns.forEach(btn => {
+            const token = btn.dataset.token;
+            if (token && deckManager.hasCard(token)) {
+                btn.classList.add('active');
+                btn.title = '已加入生词卡 (点击移除)';
+            } else {
+                btn.classList.remove('active');
+                btn.title = '加入生词卡 (Anki)';
+            }
+        });
+    }
+
+    function displayCurrentCard() {
+        if (reviewQueue.length === 0 || currentQueueIndex >= reviewQueue.length) {
+            // Completion / Empty state
+            cardStage.hidden = true;
+            modalRatingFooter.hidden = true;
+            deckEmptyScreen.hidden = false;
+
+            const total = deckManager ? deckManager.countTotal() : 0;
+            if (total === 0) {
+                emptyScreenTitle.textContent = '生词本还是空的';
+                emptyScreenDesc.textContent = '在文本拆解列表中点击词组或单词旁的 ⭐ 按钮，即可将生词加入 Anki 记忆库。';
+                studyAllCardsBtn.hidden = true;
+            } else {
+                emptyScreenTitle.textContent = '🎉 今日待复习生词已全部完成！';
+                emptyScreenDesc.textContent = '遵循 Anki SM-2 间隔记忆算法，已复习的卡片将在未来最佳艾宾浩斯复习节点再次出现。';
+                studyAllCardsBtn.hidden = false;
+                totalCardCountSpan.textContent = total;
+            }
+            modalProgressBadge.textContent = '已完成';
+            refreshIcons();
+            return;
+        }
+
+        const currentCard = reviewQueue[currentQueueIndex];
+        cardStage.hidden = false;
+        deckEmptyScreen.hidden = true;
+
+        // Reset to front face
+        isCardFlipped = false;
+        cardFrontFace.hidden = false;
+        cardBackFace.hidden = true;
+        modalRatingFooter.hidden = true;
+
+        // Populate front content
+        cardFrontWord.textContent = currentCard.token;
+        cardFrontPhonetic.textContent = currentCard.phonetic || '';
+
+        if (currentCard.sentence) {
+            cardFrontSentence.innerHTML = highlightToken(currentCard.sentence, currentCard.token);
+            cardQuoteBox.hidden = false;
+        } else {
+            cardQuoteBox.hidden = true;
+        }
+
+        // Populate back content
+        cardBackPos.textContent = currentCard.pos || '';
+        cardBackPos.hidden = !currentCard.pos;
+
+        if (currentCard.lemma && currentCard.lemma.toLowerCase() !== currentCard.token.toLowerCase()) {
+            cardBackLemma.textContent = `原形: ${currentCard.lemma}`;
+            cardBackLemma.hidden = false;
+        } else {
+            cardBackLemma.hidden = true;
+        }
+
+        cardBackCn.textContent = currentCard.explanation_cn || '暂无释义';
+        cardBackEn.textContent = currentCard.explanation_en || '';
+        cardSentenceCn.textContent = currentCard.sentence_cn || '';
+
+        modalProgressBadge.textContent = `${currentQueueIndex + 1} / ${reviewQueue.length}`;
+
+        // Compute estimated interval labels for 4 grade buttons based on SM-2
+        updateGradeButtonIntervals(currentCard);
+
+        refreshIcons();
+    }
+
+    function updateGradeButtonIntervals(card) {
+        const interval = card.interval || 0;
+        const ef = card.easeFactor || 2.5;
+        const rep = card.repetitions || 0;
+
+        let hardDays = rep === 0 ? 1 : Math.max(1, Math.round(interval * 1.2));
+        let goodDays = rep === 0 ? 1 : (rep === 1 ? 6 : Math.round(interval * ef));
+        let easyDays = rep === 0 ? 3 : (rep === 1 ? 8 : Math.round(interval * ef * 1.3));
+
+        const gradeInterval1 = document.querySelector('.btn-grade.grade-1 .grade-interval');
+        const gradeInterval2 = document.querySelector('.btn-grade.grade-2 .grade-interval');
+        const gradeInterval3 = document.querySelector('.btn-grade.grade-3 .grade-interval');
+        const gradeInterval4 = document.querySelector('.btn-grade.grade-4 .grade-interval');
+
+        if (gradeInterval1) gradeInterval1.textContent = '<1天';
+        if (gradeInterval2) gradeInterval2.textContent = `${hardDays}天`;
+        if (gradeInterval3) gradeInterval3.textContent = `${goodDays}天`;
+        if (gradeInterval4) gradeInterval4.textContent = `${easyDays}天`;
+    }
+
+    function flipCurrentCard() {
+        if (cardStage.hidden || currentQueueIndex >= reviewQueue.length) return;
+        if (!isCardFlipped) {
+            isCardFlipped = true;
+            cardFrontFace.hidden = true;
+            cardBackFace.hidden = false;
+            modalRatingFooter.hidden = false;
+            refreshIcons();
+        }
+    }
+
+    function rateCurrentCard(grade) {
+        if (!deckManager || currentQueueIndex >= reviewQueue.length) return;
+        const currentCard = reviewQueue[currentQueueIndex];
+
+        deckManager.reviewCard(currentCard.id, grade);
+
+        // If grade === 1 (Again), append back to review queue for this session
+        if (grade === 1) {
+            reviewQueue.push(currentCard);
+        }
+
+        currentQueueIndex++;
+        displayCurrentCard();
+        updateDeckBadge();
+    }
+
+    // -------------------------------------------------------------------------
+    // 5. Render Study & Breakdown Deck
     // -------------------------------------------------------------------------
     function renderStudyDeck(sentences) {
         sentencesContainer.innerHTML = '';
+
         if (!sentences || sentences.length === 0) {
             studyDeckSection.hidden = true;
             return;
         }
 
-        sentenceCountBadge.textContent = `共 ${sentences.length} 句`;
         studyDeckSection.hidden = false;
+        sentenceCountBadge.textContent = `共 ${sentences.length} 句`;
 
-        sentences.forEach((sentenceData, index) => {
+        sentences.forEach((s, idx) => {
+            const originalText = s.original || '';
+            const transEn = s.translation_en || '';
+            const transCn = s.translation_cn || '';
+            const tokens = s.tokens || [];
+
             const card = document.createElement('article');
             card.className = 'sentence-card';
-            card.dataset.sentenceIndex = index;
-
-            const sentenceIndexStr = String(index + 1).padStart(2, '0');
-            const originalText = sentenceData.original || '';
-            const transEn = sentenceData.translation_en || '';
-            const transCn = sentenceData.translation_cn || '';
-            const tokens = sentenceData.tokens || [];
+            card.dataset.index = idx;
 
             // 1. Hero / Header
             const heroHtml = `
                 <div class="sentence-hero">
                     <div class="sentence-meta-row">
-                        <span class="sentence-index-pill">Phrase ${sentenceIndexStr}</span>
+                        <span class="sentence-index-pill">Phrase ${idx + 1}</span>
+                        <div class="sentence-hero-actions">
+                            <!-- reserved -->
+                        </div>
                     </div>
                     <div class="sentence-text-row">
                         <p class="sentence-french-text">${escapeHtml(originalText)}</p>
-                        <button class="btn-speak-round" type="button" title="朗读整句" aria-label="朗读整句">
+                        <button class="btn-speak-round" type="button" title="收听整句标准发音" aria-label="朗读句子">
                             <i data-lucide="volume-2"></i>
                         </button>
                     </div>
                     <div class="sentence-translations">
-                        ${transEn ? `<div class="translation-en"><strong>EN:</strong> ${escapeHtml(transEn)}</div>` : ''}
-                        ${transCn ? `<div class="translation-cn"><strong>CN:</strong> ${escapeHtml(transCn)}</div>` : ''}
+                        <div class="translation-cn">${escapeHtml(transCn)}</div>
+                        <div class="translation-en">${escapeHtml(transEn)}</div>
                     </div>
                 </div>
             `;
 
-            // 2. Shadowing / 跟读打分模块
+            // 2. Shadowing & Scoring Panel
             const shadowingHtml = `
                 <div class="shadowing-panel">
                     <div class="shadowing-header">
                         <div class="shadowing-title">
                             <i data-lucide="mic"></i>
-                            <span>跟读打分 (Shadowing & Évaluation)</span>
+                            <span>即时跟读打分 (Shadowing & Scoring)</span>
                         </div>
-                        <span class="shadowing-guide">点击录音清晰朗读此句，系统将自动评分与反馈</span>
+                        <span class="shadowing-guide">点击麦克风朗读该句，AI 将从发音完整度、相似度与漏读进行智能评测</span>
                     </div>
                     <div class="shadowing-body">
                         <button class="btn-record" type="button">
                             <i data-lucide="mic"></i>
-                            <span class="record-btn-text">点击开始跟读</span>
+                            <span class="record-btn-text">点击开始录音跟读</span>
                         </button>
                     </div>
                     <div class="score-result-card" hidden>
                         <div class="score-summary-bar">
                             <div class="score-badge-group">
                                 <span class="score-number-pill excellent">--</span>
-                                <span class="score-rating-text">准备跟读</span>
+                                <span class="score-rating-text">评测中...</span>
                             </div>
                             <div class="score-metrics">
-                                <span>准确度: <strong class="metric-acc">--</strong></span>
-                                <span>完整度: <strong class="metric-comp">--</strong></span>
+                                <span>准确度: <strong class="metric-acc">--%</strong></span>
+                                <span>完整度: <strong class="metric-comp">--%</strong></span>
                             </div>
                         </div>
-                        <div class="diff-result-box">
-                            <!-- 逐词变色反馈 -->
-                        </div>
+                        <div class="diff-result-box"></div>
                         <div class="diff-legend">
                             <span class="diff-legend-item"><span class="diff-dot dot-green"></span> 发音准确</span>
                             <span class="diff-legend-item"><span class="diff-dot dot-yellow"></span> 接近/轻微差异</span>
@@ -419,7 +623,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `;
 
-            // 3. Three-Column Table
+            // 3. Three-Column Table with Star (Anki) and Speaker buttons
             let rowsHtml = '';
             tokens.forEach(tok => {
                 const tokenText = tok.token || '';
@@ -428,6 +632,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const phonetic = tok.phonetic || '';
                 const expEn = tok.explanation_en || '';
                 const expCn = tok.explanation_cn || '';
+                const isSaved = deckManager ? deckManager.hasCard(tokenText) : false;
 
                 rowsHtml += `
                     <tr>
@@ -435,9 +640,23 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div class="token-cell">
                                 <div class="token-main-row">
                                     <span class="token-word">${escapeHtml(tokenText)}</span>
-                                    <button class="btn-token-speak" type="button" title="发音" data-speech="${escapeHtml(tokenText)}">
-                                        <i data-lucide="volume-2"></i>
-                                    </button>
+                                    <div class="token-actions">
+                                        <button class="btn-token-speak" type="button" title="点击发音" data-speech="${escapeHtml(tokenText)}">
+                                            <i data-lucide="volume-2"></i>
+                                        </button>
+                                        <button class="btn-token-star ${isSaved ? 'active' : ''}" type="button"
+                                            title="${isSaved ? '已加入生词卡 (点击移除)' : '加入生词卡 (Anki)'}"
+                                            data-token="${escapeHtml(tokenText)}"
+                                            data-lemma="${escapeHtml(lemma)}"
+                                            data-pos="${escapeHtml(pos)}"
+                                            data-phonetic="${escapeHtml(phonetic)}"
+                                            data-exp-en="${escapeHtml(expEn)}"
+                                            data-exp-cn="${escapeHtml(expCn)}"
+                                            data-sentence="${escapeHtml(originalText)}"
+                                            data-sentence-cn="${escapeHtml(transCn)}">
+                                            <i data-lucide="star"></i>
+                                        </button>
+                                    </div>
                                 </div>
                                 <div class="token-details">
                                     ${pos ? `<span class="pos-tag">${escapeHtml(pos)}</span>` : ''}
@@ -457,9 +676,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     <table class="breakdown-table">
                         <thead>
                             <tr>
-                                <th>① 词汇 / 短语 (Forme & Audio)</th>
+                                <th>① 词汇 / 词组短语 (Forme & Audio)</th>
                                 <th>② 英文简明解释 (Anglais)</th>
-                                <th>③ 中文释义与语法 (Chinois)</th>
+                                <th>③ 中文释义与语法搭配 (Chinois)</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -472,14 +691,10 @@ document.addEventListener('DOMContentLoaded', () => {
             card.innerHTML = heroHtml + shadowingHtml + tableHtml;
             sentencesContainer.appendChild(card);
 
-            // Wire Card Events
             attachSentenceCardEvents(card, originalText);
         });
 
-        // Initialize Lucide Icons for newly injected elements
-        if (window.lucide && typeof window.lucide.createIcons === 'function') {
-            window.lucide.createIcons();
-        }
+        refreshIcons();
     }
 
     function attachSentenceCardEvents(card, targetSentence) {
@@ -507,7 +722,40 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
 
-        // 3. Shadowing Recording & Scoring Logic
+        // 3. Token Anki Star Buttons
+        const tokenStarBtns = card.querySelectorAll('.btn-token-star');
+        tokenStarBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (!deckManager) return;
+                const token = btn.dataset.token;
+                if (!token) return;
+
+                if (deckManager.hasCard(token)) {
+                    deckManager.removeCard(token);
+                    btn.classList.remove('active');
+                    btn.title = '加入生词卡 (Anki)';
+                } else {
+                    deckManager.addCard({
+                        token: token,
+                        lemma: btn.dataset.lemma,
+                        pos: btn.dataset.pos,
+                        phonetic: btn.dataset.phonetic,
+                        explanation_en: btn.dataset.expEn,
+                        explanation_cn: btn.dataset.expCn,
+                        sentence: btn.dataset.sentence,
+                        sentence_cn: btn.dataset.sentenceCn,
+                    });
+                    btn.classList.add('active');
+                    btn.title = '已加入生词卡 (点击移除)';
+                }
+
+                updateDeckBadge();
+                refreshIcons();
+            });
+        });
+
+        // 4. Shadowing Recording & Scoring Logic
         const recordBtn = card.querySelector('.btn-record');
         const recordBtnText = recordBtn.querySelector('.record-btn-text');
         const scoreCard = card.querySelector('.score-result-card');
@@ -545,10 +793,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         recordBtn.addEventListener('click', async () => {
             if (isRecording) {
-                // Stop recording
                 stopRecording();
             } else {
-                // Start recording
                 await startRecording();
             }
         });
@@ -558,7 +804,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 audioChunks = [];
                 recognitionTranscript = '';
 
-                // Request mic stream for MediaRecorder
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 mediaRecorder = new MediaRecorder(stream);
                 mediaRecorder.ondataavailable = (e) => {
@@ -573,7 +818,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
                 mediaRecorder.start();
 
-                // Setup Speech Recognition if available
                 if (SpeechRecognition) {
                     recognition = new SpeechRecognition();
                     recognition.lang = 'fr-FR';
@@ -619,7 +863,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 } catch (e) {}
             }
 
-            // Evaluate after short delay to ensure final recognition results arrived
             setTimeout(() => {
                 evaluateAndDisplay();
             }, 500);
@@ -634,14 +877,13 @@ document.addEventListener('DOMContentLoaded', () => {
             metricAcc.textContent = `${evaluation.accuracy}%`;
             metricComp.textContent = `${evaluation.completeness}%`;
 
-            // Render word diff
             diffBox.innerHTML = '';
             if (evaluation.wordResults.length > 0) {
                 evaluation.wordResults.forEach(item => {
                     const wordSpan = document.createElement('span');
                     wordSpan.className = `diff-word ${item.status}`;
                     wordSpan.textContent = item.word;
-                    wordSpan.title = `得分: ${item.score} / 100`;
+                    wordSpan.title = `相似度得分: ${item.score} / 100`;
                     diffBox.appendChild(wordSpan);
                 });
             } else {
@@ -663,7 +905,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // -------------------------------------------------------------------------
-    // 5. Text Analysis Request
+    // 6. Text Analysis Request
     // -------------------------------------------------------------------------
     async function startAnalysis() {
         const text = frenchInput.value.trim();
@@ -682,7 +924,7 @@ document.addEventListener('DOMContentLoaded', () => {
             analyzeButton.disabled = true;
             analyzeButtonLabel.textContent = '正在智能拆解与精析...';
             statusMessage.className = 'status-message status-working';
-            statusMessage.textContent = '正在调用 LLM 进行全句切分与词汇/短语深度三列解析，请稍候...';
+            statusMessage.textContent = '正在调用 LLM 进行全句切分与意群搭配深度三列解析，请稍候...';
 
             const res = await fetch('/api/analyze', {
                 method: 'POST',
@@ -700,7 +942,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             renderStudyDeck(data.sentences || []);
             statusMessage.className = 'status-message status-success';
-            statusMessage.textContent = '拆解完成！您可以逐词查阅释义、点击 🔊 即时发音，或进行跟读打分复述。';
+            statusMessage.textContent = '拆解完成！您可以查阅释义、点击 ⭐ 存入 Anki 生词卡、点击 🔊 即时发音，或进行跟读打分。';
         } catch (err) {
             statusMessage.className = 'status-message status-error';
             statusMessage.textContent = `拆解失败: ${err.message}`;
@@ -712,7 +954,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // -------------------------------------------------------------------------
-    // 6. Event Bindings
+    // 7. Event Bindings
     // -------------------------------------------------------------------------
     initSettings();
 
@@ -723,7 +965,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Fill Example
     fillExampleButton.addEventListener('click', () => {
-        frenchInput.value = "Je vais faire du vélo au bord du lac de temps en temps, parce que cela me détend énormément.";
+        frenchInput.value = "Elle comprend 40 questions portant sur des documents de la vie quotidienne et ayant des objectifs différents.";
         charCounter.textContent = `${frenchInput.value.length} / 15000`;
         startAnalysis();
     });
@@ -753,13 +995,101 @@ document.addEventListener('DOMContentLoaded', () => {
         refreshIcons();
     });
 
+    // Flashcard Deck Modal Open/Close
+    if (openDeckBtn) {
+        openDeckBtn.addEventListener('click', () => openDeckModal('due'));
+    }
+
+    if (closeModalBtn) {
+        closeModalBtn.addEventListener('click', closeDeckModal);
+    }
+
+    if (flashcardModal) {
+        flashcardModal.addEventListener('click', (e) => {
+            if (e.target === flashcardModal) {
+                closeDeckModal();
+            }
+        });
+    }
+
+    // Card Stage Flip & Speak
+    if (cardStage) {
+        cardStage.addEventListener('click', () => {
+            flipCurrentCard();
+        });
+    }
+
+    if (cardSpeakBtn) {
+        cardSpeakBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (reviewQueue.length > 0 && currentQueueIndex < reviewQueue.length) {
+                const cur = reviewQueue[currentQueueIndex];
+                if (cur && cur.token) playFrenchSpeech(cur.token);
+            }
+        });
+    }
+
+    // Flashcard SM-2 Grade Buttons
+    gradeButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const grade = parseInt(btn.dataset.grade, 10);
+            if (grade >= 1 && grade <= 4) {
+                rateCurrentCard(grade);
+            }
+        });
+    });
+
+    // Study all cards button from completion screen
+    if (studyAllCardsBtn) {
+        studyAllCardsBtn.addEventListener('click', () => {
+            openDeckModal('all');
+        });
+    }
+
+    // Anki TSV Export
+    function handleExportDeck() {
+        if (!deckManager) return;
+        try {
+            deckManager.downloadAnkiFile('FrenchStudio_AnkiDeck.tsv');
+        } catch (err) {
+            alert(err.message);
+        }
+    }
+
+    if (exportDeckBtn) exportDeckBtn.addEventListener('click', handleExportDeck);
+    if (exportDeckBtn2) exportDeckBtn2.addEventListener('click', handleExportDeck);
+
+    // Global Keyboard listener for Flashcard review
+    document.addEventListener('keydown', (e) => {
+        if (!flashcardModal || flashcardModal.hidden) return;
+
+        if (e.key === 'Escape') {
+            closeDeckModal();
+            return;
+        }
+
+        if (e.code === 'Space') {
+            e.preventDefault();
+            if (!isCardFlipped) {
+                flipCurrentCard();
+            }
+            return;
+        }
+
+        // When card is flipped, keys 1, 2, 3, 4 trigger rating
+        if (isCardFlipped && ['1', '2', '3', '4'].includes(e.key)) {
+            e.preventDefault();
+            rateCurrentCard(parseInt(e.key, 10));
+        }
+    });
+
     // Check prefilled URL query param `?text=...`
     const urlParams = new URLSearchParams(window.location.search);
     const prefillText = urlParams.get('text');
     if (prefillText) {
         frenchInput.value = decodeURIComponent(prefillText);
         charCounter.textContent = `${frenchInput.value.length} / 15000`;
-        // Auto-run if text provided
         setTimeout(() => {
             if (apiKeyInput.value.trim()) {
                 startAnalysis();

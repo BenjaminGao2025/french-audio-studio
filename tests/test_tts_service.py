@@ -692,6 +692,21 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertEqual(ts1, ts2)
         self.assertTrue(ts1.startswith("snip_"))
 
+    def test_anki_js_served(self):
+        response = self.client.get("/static/anki.js")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("AnkiDeck", response.text)
+        self.assertIn("scheduleSM2", response.text)
+
+    def test_analyze_prompt_contains_pedagogical_and_collocation_rules(self):
+        req = tts_service.AnalyzeRequest(text="Elle comprend 40 questions.")
+        payload = tts_service._analyze_payload(req)
+        prompt = payload["messages"][0]["content"]
+        self.assertIn("~200 elementary French words", prompt)
+        self.assertIn("CHUNKING & COLLOCATIONS", prompt)
+        self.assertIn("de la vie quotidienne", prompt)
+
 
 if __name__ == "__main__":
     unittest.main()
+
