@@ -40,6 +40,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // Audio Caches & Player State
     const activeAudios = new Map();
 
+    function refreshIcons() {
+        if (window.lucide && typeof window.lucide.createIcons === 'function') {
+            window.lucide.createIcons();
+        }
+    }
+
+    // Initialize icons immediately and on full window load
+    refreshIcons();
+    window.addEventListener('load', refreshIcons);
+
     // -------------------------------------------------------------------------
     // 1. Settings & Key Management
     // -------------------------------------------------------------------------
@@ -668,10 +678,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const apiKey = requireApiKey();
             const model = modelSelect.value;
 
+            analyzeButton.classList.add('is-loading');
             analyzeButton.disabled = true;
-            analyzeButtonLabel.textContent = '正在智能拆解与生成...';
+            analyzeButtonLabel.textContent = '正在智能拆解与精析...';
+            statusMessage.className = 'status-message status-working';
             statusMessage.textContent = '正在调用 LLM 进行全句切分与词汇/短语深度三列解析，请稍候...';
-            statusMessage.style.color = '#2563eb';
 
             const res = await fetch('/api/analyze', {
                 method: 'POST',
@@ -688,14 +699,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             renderStudyDeck(data.sentences || []);
+            statusMessage.className = 'status-message status-success';
             statusMessage.textContent = '拆解完成！您可以逐词查阅释义、点击 🔊 即时发音，或进行跟读打分复述。';
-            statusMessage.style.color = '#15803d';
         } catch (err) {
+            statusMessage.className = 'status-message status-error';
             statusMessage.textContent = `拆解失败: ${err.message}`;
-            statusMessage.style.color = '#e11d48';
         } finally {
+            analyzeButton.classList.remove('is-loading');
             analyzeButton.disabled = false;
-            analyzeButtonLabel.textContent = '开始三列拆解与学习';
+            analyzeButtonLabel.textContent = '开始拆解与精析';
         }
     }
 
@@ -738,7 +750,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const isPwd = apiKeyInput.type === 'password';
         apiKeyInput.type = isPwd ? 'text' : 'password';
         toggleKeyButton.innerHTML = `<i data-lucide="${isPwd ? 'eye-off' : 'eye'}"></i>`;
-        if (window.lucide) window.lucide.createIcons();
+        refreshIcons();
     });
 
     // Check prefilled URL query param `?text=...`

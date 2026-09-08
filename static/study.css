@@ -1,482 +1,410 @@
 /* ==========================================================================
-   French Audio Studio - Study & Shadowing Workbench Styles
+   French Audio Studio - Study & Shadowing Module Styles
+   Adheres strictly to the Global Design Foundation (style.css)
    ========================================================================== */
 
-/* Top Navigation Tabs */
-.nav-tabs {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    background: #f1f5f9;
-    padding: 0.25rem;
-    border-radius: 9999px;
-    border: 1px solid #e2e8f0;
+/* Input Panel Customization */
+.study-input-panel {
+    height: auto;
+    min-height: 220px;
+    margin-bottom: 0;
 }
 
-.nav-tab {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.45rem 0.95rem;
-    font-size: 0.88rem;
-    font-weight: 600;
-    color: #475569;
-    text-decoration: none;
-    border-radius: 9999px;
-    transition: all 0.2s ease;
+.study-input-panel textarea {
+    min-height: 140px;
 }
 
-.nav-tab i {
-    width: 1rem;
-    height: 1rem;
+/* Study Deck (Section 02) */
+.study-deck-section {
+    margin-top: 10px;
+    border-top: 1px solid var(--line);
+    padding-top: 24px;
 }
 
-.nav-tab:hover {
-    color: #0f172a;
-    background: #ffffff88;
-}
-
-.nav-tab.active {
-    color: #0f172a;
-    background: #ffffff;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-}
-
-/* Study Input Card */
-.study-input-card {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 1rem;
-    padding: 1.5rem;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-    margin-bottom: 1.5rem;
-}
-
-.input-actions-quick {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.btn-ghost {
-    background: transparent;
-    border: 1px solid #cbd5e1;
-    color: #475569;
-    padding: 0.4rem 0.75rem;
-    font-size: 0.85rem;
-    border-radius: 0.5rem;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    transition: all 0.15s ease;
-}
-
-.btn-ghost:hover {
-    background: #f8fafc;
-    color: #0f172a;
-    border-color: #94a3b8;
-}
-
-.study-input-card textarea {
-    width: 100%;
-    min-height: 120px;
-    border: 1px solid #cbd5e1;
-    border-radius: 0.75rem;
-    padding: 1rem;
-    font-size: 1.05rem;
-    line-height: 1.6;
-    color: #1e293b;
-    resize: vertical;
-    font-family: inherit;
-    transition: border-color 0.2s;
-    box-sizing: border-box;
-}
-
-.study-input-card textarea:focus {
-    outline: none;
-    border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
-}
-
-.study-input-footer {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: 1rem;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-}
-
-/* Deck Section & Sentence Cards */
 .deck-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 1.25rem;
+    margin-bottom: 18px;
+}
+
+.deck-title-row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
 }
 
 .badge {
     display: inline-flex;
     align-items: center;
-    padding: 0.3rem 0.75rem;
-    border-radius: 9999px;
-    background: #e2e8f0;
-    color: #334155;
-    font-size: 0.82rem;
-    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: var(--surface-muted);
+    border: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
 }
 
 .sentences-container {
     display: flex;
     flex-direction: column;
-    gap: 2rem;
+    gap: 22px;
 }
 
+/* Sentence Card */
 .sentence-card {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 1rem;
-    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
     overflow: hidden;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    box-shadow: 0 2px 8px rgba(28, 40, 33, 0.04);
+    transition: box-shadow 0.2s ease;
 }
 
 .sentence-card:hover {
-    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.07);
+    box-shadow: 0 6px 16px rgba(28, 40, 33, 0.07);
 }
 
-/* Sentence Header */
+/* Sentence Hero / Header */
 .sentence-hero {
-    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-    border-bottom: 1px solid #e2e8f0;
-    padding: 1.25rem 1.5rem;
+    background: var(--surface-muted);
+    border-bottom: 1px solid var(--line);
+    padding: 16px 20px;
 }
 
 .sentence-meta-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 0.6rem;
+    margin-bottom: 8px;
 }
 
 .sentence-index-pill {
-    font-size: 0.75rem;
-    font-weight: 700;
+    font-size: 11px;
+    font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    background: #0f172a;
+    background: var(--ink);
     color: #ffffff;
-    padding: 0.2rem 0.6rem;
-    border-radius: 0.35rem;
+    padding: 3px 8px;
+    border-radius: 4px;
 }
 
 .sentence-text-row {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 1rem;
+    gap: 16px;
 }
 
 .sentence-french-text {
-    font-size: 1.35rem;
-    font-weight: 600;
-    line-height: 1.5;
-    color: #0f172a;
     margin: 0;
-    letter-spacing: -0.01em;
+    color: var(--ink);
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.5;
 }
 
 .btn-speak-round {
     flex-shrink: 0;
-    width: 2.5rem;
-    height: 2.5rem;
+    width: 38px;
+    height: 38px;
     border-radius: 50%;
-    background: #2563eb;
+    background: var(--primary);
     color: #ffffff;
     border: none;
     cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 2px 5px rgba(37, 99, 235, 0.3);
-    transition: all 0.2s ease;
+    display: inline-grid;
+    place-items: center;
+    transition: all 0.15s ease;
 }
 
 .btn-speak-round:hover {
-    background: #1d4ed8;
+    background: var(--primary-hover);
     transform: scale(1.05);
 }
 
+.btn-speak-round svg {
+    width: 18px;
+    height: 18px;
+}
+
 .sentence-translations {
-    margin-top: 0.75rem;
+    margin-top: 10px;
     display: flex;
     flex-direction: column;
-    gap: 0.3rem;
-    font-size: 0.92rem;
+    gap: 4px;
+    font-size: 13.5px;
+    line-height: 1.5;
 }
 
 .translation-en {
-    color: #475569;
+    color: var(--muted);
 }
 
 .translation-cn {
-    color: #1e293b;
-    font-weight: 500;
+    color: var(--ink);
+    font-weight: 600;
 }
 
-/* ==========================================================================
-   Shadowing & Follow-along Scoring (跟读打分面板)
-   ========================================================================== */
+/* Shadowing & Scoring Panel */
 .shadowing-panel {
-    background: #fafafa;
-    border-bottom: 1px solid #e2e8f0;
-    padding: 1.25rem 1.5rem;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    padding: 16px 20px;
 }
 
 .shadowing-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 0.85rem;
+    margin-bottom: 12px;
+    gap: 12px;
+    flex-wrap: wrap;
 }
 
 .shadowing-title {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    font-size: 0.95rem;
+    gap: 8px;
+    font-size: 13.5px;
     font-weight: 700;
-    color: #1e293b;
+    color: var(--ink);
 }
 
-.shadowing-title i {
-    color: #e11d48;
+.shadowing-title svg {
+    width: 17px;
+    height: 17px;
+    color: var(--danger);
+}
+
+.shadowing-guide {
+    font-size: 12.5px;
+    color: var(--muted);
 }
 
 .shadowing-body {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 12px;
     flex-wrap: wrap;
 }
 
 .btn-record {
     display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.65rem 1.25rem;
-    background: #ffffff;
-    border: 1.5px solid #e11d48;
-    color: #e11d48;
-    border-radius: 9999px;
-    font-size: 0.92rem;
-    font-weight: 600;
+    gap: 8px;
+    padding: 8px 18px;
+    background: var(--surface);
+    border: 1px solid var(--danger);
+    color: var(--danger);
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 700;
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .btn-record:hover {
-    background: #fff1f2;
+    background: var(--danger-soft);
 }
 
 .btn-record.recording {
-    background: #e11d48;
+    background: var(--danger);
     color: #ffffff;
     animation: recordPulse 1.4s infinite;
 }
 
+.btn-record svg {
+    width: 16px;
+    height: 16px;
+}
+
 @keyframes recordPulse {
     0% {
-        box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.4);
+        box-shadow: 0 0 0 0 rgba(169, 54, 42, 0.4);
     }
     70% {
-        box-shadow: 0 0 0 12px rgba(225, 29, 72, 0);
+        box-shadow: 0 0 0 10px rgba(169, 54, 42, 0);
     }
     100% {
-        box-shadow: 0 0 0 0 rgba(225, 29, 72, 0);
+        box-shadow: 0 0 0 0 rgba(169, 54, 42, 0);
     }
 }
 
-.btn-record i {
-    width: 1.1rem;
-    height: 1.1rem;
-}
-
-.shadowing-guide {
-    font-size: 0.88rem;
-    color: #64748b;
-}
-
-/* Scoring Results Card */
+/* Score Result Card */
 .score-result-card {
-    margin-top: 1rem;
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 0.75rem;
-    padding: 1rem 1.25rem;
+    margin-top: 14px;
+    background: var(--surface-muted);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 14px 18px;
     display: flex;
     flex-direction: column;
-    gap: 0.85rem;
+    gap: 12px;
 }
 
 .score-summary-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
+    gap: 12px;
     flex-wrap: wrap;
 }
 
 .score-badge-group {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 10px;
 }
 
 .score-number-pill {
-    font-size: 1.5rem;
+    font-size: 20px;
     font-weight: 800;
-    padding: 0.2rem 0.8rem;
-    border-radius: 0.5rem;
+    padding: 3px 10px;
+    border-radius: 6px;
     line-height: 1.2;
 }
 
 .score-number-pill.excellent {
-    background: #ecfdf5;
-    color: #059669;
-    border: 1px solid #a7f3d0;
+    background: var(--success-soft);
+    color: var(--success);
+    border: 1px solid #b7d8c0;
 }
 
 .score-number-pill.good {
-    background: #eff6ff;
-    color: #2563eb;
-    border: 1px solid #bfdbfe;
+    background: var(--primary-soft);
+    color: var(--primary);
+    border: 1px solid #bfe3dd;
 }
 
 .score-number-pill.pass {
-    background: #fffbeb;
-    color: #d97706;
-    border: 1px solid #fde68a;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border: 1px solid #fce3a6;
 }
 
 .score-number-pill.needs-work {
-    background: #fff1f2;
-    color: #e11d48;
-    border: 1px solid #fecdd3;
+    background: var(--danger-soft);
+    color: var(--danger);
+    border: 1px solid #e6bbb5;
 }
 
 .score-rating-text {
     font-weight: 700;
-    font-size: 1rem;
-    color: #1e293b;
+    font-size: 14px;
+    color: var(--ink);
 }
 
 .score-metrics {
     display: flex;
-    gap: 1rem;
-    font-size: 0.85rem;
-    color: #64748b;
+    gap: 14px;
+    font-size: 12.5px;
+    color: var(--muted);
 }
 
 .score-metrics strong {
-    color: #0f172a;
+    color: var(--ink);
 }
 
-/* Audio Playback Controls for comparison */
-.shadow-audio-controls {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    flex-wrap: wrap;
-}
-
-.btn-audio-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.4rem 0.85rem;
-    border-radius: 9999px;
-    font-size: 0.82rem;
-    font-weight: 600;
-    border: 1px solid #cbd5e1;
-    background: #f8fafc;
-    color: #334155;
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-
-.btn-audio-pill:hover {
-    background: #e2e8f0;
-    color: #0f172a;
-}
-
-.btn-audio-pill i {
-    width: 0.95rem;
-    height: 0.95rem;
-}
-
-/* Word-by-word diff output */
+/* Diff output */
 .diff-result-box {
-    background: #f8fafc;
-    border-radius: 0.5rem;
-    padding: 0.75rem 1rem;
-    font-size: 1.05rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 12px 14px;
+    font-size: 15px;
     line-height: 1.8;
 }
 
 .diff-word {
     display: inline-block;
-    padding: 0.1rem 0.4rem;
-    margin: 0.1rem;
-    border-radius: 0.35rem;
+    padding: 1px 5px;
+    margin: 1px 2px;
+    border-radius: 4px;
     font-weight: 600;
-    transition: background-color 0.2s;
 }
 
 .diff-word.correct {
-    background: #dcfce7;
-    color: #15803d;
+    background: var(--success-soft);
+    color: var(--success);
 }
 
 .diff-word.acceptable {
-    background: #fef3c7;
-    color: #b45309;
+    background: var(--accent-soft);
+    color: #7a510b;
 }
 
 .diff-word.missed {
-    background: #ffe4e6;
-    color: #be123c;
-    text-decoration: underline wavy #e11d48;
+    background: var(--danger-soft);
+    color: var(--danger);
+    text-decoration: underline wavy var(--danger);
 }
 
 .diff-legend {
     display: flex;
-    gap: 1rem;
-    font-size: 0.78rem;
-    color: #64748b;
-    margin-top: 0.4rem;
+    gap: 14px;
+    font-size: 12px;
+    color: var(--muted);
 }
 
 .diff-legend-item {
     display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
+    gap: 5px;
 }
 
 .diff-dot {
-    width: 0.55rem;
-    height: 0.55rem;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
 }
 
-.diff-dot.dot-green { background: #22c55e; }
-.diff-dot.dot-yellow { background: #f59e0b; }
-.diff-dot.dot-red { background: #ef4444; }
+.diff-dot.dot-green { background: var(--success); }
+.diff-dot.dot-yellow { background: var(--accent); }
+.diff-dot.dot-red { background: var(--danger); }
 
-/* ==========================================================================
-   Three-Column Breakdown Table (三列拆解解析)
-   ========================================================================== */
+.shadow-audio-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding-top: 4px;
+}
+
+.btn-audio-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 12.5px;
+    font-weight: 650;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-audio-pill:hover:not(:disabled) {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+    color: var(--primary);
+}
+
+.btn-audio-pill:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-audio-pill svg {
+    width: 15px;
+    height: 15px;
+}
+
+/* Three-Column Table */
 .table-wrapper {
     overflow-x: auto;
 }
@@ -484,38 +412,30 @@
 .breakdown-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.92rem;
+    font-size: 13.5px;
     text-align: left;
 }
 
 .breakdown-table th {
-    background: #f8fafc;
-    color: #475569;
+    background: var(--surface-muted);
+    color: var(--muted);
     font-weight: 700;
-    font-size: 0.8rem;
+    font-size: 11.5px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    padding: 0.85rem 1.25rem;
-    border-bottom: 1px solid #e2e8f0;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--line);
 }
 
-.breakdown-table th:first-child {
-    width: 32%;
-}
-
-.breakdown-table th:nth-child(2) {
-    width: 33%;
-}
-
-.breakdown-table th:nth-child(3) {
-    width: 35%;
-}
+.breakdown-table th:first-child { width: 34%; }
+.breakdown-table th:nth-child(2) { width: 33%; }
+.breakdown-table th:nth-child(3) { width: 33%; }
 
 .breakdown-table td {
-    padding: 0.9rem 1.25rem;
-    border-bottom: 1px solid #f1f5f9;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--surface-muted);
     vertical-align: top;
-    line-height: 1.55;
+    line-height: 1.5;
 }
 
 .breakdown-table tr:last-child td {
@@ -523,103 +443,97 @@
 }
 
 .breakdown-table tr:hover td {
-    background-color: #fafbfc;
+    background: rgba(238, 241, 237, 0.4);
 }
 
-/* Column 1: Token, Pronunciation & Lemma */
 .token-cell {
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
+    gap: 4px;
 }
 
 .token-main-row {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 8px;
 }
 
 .token-word {
-    font-size: 1.05rem;
+    font-size: 15px;
     font-weight: 700;
-    color: #0f172a;
+    color: var(--ink);
 }
 
 .btn-token-speak {
-    width: 1.65rem;
-    height: 1.65rem;
+    width: 26px;
+    height: 26px;
     border-radius: 50%;
-    border: 1px solid #cbd5e1;
-    background: #ffffff;
-    color: #2563eb;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--primary);
     cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+    display: inline-grid;
+    place-items: center;
     padding: 0;
     transition: all 0.15s ease;
 }
 
 .btn-token-speak:hover {
-    background: #eff6ff;
-    border-color: #2563eb;
+    background: var(--primary-soft);
+    border-color: var(--primary);
     transform: scale(1.1);
 }
 
-.btn-token-speak i {
-    width: 0.85rem;
-    height: 0.85rem;
+.btn-token-speak svg {
+    width: 14px;
+    height: 14px;
 }
 
 .token-details {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 0.4rem;
-    font-size: 0.8rem;
+    gap: 6px;
+    font-size: 11.5px;
 }
 
 .pos-tag {
-    background: #f1f5f9;
-    color: #475569;
-    padding: 0.1rem 0.4rem;
-    border-radius: 0.25rem;
+    background: var(--surface-muted);
+    color: var(--muted);
+    padding: 1px 5px;
+    border-radius: 3px;
+    border: 1px solid var(--line);
     font-family: ui-monospace, monospace;
     font-weight: 600;
 }
 
 .phonetic-tag {
-    color: #64748b;
-    font-family: "Lucida Sans Unicode", "Segoe UI", sans-serif;
+    color: var(--muted);
 }
 
 .lemma-tag {
-    color: #0284c7;
-    font-weight: 500;
+    color: var(--primary);
+    font-weight: 600;
 }
 
-/* Column 2: English Explanation */
 .explanation-en-cell {
-    color: #334155;
-    font-size: 0.92rem;
+    color: var(--muted);
+    font-size: 13.5px;
 }
 
-/* Column 3: Chinese Explanation */
 .explanation-cn-cell {
-    color: #0f172a;
-    font-weight: 500;
-    font-size: 0.92rem;
+    color: var(--ink);
+    font-weight: 550;
+    font-size: 13.5px;
 }
 
-/* Responsive adjustment */
 @media (max-width: 768px) {
     .breakdown-table th:first-child,
     .breakdown-table th:nth-child(2),
     .breakdown-table th:nth-child(3) {
         width: auto;
     }
-    
     .sentence-french-text {
-        font-size: 1.15rem;
+        font-size: 16px;
     }
 }
