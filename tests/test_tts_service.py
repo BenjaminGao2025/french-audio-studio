@@ -1,4 +1,5 @@
 import asyncio
+import json
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -698,15 +699,37 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertIn("AnkiDeck", response.text)
         self.assertIn("scheduleSM2", response.text)
 
-    def test_analyze_prompt_contains_pedagogical_and_collocation_rules(self):
-        req = tts_service.AnalyzeRequest(text="Elle comprend 40 questions.")
-        payload = tts_service._analyze_payload(req)
-        prompt = payload["messages"][0]["content"]
-        self.assertIn("~200 elementary French words", prompt)
-        self.assertIn("CHUNKING & COLLOCATIONS", prompt)
-        self.assertIn("de la vie quotidienne", prompt)
+    def test_parse_analysis_json_handles_direct_list_and_filters_punct_and_trivial(self):
+        raw = json.dumps([
+            {
+                "original": "Elle comprend 40 questions portant sur des documents de la vie quotidienne.",
+                "translation_en": "She understands 40 questions.",
+                "translation_cn": "她理解40个问题。",
+                "tokens": [
+                    {"token": "Elle", "lemma": "elle", "pos": "pron.", "explanation_en": "she", "explanation_cn": "她"},
+                    {"token": "comprend", "lemma": "comprendre", "pos": "v.", "explanation_en": "includes", "explanation_cn": "包含"},
+                    {"token": "40", "lemma": "40", "pos": "num.", "explanation_en": "forty", "explanation_cn": "四十"},
+                    {"token": "portant sur", "lemma": "porter sur", "pos": "loc. verb.", "explanation_en": "dealing with", "explanation_cn": "涉及"},
+                    {"token": "de la vie quotidienne", "lemma": "de la vie quotidienne", "pos": "loc. adj.", "explanation_en": "of daily life", "explanation_cn": "日常生活的"},
+                    {"token": ".", "lemma": ".", "pos": "punct", "explanation_en": "", "explanation_cn": ""},
+                ]
+            }
+        ])
+        parsed = tts_service._parse_analysis_json(raw, "Elle comprend 40 questions portant sur des documents de la vie quotidienne.")
+        self.assertIn("sentences", parsed)
+        tokens = parsed["sentences"][0]["tokens"]
+        token_names = [t["token"] for t in tokens]
+        # Punctuation '.' and number '40' and trivial 'Elle' must be filtered out
+        self.assertNotIn(".", token_names)
+        self.assertNotIn("40", token_names)
+        self.assertNotIn("Elle", token_names)
+        # Collocations and content verbs must be preserved
+        self.assertIn("comprend", token_names)
+        self.assertIn("portant sur", token_names)
+        self.assertIn("de la vie quotidienne", token_names)
 
 
 if __name__ == "__main__":
     unittest.main()
+
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime
 import hashlib
 import json
+import logging
 import os
 import re
 import uuid
@@ -11,6 +12,8 @@ from typing import Literal
 
 import edge_tts
 import httpx
+
+logger = logging.getLogger("tts_service")
 from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -658,77 +661,117 @@ async def request_french_transform(
     raise RuntimeError("Unreachable transform retry state")
 
 
+TRIVIAL_SINGLE_WORDS = {
+    "je", "tu", "il", "elle", "on", "nous", "vous", "ils", "elles",
+    "ce", "c'", "c’", "ça", "de", "d'", "d’", "à", "au", "aux", "sur",
+    "dans", "en", "par", "pour", "avec", "sans", "sous",
+    "un", "une", "des", "du", "le", "la", "les", "l'", "l’",
+    "et", "ou", "mais", "donc", "or", "ni", "car",
+    "ne", "pas", "y", "se", "s'", "s’", "me", "te",
+}
+
+
+def _is_unwanted_token(token_text: str) -> bool:
+    clean = token_text.strip()
+    if not clean:
+        return True
+    # 1. Punctuation: e.g. '.', ',', '!', '?', ';', ':', '«', '»', '...', '-', '(', ')'
+    if not re.search(r"[a-zA-ZÀ-ÿ]", clean):
+        return True
+    # 2. Pure digits or numbers: e.g. '40', '10', '3.5'
+    if re.fullmatch(r"[\d\s.,]+", clean):
+        return True
+    # 3. Collocations / multi-word expressions (contain spaces) are ALWAYS KEPT!
+    if " " in clean:
+        return False
+    # 4. Filter single elementary words based on user's ~200 baseline
+    if clean.lower() in TRIVIAL_SINGLE_WORDS:
+        return True
+    return False
+
+
+def _filter_sentence_tokens(tokens: list[dict]) -> list[dict]:
+    filtered = [tok for tok in tokens if not _is_unwanted_token(tok.get("token", ""))]
+    if filtered:
+        return filtered
+    # Fallback if every single token was filtered out: keep content words with letters
+    fallback = [
+        tok for tok in tokens
+        if re.search(r"[a-zA-ZÀ-ÿ]", tok.get("token", "")) and not re.fullmatch(r"[\d\s.,]+", tok.get("token", ""))
+    ]
+    return fallback or tokens
+
+
 def _analyze_payload(request: AnalyzeRequest) -> dict:
     prompt = (
-        "You are an elite French linguist, lexicographer, and pedagogical coach for intermediate learners.\n"
-        "Analyze the provided French text and break it down into clean, high-value learning units.\n\n"
-        "STRICT PEDAGOGICAL RULES (CRITICAL):\n"
-        "1. LEARNER VOCABULARY BASELINE: The user already knows ~200 elementary French words (basic subject pronouns like 'je, tu, il, elle, on, nous, vous, ils, elles, ce, c'', basic prepositions standing alone like 'de, d', à, sur, dans, en', basic isolated articles like 'le, la, l', les, un, une, des, du', basic conjunctions like 'et, ou, mais', and basic numbers like '40').\n"
-        "   - DO NOT create separate entries for isolated, trivial words (e.g. NEVER list 'Elle', 'et', 'sur', 'des', '40' by themselves).\n"
-        "2. CHUNKING & COLLOCATIONS (意群与搭配绑定):\n"
-        "   - Group multi-word expressions, prepositional phrases, and natural collocations together as a SINGLE entry instead of splitting them.\n"
-        "   - Example: 'de la vie quotidienne' MUST be kept as ONE single phrase ('de la vie quotidienne', pos: 'loc. adj.', meaning 'of daily life / 日常生活中的').\n"
-        "   - Example: 'portant sur' MUST be kept as ONE phrase ('portant sur', pos: 'loc. verb.', meaning 'focusing on, dealing with / 涉及，关于').\n"
-        "   - Example: 'ayant des objectifs différents' or 'objectifs différents' should be treated as a coherent phrase.\n"
+        "You are an elite French pedagogical lexicographer and linguist for intermediate learners.\n"
+        "Analyze the French text and output a valid JSON object strictly matching the schema below.\n\n"
+        "STRICT PEDAGOGICAL & CHUNKING RULES:\n"
+        "1. LEARNER VOCABULARY BASELINE (DO NOT EXTRACT ELEMENTARY WORDS):\n"
+        "   - The learner already knows ~200 elementary French words.\n"
+        "   - NEVER create entries for isolated pronouns: 'je', 'tu', 'il', 'elle', 'on', 'nous', 'vous', 'ils', 'elles', 'ce', 'c''.\n"
+        "   - NEVER create entries for isolated prepositions: 'de', 'd'', 'à', 'sur', 'dans', 'en', 'par', 'pour', 'avec', 'sans'.\n"
+        "   - NEVER create entries for isolated articles: 'le', 'la', 'les', 'l'', 'un', 'une', 'des', 'du'.\n"
+        "   - NEVER create entries for isolated conjunctions: 'et', 'ou', 'mais'.\n"
+        "   - NEVER create entries for isolated numbers/digits: '40', '1', '10'.\n"
+        "   - NEVER create entries for punctuation marks: '.', ',', '!', '?', ';', ':', '-', '«', '»'.\n\n"
+        "2. COLLOCATIONS & PHRASAL CHUNKING (CRITICAL):\n"
+        "   - Multi-word idioms, compound prepositions, verbal expressions, and set phrases MUST be grouped together into a SINGLE entry.\n"
+        "   - Example: 'de la vie quotidienne' MUST be kept as ONE single phrase (token: 'de la vie quotidienne', pos: 'loc. adj.', meaning 'of daily life / 日常生活中的').\n"
+        "   - Example: 'portant sur' MUST be kept as ONE single phrase (token: 'portant sur', pos: 'loc. verb.', meaning 'focusing on, dealing with / 涉及，关于').\n"
+        "   - Example: 'au fur et à mesure' MUST be kept as ONE single phrase (token: 'au fur et à mesure', pos: 'loc. adv.').\n"
+        "   - Example: 'de temps en temps' MUST be kept as ONE single phrase (token: 'de temps en temps', pos: 'loc. adv.').\n\n"
         "3. WHAT TO INCLUDE:\n"
         "   - Meaningful verbs (with their infinitive lemma, tense, person).\n"
-        "   - Key nouns, adjectives, and adverbs.\n"
+        "   - Key content nouns, adjectives, and adverbs.\n"
         "   - Idiomatic expressions, compound prepositions, verbal phrases, and collocations.\n"
-        "   - Aim for 3 to 6 high-value, meaningful entries per sentence. Quality over quantity!\n"
-        "4. For each token/unit, provide:\n"
+        "   - Aim for 3 to 6 high-value, meaningful entries per sentence. Quality over quantity!\n\n"
+        "4. FOR EACH TOKEN:\n"
         "   - 'token': the word or multi-word phrase exactly as it appears in the sentence\n"
         "   - 'lemma': dictionary canonical base form (infinitive for verbs, masculine singular for nouns/adjectives)\n"
         "   - 'pos': part of speech abbreviation ('v.', 'n.m.', 'n.f.', 'adj.', 'adv.', 'loc. adv.', 'loc. verb.', 'loc. adj.', 'expr.')\n"
         "   - 'phonetic': accurate IPA phonetic transcription\n"
         "   - 'explanation_en': concise, natural English gloss and nuance in this context\n"
-        "   - 'explanation_cn': accurate, natural Chinese explanation and grammatical note (词义、时态、固定搭配用法)\n"
-        "5. Output STRICT JSON ONLY (no markdown code blocks, no ```json, no extra text):\n"
+        "   - 'explanation_cn': accurate, natural Chinese explanation and grammatical note (词义、时态、固定搭配用法)\n\n"
+        "5. REQUIRED JSON SCHEMA (Output a valid JSON object ONLY):\n"
         "{\n"
         '  "sentences": [\n'
         '    {\n'
-        '      "original": "Elle comprend 40 questions portant sur des documents de la vie quotidienne et ayant des objectifs différents.",\n'
-        '      "translation_en": "It comprises 40 questions dealing with documents of daily life and having different objectives.",\n'
-        '      "translation_cn": "它包含40道关于日常生活中各类材料并具有不同目标的问题。",\n'
+        '      "original": "Je me suis rendu compte de son absence au fur et à mesure que le temps passait.",\n'
+        '      "translation_en": "I realized his absence gradually as time passed.",\n'
+        '      "translation_cn": "随着时间的流逝，我逐渐意识到了他的缺席。",\n'
         '      "tokens": [\n'
         '        {\n'
-        '          "token": "comprend",\n'
-        '          "lemma": "comprendre",\n'
-        '          "pos": "v.",\n'
-        '          "phonetic": "/kɔ̃.pʁɑ̃/",\n'
-        '          "explanation_en": "comprises, includes (3rd person singular present of comprendre)",\n'
-        '          "explanation_cn": "包含，包括（comprendre 第三人称单数现在时）"\n'
-        '        },\n'
-        '        {\n'
-        '          "token": "portant sur",\n'
-        '          "lemma": "porter sur",\n'
+        '          "token": "se rendre compte de",\n'
+        '          "lemma": "se rendre compte de",\n'
         '          "pos": "loc. verb.",\n'
-        '          "phonetic": "/pɔʁ.tɑ̃ syʁ/",\n'
-        '          "explanation_en": "focusing on, dealing with (present participle)",\n'
-        '          "explanation_cn": "涉及，关于（现在分词短语）"\n'
+        '          "phonetic": "/sə ʁɑ̃dʁ kɔ̃t də/",\n'
+        '          "explanation_en": "to realize, to become aware of (reflexive verbal expression)",\n'
+        '          "explanation_cn": "意识到，发觉（复合反身代词动词短语）"\n'
         '        },\n'
         '        {\n'
-        '          "token": "de la vie quotidienne",\n'
-        '          "lemma": "de la vie quotidienne",\n'
-        '          "pos": "loc. adj.",\n'
-        '          "phonetic": "/də la vi kɔ.ti.djɛn/",\n'
-        '          "explanation_en": "of daily life, everyday (idiomatic phrase)",\n'
-        '          "explanation_cn": "日常生活中的（常见搭配，形容日常场景）"\n'
+        '          "token": "absence",\n'
+        '          "lemma": "absence",\n'
+        '          "pos": "n.f.",\n'
+        '          "phonetic": "/ap.sɑ̃s/",\n'
+        '          "explanation_en": "absence, non-attendance (feminine singular noun)",\n'
+        '          "explanation_cn": "不在，缺席（阴性单数名词）"\n'
         '        },\n'
         '        {\n'
-        '          "token": "objectifs",\n'
-        '          "lemma": "objectif",\n'
-        '          "pos": "n.m.",\n'
-        '          "phonetic": "/ɔb.ʒɛk.tif/",\n'
-        '          "explanation_en": "objectives, aims, targets (plural)",\n'
-        '          "explanation_cn": "目标，目的（阳性名词复数）"\n'
+        '          "token": "au fur et à mesure",\n'
+        '          "lemma": "au fur et à mesure",\n'
+        '          "pos": "loc. adv.",\n'
+        '          "phonetic": "/o fyʁ e a mə.zyʁ/",\n'
+        '          "explanation_en": "gradually, progressively, as time goes on",\n'
+        '          "explanation_cn": "逐渐地，随着……的进行（固定副词短语）"\n'
         '        },\n'
         '        {\n'
-        '          "token": "différents",\n'
-        '          "lemma": "différent",\n'
-        '          "pos": "adj.",\n'
-        '          "phonetic": "/di.fe.ʁɑ̃/",\n'
-        '          "explanation_en": "different, distinct, various (masculine plural)",\n'
-        '          "explanation_cn": "不同的，各异的（阳性复数形容词）"\n'
+        '          "token": "passait",\n'
+        '          "lemma": "passer",\n'
+        '          "pos": "v.",\n'
+        '          "phonetic": "/pa.sɛ/",\n'
+        '          "explanation_en": "passed, was passing (imparfait tense of passer)",\n'
+        '          "explanation_cn": "流逝，过去（passer 未完成过去时第三人称单数）"\n'
         '        }\n'
         '      ]\n'
         '    }\n'
@@ -741,6 +784,7 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
             {"role": "system", "content": prompt},
             {"role": "user", "content": f"Analyze this French text:\n\n{request.text}"},
         ],
+        "response_format": {"type": "json_object"},
         "stream": False,
         "temperature": 0.1,
     }
@@ -748,56 +792,82 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
 
 def _parse_analysis_json(raw_text: str, fallback_text: str) -> dict:
     cleaned = raw_text.strip()
-    if cleaned.startswith("```"):
-        lines = cleaned.splitlines()
-        if len(lines) >= 3:
-            cleaned = "\n".join(lines[1:-1]).strip()
+
+    # Strip thinking blocks from reasoning models (<think>...</think>)
+    cleaned = re.sub(r"<think>[\s\S]*?</think>", "", cleaned).strip()
+
+    # If wrapped in markdown code fence
+    fence_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned)
+    candidate = fence_match.group(1).strip() if fence_match else cleaned
 
     parsed_data = None
     try:
-        parsed_data = json.loads(cleaned)
+        parsed_data = json.loads(candidate)
     except Exception:
-        first_brace = cleaned.find("{")
-        last_brace = cleaned.rfind("}")
-        if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
-            try:
-                parsed_data = json.loads(cleaned[first_brace : last_brace + 1])
-            except Exception:
-                pass
+        first_brace = candidate.find("{")
+        last_brace = candidate.rfind("}")
+        first_bracket = candidate.find("[")
+        last_bracket = candidate.rfind("]")
 
-    if (
-        isinstance(parsed_data, dict)
-        and "sentences" in parsed_data
-        and isinstance(parsed_data["sentences"], list)
-    ):
+        is_object = (first_brace != -1 and last_brace > first_brace)
+        is_array = (first_bracket != -1 and last_bracket > first_bracket)
+
+        if is_object and (not is_array or first_brace < first_bracket):
+            json_substr = candidate[first_brace : last_brace + 1]
+        elif is_array:
+            json_substr = candidate[first_bracket : last_bracket + 1]
+        else:
+            json_substr = candidate
+
+        # Remove trailing commas before } or ]
+        cleaned_json = re.sub(r",\s*([\]}])", r"\1", json_substr)
+        try:
+            parsed_data = json.loads(cleaned_json)
+        except Exception as exc:
+            logger.warning("Failed to parse JSON from upstream LLM: %s. Snippet: %r", exc, raw_text[:300])
+
+    sentences_raw = None
+    if isinstance(parsed_data, list):
+        sentences_raw = parsed_data
+    elif isinstance(parsed_data, dict):
+        if "sentences" in parsed_data and isinstance(parsed_data["sentences"], list):
+            sentences_raw = parsed_data["sentences"]
+        elif "original" in parsed_data:
+            sentences_raw = [parsed_data]
+
+    if sentences_raw:
         valid_sentences = []
-        for s in parsed_data["sentences"]:
+        for s in sentences_raw:
             if isinstance(s, dict) and "original" in s:
-                tokens = []
-                for tok in s.get("tokens", []):
+                raw_tokens = s.get("tokens", [])
+                clean_tokens = []
+                for tok in raw_tokens:
                     if isinstance(tok, dict) and "token" in tok:
-                        tokens.append(
-                            {
-                                "token": str(tok.get("token", "")),
-                                "lemma": str(tok.get("lemma", tok.get("token", ""))),
-                                "pos": str(tok.get("pos", "")),
-                                "phonetic": str(tok.get("phonetic", "")),
-                                "explanation_en": str(tok.get("explanation_en", "")),
-                                "explanation_cn": str(tok.get("explanation_cn", "")),
-                            }
-                        )
+                        t_str = str(tok.get("token", "")).strip()
+                        if t_str:
+                            clean_tokens.append(
+                                {
+                                    "token": t_str,
+                                    "lemma": str(tok.get("lemma", t_str)),
+                                    "pos": str(tok.get("pos", "")),
+                                    "phonetic": str(tok.get("phonetic", "")),
+                                    "explanation_en": str(tok.get("explanation_en", "")),
+                                    "explanation_cn": str(tok.get("explanation_cn", "")),
+                                }
+                            )
+                filtered_tokens = _filter_sentence_tokens(clean_tokens)
                 valid_sentences.append(
                     {
                         "original": str(s.get("original", "")),
                         "translation_en": str(s.get("translation_en", "")),
                         "translation_cn": str(s.get("translation_cn", "")),
-                        "tokens": tokens,
+                        "tokens": filtered_tokens,
                     }
                 )
         if valid_sentences:
             return {"sentences": valid_sentences}
 
-    # Fallback heuristic segmenter
+    # Fallback heuristic segmenter (only if upstream LLM completely failed)
     raw_sentences = [
         sent.strip()
         for sent in re.split(r"(?<=[.!?。！？])\s+", fallback_text)
@@ -808,17 +878,18 @@ def _parse_analysis_json(raw_text: str, fallback_text: str) -> dict:
 
     fallback_sentences = []
     for sent in raw_sentences:
-        raw_words = re.findall(r"[\w'’\-]+|[^\w\s]", sent)
+        raw_words = re.findall(r"[\w'’\-]+", sent)
         fallback_tokens = [
             {
                 "token": word,
                 "lemma": word.lower(),
-                "pos": "word" if re.match(r"[\w'’\-]+", word) else "punct",
+                "pos": "word",
                 "phonetic": "",
-                "explanation_en": "",
-                "explanation_cn": "",
+                "explanation_en": "Vocabulary item in sentence context",
+                "explanation_cn": "语境词汇",
             }
             for word in raw_words
+            if not _is_unwanted_token(word)
         ]
         fallback_sentences.append(
             {
