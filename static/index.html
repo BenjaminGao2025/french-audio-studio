@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light">
+    <title>法语音频工作台</title>
+    <link rel="icon" href="/favicon.ico?v=2" sizes="any">
+    <link rel="stylesheet" href="/static/style.css?v=4.1">
+    <script src="https://unpkg.com/lucide@1.34.0/dist/umd/lucide.min.js" defer></script>
+    <script src="/static/script.js?v=4.1" defer></script>
+</head>
+<body>
+    <div class="app-shell">
+        <header class="topbar">
+            <div class="brand-block">
+                <div class="brand-mark" aria-hidden="true">
+                    <i data-lucide="headphones"></i>
+                </div>
+                <div>
+                    <p class="product-label">1000H French</p>
+                    <h1>法语音频工作台</h1>
+                </div>
+            </div>
+
+            <details class="connection-settings">
+                <summary>
+                    <i data-lucide="key-round" aria-hidden="true"></i>
+                    <span class="summary-label">连接设置</span>
+                    <span id="connection-summary-state" class="connection-summary-state" data-state="idle" title="连接尚未验证">
+                        <span class="connection-dot" aria-hidden="true"></span>
+                        <span class="connection-summary-text">未验证</span>
+                    </span>
+                    <i data-lucide="chevron-down" class="summary-chevron" aria-hidden="true"></i>
+                </summary>
+                <form class="connection-popover" autocomplete="off">
+                    <div class="connection-field">
+                        <label for="api-key">Perplexity web2api API Key</label>
+                        <div class="password-row">
+                            <input id="api-key" type="password" autocomplete="off" spellcheck="false">
+                            <button id="toggle-key" class="icon-btn" type="button" title="显示或隐藏 API Key" aria-label="显示或隐藏 API Key">
+                                <i data-lucide="eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="connection-field">
+                        <label for="model-select">转换模型</label>
+                        <select id="model-select">
+                            <option value="grok-4.6" selected>Grok 4.6 · 推荐</option>
+                            <option value="grok-4.6-thinking">Grok 4.6 Thinking</option>
+                            <option value="sonar-2">Sonar 2 · 备用</option>
+                        </select>
+                    </div>
+                    <label class="check-row" for="remember-key">
+                        <input id="remember-key" type="checkbox">
+                        <span>记住在此设备</span>
+                    </label>
+                    <div class="connection-test-row">
+                        <div id="connection-result" class="connection-result" data-state="idle" role="status" aria-live="polite">
+                            <span class="connection-dot" aria-hidden="true"></span>
+                            <div>
+                                <strong id="connection-result-title">尚未测试</strong>
+                                <span id="connection-result-detail">填写 Key 后测试实际连接</span>
+                            </div>
+                        </div>
+                        <button id="test-connection" class="btn btn-test" type="button">
+                            <i data-lucide="plug-zap" aria-hidden="true"></i>
+                            <span>测试连接</span>
+                        </button>
+                    </div>
+                </form>
+            </details>
+        </header>
+
+        <main>
+            <section class="task-mode-band" aria-label="处理方式">
+                <fieldset class="control-group task-mode-control">
+                    <legend>处理方式</legend>
+                    <div class="segmented-control task-segments">
+                        <label title="自动判断是生成、翻译、自然表达还是润色">
+                            <input type="radio" name="task-mode" value="auto" checked>
+                            <span>智能判断</span>
+                        </label>
+                        <label title="把输入当作要求，直接创作所需法语内容">
+                            <input type="radio" name="task-mode" value="generate">
+                            <span>按要求生成</span>
+                        </label>
+                        <label title="忠实翻译原文，不扩写内容">
+                            <input type="radio" name="task-mode" value="translate">
+                            <span>忠实翻译</span>
+                        </label>
+                        <label title="整理口述或零散想法，表达成自然法语">
+                            <input type="radio" name="task-mode" value="express">
+                            <span>自然表达</span>
+                        </label>
+                        <label title="修正已有法语，同时保留原意">
+                            <input type="radio" name="task-mode" value="polish">
+                            <span>润色法语</span>
+                        </label>
+                    </div>
+                </fieldset>
+            </section>
+
+            <section class="editor-grid" aria-label="法语文本转换">
+                <article class="editor-panel">
+                    <div class="panel-heading">
+                        <div>
+                            <span class="step-number">01</span>
+                            <h2 id="source-heading">输入内容</h2>
+                        </div>
+                        <button id="clear-source" class="icon-btn" type="button" title="清空原文" aria-label="清空原文">
+                            <i data-lucide="trash-2"></i>
+                        </button>
+                    </div>
+                    <textarea id="source-text" maxlength="15000" placeholder="粘贴中文、英文或已有法语文本..." spellcheck="true"></textarea>
+                    <div class="editor-footer">
+                        <span id="source-count">0 / 15000</span>
+                    </div>
+                </article>
+
+                <article class="editor-panel output-panel">
+                    <div class="panel-heading">
+                        <div>
+                            <span class="step-number">02</span>
+                            <h2>法语结果</h2>
+                        </div>
+                        <div class="panel-tools">
+                            <span id="task-used" class="task-used" data-state="pending">待判断</span>
+                            <span id="model-used" class="model-used" data-quality="pending">Grok 4.6 · 待生成</span>
+                            <button id="copy-output" class="icon-btn" type="button" title="复制法语文本" aria-label="复制法语文本">
+                                <i data-lucide="copy"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <textarea id="output-text" maxlength="15000" placeholder="转换后的法语会显示在这里，可继续编辑..." spellcheck="true"></textarea>
+                    <div class="editor-footer">
+                        <span id="output-count">0 / 15000</span>
+                    </div>
+                </article>
+            </section>
+
+            <section class="controls-band" aria-label="转换参数">
+                <fieldset class="control-group style-control">
+                    <legend>表达风格</legend>
+                    <div class="segmented-control">
+                        <label>
+                            <input type="radio" name="style" value="spoken" checked>
+                            <span>口语化</span>
+                        </label>
+                        <label>
+                            <input type="radio" name="style" value="neutral">
+                            <span>标准</span>
+                        </label>
+                        <label>
+                            <input type="radio" name="style" value="formal">
+                            <span>书面化</span>
+                        </label>
+                        <label>
+                            <input type="radio" name="style" value="polished">
+                            <span>写作润色</span>
+                        </label>
+                    </div>
+                </fieldset>
+
+                <div class="control-group compact-control">
+                    <label for="level-select">语言难度</label>
+                    <select id="level-select">
+                        <option value="A1-A2">A1-A2 基础</option>
+                        <option value="B1-B2" selected>B1-B2 中级</option>
+                        <option value="C1-C2">C1-C2 高级</option>
+                    </select>
+                </div>
+
+                <div class="control-group compact-control">
+                    <label for="locale-select">法语地区</label>
+                    <select id="locale-select">
+                        <option value="fr-FR" selected>法国法语</option>
+                        <option value="fr-CA">加拿大法语</option>
+                    </select>
+                </div>
+
+                <div class="control-group voice-control">
+                    <label for="voice-select">朗读声音</label>
+                    <select id="voice-select">
+                        <optgroup label="法国法语">
+                            <option value="fr-FR-DeniseNeural">Denise · 女声</option>
+                            <option value="fr-FR-HenriNeural">Henri · 男声</option>
+                            <option value="fr-FR-VivienneMultilingualNeural">Vivienne · 女声</option>
+                            <option value="fr-FR-RemyMultilingualNeural">Remy · 男声</option>
+                        </optgroup>
+                        <optgroup label="加拿大法语">
+                            <option value="fr-CA-SylvieNeural">Sylvie · 女声</option>
+                            <option value="fr-CA-JeanNeural">Jean · 男声</option>
+                            <option value="fr-CA-AntoineNeural">Antoine · 男声</option>
+                        </optgroup>
+                    </select>
+                </div>
+            </section>
+
+            <section class="action-row" aria-label="生成操作">
+                <div id="status-message" class="status-message" role="status" aria-live="polite"></div>
+                <div class="action-buttons">
+                    <button id="speech-btn" class="btn btn-secondary" type="button">
+                        <i data-lucide="volume-2" aria-hidden="true"></i>
+                        <span>朗读当前法语</span>
+                    </button>
+                    <button id="transform-btn" class="btn btn-secondary" type="button">
+                        <i data-lucide="languages" aria-hidden="true"></i>
+                        <span id="transform-btn-label">智能生成法语</span>
+                    </button>
+                    <button id="transform-speech-btn" class="btn btn-primary" type="button">
+                        <i data-lucide="sparkles" aria-hidden="true"></i>
+                        <span id="transform-speech-btn-label">智能生成并制作音频</span>
+                    </button>
+                </div>
+            </section>
+
+            <section id="audio-panel" class="audio-panel" aria-labelledby="audio-heading" hidden>
+                <div class="audio-heading-row">
+                    <div>
+                        <span class="step-number">03</span>
+                        <h2 id="audio-heading">音频与字幕</h2>
+                    </div>
+                    <div class="download-actions">
+                        <a id="download-mp3" class="btn btn-download" href="#" download>
+                            <i data-lucide="download" aria-hidden="true"></i>
+                            <span>MP3</span>
+                        </a>
+                        <a id="download-srt" class="btn btn-download" href="#" download>
+                            <i data-lucide="captions" aria-hidden="true"></i>
+                            <span>SRT</span>
+                        </a>
+                    </div>
+                </div>
+                <audio id="audio-player" controls preload="metadata"></audio>
+            </section>
+        </main>
+    </div>
+</body>
+</html>

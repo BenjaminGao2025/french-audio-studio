@@ -1,0 +1,17 @@
+services:
+  french-audio-studio:
+    build: .
+    image: french-audio-studio:latest
+    container_name: french-audio-studio
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    environment:
+      OUTPUT_DIR: /app/outputs
+      PERPLEXITY_BASE_URL: ${PERPLEXITY_BASE_URL:-http://127.0.0.1:8002/v1}
+      PERPLEXITY_MODEL: ${PERPLEXITY_MODEL:-grok-4.6}
+      PERPLEXITY_PROOFREAD_MODEL: ${PERPLEXITY_PROOFREAD_MODEL:-gpt-5.6-terra}
+      PERPLEXITY_TIMEOUT_SECONDS: ${PERPLEXITY_TIMEOUT_SECONDS:-120}
+      MAX_TEXT_CHARS: ${MAX_TEXT_CHARS:-15000}
+    volumes:
+      - ./outputs:/app/outputs
