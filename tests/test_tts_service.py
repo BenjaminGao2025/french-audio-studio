@@ -780,6 +780,30 @@ class FrenchAudioStudioTests(unittest.TestCase):
         resolved = tts_service._authorization_token(f"Bearer {token}")
         self.assertEqual(resolved, tts_service.SERVER_WEB2API_KEY)
 
+    @patch("tts_service.request_word_lookup", new_callable=AsyncMock)
+    def test_quick_lookup_endpoint(self, lookup_mock):
+        lookup_mock.return_value = {
+            "token": "bonjour",
+            "lemma": "bonjour",
+            "pos": "n.m.",
+            "phonetic": "/bɔ̃.ʒuʁ/",
+            "explanation_cn": "你好，问候语",
+            "explanation_en": "hello, good morning",
+        }
+        res = self.client.get(
+            "/api/lookup?word=bonjour",
+            headers={"Authorization": "Bearer test-key"},
+        )
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["token"], "bonjour")
+        self.assertEqual(data["pos"], "n.m.")
+        self.assertEqual(data["explanation_cn"], "你好，问候语")
+
+    def test_quick_lookup_requires_auth(self):
+        res = self.client.get("/api/lookup?word=bonjour")
+        self.assertEqual(res.status_code, 401)
+
 
 if __name__ == "__main__":
     unittest.main()

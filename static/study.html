@@ -6,11 +6,11 @@
     <meta name="color-scheme" content="light">
     <title>法语拆解与跟读复述 - 1000H French</title>
     <link rel="icon" href="/favicon.ico?v=2" sizes="any">
-    <link rel="stylesheet" href="/static/style.css?v=7.0">
-    <link rel="stylesheet" href="/static/study.css?v=7.0">
+    <link rel="stylesheet" href="/static/style.css?v=8.0">
+    <link rel="stylesheet" href="/static/study.css?v=8.0">
     <script src="https://unpkg.com/lucide@1.34.0/dist/umd/lucide.min.js" defer></script>
-    <script src="/static/anki.js?v=7.0" defer></script>
-    <script src="/static/study.js?v=7.0" defer></script>
+    <script src="/static/anki.js?v=8.0" defer></script>
+    <script src="/static/study.js?v=8.0" defer></script>
 </head>
 <body>
     <div class="app-shell">
@@ -395,6 +395,45 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Floating Double-Click Lexical Popover -->
+    <div id="floating-word-popover" class="floating-word-popover" hidden aria-live="polite">
+        <div class="popover-arrow" aria-hidden="true"></div>
+        <div class="popover-header">
+            <div class="popover-main-info">
+                <div class="popover-word-row">
+                    <strong id="popover-word" class="popover-word">--</strong>
+                    <button id="popover-speak-btn" class="btn-token-speak btn-popover-speak" type="button" title="重播发音 (快捷键 R)">
+                        <i data-lucide="volume-2" aria-hidden="true"></i>
+                    </button>
+                </div>
+                <div class="popover-tags-row">
+                    <span id="popover-pos" class="pos-tag" hidden></span>
+                    <span id="popover-lemma" class="lemma-tag" hidden></span>
+                    <span id="popover-phonetic" class="popover-phonetic"></span>
+                </div>
+            </div>
+            <button id="popover-close-btn" class="icon-btn popover-close-btn" type="button" title="关闭 (Esc)">
+                <i data-lucide="x" aria-hidden="true"></i>
+            </button>
+        </div>
+        <div class="popover-body">
+            <div id="popover-loading" class="popover-loading" hidden>
+                <i data-lucide="loader" class="spin-icon"></i>
+                <span>正在查询字义...</span>
+            </div>
+            <div id="popover-content">
+                <div class="popover-cn-text" id="popover-cn"></div>
+                <div class="popover-en-text" id="popover-en"></div>
+            </div>
+        </div>
+        <div class="popover-footer">
+            <button id="popover-star-btn" class="btn btn-secondary btn-xs btn-popover-star" type="button" title="存入 Anki 生词卡">
+                <i data-lucide="star" aria-hidden="true"></i>
+                <span id="popover-star-text">加入生词卡</span>
+            </button>
         </div>
     </div>
 </body>

@@ -100,6 +100,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const cardBackSpeakBtn = document.getElementById('card-back-speak-btn');
     const cardSentenceSpeakBtn = document.getElementById('card-sentence-speak-btn');
 
+    // DOM Elements - Floating Word Popover
+    const floatingWordPopover = document.getElementById('floating-word-popover');
+    const popoverWord = document.getElementById('popover-word');
+    const popoverSpeakBtn = document.getElementById('popover-speak-btn');
+    const popoverPhonetic = document.getElementById('popover-phonetic');
+    const popoverPos = document.getElementById('popover-pos');
+    const popoverLemma = document.getElementById('popover-lemma');
+    const popoverCloseBtn = document.getElementById('popover-close-btn');
+    const popoverLoading = document.getElementById('popover-loading');
+    const popoverContent = document.getElementById('popover-content');
+    const popoverCn = document.getElementById('popover-cn');
+    const popoverEn = document.getElementById('popover-en');
+    const popoverStarBtn = document.getElementById('popover-star-btn');
+    const popoverStarText = document.getElementById('popover-star-text');
+
     const deckEmptyScreen = document.getElementById('deck-empty-screen');
     const emptyScreenTitle = document.getElementById('empty-screen-title');
     const emptyScreenDesc = document.getElementById('empty-screen-desc');
@@ -590,6 +605,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // -------------------------------------------------------------------------
     function renderStudyDeck(sentences) {
         sentencesContainer.innerHTML = '';
+        activeTokensMap.clear();
 
         if (!sentences || sentences.length === 0) {
             studyDeckSection.hidden = true;
@@ -604,6 +620,24 @@ document.addEventListener('DOMContentLoaded', () => {
             const transEn = s.translation_en || '';
             const transCn = s.translation_cn || '';
             const tokens = s.tokens || [];
+
+            // Index tokens for instant double-click lookup
+            tokens.forEach(tok => {
+                if (tok.token) {
+                    const entry = {
+                        token: tok.token,
+                        lemma: tok.lemma || tok.token,
+                        pos: tok.pos || '',
+                        phonetic: tok.phonetic || '',
+                        explanation_cn: tok.explanation_cn || '',
+                        explanation_en: tok.explanation_en || '',
+                        sentence: originalText,
+                        sentence_cn: transCn,
+                    };
+                    activeTokensMap.set(tok.token.toLowerCase(), entry);
+                    if (tok.lemma) activeTokensMap.set(tok.lemma.toLowerCase(), entry);
+                }
+            });
 
             const card = document.createElement('article');
             card.className = 'sentence-card';
@@ -1239,7 +1273,147 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // -------------------------------------------------------------------------
-    // 8. Text Analysis Request
+    // 8. Double-Click / Selection Word Lookup Popover
+    // -------------------------------------------------------------------------
+    let currentPopoverCard = null;
+
+    function closeWordPopover() {
+        if (floatingWordPopover) {
+            floatingWordPopover.hidden = true;
+        }
+    }
+
+    function renderPopoverData(item) {
+        currentPopoverCard = item;
+        popoverWord.textContent = item.token;
+        popoverPhonetic.textContent = item.phonetic || '';
+        if (item.pos) {
+            popoverPos.textContent = item.pos;
+            popoverPos.hidden = false;
+        } else {
+            popoverPos.hidden = true;
+        }
+        if (item.lemma && item.lemma.toLowerCase() !== item.token.toLowerCase()) {
+            popoverLemma.textContent = `原形: ${item.lemma}`;
+            popoverLemma.hidden = false;
+        } else {
+            popoverLemma.hidden = true;
+        }
+
+        popoverCn.textContent = item.explanation_cn || '语境词汇';
+        popoverEn.textContent = item.explanation_en || '';
+        popoverLoading.hidden = true;
+        popoverContent.hidden = false;
+
+        updatePopoverStarState();
+        refreshIcons();
+    }
+
+    function updatePopoverStarState() {
+        if (!popoverStarBtn || !currentPopoverCard || !deckManager) return;
+        const exists = deckManager.hasCard(currentPopoverCard.token);
+        if (exists) {
+            popoverStarBtn.classList.add('active');
+            if (popoverStarText) popoverStarText.textContent = '已存生词卡';
+        } else {
+            popoverStarBtn.classList.remove('active');
+            if (popoverStarText) popoverStarText.textContent = '加入生词卡';
+        }
+    }
+
+    async function handleWordDoubleClick(e) {
+        if (floatingWordPopover && floatingWordPopover.contains(e.target)) return;
+
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0) return;
+
+        const rawSelected = selection.toString().trim();
+        if (!rawSelected) return;
+
+        // Clean punctuation, apostrophes, quotes, commas, dots
+        const cleanWord = rawSelected.replace(/^[^\wÀ-ÿ]+|[^\wÀ-ÿ]+$/g, '').trim();
+        if (!cleanWord || cleanWord.length > 40 || !/[a-zA-ZÀ-ÿ]/.test(cleanWord)) return;
+
+        const range = selection.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        if (rect.width === 0 && rect.height === 0) return;
+
+        const popoverWidth = 290;
+        const popoverHeight = 140;
+        let left = rect.left + window.scrollX + (rect.width / 2) - (popoverWidth / 2);
+        left = Math.max(12, Math.min(left, window.innerWidth - popoverWidth - 12));
+
+        let top = rect.top + window.scrollY - popoverHeight - 12;
+        let isArrowTop = false;
+        if (rect.top - popoverHeight < 15) {
+            top = rect.bottom + window.scrollY + 12;
+            isArrowTop = true;
+        }
+
+        floatingWordPopover.style.left = `${left}px`;
+        floatingWordPopover.style.top = `${top}px`;
+        if (isArrowTop) {
+            floatingWordPopover.classList.add('arrow-top');
+        } else {
+            floatingWordPopover.classList.remove('arrow-top');
+        }
+
+        floatingWordPopover.hidden = false;
+
+        // 1. Check local cache (0ms instant response)
+        const localMatch = activeTokensMap.get(cleanWord.toLowerCase());
+        if (localMatch) {
+            renderPopoverData(localMatch);
+            playFrenchSpeech(localMatch.token);
+            return;
+        }
+
+        // 2. Query backend /api/lookup
+        popoverWord.textContent = cleanWord;
+        popoverPhonetic.textContent = '';
+        popoverPos.hidden = true;
+        popoverLemma.hidden = true;
+        popoverLoading.hidden = false;
+        popoverContent.hidden = true;
+        currentPopoverCard = {
+            token: cleanWord,
+            lemma: cleanWord,
+            pos: '',
+            phonetic: '',
+            explanation_cn: '查询中...',
+            explanation_en: '',
+        };
+        updatePopoverStarState();
+        refreshIcons();
+
+        // Auto play audio immediately
+        playFrenchSpeech(cleanWord);
+
+        try {
+            const token = getEffectiveAuthToken();
+            const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+            const res = await fetch(`/api/lookup?word=${encodeURIComponent(cleanWord)}`, { headers });
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.detail?.message || '查词失败');
+            }
+            const data = await res.json();
+            activeTokensMap.set(cleanWord.toLowerCase(), data);
+            if (!floatingWordPopover.hidden && popoverWord.textContent === cleanWord) {
+                renderPopoverData(data);
+            }
+        } catch (err) {
+            if (!floatingWordPopover.hidden && popoverWord.textContent === cleanWord) {
+                popoverLoading.hidden = true;
+                popoverContent.hidden = false;
+                popoverCn.textContent = '暂无法获取释义';
+                popoverEn.textContent = err.message;
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 9. Text Analysis Request
     // -------------------------------------------------------------------------
     async function startAnalysis() {
         const text = frenchInput.value.trim();
@@ -1439,8 +1613,66 @@ document.addEventListener('DOMContentLoaded', () => {
     if (exportDeckBtn) exportDeckBtn.addEventListener('click', handleExportDeck);
     if (exportDeckBtn2) exportDeckBtn2.addEventListener('click', handleExportDeck);
 
-    // Global Keyboard listener for Flashcard review
+    // Floating Lexical Popover Bindings
+    if (popoverCloseBtn) popoverCloseBtn.addEventListener('click', closeWordPopover);
+    if (popoverSpeakBtn) {
+        popoverSpeakBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (currentPopoverCard && currentPopoverCard.token) {
+                playFrenchSpeech(currentPopoverCard.token);
+            }
+        });
+    }
+    if (popoverStarBtn) {
+        popoverStarBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (!currentPopoverCard || !deckManager) return;
+            if (deckManager.hasCard(currentPopoverCard.token)) {
+                deckManager.removeCard(currentPopoverCard.token);
+            } else {
+                deckManager.addCard({
+                    token: currentPopoverCard.token,
+                    lemma: currentPopoverCard.lemma,
+                    pos: currentPopoverCard.pos,
+                    phonetic: currentPopoverCard.phonetic,
+                    explanation_cn: currentPopoverCard.explanation_cn,
+                    explanation_en: currentPopoverCard.explanation_en,
+                    sentence: currentPopoverCard.sentence || '',
+                    sentence_cn: currentPopoverCard.sentence_cn || '',
+                });
+            }
+            updatePopoverStarState();
+            updateDeckBadge();
+            updateTableStarStates();
+        });
+    }
+
+    document.addEventListener('dblclick', handleWordDoubleClick);
+    document.addEventListener('mousedown', (e) => {
+        if (floatingWordPopover && !floatingWordPopover.hidden) {
+            if (!floatingWordPopover.contains(e.target)) {
+                closeWordPopover();
+            }
+        }
+    });
+
+    // Global Keyboard listener for Flashcard review & Popover
     document.addEventListener('keydown', (e) => {
+        // Close word popover on Escape
+        if (e.key === 'Escape' && floatingWordPopover && !floatingWordPopover.hidden) {
+            closeWordPopover();
+            return;
+        }
+
+        // Replay word in popover on 'R' if popover is active
+        if ((e.key === 'r' || e.key === 'R') && floatingWordPopover && !floatingWordPopover.hidden) {
+            if (currentPopoverCard && currentPopoverCard.token) {
+                e.preventDefault();
+                playFrenchSpeech(currentPopoverCard.token);
+                return;
+            }
+        }
+
         if (!flashcardModal || flashcardModal.hidden) return;
 
         if (e.key === 'Escape') {
@@ -1448,7 +1680,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // 'R' or 'r' key to replay audio
+        // 'R' or 'r' key to replay audio in flashcard
         if (e.key === 'r' || e.key === 'R') {
             e.preventDefault();
             if (reviewQueue.length > 0 && currentQueueIndex < reviewQueue.length) {

@@ -1121,6 +1121,92 @@ async def analyze_french(
     return result
 
 
+LOOKUP_CACHE: dict[str, dict] = {}
+
+
+async def request_word_lookup(word: str, api_key: str, model: str = "grok-4.6") -> dict:
+    clean_word = word.strip()
+    cache_key = clean_word.lower()
+    if cache_key in LOOKUP_CACHE:
+        return LOOKUP_CACHE[cache_key]
+
+    prompt = (
+        "You are an expert French pedagogical lexicographer for learners.\n"
+        "Provide accurate linguistic details for the given French word in valid JSON format ONLY.\n"
+        "Schema:\n"
+        "{\n"
+        '  "token": "...",\n'
+        '  "lemma": "dictionary canonical base form (infinitive for verbs, masc sing for nouns/adjectives)",\n'
+        '  "pos": "part of speech (e.g. v., n.m., n.f., adj., adv., prep., conj.)",\n'
+        '  "phonetic": "IPA phonetic transcription (e.g. /bɔ̃.ʒuʁ/)",\n'
+        '  "explanation_cn": "concise, accurate Chinese definition and grammatical nuance",\n'
+        '  "explanation_en": "concise, accurate English definition"\n'
+        "}"
+    )
+
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": f"Define this French word: {clean_word}"},
+        ],
+        "response_format": {"type": "json_object"},
+        "stream": False,
+        "temperature": 0.0,
+    }
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        _, raw_text = await _post_chat(client, payload, headers)
+
+    cleaned = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip()
+    fence_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned)
+    candidate = fence_match.group(1).strip() if fence_match else cleaned
+
+    try:
+        data = json.loads(candidate)
+    except Exception:
+        first_brace = candidate.find("{")
+        last_brace = candidate.rfind("}")
+        if first_brace != -1 and last_brace > first_brace:
+            try:
+                data = json.loads(candidate[first_brace : last_brace + 1])
+            except Exception:
+                data = {}
+        else:
+            data = {}
+
+    result = {
+        "token": str(data.get("token", clean_word)),
+        "lemma": str(data.get("lemma", clean_word)),
+        "pos": str(data.get("pos", "")),
+        "phonetic": str(data.get("phonetic", "")),
+        "explanation_cn": str(data.get("explanation_cn", "语境词汇")),
+        "explanation_en": str(data.get("explanation_en", "")),
+    }
+
+    LOOKUP_CACHE[cache_key] = result
+    return result
+
+
+@app.get("/api/lookup")
+async def lookup_word(
+    word: str,
+    model: str = "grok-4.6",
+    authorization: str | None = Header(default=None),
+):
+    clean = word.strip()
+    if not clean:
+        raise HTTPException(status_code=400, detail={"message": "请提供待查询单词"})
+    api_key = _authorization_token(authorization)
+    result = await request_word_lookup(clean, api_key, model=model)
+    return result
+
+
 @app.get("/tts")
 async def generate_tts(
     text: str,
