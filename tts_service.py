@@ -36,10 +36,15 @@ PERPLEXITY_TIMEOUT_SECONDS = float(os.getenv("PERPLEXITY_TIMEOUT_SECONDS", "120"
 MAX_TEXT_CHARS = int(os.getenv("MAX_TEXT_CHARS", "15000"))
 
 TRANSFORM_MODELS = {
+    "gemini-3.8-flash": {
+        "label": "Gemini 3.8 Flash (AGY)",
+        "description": "7840 AGY 原生极速模型；词汇切分与语法精析极速响应。",
+        "recommended": True,
+    },
     "grok-4.6": {
         "label": "Grok 4.6",
         "description": "Fast mode; recommended for clean French transformation.",
-        "recommended": True,
+        "recommended": False,
     },
     "grok-4.6-thinking": {
         "label": "Grok 4.6 Thinking",

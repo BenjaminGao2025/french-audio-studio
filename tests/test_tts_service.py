@@ -37,7 +37,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
         model_ids = {item["id"] for item in response.json()["models"]}
         self.assertEqual(
             model_ids,
-            {"grok-4.6", "grok-4.6-thinking", "sonar-2"},
+            {"gemini-3.8-flash", "grok-4.6", "grok-4.6-thinking", "sonar-2"},
         )
 
     @patch(
