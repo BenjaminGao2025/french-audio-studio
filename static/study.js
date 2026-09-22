@@ -125,6 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let reviewQueue = [];
     let currentQueueIndex = 0;
     let isCardFlipped = false;
+    const activeTokensMap = new Map();
 
     // Speech Recognition API Detection
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition || null;
@@ -1141,136 +1142,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // -------------------------------------------------------------------------
-    // 7. Query History Manager
+    // 7. Query History Manager (Unified via FrenchHistory)
     // -------------------------------------------------------------------------
-    const historyStorageKey = 'frenchStudio.queryHistory';
-
-    function getHistory() {
-        try {
-            return JSON.parse(localStorage.getItem(historyStorageKey) || '[]');
-        } catch (e) {
-            return [];
-        }
-    }
-
     function saveHistoryItem(text, sentences) {
         if (!text || !sentences || sentences.length === 0) return;
-        let list = getHistory();
-        // Remove duplicate of same trimmed text
-        list = list.filter(item => item.text.trim() !== text.trim());
-        const totalTokens = sentences.reduce((acc, s) => acc + (s.tokens ? s.tokens.length : 0), 0);
-        const now = new Date();
-        const timeFormatted = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-
-        const newItem = {
-            id: 'hist_' + Date.now(),
-            timestamp: Date.now(),
-            timeFormatted,
-            text,
-            sentences,
-            sentenceCount: sentences.length,
-            tokenCount: totalTokens,
-        };
-        list.unshift(newItem);
-        if (list.length > 50) list = list.slice(0, 50);
-        localStorage.setItem(historyStorageKey, JSON.stringify(list));
-        updateHistoryBadges();
+        if (window.FrenchHistory) {
+            window.FrenchHistory.saveStudyRecord(text, sentences, modelSelect ? modelSelect.value : 'grok-4.6');
+        }
     }
 
     function updateHistoryBadges() {
-        const list = getHistory();
-        const count = list.length;
-        if (historyCountBadge) {
-            historyCountBadge.textContent = `${count}`;
-            historyCountBadge.hidden = count === 0;
-        }
-        if (historyTotalBadge) {
-            historyTotalBadge.textContent = `共 ${count} 条`;
+        if (window.FrenchHistory) {
+            window.FrenchHistory.updateBadges();
         }
     }
 
-    function openHistoryModal() {
-        renderHistoryList();
-        if (historyModal) historyModal.hidden = false;
-        refreshIcons();
-    }
-
-    function closeHistoryModal() {
-        if (historyModal) historyModal.hidden = true;
-    }
-
-    function clearHistory() {
-        if (confirm('确定要清空全部查询历史记录吗？')) {
-            localStorage.removeItem(historyStorageKey);
-            renderHistoryList();
-            updateHistoryBadges();
-        }
-    }
-
-    function renderHistoryList() {
-        if (!historyList || !historyEmpty) return;
-        const list = getHistory();
-        updateHistoryBadges();
-        if (list.length === 0) {
-            historyList.innerHTML = '';
-            historyEmpty.hidden = false;
-            return;
-        }
-        historyEmpty.hidden = true;
-        historyList.innerHTML = list.map(item => `
-            <div class="history-item" data-id="${escapeHtml(item.id)}">
-                <div class="history-item-header">
-                    <div class="history-time-group">
-                        <i data-lucide="clock" style="width: 13px; height: 13px;"></i>
-                        <span>${escapeHtml(item.timeFormatted)}</span>
-                    </div>
-                    <div class="history-stats-group">
-                        <span class="history-stat-tag">${item.sentenceCount} 句子</span>
-                        <span class="history-stat-tag">${item.tokenCount} 词汇/短语</span>
-                    </div>
-                </div>
-                <div class="history-snippet">${escapeHtml(item.text)}</div>
-                <div class="history-item-actions">
-                    <button class="btn btn-secondary btn-sm btn-delete-history" data-id="${escapeHtml(item.id)}" type="button" title="删除此条记录">
-                        <i data-lucide="trash-2"></i>
-                        <span>删除</span>
-                    </button>
-                    <button class="btn btn-primary btn-sm btn-restore-history" data-id="${escapeHtml(item.id)}" type="button" title="恢复文本与已解析卡片">
-                        <i data-lucide="rotate-ccw"></i>
-                        <span>恢复并学习</span>
-                    </button>
-                </div>
-            </div>
-        `).join('');
-
-        // Wire buttons
-        historyList.querySelectorAll('.btn-restore-history').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const id = btn.dataset.id;
-                const found = getHistory().find(x => x.id === id);
-                if (found) {
-                    frenchInput.value = found.text;
-                    charCounter.textContent = `${found.text.length} / 15000`;
-                    renderStudyDeck(found.sentences);
-                    closeHistoryModal();
-                    statusMessage.className = 'status-message status-success';
-                    statusMessage.textContent = `已成功恢复历史记录（共 ${found.sentenceCount} 句，${found.tokenCount} 个词汇），无需重复调用大模型。`;
-                    window.scrollTo({ top: studyDeckSection.offsetTop - 80, behavior: 'smooth' });
-                }
-            });
-        });
-
-        historyList.querySelectorAll('.btn-delete-history').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const id = btn.dataset.id;
-                let cur = getHistory().filter(x => x.id !== id);
-                localStorage.setItem(historyStorageKey, JSON.stringify(cur));
-                renderHistoryList();
-            });
-        });
-
-        refreshIcons();
-    }
 
     // -------------------------------------------------------------------------
     // 8. Double-Click / Selection Word Lookup Popover
@@ -1518,15 +1404,27 @@ document.addEventListener('DOMContentLoaded', () => {
     if (authForm) authForm.addEventListener('submit', handleAuthSubmit);
     if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
 
-    // History Modal Bindings
-    if (historyToggleBtn) historyToggleBtn.addEventListener('click', openHistoryModal);
-    if (closeHistoryModalBtn) closeHistoryModalBtn.addEventListener('click', closeHistoryModal);
-    if (historyModal) {
-        historyModal.addEventListener('click', (e) => {
-            if (e.target === historyModal) closeHistoryModal();
+    // Initialize Unified History
+    if (window.FrenchHistory) {
+        window.FrenchHistory.init({
+            currentPage: 'study',
+            onRestoreStudy: (item) => {
+                if (item.text) {
+                    frenchInput.value = item.text;
+                    charCounter.textContent = `${item.text.length} / 15000`;
+                }
+                if (item.sentences && item.sentences.length > 0) {
+                    renderStudyDeck(item.sentences);
+                    statusMessage.className = 'status-message status-success';
+                    statusMessage.textContent = `已成功从历史记录恢复（共 ${item.sentenceCount || item.sentences.length} 句），无需重新消耗 Token。`;
+                    window.scrollTo({ top: studyDeckSection.offsetTop - 80, behavior: 'smooth' });
+                } else if (item.text) {
+                    statusMessage.className = 'status-message status-info';
+                    statusMessage.textContent = '已填入历史音频文本，点击“开始拆解与精析”即可生成语法词汇卡片。';
+                }
+            },
         });
     }
-    if (clearHistoryBtn) clearHistoryBtn.addEventListener('click', clearHistory);
 
     // Flashcard Deck Modal Open/Close
     if (openDeckBtn) {

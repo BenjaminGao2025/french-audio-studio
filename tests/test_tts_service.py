@@ -804,6 +804,72 @@ class FrenchAudioStudioTests(unittest.TestCase):
         res = self.client.get("/api/lookup?word=bonjour")
         self.assertEqual(res.status_code, 401)
 
+    def test_history_crud_flow(self):
+        # 1. Clear any prior test records
+        res_clear = self.client.delete("/api/history")
+        self.assertEqual(res_clear.status_code, 200)
+
+        # 2. Save a TTS record
+        tts_payload = {
+            "id": "hist_tts_test_001",
+            "type": "tts",
+            "text": "Bonjour tout le monde",
+            "payload": {
+                "voice": "fr-FR-DeniseNeural",
+                "audioUrl": "/files/test.mp3",
+                "srtUrl": "/files/test.srt",
+            },
+        }
+        res_post_tts = self.client.post("/api/history", json=tts_payload)
+        self.assertEqual(res_post_tts.status_code, 200)
+
+        # 3. Save a Study record
+        study_payload = {
+            "id": "hist_study_test_002",
+            "type": "study",
+            "text": "Je mange du pain",
+            "payload": {
+                "sentenceCount": 1,
+                "tokenCount": 4,
+                "sentences": [{"original": "Je mange du pain"}],
+            },
+        }
+        res_post_study = self.client.post("/api/history", json=study_payload)
+        self.assertEqual(res_post_study.status_code, 200)
+
+        # 4. List all records
+        res_all = self.client.get("/api/history")
+        self.assertEqual(res_all.status_code, 200)
+        data_all = res_all.json()
+        self.assertGreaterEqual(data_all["count"], 2)
+        ids = [r["id"] for r in data_all["records"]]
+        self.assertIn("hist_tts_test_001", ids)
+        self.assertIn("hist_study_test_002", ids)
+
+        # 5. Filter by type
+        res_tts_only = self.client.get("/api/history?type=tts")
+        self.assertEqual(res_tts_only.status_code, 200)
+        tts_records = res_tts_only.json()["records"]
+        self.assertTrue(all(r["type"] == "tts" for r in tts_records))
+        self.assertIn("hist_tts_test_001", [r["id"] for r in tts_records])
+
+        # 6. Delete single record
+        res_del = self.client.delete("/api/history/hist_tts_test_001")
+        self.assertEqual(res_del.status_code, 200)
+        self.assertTrue(res_del.json()["success"])
+
+        # 7. Verify deletion
+        res_after_del = self.client.get("/api/history")
+        ids_after = [r["id"] for r in res_after_del.json()["records"]]
+        self.assertNotIn("hist_tts_test_001", ids_after)
+        self.assertIn("hist_study_test_002", ids_after)
+
+        # 8. Clear all
+        res_clear_final = self.client.delete("/api/history")
+        self.assertEqual(res_clear_final.status_code, 200)
+        res_empty = self.client.get("/api/history")
+        self.assertEqual(res_empty.json()["count"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

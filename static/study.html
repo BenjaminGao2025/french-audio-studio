@@ -6,11 +6,12 @@
     <meta name="color-scheme" content="light">
     <title>法语拆解与跟读复述 - 1000H French</title>
     <link rel="icon" href="/favicon.ico?v=2" sizes="any">
-    <link rel="stylesheet" href="/static/style.css?v=8.0">
-    <link rel="stylesheet" href="/static/study.css?v=8.0">
+    <link rel="stylesheet" href="/static/style.css?v=9.0">
+    <link rel="stylesheet" href="/static/study.css?v=9.0">
     <script src="https://unpkg.com/lucide@1.34.0/dist/umd/lucide.min.js" defer></script>
-    <script src="/static/anki.js?v=8.0" defer></script>
-    <script src="/static/study.js?v=8.0" defer></script>
+    <script src="/static/anki.js?v=9.0" defer></script>
+    <script src="/static/history.js?v=9.0" defer></script>
+    <script src="/static/study.js?v=9.0" defer></script>
 </head>
 <body>
     <div class="app-shell">
@@ -290,11 +291,11 @@
             <header class="modal-header">
                 <div class="modal-title-group">
                     <i data-lucide="history" class="modal-icon" aria-hidden="true"></i>
-                    <h3 id="history-modal-title">法语精析历史记录</h3>
+                    <h3 id="history-modal-title">历史记录</h3>
                     <span id="history-total-badge" class="badge">共 0 条</span>
                 </div>
                 <div class="modal-header-actions">
-                    <button id="clear-history-btn" class="btn btn-secondary btn-sm" type="button" title="清空全部查询历史">
+                    <button id="clear-history-btn" class="btn btn-secondary btn-sm" type="button" title="清空当前分类历史">
                         <i data-lucide="trash-2" aria-hidden="true"></i>
                         <span>清空历史</span>
                     </button>
@@ -303,6 +304,22 @@
                     </button>
                 </div>
             </header>
+            <div class="history-tabs-container">
+                <div class="history-tabs" role="tablist">
+                    <button id="hist-tab-all" class="history-tab active" data-tab="all" type="button" role="tab" aria-selected="true">
+                        <span>全部</span>
+                        <span id="hist-tab-count-all" class="history-tab-badge">0</span>
+                    </button>
+                    <button id="hist-tab-study" class="history-tab" data-tab="study" type="button" role="tab" aria-selected="false">
+                        <span>📖 拆解精析</span>
+                        <span id="hist-tab-count-study" class="history-tab-badge">0</span>
+                    </button>
+                    <button id="hist-tab-tts" class="history-tab" data-tab="tts" type="button" role="tab" aria-selected="false">
+                        <span>🎧 音频制作</span>
+                        <span id="hist-tab-count-tts" class="history-tab-badge">0</span>
+                    </button>
+                </div>
+            </div>
             <div class="modal-body history-modal-body">
                 <div id="history-list" class="history-list"></div>
                 <div id="history-empty" class="history-empty" hidden>

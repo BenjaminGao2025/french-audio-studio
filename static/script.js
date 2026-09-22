@@ -349,6 +349,22 @@ document.addEventListener('DOMContentLoaded', () => {
             setStatus('音频和字幕已生成。', 'success');
             audioPlayer.play().catch(() => {});
             audioPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+            // Record into unified history
+            if (window.FrenchHistory) {
+                window.FrenchHistory.saveTtsRecord({
+                    text,
+                    sourceText: sourceText.value,
+                    taskMode: selectedTaskMode(),
+                    taskLabel: taskModes[selectedTaskMode()] ? taskModes[selectedTaskMode()].label : '',
+                    voice: voiceSelect.value,
+                    audioUrl: result.audio_url,
+                    audioFilename: result.audio_filename,
+                    srtUrl: result.srt_url,
+                    srtFilename: result.srt_filename,
+                    model: modelSelect.value,
+                });
+            }
             return result;
         } finally {
             if (manageBusy) {
@@ -525,5 +541,46 @@ document.addEventListener('DOMContentLoaded', () => {
         setConnectionState('idle', 'Key 已保存', `点击测试 ${modelLabel()} 实际连接`);
     } else {
         setConnectionState('idle', '尚未填写 Key', '填写后测试实际连接');
+    }
+
+    // Support query param ?text= passed from study or elsewhere
+    const urlParams = new URLSearchParams(window.location.search);
+    const queryText = urlParams.get('text');
+    if (queryText) {
+        outputText.value = queryText;
+        updateCount(outputText, outputCount);
+        setStatus('已从拆解学习台导入法语文本，可直接点击“制作音频”或进行调整。', 'success');
+    }
+
+    // Initialize Unified History
+    if (window.FrenchHistory) {
+        window.FrenchHistory.init({
+            currentPage: 'workbench',
+            onRestoreTts: (item) => {
+                if (item.text) {
+                    outputText.value = item.text;
+                    updateCount(outputText, outputCount);
+                }
+                if (item.sourceText) {
+                    sourceText.value = item.sourceText;
+                    updateCount(sourceText, sourceCount);
+                }
+                if (item.voice && Array.from(voiceSelect.options).some(o => o.value === item.voice)) {
+                    voiceSelect.value = item.voice;
+                }
+                if (item.audioUrl) {
+                    audioPlayer.src = item.audioUrl;
+                    downloadMp3.href = `${item.audioUrl}?download=true`;
+                    downloadMp3.download = item.audioFilename || 'french_audio.mp3';
+                    if (item.srtUrl) {
+                        downloadSrt.href = `${item.srtUrl}?download=true`;
+                        downloadSrt.download = item.srtFilename || 'french_subtitles.srt';
+                    }
+                    audioPanel.hidden = false;
+                    audioPlayer.play().catch(() => {});
+                }
+                setStatus('已从历史记录恢复文本与音频。', 'success');
+            },
+        });
     }
 });

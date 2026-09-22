@@ -44,6 +44,28 @@ def init_db() -> None:
             );
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS history_records (
+                id TEXT PRIMARY KEY,
+                user_id INTEGER,
+                record_type TEXT NOT NULL,
+                text TEXT NOT NULL,
+                payload_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_history_user ON history_records(user_id, created_at DESC);
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_history_type ON history_records(record_type, created_at DESC);
+            """
+        )
         conn.commit()
 
 
@@ -188,3 +210,132 @@ def get_user_status(user_id: int) -> dict[str, Any] | None:
         "days_left": days_left,
         "is_valid": is_valid,
     }
+
+
+def save_history_record(
+    record_id: str,
+    record_type: str,
+    text: str,
+    payload: dict[str, Any],
+    user_id: int | None = None,
+) -> dict[str, Any]:
+    """
+    Save or update a unified history record (TTS audio or Study analysis).
+    """
+    init_db()
+    db_path = _get_db_path()
+    now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    clean_type = (record_type or "unknown").strip().lower()
+    clean_text = (text or "").strip()
+    payload_str = json.dumps(payload, ensure_ascii=False)
+
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            """
+            INSERT INTO history_records (id, user_id, record_type, text, payload_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                record_type=excluded.record_type,
+                text=excluded.text,
+                payload_json=excluded.payload_json,
+                created_at=excluded.created_at;
+            """,
+            (record_id, user_id, clean_type, clean_text, payload_str, now_iso),
+        )
+        conn.commit()
+
+    return {
+        "id": record_id,
+        "user_id": user_id,
+        "record_type": clean_type,
+        "text": clean_text,
+        "created_at": now_iso,
+    }
+
+
+def get_history_records(
+    user_id: int | None = None,
+    record_type: str | None = None,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """
+    Retrieve unified history records ordered by created_at DESC.
+    """
+    init_db()
+    db_path = _get_db_path()
+    query = "SELECT id, user_id, record_type, text, payload_json, created_at FROM history_records WHERE 1=1"
+    params: list[Any] = []
+
+    if user_id is not None:
+        query += " AND (user_id = ? OR user_id IS NULL)"
+        params.append(user_id)
+
+    if record_type:
+        query += " AND record_type = ?"
+        params.append(record_type.strip().lower())
+
+    query += " ORDER BY created_at DESC LIMIT ?"
+    params.append(max(1, min(limit, 200)))
+
+    results: list[dict[str, Any]] = []
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        for r in rows:
+            try:
+                payload = json.loads(r["payload_json"])
+            except Exception:
+                payload = {}
+            results.append({
+                "id": r["id"],
+                "user_id": r["user_id"],
+                "type": r["record_type"],
+                "text": r["text"],
+                "created_at": r["created_at"],
+                **payload,
+            })
+
+    return results
+
+
+def delete_history_record(record_id: str, user_id: int | None = None) -> bool:
+    """
+    Delete a single history record by ID.
+    """
+    init_db()
+    db_path = _get_db_path()
+    query = "DELETE FROM history_records WHERE id = ?"
+    params: list[Any] = [record_id]
+    if user_id is not None:
+        query += " AND (user_id = ? OR user_id IS NULL)"
+        params.append(user_id)
+
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(query, params)
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+def clear_history_records(user_id: int | None = None, record_type: str | None = None) -> int:
+    """
+    Clear history records.
+    """
+    init_db()
+    db_path = _get_db_path()
+    query = "DELETE FROM history_records WHERE 1=1"
+    params: list[Any] = []
+    if user_id is not None:
+        query += " AND (user_id = ? OR user_id IS NULL)"
+        params.append(user_id)
+    if record_type:
+        query += " AND record_type = ?"
+        params.append(record_type.strip().lower())
+
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(query, params)
+        conn.commit()
+        return cursor.rowcount

@@ -6,9 +6,10 @@
     <meta name="color-scheme" content="light">
     <title>法语音频工作台</title>
     <link rel="icon" href="/favicon.ico?v=2" sizes="any">
-    <link rel="stylesheet" href="/static/style.css?v=6.0">
+    <link rel="stylesheet" href="/static/style.css?v=9.0">
     <script src="https://unpkg.com/lucide@1.34.0/dist/umd/lucide.min.js" defer></script>
-    <script src="/static/script.js?v=6.0" defer></script>
+    <script src="/static/history.js?v=9.0" defer></script>
+    <script src="/static/script.js?v=9.0" defer></script>
 </head>
 <body>
     <div class="app-shell">
@@ -34,53 +35,61 @@
                 </a>
             </nav>
 
-            <details class="connection-settings">
-                <summary>
-                    <i data-lucide="key-round" aria-hidden="true"></i>
-                    <span class="summary-label">连接设置</span>
-                    <span id="connection-summary-state" class="connection-summary-state" data-state="idle" title="连接尚未验证">
-                        <span class="connection-dot" aria-hidden="true"></span>
-                        <span class="connection-summary-text">未验证</span>
-                    </span>
-                    <i data-lucide="chevron-down" class="summary-chevron" aria-hidden="true"></i>
-                </summary>
-                <form class="connection-popover" autocomplete="off">
-                    <div class="connection-field">
-                        <label for="api-key">Perplexity web2api API Key</label>
-                        <div class="password-row">
-                            <input id="api-key" type="password" autocomplete="off" spellcheck="false">
-                            <button id="toggle-key" class="icon-btn" type="button" title="显示或隐藏 API Key" aria-label="显示或隐藏 API Key">
-                                <i data-lucide="eye"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="connection-field">
-                        <label for="model-select">转换模型</label>
-                        <select id="model-select">
-                            <option value="grok-4.6" selected>Grok 4.6 · 推荐</option>
-                            <option value="grok-4.6-thinking">Grok 4.6 Thinking</option>
-                            <option value="sonar-2">Sonar 2 · 备用</option>
-                        </select>
-                    </div>
-                    <label class="check-row" for="remember-key">
-                        <input id="remember-key" type="checkbox">
-                        <span>记住在此设备</span>
-                    </label>
-                    <div class="connection-test-row">
-                        <div id="connection-result" class="connection-result" data-state="idle" role="status" aria-live="polite">
+            <div class="topbar-actions">
+                <button id="history-toggle-btn" class="btn btn-secondary nav-history-btn" type="button" title="查看并恢复过往历史记录">
+                    <i data-lucide="history" aria-hidden="true"></i>
+                    <span>历史记录</span>
+                    <span id="history-count-badge" class="badge count-badge" hidden>0</span>
+                </button>
+
+                <details class="connection-settings">
+                    <summary>
+                        <i data-lucide="key-round" aria-hidden="true"></i>
+                        <span class="summary-label">连接设置</span>
+                        <span id="connection-summary-state" class="connection-summary-state" data-state="idle" title="连接尚未验证">
                             <span class="connection-dot" aria-hidden="true"></span>
-                            <div>
-                                <strong id="connection-result-title">尚未测试</strong>
-                                <span id="connection-result-detail">填写 Key 后测试实际连接</span>
+                            <span class="connection-summary-text">未验证</span>
+                        </span>
+                        <i data-lucide="chevron-down" class="summary-chevron" aria-hidden="true"></i>
+                    </summary>
+                    <form class="connection-popover" autocomplete="off">
+                        <div class="connection-field">
+                            <label for="api-key">Perplexity web2api API Key</label>
+                            <div class="password-row">
+                                <input id="api-key" type="password" autocomplete="off" spellcheck="false">
+                                <button id="toggle-key" class="icon-btn" type="button" title="显示或隐藏 API Key" aria-label="显示或隐藏 API Key">
+                                    <i data-lucide="eye"></i>
+                                </button>
                             </div>
                         </div>
-                        <button id="test-connection" class="btn btn-test" type="button">
-                            <i data-lucide="plug-zap" aria-hidden="true"></i>
-                            <span>测试连接</span>
-                        </button>
-                    </div>
-                </form>
-            </details>
+                        <div class="connection-field">
+                            <label for="model-select">转换模型</label>
+                            <select id="model-select">
+                                <option value="grok-4.6" selected>Grok 4.6 · 推荐</option>
+                                <option value="grok-4.6-thinking">Grok 4.6 Thinking</option>
+                                <option value="sonar-2">Sonar 2 · 备用</option>
+                            </select>
+                        </div>
+                        <label class="check-row" for="remember-key">
+                            <input id="remember-key" type="checkbox">
+                            <span>记住在此设备</span>
+                        </label>
+                        <div class="connection-test-row">
+                            <div id="connection-result" class="connection-result" data-state="idle" role="status" aria-live="polite">
+                                <span class="connection-dot" aria-hidden="true"></span>
+                                <div>
+                                    <strong id="connection-result-title">尚未测试</strong>
+                                    <span id="connection-result-detail">填写 Key 后测试实际连接</span>
+                                </div>
+                            </div>
+                            <button id="test-connection" class="btn btn-test" type="button">
+                                <i data-lucide="plug-zap" aria-hidden="true"></i>
+                                <span>测试连接</span>
+                            </button>
+                        </div>
+                    </form>
+                </details>
+            </div>
         </header>
 
         <main>
@@ -249,6 +258,52 @@
                 <audio id="audio-player" controls preload="metadata"></audio>
             </section>
         </main>
+    </div>
+
+    <!-- Unified History Modal Dialog -->
+    <div id="history-modal" class="modal-backdrop" hidden>
+        <div class="modal-dialog modal-history-dialog" role="dialog" aria-labelledby="history-modal-title" aria-modal="true">
+            <header class="modal-header">
+                <div class="modal-title-group">
+                    <i data-lucide="history" class="modal-icon" aria-hidden="true"></i>
+                    <h3 id="history-modal-title">历史记录</h3>
+                    <span id="history-total-badge" class="badge">共 0 条</span>
+                </div>
+                <div class="modal-header-actions">
+                    <button id="clear-history-btn" class="btn btn-secondary btn-sm" type="button" title="清空当前分类历史">
+                        <i data-lucide="trash-2" aria-hidden="true"></i>
+                        <span>清空历史</span>
+                    </button>
+                    <button id="close-history-modal-btn" class="icon-btn modal-close-btn" type="button" title="关闭 (Esc)">
+                        <i data-lucide="x" aria-hidden="true"></i>
+                    </button>
+                </div>
+            </header>
+            <div class="history-tabs-container">
+                <div class="history-tabs" role="tablist">
+                    <button id="hist-tab-all" class="history-tab active" data-tab="all" type="button" role="tab" aria-selected="true">
+                        <span>全部</span>
+                        <span id="hist-tab-count-all" class="history-tab-badge">0</span>
+                    </button>
+                    <button id="hist-tab-tts" class="history-tab" data-tab="tts" type="button" role="tab" aria-selected="false">
+                        <span>🎧 音频制作</span>
+                        <span id="hist-tab-count-tts" class="history-tab-badge">0</span>
+                    </button>
+                    <button id="hist-tab-study" class="history-tab" data-tab="study" type="button" role="tab" aria-selected="false">
+                        <span>📖 拆解精析</span>
+                        <span id="hist-tab-count-study" class="history-tab-badge">0</span>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-body history-modal-body">
+                <div id="history-list" class="history-list"></div>
+                <div id="history-empty" class="history-empty" hidden>
+                    <div class="empty-icon-box">⏳</div>
+                    <h4>暂无历史记录</h4>
+                    <p>您每次生成的音频与拆解精析结果都会自动保存在这里，随时可以一键试听或恢复。</p>
+                </div>
+            </div>
+        </div>
     </div>
 </body>
 </html>

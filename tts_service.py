@@ -8,7 +8,7 @@ import os
 import re
 import uuid
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import edge_tts
 import httpx
@@ -1256,6 +1256,84 @@ async def get_current_user(authorization: str | None = Header(default=None)):
     if not status:
         raise HTTPException(status_code=404, detail={"message": "账号不存在"})
     return status
+
+
+class SaveHistoryRequest(BaseModel):
+    id: str
+    type: str = "tts"
+    text: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+@app.get("/api/history")
+async def list_history(
+    type: str | None = Query(default=None),
+    limit: int = Query(default=50),
+    authorization: str | None = Header(default=None),
+):
+    user_id = None
+    if authorization:
+        parts = authorization.split(" ", 1)
+        token = parts[1].strip() if len(parts) == 2 and parts[0].lower() == "bearer" else authorization.strip()
+        payload = auth_db.verify_token(token)
+        if payload:
+            user_id = payload.get("sub")
+    records = auth_db.get_history_records(user_id=user_id, record_type=type, limit=limit)
+    return {"records": records, "count": len(records)}
+
+
+@app.post("/api/history")
+async def save_history(
+    req: SaveHistoryRequest,
+    authorization: str | None = Header(default=None),
+):
+    user_id = None
+    if authorization:
+        parts = authorization.split(" ", 1)
+        token = parts[1].strip() if len(parts) == 2 and parts[0].lower() == "bearer" else authorization.strip()
+        payload = auth_db.verify_token(token)
+        if payload:
+            user_id = payload.get("sub")
+    res = auth_db.save_history_record(
+        record_id=req.id,
+        record_type=req.type,
+        text=req.text,
+        payload=req.payload,
+        user_id=user_id,
+    )
+    return res
+
+
+@app.delete("/api/history/{record_id}")
+async def delete_history(
+    record_id: str,
+    authorization: str | None = Header(default=None),
+):
+    user_id = None
+    if authorization:
+        parts = authorization.split(" ", 1)
+        token = parts[1].strip() if len(parts) == 2 and parts[0].lower() == "bearer" else authorization.strip()
+        payload = auth_db.verify_token(token)
+        if payload:
+            user_id = payload.get("sub")
+    ok = auth_db.delete_history_record(record_id, user_id=user_id)
+    return {"success": ok}
+
+
+@app.delete("/api/history")
+async def clear_all_history(
+    type: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+):
+    user_id = None
+    if authorization:
+        parts = authorization.split(" ", 1)
+        token = parts[1].strip() if len(parts) == 2 and parts[0].lower() == "bearer" else authorization.strip()
+        payload = auth_db.verify_token(token)
+        if payload:
+            user_id = payload.get("sub")
+    count = auth_db.clear_history_records(user_id=user_id, record_type=type)
+    return {"deleted": count}
 
 
 if __name__ == "__main__":
