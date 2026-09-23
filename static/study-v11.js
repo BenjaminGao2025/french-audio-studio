@@ -547,7 +547,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Populate front content
         cardFrontWord.textContent = currentCard.token;
-        cardFrontPhonetic.textContent = currentCard.phonetic || '';
+        cardFrontPhonetic.textContent = formatFriendlyPhonetic(currentCard.phonetic || '');
 
         if (currentCard.sentence) {
             cardFrontSentence.innerHTML = highlightToken(currentCard.sentence, currentCard.token);
@@ -791,7 +791,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 </div>
                                 <div class="token-details">
                                     ${pos ? `<span class="pos-tag">${escapeHtml(pos)}</span>` : ''}
-                                    ${phonetic ? `<span class="phonetic-tag">${escapeHtml(phonetic)}</span>` : ''}
+                                    ${phonetic ? `<span class="phonetic-tag">${escapeHtml(formatFriendlyPhonetic(phonetic))}</span>` : ''}
                                     ${lemma ? `<span class="lemma-tag">原形: ${escapeHtml(lemma)}</span>` : ''}
                                 </div>
                             </div>
@@ -1252,6 +1252,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // -------------------------------------------------------------------------
     // 8. Interactive Word Breakdown & Lexical Popover (A1 Beginner Optimized)
     // -------------------------------------------------------------------------
+    function formatFriendlyPhonetic(raw) {
+        if (!raw) return '';
+        let str = String(raw).trim();
+        str = str.replace(/^[/[\\(\s]+/, '').replace(/[/\]\\)\s]+$/, '').trim();
+        str = str.replace(/[.·•\-]/g, '');
+        str = str.replace(/[ʁʀ]/g, 'r');
+        str = str.replace(/ɡ/g, 'g');
+        if (!str) return '';
+        return `[${str}]`;
+    }
+
     const BASIC_FRENCH_WORDS = {
         // Pronouns
         "je": { token: "je", lemma: "je", pos: "pron. pers.", phonetic: "/ʒə/", explanation_cn: "我 (第一人称单数主格代词)", explanation_en: "I (subject pronoun)" },
@@ -1437,8 +1448,11 @@ document.addEventListener('DOMContentLoaded', () => {
         "dit": { token: "dit", lemma: "dire", pos: "v.", phonetic: "/di/", explanation_cn: "说 (dire 的第三人称单数现在时)", explanation_en: "says" },
         "prendre": { token: "prendre", lemma: "prendre", pos: "v.", phonetic: "/pʁɑ̃dʁ/", explanation_cn: "拿，取，乘坐，吃喝 (动词原形)", explanation_en: "to take" },
         "prends": { token: "prends", lemma: "prendre", pos: "v.", phonetic: "/pʁɑ̃/", explanation_cn: "拿，乘 (prendre 的第一/二人称单数现在时)", explanation_en: "take" },
-        "prend": { token: "prend", lemma: "prendre", pos: "v.", phonetic: "/pʁɑ̃/", explanation_cn: "拿，乘 (prendre 的第三人称单数现在时)", explanation_en: "takes" }
     };
+
+    Object.values(BASIC_FRENCH_WORDS).forEach(item => {
+        if (item.phonetic) item.phonetic = formatFriendlyPhonetic(item.phonetic);
+    });
 
     function renderInteractiveWordsHtml(text) {
         if (!text) return '';
@@ -1469,7 +1483,13 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderPopoverData(item) {
         currentPopoverCard = item;
         popoverWord.textContent = item.token;
-        popoverPhonetic.textContent = item.phonetic || '';
+        const friendlyPhonetic = formatFriendlyPhonetic(item.phonetic || '');
+        popoverPhonetic.textContent = friendlyPhonetic;
+        if (friendlyPhonetic) {
+            popoverPhonetic.hidden = false;
+        } else {
+            popoverPhonetic.hidden = true;
+        }
         if (item.pos) {
             popoverPos.textContent = item.pos;
             popoverPos.hidden = false;
@@ -1497,9 +1517,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const exists = deckManager.hasCard(currentPopoverCard.token);
         if (exists) {
             popoverStarBtn.classList.add('active');
+            popoverStarBtn.title = '已存生词卡 (点击移出)';
             if (popoverStarText) popoverStarText.textContent = '已存生词卡';
         } else {
             popoverStarBtn.classList.remove('active');
+            popoverStarBtn.title = '存入 Anki 生词卡';
             if (popoverStarText) popoverStarText.textContent = '加入生词卡';
         }
     }
@@ -1877,6 +1899,14 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+    if (popoverPhonetic) {
+        popoverPhonetic.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (currentPopoverCard && currentPopoverCard.token) {
+                playFrenchSpeech(currentPopoverCard.token);
+            }
+        });
+    }
     if (popoverStarBtn) {
         popoverStarBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -1923,6 +1953,15 @@ document.addEventListener('DOMContentLoaded', () => {
             if (currentPopoverCard && currentPopoverCard.token) {
                 e.preventDefault();
                 playFrenchSpeech(currentPopoverCard.token);
+                return;
+            }
+        }
+
+        // Star word in popover on 'S' if popover is active
+        if ((e.key === 's' || e.key === 'S') && floatingWordPopover && !floatingWordPopover.hidden) {
+            if (popoverStarBtn) {
+                e.preventDefault();
+                popoverStarBtn.click();
                 return;
             }
         }

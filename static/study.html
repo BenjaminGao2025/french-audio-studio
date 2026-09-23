@@ -7,12 +7,12 @@
     <title>法语拆解与跟读复述 - 1000H French</title>
     <link rel="icon" href="/favicon.ico?v=2" sizes="any">
     <link rel="stylesheet" href="/static/style.css?v=9.0">
-    <link rel="stylesheet" href="/static/study.css?v=11.0">
+    <link rel="stylesheet" href="/static/study.css?v=12.0">
     <script>window.activeTokensMap = new Map(); var activeTokensMap = window.activeTokensMap;</script>
     <script src="https://unpkg.com/lucide@1.34.0/dist/umd/lucide.min.js" defer></script>
     <script src="/static/anki.js?v=10.0" defer></script>
     <script src="/static/history-v10.js" defer></script>
-    <script src="/static/study-v11.js?v=11.0" defer></script>
+    <script src="/static/study-v12.js?v=12.0" defer></script>
 </head>
 <body>
     <div class="app-shell">
@@ -417,21 +417,24 @@
         </div>
     </div>
 
-    <!-- Floating Double-Click Lexical Popover -->
+    <!-- Floating Word Popover -->
     <div id="floating-word-popover" class="floating-word-popover" hidden aria-live="polite">
         <div class="popover-arrow" aria-hidden="true"></div>
         <div class="popover-header">
             <div class="popover-main-info">
                 <div class="popover-word-row">
                     <strong id="popover-word" class="popover-word">--</strong>
-                    <button id="popover-speak-btn" class="btn-token-speak btn-popover-speak" type="button" title="重播发音 (快捷键 R)">
-                        <i data-lucide="volume-2" aria-hidden="true"></i>
+                    <button id="popover-star-btn" class="btn-popover-star-icon" type="button" title="存入 Anki 生词卡 (快捷键 S)">
+                        <i data-lucide="star" aria-hidden="true"></i>
                     </button>
                 </div>
-                <div class="popover-tags-row">
+                <div class="popover-phonetic-row">
+                    <button id="popover-speak-btn" class="btn-popover-speak-inline" type="button" title="重播发音 (快捷键 R)">
+                        <i data-lucide="volume-2" aria-hidden="true"></i>
+                    </button>
+                    <span id="popover-phonetic" class="popover-phonetic" title="点击重播发音"></span>
                     <span id="popover-pos" class="pos-tag" hidden></span>
                     <span id="popover-lemma" class="lemma-tag" hidden></span>
-                    <span id="popover-phonetic" class="popover-phonetic"></span>
                 </div>
             </div>
             <button id="popover-close-btn" class="icon-btn popover-close-btn" type="button" title="关闭 (Esc)">
@@ -447,12 +450,6 @@
                 <div class="popover-cn-text" id="popover-cn"></div>
                 <div class="popover-en-text" id="popover-en"></div>
             </div>
-        </div>
-        <div class="popover-footer">
-            <button id="popover-star-btn" class="btn btn-secondary btn-xs btn-popover-star" type="button" title="存入 Anki 生词卡">
-                <i data-lucide="star" aria-hidden="true"></i>
-                <span id="popover-star-text">加入生词卡</span>
-            </button>
         </div>
     </div>
 </body>

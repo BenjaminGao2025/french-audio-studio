@@ -735,6 +735,20 @@ def _filter_sentence_tokens(tokens: list[dict]) -> list[dict]:
     return fallback or tokens
 
 
+def format_friendly_phonetic(raw: str) -> str:
+    if not raw:
+        return ""
+    s = str(raw).strip()
+    s = re.sub(r"^[/[\\(\s]+", "", s)
+    s = re.sub(r"[/\]\\)\s]+$", "", s).strip()
+    s = re.sub(r"[.·•\-]", "", s)
+    s = re.sub(r"[ʁʀ]", "r", s)
+    s = re.sub(r"ɡ", "g", s)
+    if not s:
+        return ""
+    return f"[{s}]"
+
+
 def _analyze_payload(request: AnalyzeRequest) -> dict:
     prompt = (
         "You are an elite French pedagogical lexicographer and teacher dedicated to A1 beginners who know almost zero French.\n"
@@ -878,7 +892,7 @@ def _parse_analysis_json(raw_text: str, fallback_text: str) -> dict:
                                     "token": t_str,
                                     "lemma": str(tok.get("lemma", t_str)),
                                     "pos": str(tok.get("pos", "")),
-                                    "phonetic": str(tok.get("phonetic", "")),
+                                    "phonetic": format_friendly_phonetic(str(tok.get("phonetic", ""))),
                                     "explanation_en": str(tok.get("explanation_en", "")),
                                     "explanation_cn": str(tok.get("explanation_cn", "")),
                                 }
@@ -1207,7 +1221,7 @@ async def request_word_lookup(word: str, api_key: str, model: str = "grok-4.6") 
         "token": str(data.get("token", clean_word)),
         "lemma": str(data.get("lemma", clean_word)),
         "pos": str(data.get("pos", "")),
-        "phonetic": str(data.get("phonetic", "")),
+        "phonetic": format_friendly_phonetic(str(data.get("phonetic", ""))),
         "explanation_cn": str(data.get("explanation_cn", "语境词汇")),
         "explanation_en": str(data.get("explanation_en", "")),
     }
