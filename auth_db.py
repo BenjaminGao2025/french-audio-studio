@@ -212,6 +212,28 @@ def get_user_status(user_id: int) -> dict[str, Any] | None:
     }
 
 
+def _normalize_history_text(text: str) -> str:
+    return re.sub(r"[^\w]+", "", (text or "").lower())
+
+
+def _is_similar_history_text(t1: str, t2: str) -> bool:
+    if not t1 or not t2:
+        return False
+    if t1.strip() == t2.strip():
+        return True
+    n1 = _normalize_history_text(t1)
+    n2 = _normalize_history_text(t2)
+    if not n1 or not n2:
+        return False
+    if n1 == n2:
+        return True
+    min_len = min(len(n1), len(n2))
+    max_len = max(len(n1), len(n2))
+    if min_len >= 12 and (n1 in n2 or n2 in n1) and (max_len - min_len <= 5):
+        return True
+    return False
+
+
 def save_history_record(
     record_id: str,
     record_type: str,
@@ -221,6 +243,7 @@ def save_history_record(
 ) -> dict[str, Any]:
     """
     Save or update a unified history record (TTS audio or Study analysis).
+    Automatically deduplicates records with identical or near-identical text for the user.
     """
     init_db()
     db_path = _get_db_path()
@@ -230,7 +253,24 @@ def save_history_record(
     payload_str = json.dumps(payload, ensure_ascii=False)
 
     with sqlite3.connect(db_path) as conn:
-        conn.execute(
+        cursor = conn.cursor()
+        # Find existing duplicate record for user and delete old ones
+        if user_id is not None:
+            cursor.execute(
+                "SELECT id, text FROM history_records WHERE user_id = ? AND record_type = ?",
+                (user_id, clean_type),
+            )
+        else:
+            cursor.execute(
+                "SELECT id, text FROM history_records WHERE (user_id IS NULL OR user_id = 0) AND record_type = ?",
+                (clean_type,),
+            )
+        existing_rows = cursor.fetchall()
+        for row_id, row_text in existing_rows:
+            if row_id == record_id or _is_similar_history_text(row_text, clean_text):
+                cursor.execute("DELETE FROM history_records WHERE id = ?", (row_id,))
+
+        cursor.execute(
             """
             INSERT INTO history_records (id, user_id, record_type, text, payload_json, created_at)
             VALUES (?, ?, ?, ?, ?, ?)
@@ -259,7 +299,7 @@ def get_history_records(
     limit: int = 50,
 ) -> list[dict[str, Any]]:
     """
-    Retrieve unified history records ordered by created_at DESC.
+    Retrieve unified history records ordered by created_at DESC with deduplication.
     """
     init_db()
     db_path = _get_db_path()
@@ -275,15 +315,26 @@ def get_history_records(
         params.append(record_type.strip().lower())
 
     query += " ORDER BY created_at DESC LIMIT ?"
-    params.append(max(1, min(limit, 200)))
+    params.append(max(1, min(limit * 2, 400)))
 
     results: list[dict[str, Any]] = []
+
     with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         cursor.execute(query, params)
         rows = cursor.fetchall()
         for r in rows:
+            clean_text = (r["text"] or "").strip()
+            # Check if duplicate of already selected result
+            is_dup = False
+            for acc in results:
+                if acc["type"] == r["record_type"] and _is_similar_history_text(acc["text"], clean_text):
+                    is_dup = True
+                    break
+            if is_dup:
+                continue
+
             try:
                 payload = json.loads(r["payload_json"])
             except Exception:
@@ -292,10 +343,12 @@ def get_history_records(
                 "id": r["id"],
                 "user_id": r["user_id"],
                 "type": r["record_type"],
-                "text": r["text"],
+                "text": clean_text,
                 "created_at": r["created_at"],
                 **payload,
             })
+            if len(results) >= limit:
+                break
 
     return results
 

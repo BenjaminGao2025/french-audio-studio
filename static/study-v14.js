@@ -1955,6 +1955,14 @@ document.addEventListener('DOMContentLoaded', () => {
         window.FrenchHistory.init({
             currentPage: 'study',
             onRestoreStudy: (item) => {
+                // 1. Stop any currently playing audio
+                stopAllAudio();
+
+                // 2. Clean URL params so page reload won't re-trigger analysis
+                if (window.history && window.history.replaceState) {
+                    window.history.replaceState(null, '', window.location.pathname);
+                }
+
                 if (item.text) {
                     frenchInput.value = item.text;
                     charCounter.textContent = `${item.text.length} / 15000`;

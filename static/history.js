@@ -36,41 +36,169 @@
     }
 
     // -------------------------------------------------------------------------
-    // Storage & Legacy Migration
+    // Storage & Deduplication Engine
     // -------------------------------------------------------------------------
+    function normalizeHistoryText(str) {
+        if (!str) return '';
+        return String(str)
+            .toLowerCase()
+            .replace(/[.,/#!$%^&*;:{}=\-_`~()?"'«»[\]\s\n\r\t]/g, '')
+            .trim();
+    }
+
+    function calculateStringSimilarity(s1, s2) {
+        if (!s1 && !s2) return 1.0;
+        if (!s1 || !s2) return 0.0;
+        if (s1 === s2) return 1.0;
+        const m = s1.length;
+        const n = s2.length;
+        if (Math.abs(m - n) > Math.max(m, n) * 0.3) return 0.0;
+        const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+        for (let i = 0; i <= m; i++) dp[i][0] = i;
+        for (let j = 0; j <= n; j++) dp[0][j] = j;
+        for (let i = 1; i <= m; i++) {
+            for (let j = 1; j <= n; j++) {
+                if (s1[i - 1] === s2[j - 1]) dp[i][j] = dp[i - 1][j - 1];
+                else dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + 1);
+            }
+        }
+        return Math.max(0, 1 - dp[m][n] / Math.max(m, n));
+    }
+
+    function getRecordSentencesKey(item) {
+        if (!item || !item.sentences || !Array.isArray(item.sentences) || item.sentences.length === 0) {
+            return '';
+        }
+        return item.sentences.map(s => normalizeHistoryText(s.original || '')).filter(Boolean).join(':::');
+    }
+
+    function areStudyRecordsDuplicate(itemA, itemB) {
+        if (!itemA || !itemB) return false;
+        if (itemA.type !== 'study' || itemB.type !== 'study') return false;
+
+        // 1. Exact text match (trimmed)
+        if (itemA.text && itemB.text && itemA.text.trim() === itemB.text.trim()) {
+            return true;
+        }
+
+        // 2. Parsed sentences match (same sentence breakdown structure)
+        const sentKeyA = getRecordSentencesKey(itemA);
+        const sentKeyB = getRecordSentencesKey(itemB);
+        if (sentKeyA && sentKeyB && sentKeyA === sentKeyB) {
+            return true;
+        }
+
+        // 3. Normalized text similarity (fuzzy match)
+        const normA = normalizeHistoryText(itemA.text);
+        const normB = normalizeHistoryText(itemB.text);
+        if (normA && normB) {
+            if (normA === normB) return true;
+            const minLen = Math.min(normA.length, normB.length);
+            const maxLen = Math.max(normA.length, normB.length);
+            if (minLen >= 10) {
+                // If one contains the other and length difference is minor (<= 4 chars)
+                if ((normA.includes(normB) || normB.includes(normA)) && (maxLen - minLen <= 4)) {
+                    return true;
+                }
+                // High similarity check
+                if (maxLen - minLen <= 6 && calculateStringSimilarity(normA, normB) >= 0.88) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    function areTtsRecordsDuplicate(itemA, itemB) {
+        if (!itemA || !itemB) return false;
+        if (itemA.type !== 'tts' || itemB.type !== 'tts') return false;
+        const normA = normalizeHistoryText(itemA.text);
+        const normB = normalizeHistoryText(itemB.text);
+        if (normA && normB && normA === normB) {
+            if ((itemA.voice || '') === (itemB.voice || '')) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function deduplicateHistoryList(list) {
+        if (!Array.isArray(list) || list.length <= 1) return list || [];
+        const result = [];
+
+        for (const item of list) {
+            if (!item || !item.type) continue;
+            let isDuplicate = false;
+
+            for (let i = 0; i < result.length; i++) {
+                const existing = result[i];
+                if (item.type === 'study' && areStudyRecordsDuplicate(item, existing)) {
+                    isDuplicate = true;
+                    // Prefer record with valid sentences and longer text
+                    const itemSentencesCount = (item.sentences && Array.isArray(item.sentences)) ? item.sentences.length : 0;
+                    const existingSentencesCount = (existing.sentences && Array.isArray(existing.sentences)) ? existing.sentences.length : 0;
+                    if (existingSentencesCount === 0 && itemSentencesCount > 0) {
+                        result[i] = item;
+                    } else if (itemSentencesCount >= existingSentencesCount && (item.text || '').length > (existing.text || '').length) {
+                        result[i] = item;
+                    }
+                    break;
+                } else if (item.type === 'tts' && areTtsRecordsDuplicate(item, existing)) {
+                    isDuplicate = true;
+                    if (!existing.audioUrl && item.audioUrl) {
+                        result[i] = item;
+                    }
+                    break;
+                }
+            }
+
+            if (!isDuplicate) {
+                result.push(item);
+            }
+        }
+
+        return result;
+    }
+
     function loadRawHistory() {
+        let rawList = [];
         try {
             const raw = localStorage.getItem(UNIFIED_STORAGE_KEY);
             if (raw) {
                 const list = JSON.parse(raw);
-                if (Array.isArray(list)) return list;
+                if (Array.isArray(list)) rawList = list;
             }
         } catch (_) {}
 
-        // Migrate legacy study history if unified storage does not exist yet
-        try {
-            const legacyRaw = localStorage.getItem(LEGACY_STUDY_STORAGE_KEY);
-            if (legacyRaw) {
-                const legacyList = JSON.parse(legacyRaw);
-                if (Array.isArray(legacyList) && legacyList.length > 0) {
-                    const migrated = legacyList.map(item => ({
-                        id: item.id || ('hist_study_' + (item.timestamp || Date.now())),
-                        type: 'study',
-                        timestamp: item.timestamp || Date.now(),
-                        timeFormatted: item.timeFormatted || formatTime(new Date(item.timestamp || Date.now())),
-                        text: item.text || '',
-                        sentences: item.sentences || [],
-                        sentenceCount: item.sentenceCount || (item.sentences ? item.sentences.length : 1),
-                        tokenCount: item.tokenCount || 0,
-                        model: item.model || 'grok-4.6',
-                    }));
-                    localStorage.setItem(UNIFIED_STORAGE_KEY, JSON.stringify(migrated));
-                    return migrated;
+        if (rawList.length === 0) {
+            // Migrate legacy study history if unified storage does not exist yet
+            try {
+                const legacyRaw = localStorage.getItem(LEGACY_STUDY_STORAGE_KEY);
+                if (legacyRaw) {
+                    const legacyList = JSON.parse(legacyRaw);
+                    if (Array.isArray(legacyList) && legacyList.length > 0) {
+                        rawList = legacyList.map(item => ({
+                            id: item.id || ('hist_study_' + (item.timestamp || Date.now())),
+                            type: 'study',
+                            timestamp: item.timestamp || Date.now(),
+                            timeFormatted: item.timeFormatted || formatTime(new Date(item.timestamp || Date.now())),
+                            text: item.text || '',
+                            sentences: item.sentences || [],
+                            sentenceCount: item.sentenceCount || (item.sentences ? item.sentences.length : 1),
+                            tokenCount: item.tokenCount || 0,
+                            model: item.model || 'grok-4.6',
+                        }));
+                    }
                 }
-            }
-        } catch (_) {}
+            } catch (_) {}
+        }
 
-        return [];
+        const cleaned = deduplicateHistoryList(rawList);
+        if (cleaned.length !== rawList.length) {
+            saveRawHistory(cleaned);
+        }
+        return cleaned;
     }
 
     function saveRawHistory(list) {
@@ -177,8 +305,8 @@
                 model: data.model || 'grok-4.6',
             };
 
-            // Deduplicate same text + voice within 10 seconds, or remove older same text
-            const filtered = list.filter(item => !(item.type === 'tts' && item.text === record.text && item.voice === record.voice));
+            // Deduplicate same text + voice
+            const filtered = list.filter(item => !areTtsRecordsDuplicate(item, record));
             filtered.unshift(record);
             saveRawHistory(filtered);
             this.updateBadges();
@@ -204,8 +332,8 @@
                 model: model || 'grok-4.6',
             };
 
-            // Deduplicate same text
-            const filtered = list.filter(item => !(item.type === 'study' && item.text === record.text));
+            // Deduplicate same or near-identical text / sentence breakdown
+            const filtered = list.filter(item => !areStudyRecordsDuplicate(item, record));
             filtered.unshift(record);
             saveRawHistory(filtered);
             this.updateBadges();
