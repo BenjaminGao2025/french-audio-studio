@@ -64,6 +64,12 @@ MODEL_LABELS = {
 if PERPLEXITY_MODEL not in TRANSFORM_MODELS:
     raise RuntimeError(f"Unsupported PERPLEXITY_MODEL: {PERPLEXITY_MODEL}")
 
+
+def _map_upstream_model(model_name: str) -> str:
+    if model_name == "gemini-3.8-flash":
+        return "gemini-3.8-flash-low"
+    return model_name
+
 SUPPORTED_VOICES = {
     "en-US-AvaNeural",
     "en-US-AndrewNeural",
@@ -354,7 +360,7 @@ def _proofread_payload(
     task_instruction = _build_messages(request, task_mode)[0]["content"]
     candidate = draft.strip() or "No usable draft is available; produce the final French."
     return {
-        "model": PERPLEXITY_PROOFREAD_MODEL,
+        "model": _map_upstream_model(PERPLEXITY_PROOFREAD_MODEL),
         "messages": [
             {
                 "role": "system",
@@ -431,7 +437,7 @@ def _chat_payload(request: TransformRequest, task_mode: ResolvedTaskMode) -> dic
         "polish": 0.2,
     }
     return {
-        "model": request.model,
+        "model": _map_upstream_model(request.model),
         "messages": _build_messages(request, task_mode),
         "stream": False,
         "temperature": temperatures[task_mode],
@@ -801,7 +807,7 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
         '}'
     )
     return {
-        "model": request.model,
+        "model": _map_upstream_model(request.model),
         "messages": [
             {"role": "system", "content": prompt},
             {"role": "user", "content": f"Analyze this French text for an A1 beginner:\n\n{request.text}"},
@@ -1152,7 +1158,7 @@ async def request_word_lookup(word: str, api_key: str, model: str = "grok-4.6") 
     )
 
     payload = {
-        "model": model,
+        "model": _map_upstream_model(model),
         "messages": [
             {"role": "system", "content": prompt},
             {"role": "user", "content": f"Define this French word: {clean_word}"},
