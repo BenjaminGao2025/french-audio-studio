@@ -1492,8 +1492,8 @@
    Floating Double-Click Lexical Popover
    ========================================================================== */
 .floating-word-popover {
-    position: absolute;
-    z-index: 1050;
+    position: fixed;
+    z-index: 9999;
     width: 290px;
     max-width: calc(100vw - 32px);
     background: var(--surface);
@@ -1507,6 +1507,10 @@
     pointer-events: auto;
     animation: popoverFadeIn 0.16s cubic-bezier(0.16, 1, 0.3, 1);
     transform-origin: center bottom;
+}
+
+.floating-word-popover.arrow-top {
+    transform-origin: center top;
 }
 
 .floating-word-popover[hidden] {

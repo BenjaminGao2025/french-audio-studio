@@ -1548,29 +1548,39 @@ document.addEventListener('DOMContentLoaded', () => {
         if (rect.width === 0 && rect.height === 0) return;
 
         const popoverWidth = 290;
-        const popoverHeight = 140;
-        let left = rect.left + window.scrollX + (rect.width / 2) - (popoverWidth / 2);
+
+        // Show and set to fixed viewport positioning
+        floatingWordPopover.hidden = false;
+        floatingWordPopover.style.display = 'flex';
+        floatingWordPopover.style.position = 'fixed';
+        floatingWordPopover.style.zIndex = '9999';
+
+        const popoverHeight = floatingWordPopover.offsetHeight || 160;
+
+        let left = rect.left + (rect.width / 2) - (popoverWidth / 2);
         left = Math.max(12, Math.min(left, window.innerWidth - popoverWidth - 12));
 
-        let top = rect.top + window.scrollY - popoverHeight - 12;
+        let top;
         let isArrowTop = false;
-        if (rect.top - popoverHeight < 15) {
-            top = rect.bottom + window.scrollY + 12;
+
+        // If clearance above the word in the viewport is less than popoverHeight + 60px, flip below
+        if (rect.top - popoverHeight < 60) {
+            top = rect.bottom + 10;
             isArrowTop = true;
+            floatingWordPopover.classList.add('arrow-top');
+        } else {
+            top = rect.top - popoverHeight - 10;
+            isArrowTop = false;
+            floatingWordPopover.classList.remove('arrow-top');
         }
 
         floatingWordPopover.style.left = `${left}px`;
         floatingWordPopover.style.top = `${top}px`;
-        if (isArrowTop) {
-            floatingWordPopover.classList.add('arrow-top');
-        } else {
-            floatingWordPopover.classList.remove('arrow-top');
-        }
 
         // Dynamically align arrow with word center
         const arrowEl = floatingWordPopover.querySelector('.popover-arrow');
         if (arrowEl) {
-            const elCenter = rect.left + window.scrollX + (rect.width / 2);
+            const elCenter = rect.left + (rect.width / 2);
             const arrowLeft = Math.max(16, Math.min(popoverWidth - 16, elCenter - left));
             arrowEl.style.left = `${arrowLeft}px`;
         }
@@ -1955,6 +1965,21 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    document.addEventListener('click', (e) => {
+        const wordEl = e.target.closest('.interactive-word, .diff-word, .token-word');
+        if (wordEl) {
+            e.stopPropagation();
+            const card = wordEl.closest('.sentence-card');
+            const targetSentence = card ? (card.querySelector('.sentence-french-text')?.textContent || '') : '';
+            const transCn = card ? (card.querySelector('.translation-cn')?.textContent || '') : '';
+            const word = wordEl.dataset.word || wordEl.dataset.token || wordEl.textContent.trim();
+            showPopoverForElement(word, wordEl, {
+                sentence: targetSentence,
+                sentence_cn: transCn
+            });
+        }
+    });
+
     document.addEventListener('dblclick', handleWordDoubleClick);
     document.addEventListener('mousedown', (e) => {
         if (floatingWordPopover && !floatingWordPopover.hidden) {
@@ -1963,6 +1988,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
+
+    window.addEventListener('scroll', () => {
+        if (floatingWordPopover && !floatingWordPopover.hidden) {
+            closeWordPopover();
+        }
+    }, { passive: true });
 
     // Global Keyboard listener for Flashcard review & Popover
     document.addEventListener('keydown', (e) => {
