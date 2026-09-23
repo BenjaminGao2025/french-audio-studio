@@ -3,6 +3,11 @@
    Adheres strictly to the Global Design Foundation (style.css)
    ========================================================================== */
 
+/* Global Hidden Guard */
+[hidden] {
+    display: none !important;
+}
+
 /* Topbar & Deck Launcher */
 .topbar-actions {
     display: inline-flex;
@@ -1693,6 +1698,16 @@
     font-size: 12.5px;
     color: var(--muted);
     padding: 4px 0;
+}
+
+.popover-loading[hidden],
+#popover-loading[hidden] {
+    display: none !important;
+}
+
+.popover-content[hidden],
+#popover-content[hidden] {
+    display: none !important;
 }
 
 .popover-loading svg {

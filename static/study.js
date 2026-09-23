@@ -1473,6 +1473,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function closeWordPopover() {
         if (floatingWordPopover) {
             floatingWordPopover.hidden = true;
+            floatingWordPopover.style.display = 'none';
+        }
+        if (popoverLoading) {
+            popoverLoading.hidden = true;
+            popoverLoading.style.display = 'none';
         }
         if (currentActiveWordEl) {
             currentActiveWordEl.classList.remove('is-active-word');
@@ -1505,8 +1510,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         popoverCn.textContent = item.explanation_cn || '语境词汇';
         popoverEn.textContent = item.explanation_en || '';
-        popoverLoading.hidden = true;
-        popoverContent.hidden = false;
+        if (popoverLoading) {
+            popoverLoading.hidden = true;
+            popoverLoading.style.display = 'none';
+        }
+        if (popoverContent) {
+            popoverContent.hidden = false;
+            popoverContent.style.display = 'block';
+        }
 
         updatePopoverStarState();
         refreshIcons();
@@ -1574,6 +1585,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         floatingWordPopover.hidden = false;
+        floatingWordPopover.style.display = 'flex';
 
         // Pronounce single word immediately (handling elisions like c', d', l')
         const lower = cleanWord.toLowerCase();
@@ -1611,8 +1623,14 @@ document.addEventListener('DOMContentLoaded', () => {
         popoverPhonetic.textContent = '';
         popoverPos.hidden = true;
         popoverLemma.hidden = true;
-        popoverLoading.hidden = false;
-        popoverContent.hidden = true;
+        if (popoverLoading) {
+            popoverLoading.hidden = false;
+            popoverLoading.style.display = 'flex';
+        }
+        if (popoverContent) {
+            popoverContent.hidden = true;
+            popoverContent.style.display = 'none';
+        }
         currentPopoverCard = {
             token: cleanWord,
             lemma: cleanWord,
@@ -1646,8 +1664,14 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (err) {
             if (!floatingWordPopover.hidden && popoverWord.textContent === cleanWord) {
-                popoverLoading.hidden = true;
-                popoverContent.hidden = false;
+                if (popoverLoading) {
+                    popoverLoading.hidden = true;
+                    popoverLoading.style.display = 'none';
+                }
+                if (popoverContent) {
+                    popoverContent.hidden = false;
+                    popoverContent.style.display = 'block';
+                }
                 popoverCn.textContent = '暂无法获取释义';
                 popoverEn.textContent = err.message;
             }
