@@ -490,6 +490,19 @@
     color: var(--primary);
 }
 
+.btn-audio-pill.playing {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+    color: var(--primary);
+    font-weight: 700;
+    box-shadow: 0 0 0 2px rgba(14, 116, 144, 0.2);
+}
+
+.btn-audio-pill.playing svg {
+    color: var(--primary);
+    stroke: var(--primary);
+}
+
 .btn-audio-pill:disabled {
     opacity: 0.5;
     cursor: not-allowed;

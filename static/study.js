@@ -289,42 +289,97 @@ document.addEventListener('DOMContentLoaded', () => {
     // -------------------------------------------------------------------------
     // 2. Audio Playback Engine (Edge-TTS + Fallback Web Speech)
     // -------------------------------------------------------------------------
+    let currentActiveAudio = null;
+    let currentAudioCleanup = null;
+
+    function stopAllAudio() {
+        if (currentAudioCleanup) {
+            const cleanup = currentAudioCleanup;
+            currentAudioCleanup = null;
+            try {
+                cleanup();
+            } catch (e) {
+                console.warn('Audio cleanup error:', e);
+            }
+        }
+        if (currentActiveAudio) {
+            const audio = currentActiveAudio;
+            currentActiveAudio = null;
+            try {
+                audio.pause();
+                audio.currentTime = 0;
+            } catch (e) {}
+        }
+        if ('speechSynthesis' in window) {
+            try {
+                window.speechSynthesis.cancel();
+            } catch (e) {}
+        }
+    }
+
     function playFrenchSpeech(text, onEndCallback = null) {
         if (!text || !text.trim()) return;
         const cleanText = text.trim();
 
+        // 1. Stop any previously active playback
+        stopAllAudio();
+
         const audioUrl = `/tts?text=${encodeURIComponent(cleanText)}&voice=fr-FR-DeniseNeural`;
         const audio = new Audio(audioUrl);
+        currentActiveAudio = audio;
 
-        audio.addEventListener('ended', () => {
+        let isFinished = false;
+        const finish = () => {
+            if (isFinished) return;
+            isFinished = true;
+            if (currentActiveAudio === audio) {
+                currentActiveAudio = null;
+            }
+            if (currentAudioCleanup === cleanup) {
+                currentAudioCleanup = null;
+            }
             if (onEndCallback) onEndCallback();
-        });
+        };
+
+        const cleanup = () => {
+            if (!isFinished) {
+                isFinished = true;
+                if (onEndCallback) onEndCallback();
+            }
+        };
+        currentAudioCleanup = cleanup;
+
+        audio.addEventListener('ended', finish);
 
         audio.addEventListener('error', () => {
+            if (isFinished) return;
+            console.warn('Audio error, falling back to Web Speech');
             if ('speechSynthesis' in window) {
-                window.speechSynthesis.cancel();
+                try { window.speechSynthesis.cancel(); } catch (e) {}
                 const utterance = new SpeechSynthesisUtterance(cleanText);
                 utterance.lang = 'fr-FR';
                 utterance.rate = 0.95;
-                if (onEndCallback) {
-                    utterance.onend = onEndCallback;
-                    utterance.onerror = onEndCallback;
-                }
+                utterance.onend = finish;
+                utterance.onerror = finish;
                 window.speechSynthesis.speak(utterance);
-            } else if (onEndCallback) {
-                onEndCallback();
+            } else {
+                finish();
             }
         });
 
         audio.play().catch(e => {
+            if (isFinished) return;
             console.warn('Audio play interrupted, falling back to Web Speech:', e);
             if ('speechSynthesis' in window) {
+                try { window.speechSynthesis.cancel(); } catch (e) {}
                 const utterance = new SpeechSynthesisUtterance(cleanText);
                 utterance.lang = 'fr-FR';
-                if (onEndCallback) utterance.onend = onEndCallback;
+                utterance.rate = 0.95;
+                utterance.onend = finish;
+                utterance.onerror = finish;
                 window.speechSynthesis.speak(utterance);
-            } else if (onEndCallback) {
-                onEndCallback();
+            } else {
+                finish();
             }
         });
     }
@@ -945,15 +1000,91 @@ document.addEventListener('DOMContentLoaded', () => {
         let recognition = null;
         let recognitionTranscript = '';
 
+        let isModelPlaying = false;
+        let isUserPlaying = false;
+
+        function resetModelBtn() {
+            isModelPlaying = false;
+            if (playModelBtn) {
+                playModelBtn.classList.remove('playing');
+                playModelBtn.innerHTML = `<i data-lucide="volume-2"></i><span>官方范读</span>`;
+                refreshIcons();
+            }
+        }
+
+        function resetUserBtn() {
+            isUserPlaying = false;
+            if (playUserBtn) {
+                playUserBtn.classList.remove('playing');
+                playUserBtn.innerHTML = `<i data-lucide="play"></i><span>我的录音</span>`;
+                refreshIcons();
+            }
+        }
+
         playModelBtn.addEventListener('click', () => {
-            playFrenchSpeech(targetSentence);
+            if (isModelPlaying) {
+                stopAllAudio();
+                return;
+            }
+
+            stopAllAudio();
+
+            isModelPlaying = true;
+            playModelBtn.classList.add('playing');
+            playModelBtn.innerHTML = `<i data-lucide="square"></i><span>停止范读</span>`;
+            refreshIcons();
+
+            playFrenchSpeech(targetSentence, () => {
+                resetModelBtn();
+            });
         });
 
         playUserBtn.addEventListener('click', () => {
-            if (userAudioUrl) {
-                const userAudio = new Audio(userAudioUrl);
-                userAudio.play();
+            if (!userAudioUrl) return;
+
+            if (isUserPlaying) {
+                stopAllAudio();
+                return;
             }
+
+            stopAllAudio();
+
+            const userAudio = new Audio(userAudioUrl);
+            currentActiveAudio = userAudio;
+
+            isUserPlaying = true;
+            playUserBtn.classList.add('playing');
+            playUserBtn.innerHTML = `<i data-lucide="square"></i><span>停止播放</span>`;
+            refreshIcons();
+
+            let finished = false;
+            const handleUserAudioEnd = () => {
+                if (finished) return;
+                finished = true;
+                if (currentActiveAudio === userAudio) {
+                    currentActiveAudio = null;
+                }
+                if (currentAudioCleanup === userCleanup) {
+                    currentAudioCleanup = null;
+                }
+                resetUserBtn();
+            };
+
+            const userCleanup = () => {
+                if (!finished) {
+                    finished = true;
+                    resetUserBtn();
+                }
+            };
+            currentAudioCleanup = userCleanup;
+
+            userAudio.addEventListener('ended', handleUserAudioEnd);
+            userAudio.addEventListener('error', handleUserAudioEnd);
+
+            userAudio.play().catch(e => {
+                console.warn('User audio play interrupted or failed:', e);
+                handleUserAudioEnd();
+            });
         });
 
         if (diffBox) {
@@ -970,6 +1101,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         retryBtn.addEventListener('click', () => {
+            stopAllAudio();
             scoreCard.hidden = true;
             recordBtn.click();
         });
@@ -984,6 +1116,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         async function startRecording() {
             try {
+                stopAllAudio();
                 audioChunks = [];
                 recognitionTranscript = '';
 
@@ -997,6 +1130,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (userAudioUrl) URL.revokeObjectURL(userAudioUrl);
                     userAudioUrl = URL.createObjectURL(audioBlob);
                     playUserBtn.disabled = false;
+                    resetUserBtn();
                     stream.getTracks().forEach(track => track.stop());
                 };
                 mediaRecorder.start();
