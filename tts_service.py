@@ -1011,12 +1011,19 @@ async def security_headers(request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "same-origin"
     response.headers["X-Frame-Options"] = "DENY"
+    if request.url.path in {"/", "/study"}:
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
     return response
 
 
 @app.get("/")
 async def root():
-    return FileResponse(STATIC_DIR / "index.html")
+    return FileResponse(
+        STATIC_DIR / "index.html",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
 
 
 @app.get("/favicon.ico", include_in_schema=False)
@@ -1121,7 +1128,10 @@ async def get_output_file(filename: str, download: bool = Query(default=False)):
 
 @app.get("/study")
 async def study():
-    return FileResponse(STATIC_DIR / "study.html")
+    return FileResponse(
+        STATIC_DIR / "study.html",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
 
 
 @app.post("/api/analyze")

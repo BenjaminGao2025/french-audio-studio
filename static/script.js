@@ -97,6 +97,35 @@ document.addEventListener('DOMContentLoaded', () => {
     if (savedModel && Array.from(modelSelect.options).some((option) => option.value === savedModel)) {
         modelSelect.value = savedModel;
     }
+
+    async function syncModelsFromBackend() {
+        if (!modelSelect) return;
+        try {
+            const resp = await fetch('/api/models');
+            if (!resp.ok) return;
+            const data = await resp.json();
+            if (data && Array.isArray(data.models) && data.models.length > 0) {
+                modelSelect.innerHTML = '';
+                data.models.forEach((m) => {
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.textContent = m.label + (m.recommended ? ' · 极速推荐' : '');
+                    modelSelect.appendChild(opt);
+                });
+                const saved = localStorage.getItem(modelKeyName);
+                if (saved && Array.from(modelSelect.options).some((opt) => opt.value === saved)) {
+                    modelSelect.value = saved;
+                } else if (data.default && Array.from(modelSelect.options).some((opt) => opt.value === data.default)) {
+                    modelSelect.value = data.default;
+                } else if (modelSelect.options.length > 0) {
+                    modelSelect.selectedIndex = 0;
+                }
+            }
+        } catch (err) {
+            console.warn('Failed to sync models from backend', err);
+        }
+    }
+    syncModelsFromBackend();
     const savedTaskMode = localStorage.getItem(taskModeKeyName);
     if (savedTaskMode && taskModes[savedTaskMode]) {
         const savedTaskInput = document.querySelector(`input[name="task-mode"][value="${savedTaskMode}"]`);

@@ -157,6 +157,8 @@ document.addEventListener('DOMContentLoaded', () => {
             modelSelect.value = savedModel;
         }
 
+        syncModelsFromBackend();
+
         if (apiKeyInput.value.trim()) {
             setConnectionState('idle', 'Key 已加载', '点击测试实际连接');
         } else {
@@ -166,6 +168,34 @@ document.addEventListener('DOMContentLoaded', () => {
         updateDeckBadge();
         updateHistoryBadges();
         checkCurrentUser();
+    }
+
+    async function syncModelsFromBackend() {
+        if (!modelSelect) return;
+        try {
+            const resp = await fetch('/api/models');
+            if (!resp.ok) return;
+            const data = await resp.json();
+            if (data && Array.isArray(data.models) && data.models.length > 0) {
+                modelSelect.innerHTML = '';
+                data.models.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.textContent = m.label + (m.recommended ? ' · 极速推荐' : '');
+                    modelSelect.appendChild(opt);
+                });
+                const savedModel = localStorage.getItem(modelKeyName);
+                if (savedModel && Array.from(modelSelect.options).some(opt => opt.value === savedModel)) {
+                    modelSelect.value = savedModel;
+                } else if (data.default && Array.from(modelSelect.options).some(opt => opt.value === data.default)) {
+                    modelSelect.value = data.default;
+                } else if (modelSelect.options.length > 0) {
+                    modelSelect.selectedIndex = 0;
+                }
+            }
+        } catch (err) {
+            console.warn('Failed to sync models from backend', err);
+        }
     }
 
     function saveApiKey() {
