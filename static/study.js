@@ -130,7 +130,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let reviewQueue = [];
     let currentQueueIndex = 0;
     let isCardFlipped = false;
-    const activeTokensMap = new Map();
 
     // Speech Recognition API Detection
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition || null;
@@ -692,7 +691,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     </div>
                     <div class="sentence-text-row">
-                        <p class="sentence-french-text">${escapeHtml(originalText)}</p>
+                        <p class="sentence-french-text">${renderInteractiveWordsHtml(originalText)}</p>
                         <button class="btn-speak-round" type="button" title="收听整句标准发音" aria-label="朗读句子">
                             <i data-lucide="volume-2"></i>
                         </button>
@@ -823,13 +822,52 @@ document.addEventListener('DOMContentLoaded', () => {
             card.innerHTML = heroHtml + shadowingHtml + tableHtml;
             sentencesContainer.appendChild(card);
 
-            attachSentenceCardEvents(card, originalText);
+            attachSentenceCardEvents(card, originalText, transCn, transEn);
         });
 
         refreshIcons();
     }
 
-    function attachSentenceCardEvents(card, targetSentence) {
+    function attachSentenceCardEvents(card, targetSentence, transCn = '', transEn = '') {
+        // 0. Interactive Word & Token Click Delegation
+        card.addEventListener('click', (e) => {
+            const interactiveWord = e.target.closest('.interactive-word');
+            if (interactiveWord) {
+                e.stopPropagation();
+                const word = interactiveWord.dataset.word || interactiveWord.dataset.token || interactiveWord.textContent.trim();
+                showPopoverForElement(word, interactiveWord, {
+                    sentence: targetSentence,
+                    sentence_cn: transCn
+                });
+                return;
+            }
+            const tokenWord = e.target.closest('.token-word');
+            if (tokenWord) {
+                e.stopPropagation();
+                const word = tokenWord.textContent.trim();
+                showPopoverForElement(word, tokenWord, {
+                    sentence: targetSentence,
+                    sentence_cn: transCn
+                });
+                return;
+            }
+        });
+
+        card.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                const interactiveWord = e.target.closest('.interactive-word');
+                if (interactiveWord) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const word = interactiveWord.dataset.word || interactiveWord.dataset.token || interactiveWord.textContent.trim();
+                    showPopoverForElement(word, interactiveWord, {
+                        sentence: targetSentence,
+                        sentence_cn: transCn
+                    });
+                }
+            }
+        });
+
         // 1. Full Sentence Pronunciation Button
         const heroSpeakBtn = card.querySelector('.btn-speak-round');
         heroSpeakBtn.addEventListener('click', () => {
@@ -917,6 +955,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 userAudio.play();
             }
         });
+
+        if (diffBox) {
+            diffBox.addEventListener('click', (e) => {
+                const diffWord = e.target.closest('.diff-word');
+                if (!diffWord) return;
+                e.stopPropagation();
+                const word = diffWord.dataset.word || diffWord.textContent.trim();
+                showPopoverForElement(word, diffWord, {
+                    sentence: targetSentence,
+                    sentence_cn: transCn
+                });
+            });
+        }
 
         retryBtn.addEventListener('click', () => {
             scoreCard.hidden = true;
@@ -1015,8 +1066,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     const wordSpan = document.createElement('span');
                     wordSpan.className = `diff-word ${item.status}`;
                     wordSpan.textContent = item.word;
-                    wordSpan.title = `相似度得分: ${item.score} / 100`;
+                    wordSpan.dataset.word = item.word;
+                    wordSpan.title = `相似度得分: ${item.score} / 100 · 点击查看释义与单读发音`;
                     diffBox.appendChild(wordSpan);
+                    diffBox.appendChild(document.createTextNode(' '));
                 });
             } else {
                 diffBox.textContent = recognitionTranscript || '未检测到清晰发音，请重试。';
@@ -1197,13 +1250,219 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // -------------------------------------------------------------------------
-    // 8. Double-Click / Selection Word Lookup Popover
+    // 8. Interactive Word Breakdown & Lexical Popover (A1 Beginner Optimized)
     // -------------------------------------------------------------------------
+    const BASIC_FRENCH_WORDS = {
+        // Pronouns
+        "je": { token: "je", lemma: "je", pos: "pron. pers.", phonetic: "/ʒə/", explanation_cn: "我 (第一人称单数主格代词)", explanation_en: "I (subject pronoun)" },
+        "j'": { token: "j'", lemma: "je", pos: "pron. pers.", phonetic: "/ʒ/", explanation_cn: "我 (je 在元音或哑音h前的省音形式)", explanation_en: "I (elision of je)" },
+        "tu": { token: "tu", lemma: "tu", pos: "pron. pers.", phonetic: "/ty/", explanation_cn: "你 (第二人称单数主格代词)", explanation_en: "you (singular/informal)" },
+        "il": { token: "il", lemma: "il", pos: "pron. pers.", phonetic: "/il/", explanation_cn: "他 / 它 (第三人称阳性单数主格代词)", explanation_en: "he / it" },
+        "elle": { token: "elle", lemma: "elle", pos: "pron. pers.", phonetic: "/ɛl/", explanation_cn: "她 / 它 (第三人称阴性单数主格代词)", explanation_en: "she / it" },
+        "on": { token: "on", lemma: "on", pos: "pron. indéf.", phonetic: "/ɔ̃/", explanation_cn: "人们 / 我们 (泛指人称代词，常作口语中的我们)", explanation_en: "one / we / people" },
+        "nous": { token: "nous", lemma: "nous", pos: "pron. pers.", phonetic: "/nu/", explanation_cn: "我们 (第一人称复数代词)", explanation_en: "we / us" },
+        "vous": { token: "vous", lemma: "vous", pos: "pron. pers.", phonetic: "/vu/", explanation_cn: "您 / 你们 (第二人称尊称或复数代词)", explanation_en: "you (formal/plural)" },
+        "ils": { token: "ils", lemma: "ils", pos: "pron. pers.", phonetic: "/il/", explanation_cn: "他们 (第三人称阳性复数代词)", explanation_en: "they (masculine)" },
+        "elles": { token: "elles", lemma: "elles", pos: "pron. pers.", phonetic: "/ɛl/", explanation_cn: "她们 (第三人称阴性复数代词)", explanation_en: "they (feminine)" },
+        "me": { token: "me", lemma: "me", pos: "pron. pers.", phonetic: "/mə/", explanation_cn: "我 / 我自己 (第一人称宾格/自反代词)", explanation_en: "me / myself" },
+        "m'": { token: "m'", lemma: "me", pos: "pron. pers.", phonetic: "/m/", explanation_cn: "我 / 我自己 (me 在元音前的省音形式)", explanation_en: "me / myself (elision of me)" },
+        "te": { token: "te", lemma: "te", pos: "pron. pers.", phonetic: "/tə/", explanation_cn: "你 / 你自己 (第二人称宾格/自反代词)", explanation_en: "you / yourself" },
+        "t'": { token: "t'", lemma: "te", pos: "pron. pers.", phonetic: "/t/", explanation_cn: "你 / 你自己 (te 在元音前的省音形式)", explanation_en: "you / yourself (elision of te)" },
+        "se": { token: "se", lemma: "se", pos: "pron. réfl.", phonetic: "/sə/", explanation_cn: "他自己/她自己/他们自己 (第三人称自反代词)", explanation_en: "himself / herself / themselves" },
+        "s'": { token: "s'", lemma: "se", pos: "pron. réfl.", phonetic: "/s/", explanation_cn: "自反代词 (se 在元音前的省音形式)", explanation_en: "himself / herself (elision of se)" },
+        "moi": { token: "moi", lemma: "moi", pos: "pron. tonique", phonetic: "/mwa/", explanation_cn: "我 (重读人称代词)", explanation_en: "me (disjunctive pronoun)" },
+        "toi": { token: "toi", lemma: "toi", pos: "pron. tonique", phonetic: "/twa/", explanation_cn: "你 (重读人称代词)", explanation_en: "you (disjunctive pronoun)" },
+        "lui": { token: "lui", lemma: "lui", pos: "pron. pers.", phonetic: "/lɥi/", explanation_cn: "他 / 她 (重读代词或间接宾语代词: 向他/向她)", explanation_en: "him / her / to him / to her" },
+        "leur": { token: "leur", lemma: "leur", pos: "pron. / adj.", phonetic: "/lœʁ/", explanation_cn: "向他们 (间接宾格代词) 或 他们的 (主有形容词)", explanation_en: "to them / their" },
+        "y": { token: "y", lemma: "y", pos: "pron. adv.", phonetic: "/i/", explanation_cn: "在那里 / 对某事 (副代词，代替 à+名词等)", explanation_en: "there / in it / to it" },
+        "en": { token: "en", lemma: "en", pos: "pron. / prép.", phonetic: "/ɑ̃/", explanation_cn: "副代词 (从中，一些) 或 介词 (在…中，乘…)", explanation_en: "of it / some / in / by" },
+
+        // Demonstratives & Relatives
+        "ce": { token: "ce", lemma: "ce", pos: "adj. / pron.", phonetic: "/sə/", explanation_cn: "这个 (阳性指示形容词) 或 这/它 (指示代词)", explanation_en: "this / that / it" },
+        "c'": { token: "c'", lemma: "ce", pos: "pron. dém.", phonetic: "/s/", explanation_cn: "这 / 它 (ce 在元音前的省音形式，如 c'est)", explanation_en: "this / it (elision of ce)" },
+        "cet": { token: "cet", lemma: "ce", pos: "adj. dém.", phonetic: "/sɛt/", explanation_cn: "这个 (ce 在元音或哑音h开头的阳性单数名词前)", explanation_en: "this / that (masc. before vowel)" },
+        "cette": { token: "cette", lemma: "ce", pos: "adj. dém.", phonetic: "/sɛt/", explanation_cn: "这个 (阴性单数指示形容词)", explanation_en: "this / that (feminine)" },
+        "ces": { token: "ces", lemma: "ce", pos: "adj. dém.", phonetic: "/se/", explanation_cn: "这些 / 那些 (复数指示形容词)", explanation_en: "these / those" },
+        "ça": { token: "ça", lemma: "cela", pos: "pron. dém.", phonetic: "/sa/", explanation_cn: "这个 / 那个 (指示代词口语形式)", explanation_en: "that / this / it" },
+        "qui": { token: "qui", lemma: "qui", pos: "pron. rel.", phonetic: "/ki/", explanation_cn: "谁 / 哪个 (主格关系代词或疑问代词)", explanation_en: "who / which / that" },
+        "que": { token: "que", lemma: "que", pos: "pron. / conj.", phonetic: "/kə/", explanation_cn: "宾格关系代词 (什么/引导从句) 或 比较级连接词 (比)", explanation_en: "what / that / than" },
+        "qu'": { token: "qu'", lemma: "que", pos: "pron. / conj.", phonetic: "/k/", explanation_cn: "que 在元音开头的省音形式", explanation_en: "what / that (elision of que)" },
+        "quoi": { token: "quoi", lemma: "quoi", pos: "pron. interr.", phonetic: "/kwa/", explanation_cn: "什么 (重读疑问代词)", explanation_en: "what" },
+        "dont": { token: "dont", lemma: "dont", pos: "pron. rel.", phonetic: "/dɔ̃/", explanation_cn: "其中 / 关于它的 (代替 de+先行词 的关系代词)", explanation_en: "whose / of which" },
+
+        // Articles & Contractions
+        "le": { token: "le", lemma: "le", pos: "art. déf.", phonetic: "/lə/", explanation_cn: "定冠词 (阳性单数): 这个 / 表特指或类别", explanation_en: "the (masculine singular)" },
+        "la": { token: "la", lemma: "la", pos: "art. déf.", phonetic: "/la/", explanation_cn: "定冠词 (阴性单数): 这个 / 表特指或类别", explanation_en: "the (feminine singular)" },
+        "les": { token: "les", lemma: "le", pos: "art. déf.", phonetic: "/le/", explanation_cn: "定冠词 (复数): 这些 / 那些", explanation_en: "the (plural)" },
+        "l'": { token: "l'", lemma: "le", pos: "art. déf.", phonetic: "/l/", explanation_cn: "定冠词 (le/la 在元音或哑音h前的省音形式)", explanation_en: "the (elision of le/la)" },
+        "un": { token: "un", lemma: "un", pos: "art. indéf.", phonetic: "/œ̃/", explanation_cn: "一个 (阳性单数不定冠词 / 数词1)", explanation_en: "a / an / one (masculine)" },
+        "une": { token: "une", lemma: "un", pos: "art. indéf.", phonetic: "/yn/", explanation_cn: "一个 (阴性单数不定冠词 / 数词1)", explanation_en: "a / an / one (feminine)" },
+        "des": { token: "des", lemma: "des", pos: "art. indéf. / contracté", phonetic: "/de/", explanation_cn: "1. 不定冠词复数 (一些，若干); 2. 缩合冠词 de+les (来自…的)", explanation_en: "some / of the (plural)" },
+        "du": { token: "du", lemma: "du", pos: "art. part. / contracté", phonetic: "/dy/", explanation_cn: "1. 部分冠词 (一些阳性不可数); 2. 缩合冠词 de+le (来自…的)", explanation_en: "some / of the (contraction of de + le)" },
+        "au": { token: "au", lemma: "à + le", pos: "art. contracté", phonetic: "/o/", explanation_cn: "在…，去… (介词 à 与阳性定冠词 le 的缩合形式)", explanation_en: "at the / to the (contraction of à + le)" },
+        "aux": { token: "aux", lemma: "à + les", pos: "art. contracté", phonetic: "/o/", explanation_cn: "在…，去… (介词 à 与复数定冠词 les 的缩合形式)", explanation_en: "at the / to the (contraction of à + les)" },
+
+        // Prepositions
+        "à": { token: "à", lemma: "à", pos: "prép.", phonetic: "/a/", explanation_cn: "在，到，向，给 (基础介词)", explanation_en: "at, to, in" },
+        "de": { token: "de", lemma: "de", pos: "prép.", phonetic: "/də/", explanation_cn: "…的，来自，从，关于 (基础介词)", explanation_en: "of, from, about" },
+        "d'": { token: "d'", lemma: "de", pos: "prép.", phonetic: "/d/", explanation_cn: "…的，从，来自 (de 在元音或哑音h前的省音形式)", explanation_en: "of, from (elision of de)" },
+        "dans": { token: "dans", lemma: "dans", pos: "prép.", phonetic: "/dɑ̃/", explanation_cn: "在…里面，在…之内，在…之后(时间)", explanation_en: "in, inside, into" },
+        "pour": { token: "pour", lemma: "pour", pos: "prép.", phonetic: "/puʁ/", explanation_cn: "为了，对于，给", explanation_en: "for, in order to" },
+        "avec": { token: "avec", lemma: "avec", pos: "prép.", phonetic: "/a.vɛk/", explanation_cn: "和…一起，带有，用", explanation_en: "with" },
+        "sur": { token: "sur", lemma: "sur", pos: "prép.", phonetic: "/syʁ/", explanation_cn: "在…上面，关于", explanation_en: "on, upon, above" },
+        "sous": { token: "sous", lemma: "sous", pos: "prép.", phonetic: "/su/", explanation_cn: "在…下面", explanation_en: "under, beneath" },
+        "par": { token: "par", lemma: "par", pos: "prép.", phonetic: "/paʁ/", explanation_cn: "由，被，通过，经由", explanation_en: "by, through" },
+        "chez": { token: "chez", lemma: "chez", pos: "prép.", phonetic: "/ʃe/", explanation_cn: "在…家，在…处", explanation_en: "at the home/place of" },
+        "sans": { token: "sans", lemma: "sans", pos: "prép.", phonetic: "/sɑ̃/", explanation_cn: "没有，无", explanation_en: "without" },
+        "vers": { token: "vers", lemma: "vers", pos: "prép.", phonetic: "/vɛʁ/", explanation_cn: "朝向，接近", explanation_en: "towards, around" },
+        "entre": { token: "entre", lemma: "entre", pos: "prép.", phonetic: "/ɑ̃tʁ/", explanation_cn: "在…之间", explanation_en: "between, among" },
+        "pendant": { token: "pendant", lemma: "pendant", pos: "prép.", phonetic: "/pɑ̃.dɑ̃/", explanation_cn: "在…期间", explanation_en: "during, for" },
+        "avant": { token: "avant", lemma: "avant", pos: "prép.", phonetic: "/a.vɑ̃/", explanation_cn: "在…之前", explanation_en: "before" },
+        "après": { token: "après", lemma: "après", pos: "prép.", phonetic: "/a.pʁɛ/", explanation_cn: "在…之后", explanation_en: "after" },
+        "depuis": { token: "depuis", lemma: "depuis", pos: "prép.", phonetic: "/də.pɥi/", explanation_cn: "自从，已有…时间", explanation_en: "since, for" },
+
+        // Conjunctions
+        "et": { token: "et", lemma: "et", pos: "conj.", phonetic: "/e/", explanation_cn: "和，与，并且 (并列连词，注意从不联诵)", explanation_en: "and" },
+        "ou": { token: "ou", lemma: "ou", pos: "conj.", phonetic: "/u/", explanation_cn: "或者，还是 (选择连词)", explanation_en: "or" },
+        "où": { token: "où", lemma: "où", pos: "adv. / pron.", phonetic: "/u/", explanation_cn: "在哪里，在…的地方 (疑问副词或关系代词)", explanation_en: "where" },
+        "mais": { token: "mais", lemma: "mais", pos: "conj.", phonetic: "/mɛ/", explanation_cn: "但是，可是 (转折连词)", explanation_en: "but" },
+        "donc": { token: "donc", lemma: "donc", pos: "conj.", phonetic: "/dɔ̃k/", explanation_cn: "因此，所以", explanation_en: "therefore, so" },
+        "car": { token: "car", lemma: "car", pos: "conj.", phonetic: "/kaʁ/", explanation_cn: "因为 (并列连词)", explanation_en: "because, for" },
+        "ni": { token: "ni", lemma: "ni", pos: "conj.", phonetic: "/ni/", explanation_cn: "既不…也不…", explanation_en: "neither / nor" },
+        "si": { token: "si", lemma: "si", pos: "conj. / adv.", phonetic: "/si/", explanation_cn: "如果 (条件从句) / 对否定的肯定回答: 怎么不", explanation_en: "if / so / yes" },
+        "comme": { token: "comme", lemma: "comme", pos: "conj. / adv.", phonetic: "/kɔm/", explanation_cn: "如同，正如，既然，因为", explanation_en: "as, like, since" },
+        "quand": { token: "quand", lemma: "quand", pos: "conj.", phonetic: "/kɑ̃/", explanation_cn: "当…的时候", explanation_en: "when" },
+
+        // Negations & Adverbs
+        "ne": { token: "ne", lemma: "ne", pos: "adv. nég.", phonetic: "/nə/", explanation_cn: "不 (否定词前半部分，与 pas 搭配)", explanation_en: "not (negative particle)" },
+        "n'": { token: "n'", lemma: "ne", pos: "adv. nég.", phonetic: "/n/", explanation_cn: "不 (ne 在元音前的省音形式)", explanation_en: "not (elision of ne)" },
+        "pas": { token: "pas", lemma: "pas", pos: "adv. nég.", phonetic: "/pa/", explanation_cn: "不，没有 (否定核心副词)", explanation_en: "not" },
+        "plus": { token: "plus", lemma: "plus", pos: "adv.", phonetic: "/ply/ 或 /plys/", explanation_cn: "更多，再加上；在否定句 ne...plus 中表不再", explanation_en: "more / no more" },
+        "jamais": { token: "jamais", lemma: "jamais", pos: "adv.", phonetic: "/ʒa.mɛ/", explanation_cn: "从不，绝不 (ne...jamais)", explanation_en: "never" },
+        "rien": { token: "rien", lemma: "rien", pos: "pron. indéf.", phonetic: "/ʁjɛ̃/", explanation_cn: "什么也没有，无事 (ne...rien)", explanation_en: "nothing" },
+        "toujours": { token: "toujours", lemma: "toujours", pos: "adv.", phonetic: "/tu.ʒuʁ/", explanation_cn: "总是，一直，仍然", explanation_en: "always, still" },
+        "souvent": { token: "souvent", lemma: "souvent", pos: "adv.", phonetic: "/su.vɑ̃/", explanation_cn: "经常，常常", explanation_en: "often" },
+        "très": { token: "très", lemma: "très", pos: "adv.", phonetic: "/tʁɛ/", explanation_cn: "非常，很", explanation_en: "very" },
+        "bien": { token: "bien", lemma: "bien", pos: "adv.", phonetic: "/bjɛ̃/", explanation_cn: "好，很好，确实", explanation_en: "well, good" },
+        "mal": { token: "mal", lemma: "mal", pos: "adv. / n.m.", phonetic: "/mal/", explanation_cn: "坏，糟糕，不好；痛苦", explanation_en: "badly, poor" },
+        "ici": { token: "ici", lemma: "ici", pos: "adv.", phonetic: "/i.si/", explanation_cn: "这里，这儿", explanation_en: "here" },
+        "là": { token: "là", lemma: "là", pos: "adv.", phonetic: "/la/", explanation_cn: "那里，那儿", explanation_en: "there" },
+        "trop": { token: "trop", lemma: "trop", pos: "adv.", phonetic: "/tʁo/", explanation_cn: "太，过于，过多", explanation_en: "too, too much" },
+        "beaucoup": { token: "beaucoup", lemma: "beaucoup", pos: "adv.", phonetic: "/bo.ku/", explanation_cn: "许多，很多", explanation_en: "a lot, much" },
+        "peu": { token: "peu", lemma: "peu", pos: "adv.", phonetic: "/pø/", explanation_cn: "少，不多", explanation_en: "little, few" },
+        "aussi": { token: "aussi", lemma: "aussi", pos: "adv.", phonetic: "/o.si/", explanation_cn: "也，同样地", explanation_en: "also, too" },
+        "maintenant": { token: "maintenant", lemma: "maintenant", pos: "adv.", phonetic: "/mɛ̃t.nɑ̃/", explanation_cn: "现在，如今", explanation_en: "now" },
+        "aujourd'hui": { token: "aujourd'hui", lemma: "aujourd'hui", pos: "adv.", phonetic: "/o.ʒuʁ.dɥi/", explanation_cn: "今天", explanation_en: "today" },
+        "hier": { token: "hier", lemma: "hier", pos: "adv.", phonetic: "/jɛʁ/", explanation_cn: "昨天", explanation_en: "yesterday" },
+        "demain": { token: "demain", lemma: "demain", pos: "adv.", phonetic: "/də.mɛ̃/", explanation_cn: "明天", explanation_en: "tomorrow" },
+        "oui": { token: "oui", lemma: "oui", pos: "adv.", phonetic: "/wi/", explanation_cn: "是，是的", explanation_en: "yes" },
+        "non": { token: "non", lemma: "non", pos: "adv.", phonetic: "/nɔ̃/", explanation_cn: "不，不是", explanation_en: "no" },
+        "merci": { token: "merci", lemma: "merci", pos: "interj. / n.", phonetic: "/mɛʁ.si/", explanation_cn: "谢谢", explanation_en: "thank you" },
+        "bonjour": { token: "bonjour", lemma: "bonjour", pos: "interj. / n.m.", phonetic: "/bɔ̃.ʒuʁ/", explanation_cn: "你好，早上好", explanation_en: "hello, good morning" },
+
+        // Possessives
+        "mon": { token: "mon", lemma: "mon", pos: "adj. poss.", phonetic: "/mɔ̃/", explanation_cn: "我的 (阳性单数)", explanation_en: "my (masculine)" },
+        "ma": { token: "ma", lemma: "mon", pos: "adj. poss.", phonetic: "/ma/", explanation_cn: "我的 (阴性单数)", explanation_en: "my (feminine)" },
+        "mes": { token: "mes", lemma: "mon", pos: "adj. poss.", phonetic: "/me/", explanation_cn: "我的 (复数)", explanation_en: "my (plural)" },
+        "ton": { token: "ton", lemma: "ton", pos: "adj. poss.", phonetic: "/tɔ̃/", explanation_cn: "你的 (阳性单数)", explanation_en: "your (masculine)" },
+        "ta": { token: "ta", lemma: "ton", pos: "adj. poss.", phonetic: "/ta/", explanation_cn: "你的 (阴性单数)", explanation_en: "your (feminine)" },
+        "tes": { token: "tes", lemma: "ton", pos: "adj. poss.", phonetic: "/te/", explanation_cn: "你的 (复数)", explanation_en: "your (plural)" },
+        "son": { token: "son", lemma: "son", pos: "adj. poss.", phonetic: "/sɔ̃/", explanation_cn: "他的 / 她的 (阳性单数)", explanation_en: "his / her / its (masculine)" },
+        "sa": { token: "sa", lemma: "son", pos: "adj. poss.", phonetic: "/sa/", explanation_cn: "他的 / 她的 (阴性单数)", explanation_en: "his / her / its (feminine)" },
+        "ses": { token: "ses", lemma: "son", pos: "adj. poss.", phonetic: "/se/", explanation_cn: "他的 / 她的 (复数)", explanation_en: "his / her / its (plural)" },
+        "notre": { token: "notre", lemma: "notre", pos: "adj. poss.", phonetic: "/nɔtʁ/", explanation_cn: "我们的 (单数)", explanation_en: "our" },
+        "nos": { token: "nos", lemma: "notre", pos: "adj. poss.", phonetic: "/no/", explanation_cn: "我们的 (复数)", explanation_en: "our (plural)" },
+        "votre": { token: "votre", lemma: "votre", pos: "adj. poss.", phonetic: "/vɔtʁ/", explanation_cn: "您的 / 你们的 (单数)", explanation_en: "your" },
+        "vos": { token: "vos", lemma: "votre", pos: "adj. poss.", phonetic: "/vo/", explanation_cn: "您的 / 你们的 (复数)", explanation_en: "your (plural)" },
+
+        // Verbs: être
+        "être": { token: "être", lemma: "être", pos: "v. aux.", phonetic: "/ɛtʁ/", explanation_cn: "是，存在 (动词原形/助动词)", explanation_en: "to be" },
+        "suis": { token: "suis", lemma: "être", pos: "v.", phonetic: "/sɥi/", explanation_cn: "是 (être 的第一人称单数直陈式现在时)", explanation_en: "am (first-person singular present of être)" },
+        "es": { token: "es", lemma: "être", pos: "v.", phonetic: "/ɛ/", explanation_cn: "是 (être 的第二人称单数直陈式现在时)", explanation_en: "are (second-person singular present of être)" },
+        "est": { token: "est", lemma: "être", pos: "v.", phonetic: "/ɛ/", explanation_cn: "是 (être 的第三人称单数直陈式现在时)", explanation_en: "is (third-person singular present of être)" },
+        "sommes": { token: "sommes", lemma: "être", pos: "v.", phonetic: "/sɔm/", explanation_cn: "是 (être 的第一人称复数直陈式现在时)", explanation_en: "are (first-person plural present of être)" },
+        "êtes": { token: "êtes", lemma: "être", pos: "v.", phonetic: "/ɛt/", explanation_cn: "是 (être 的第二人称复数直陈式现在时)", explanation_en: "are (second-person plural present of être)" },
+        "sont": { token: "sont", lemma: "être", pos: "v.", phonetic: "/sɔ̃/", explanation_cn: "是 (être 的第三人称复数直陈式现在时)", explanation_en: "are (third-person plural present of être)" },
+        "été": { token: "été", lemma: "être", pos: "p.p. / n.m.", phonetic: "/e.te/", explanation_cn: "曾经是 (être 过去分词) 或 夏天(名词)", explanation_en: "been / summer" },
+
+        // Verbs: avoir
+        "avoir": { token: "avoir", lemma: "avoir", pos: "v. aux.", phonetic: "/a.vwaʁ/", explanation_cn: "有，拥有 (动词原形/助动词)", explanation_en: "to have" },
+        "ai": { token: "ai", lemma: "avoir", pos: "v.", phonetic: "/e/", explanation_cn: "有 (avoir 的第一人称单数直陈式现在时，如 J'ai)", explanation_en: "have (first-person singular present of avoir)" },
+        "as": { token: "as", lemma: "avoir", pos: "v.", phonetic: "/a/", explanation_cn: "有 (avoir 的第二人称单数直陈式现在时)", explanation_en: "have (second-person singular present of avoir)" },
+        "a": { token: "a", lemma: "avoir", pos: "v.", phonetic: "/a/", explanation_cn: "有 (avoir 的第三人称单数直陈式现在时)", explanation_en: "has (third-person singular present of avoir)" },
+        "avons": { token: "avons", lemma: "avoir", pos: "v.", phonetic: "/a.vɔ̃/", explanation_cn: "有 (avoir 的第一人称复数直陈式现在时)", explanation_en: "have (first-person plural present of avoir)" },
+        "avez": { token: "avez", lemma: "avoir", pos: "v.", phonetic: "/a.ve/", explanation_cn: "有 (avoir 的第二人称复数直陈式现在时)", explanation_en: "have (second-person plural present of avoir)" },
+        "ont": { token: "ont", lemma: "avoir", pos: "v.", phonetic: "/ɔ̃/", explanation_cn: "有 (avoir 的第三人称复数直陈式现在时)", explanation_en: "have (third-person plural present of avoir)" },
+        "eu": { token: "eu", lemma: "avoir", pos: "p.p.", phonetic: "/y/", explanation_cn: "曾经有 (avoir 的过去分词)", explanation_en: "had (past participle of avoir)" },
+        "ayant": { token: "ayant", lemma: "avoir", pos: "part. prés.", phonetic: "/ɛ.jɑ̃/", explanation_cn: "有着，具有 (avoir 的现在分词)", explanation_en: "having, possessing (present participle of avoir)" },
+
+        // Verbs: aller
+        "aller": { token: "aller", lemma: "aller", pos: "v.", phonetic: "/a.le/", explanation_cn: "去，前往 (动词原形)", explanation_en: "to go" },
+        "vais": { token: "vais", lemma: "aller", pos: "v.", phonetic: "/vɛ/", explanation_cn: "去 (aller 的第一人称单数直陈式现在时)", explanation_en: "go (first-person singular present of aller)" },
+        "vas": { token: "vas", lemma: "aller", pos: "v.", phonetic: "/va/", explanation_cn: "去 (aller 的第二人称单数直陈式现在时)", explanation_en: "go (second-person singular present of aller)" },
+        "va": { token: "va", lemma: "aller", pos: "v.", phonetic: "/va/", explanation_cn: "去 (aller 的第三人称单数直陈式现在时)", explanation_en: "goes (third-person singular present of aller)" },
+        "allons": { token: "allons", lemma: "aller", pos: "v.", phonetic: "/a.lɔ̃/", explanation_cn: "去 (aller 的第一人称复数直陈式现在时)", explanation_en: "go (first-person plural present of aller)" },
+        "allez": { token: "allez", lemma: "aller", pos: "v.", phonetic: "/a.le/", explanation_cn: "去 (aller 的第二人称复数直陈式现在时)", explanation_en: "go (second-person plural present of aller)" },
+        "vont": { token: "vont", lemma: "aller", pos: "v.", phonetic: "/vɔ̃/", explanation_cn: "去 (aller 的第三人称复数直陈式现在时)", explanation_en: "go (third-person plural present of aller)" },
+
+        // Verbs: faire
+        "faire": { token: "faire", lemma: "faire", pos: "v.", phonetic: "/fɛʁ/", explanation_cn: "做，制造，从事 (动词原形)", explanation_en: "to do / to make" },
+        "fais": { token: "fais", lemma: "faire", pos: "v.", phonetic: "/fɛ/", explanation_cn: "做 (faire 的第一/二人称单数直陈式现在时)", explanation_en: "do / make (present tense of faire)" },
+        "fait": { token: "fait", lemma: "faire", pos: "v. / n.m.", phonetic: "/fɛ/", explanation_cn: "做 (faire 第三人称现在时) 或 事实(名词)", explanation_en: "does / makes / fact" },
+        "faisons": { token: "faisons", lemma: "faire", pos: "v.", phonetic: "/fə.zɔ̃/", explanation_cn: "做 (faire 的第一人称复数直陈式现在时)", explanation_en: "do / make" },
+        "faites": { token: "faites", lemma: "faire", pos: "v.", phonetic: "/fɛt/", explanation_cn: "做 (faire 的第二人称复数直陈式现在时)", explanation_en: "do / make" },
+        "font": { token: "font", lemma: "faire", pos: "v.", phonetic: "/fɔ̃/", explanation_cn: "做 (faire 的第三人称复数直陈式现在时)", explanation_en: "do / make" },
+
+        // Verbs: pouvoir, vouloir, devoir, savoir, voir, venir, dire, prendre
+        "pouvoir": { token: "pouvoir", lemma: "pouvoir", pos: "v.", phonetic: "/pu.vwaʁ/", explanation_cn: "能够，可以 (动词原形)", explanation_en: "to be able to, can" },
+        "peux": { token: "peux", lemma: "pouvoir", pos: "v.", phonetic: "/pø/", explanation_cn: "能，可以 (pouvoir 的第一人称单数现在时)", explanation_en: "can (first-person singular of pouvoir)" },
+        "peut": { token: "peut", lemma: "pouvoir", pos: "v.", phonetic: "/pø/", explanation_cn: "能，可以 (pouvoir 的第三人称单数现在时)", explanation_en: "can (third-person singular of pouvoir)" },
+        "vouloir": { token: "vouloir", lemma: "vouloir", pos: "v.", phonetic: "/vu.lwaʁ/", explanation_cn: "想要，意愿 (动词原形)", explanation_en: "to want" },
+        "veux": { token: "veux", lemma: "vouloir", pos: "v.", phonetic: "/vø/", explanation_cn: "想，要 (vouloir 的第一/二人称单数现在时)", explanation_en: "want (present tense of vouloir)" },
+        "veut": { token: "veut", lemma: "vouloir", pos: "v.", phonetic: "/vø/", explanation_cn: "想，要 (vouloir 的第三人称单数现在时)", explanation_en: "wants (third-person singular of vouloir)" },
+        "devoir": { token: "devoir", lemma: "devoir", pos: "v.", phonetic: "/də.vwaʁ/", explanation_cn: "应当，必须 (动词原形)", explanation_en: "to have to, must" },
+        "dois": { token: "dois", lemma: "devoir", pos: "v.", phonetic: "/dwa/", explanation_cn: "必须，应该 (devoir 的第一/二人称单数现在时)", explanation_en: "must / should" },
+        "doit": { token: "doit", lemma: "devoir", pos: "v.", phonetic: "/dwa/", explanation_cn: "必须，应该 (devoir 的第三人称单数现在时)", explanation_en: "must / should" },
+        "savoir": { token: "savoir", lemma: "savoir", pos: "v.", phonetic: "/sa.vwaʁ/", explanation_cn: "知道，获悉 (动词原形)", explanation_en: "to know" },
+        "sais": { token: "sais", lemma: "savoir", pos: "v.", phonetic: "/sɛ/", explanation_cn: "知道 (savoir 的第一/二人称单数现在时)", explanation_en: "know" },
+        "sait": { token: "sait", lemma: "savoir", pos: "v.", phonetic: "/sɛ/", explanation_cn: "知道 (savoir 的第三人称单数现在时)", explanation_en: "knows" },
+        "voir": { token: "voir", lemma: "voir", pos: "v.", phonetic: "/vwaʁ/", explanation_cn: "看见，理解 (动词原形)", explanation_en: "to see" },
+        "vois": { token: "vois", lemma: "voir", pos: "v.", phonetic: "/vwa/", explanation_cn: "看见 (voir 的第一/二人称单数现在时)", explanation_en: "see" },
+        "voit": { token: "voit", lemma: "voir", pos: "v.", phonetic: "/vwa/", explanation_cn: "看见 (voir 的第三人称单数现在时)", explanation_en: "sees" },
+        "venir": { token: "venir", lemma: "venir", pos: "v.", phonetic: "/və.niʁ/", explanation_cn: "来，来自 (动词原形)", explanation_en: "to come" },
+        "viens": { token: "viens", lemma: "venir", pos: "v.", phonetic: "/vjɛ̃/", explanation_cn: "来 (venir 的第一/二人称单数现在时)", explanation_en: "come" },
+        "vient": { token: "vient", lemma: "venir", pos: "v.", phonetic: "/vjɛ̃/", explanation_cn: "来 (venir 的第三人称单数现在时)", explanation_en: "comes" },
+        "dire": { token: "dire", lemma: "dire", pos: "v.", phonetic: "/diʁ/", explanation_cn: "说，讲述 (动词原形)", explanation_en: "to say / to tell" },
+        "dis": { token: "dis", lemma: "dire", pos: "v.", phonetic: "/di/", explanation_cn: "说 (dire 的第一/二人称单数现在时)", explanation_en: "say" },
+        "dit": { token: "dit", lemma: "dire", pos: "v.", phonetic: "/di/", explanation_cn: "说 (dire 的第三人称单数现在时)", explanation_en: "says" },
+        "prendre": { token: "prendre", lemma: "prendre", pos: "v.", phonetic: "/pʁɑ̃dʁ/", explanation_cn: "拿，取，乘坐，吃喝 (动词原形)", explanation_en: "to take" },
+        "prends": { token: "prends", lemma: "prendre", pos: "v.", phonetic: "/pʁɑ̃/", explanation_cn: "拿，乘 (prendre 的第一/二人称单数现在时)", explanation_en: "take" },
+        "prend": { token: "prend", lemma: "prendre", pos: "v.", phonetic: "/pʁɑ̃/", explanation_cn: "拿，乘 (prendre 的第三人称单数现在时)", explanation_en: "takes" }
+    };
+
+    function renderInteractiveWordsHtml(text) {
+        if (!text) return '';
+        const regex = /(aujourd['’]hui|[A-Za-zÀ-ÖØ-öø-ÿŒœ]+['’]|[A-Za-zÀ-ÖØ-öø-ÿŒœ]+|[^\sA-Za-zÀ-ÖØ-öø-ÿŒœ]+|\s+)/gi;
+        const tokens = text.match(regex) || [text];
+        return tokens.map(token => {
+            if (/^[A-Za-zÀ-ÖØ-öø-ÿŒœ]/i.test(token)) {
+                const clean = token.replace(/['’]$/, '').trim() || token.trim();
+                return `<span class="interactive-word" role="button" tabindex="0" data-word="${escapeHtml(clean)}" data-token="${escapeHtml(token.trim())}" title="${escapeHtml(clean)} · 点击查看释义与单读发音">${escapeHtml(token)}</span>`;
+            }
+            return escapeHtml(token);
+        }).join('');
+    }
+
     let currentPopoverCard = null;
+    let currentActiveWordEl = null;
 
     function closeWordPopover() {
         if (floatingWordPopover) {
             floatingWordPopover.hidden = true;
+        }
+        if (currentActiveWordEl) {
+            currentActiveWordEl.classList.remove('is-active-word');
+            currentActiveWordEl = null;
         }
     }
 
@@ -1245,21 +1504,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function handleWordDoubleClick(e) {
-        if (floatingWordPopover && floatingWordPopover.contains(e.target)) return;
-
-        const selection = window.getSelection();
-        if (!selection || selection.rangeCount === 0) return;
-
-        const rawSelected = selection.toString().trim();
-        if (!rawSelected) return;
+    async function showPopoverForElement(rawWord, element, context = {}) {
+        if (!floatingWordPopover || !element) return;
 
         // Clean punctuation, apostrophes, quotes, commas, dots
-        const cleanWord = rawSelected.replace(/^[^\wÀ-ÿ]+|[^\wÀ-ÿ]+$/g, '').trim();
+        const cleanWord = (rawWord || '').replace(/^[^\wÀ-ÿ]+|[^\wÀ-ÿ]+$/g, '').trim();
         if (!cleanWord || cleanWord.length > 40 || !/[a-zA-ZÀ-ÿ]/.test(cleanWord)) return;
 
-        const range = selection.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
+        const rect = element.getBoundingClientRect();
         if (rect.width === 0 && rect.height === 0) return;
 
         const popoverWidth = 290;
@@ -1282,17 +1534,57 @@ document.addEventListener('DOMContentLoaded', () => {
             floatingWordPopover.classList.remove('arrow-top');
         }
 
+        // Dynamically align arrow with word center
+        const arrowEl = floatingWordPopover.querySelector('.popover-arrow');
+        if (arrowEl) {
+            const elCenter = rect.left + window.scrollX + (rect.width / 2);
+            const arrowLeft = Math.max(16, Math.min(popoverWidth - 16, elCenter - left));
+            arrowEl.style.left = `${arrowLeft}px`;
+        }
+
+        // Active highlight state on the element
+        if (currentActiveWordEl && currentActiveWordEl !== element) {
+            currentActiveWordEl.classList.remove('is-active-word');
+        }
+        currentActiveWordEl = element;
+        if (element && element.classList) {
+            element.classList.add('is-active-word');
+        }
+
         floatingWordPopover.hidden = false;
 
-        // 1. Check local cache (0ms instant response)
-        const localMatch = (window.activeTokensMap || new Map()).get(cleanWord.toLowerCase());
+        // Pronounce single word immediately (handling elisions like c', d', l')
+        const lower = cleanWord.toLowerCase();
+        const speechWord = (cleanWord.endsWith("'") || cleanWord.endsWith("’"))
+            ? (BASIC_FRENCH_WORDS[lower]?.lemma || cleanWord)
+            : cleanWord;
+        playFrenchSpeech(speechWord);
+
+        // 1. Check local cache from active tokens in analyzed sentence (0ms instant)
+        const localMatch = (window.activeTokensMap || new Map()).get(lower);
         if (localMatch) {
-            renderPopoverData(localMatch);
-            playFrenchSpeech(localMatch.token);
+            const item = Object.assign({}, localMatch);
+            if (context.sentence) item.sentence = context.sentence;
+            if (context.sentence_cn) item.sentence_cn = context.sentence_cn;
+            renderPopoverData(item);
             return;
         }
 
-        // 2. Query backend /api/lookup
+        // 2. Check built-in beginner A1 dictionary (0ms instant)
+        const basicMatch = BASIC_FRENCH_WORDS[lower];
+        if (basicMatch) {
+            const item = Object.assign({}, basicMatch, {
+                token: cleanWord,
+                sentence: context.sentence || '',
+                sentence_cn: context.sentence_cn || ''
+            });
+            if (!window.activeTokensMap) window.activeTokensMap = new Map();
+            window.activeTokensMap.set(lower, item);
+            renderPopoverData(item);
+            return;
+        }
+
+        // 3. Fallback to server /api/lookup
         popoverWord.textContent = cleanWord;
         popoverPhonetic.textContent = '';
         popoverPos.hidden = true;
@@ -1306,12 +1598,11 @@ document.addEventListener('DOMContentLoaded', () => {
             phonetic: '',
             explanation_cn: '查询中...',
             explanation_en: '',
+            sentence: context.sentence || '',
+            sentence_cn: context.sentence_cn || ''
         };
         updatePopoverStarState();
         refreshIcons();
-
-        // Auto play audio immediately
-        playFrenchSpeech(cleanWord);
 
         try {
             const token = getEffectiveAuthToken();
@@ -1322,10 +1613,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(errData.detail?.message || '查词失败');
             }
             const data = await res.json();
+            const item = Object.assign({}, data, {
+                sentence: context.sentence || '',
+                sentence_cn: context.sentence_cn || ''
+            });
             if (!window.activeTokensMap) window.activeTokensMap = new Map();
-            window.activeTokensMap.set(cleanWord.toLowerCase(), data);
+            window.activeTokensMap.set(lower, item);
             if (!floatingWordPopover.hidden && popoverWord.textContent === cleanWord) {
-                renderPopoverData(data);
+                renderPopoverData(item);
             }
         } catch (err) {
             if (!floatingWordPopover.hidden && popoverWord.textContent === cleanWord) {
@@ -1335,6 +1630,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 popoverEn.textContent = err.message;
             }
         }
+    }
+
+    async function handleWordDoubleClick(e) {
+        if (floatingWordPopover && floatingWordPopover.contains(e.target)) return;
+        if (e.target.closest('.interactive-word, .diff-word, .token-word, .btn-token-speak, .btn-token-star, .btn-speak-round, .floating-word-popover')) {
+            return;
+        }
+
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0) return;
+
+        const rawSelected = selection.toString().trim();
+        if (!rawSelected) return;
+
+        const cleanWord = rawSelected.replace(/^[^\wÀ-ÿ]+|[^\wÀ-ÿ]+$/g, '').trim();
+        if (!cleanWord || cleanWord.length > 40 || !/[a-zA-ZÀ-ÿ]/.test(cleanWord)) return;
+
+        const range = selection.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        if (rect.width === 0 && rect.height === 0) return;
+
+        showPopoverForElement(cleanWord, { getBoundingClientRect: () => rect });
     }
 
     // -------------------------------------------------------------------------
@@ -1587,7 +1904,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('dblclick', handleWordDoubleClick);
     document.addEventListener('mousedown', (e) => {
         if (floatingWordPopover && !floatingWordPopover.hidden) {
-            if (!floatingWordPopover.contains(e.target)) {
+            if (!floatingWordPopover.contains(e.target) && !e.target.closest('.interactive-word, .diff-word, .token-word')) {
                 closeWordPopover();
             }
         }

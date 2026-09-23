@@ -160,6 +160,35 @@
     line-height: 1.5;
 }
 
+.interactive-word {
+    display: inline-block;
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 1px 4px;
+    margin: 0 1px;
+    transition: all 0.15s ease;
+    user-select: text;
+}
+
+.interactive-word:hover {
+    background: rgba(4, 120, 87, 0.12);
+    color: var(--primary, #047857);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.interactive-word:focus-visible {
+    outline: 2px solid var(--primary, #047857);
+    outline-offset: 1px;
+    background: rgba(4, 120, 87, 0.15);
+}
+
+.interactive-word.is-active-word {
+    background: rgba(4, 120, 87, 0.2);
+    color: var(--primary, #047857);
+    font-weight: 600;
+}
+
 .btn-speak-round {
     flex-shrink: 0;
     width: 38px;
@@ -374,10 +403,17 @@
 
 .diff-word {
     display: inline-block;
-    padding: 1px 6px;
-    margin: 1px 2px;
-    border-radius: 4px;
+    padding: 2px 7px;
+    margin: 2px 4px;
+    border-radius: 6px;
     font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.diff-word:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.12);
 }
 
 .diff-word.correct {
