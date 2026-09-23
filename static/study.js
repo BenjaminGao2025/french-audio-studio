@@ -1603,6 +1603,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let currentPopoverCard = null;
     let currentActiveWordEl = null;
+    let currentPopoverTarget = null;
 
     function closeWordPopover() {
         if (floatingWordPopover) {
@@ -1613,9 +1614,72 @@ document.addEventListener('DOMContentLoaded', () => {
             popoverLoading.hidden = true;
             popoverLoading.style.display = 'none';
         }
-        if (currentActiveWordEl) {
+        if (currentActiveWordEl && currentActiveWordEl.classList) {
             currentActiveWordEl.classList.remove('is-active-word');
-            currentActiveWordEl = null;
+        }
+        currentActiveWordEl = null;
+        currentPopoverTarget = null;
+    }
+
+    function positionPopover(target) {
+        const el = target || currentPopoverTarget;
+        if (!floatingWordPopover || !el || floatingWordPopover.hidden) return;
+
+        const rect = el.getBoundingClientRect();
+        if (!rect || (rect.width === 0 && rect.height === 0)) return;
+
+        const popoverWidth = 290;
+        floatingWordPopover.style.display = 'flex';
+        const popoverHeight = floatingWordPopover.offsetHeight || 160;
+
+        let left = rect.left + (rect.width / 2) - (popoverWidth / 2);
+        left = Math.max(12, Math.min(left, window.innerWidth - popoverWidth - 12));
+
+        // Arrow sticks out ~8.5px from popover edge (12px rotated square with -6px offset).
+        // With 16px clearance gap from the target bounding box:
+        // When above: bottom of popover is rect.top - 16px; arrow tip is rect.top - 7.5px.
+        // When below: top of popover is rect.bottom + 16px; arrow tip is rect.bottom + 7.5px.
+        // The clicked word is 100% visible and unobstructed with a clean, comfortable gap!
+        const arrowClearance = 16;
+        let top;
+        let isArrowTop = false;
+
+        // Check vertical clearance: need popoverHeight + clearance + 65px safe margin (topbar/header)
+        const spaceAbove = rect.top - popoverHeight - arrowClearance;
+        const spaceBelow = window.innerHeight - (rect.bottom + popoverHeight + arrowClearance);
+
+        if (spaceAbove < 65 && spaceBelow >= 0) {
+            // Not enough room above, flip below word
+            top = rect.bottom + arrowClearance;
+            isArrowTop = true;
+            floatingWordPopover.classList.add('arrow-top');
+        } else if (spaceAbove < 65 && spaceBelow < 0) {
+            // Screen is very cramped vertically; choose the side with more space
+            if (spaceAbove > spaceBelow) {
+                top = Math.max(12, rect.top - popoverHeight - arrowClearance);
+                isArrowTop = false;
+                floatingWordPopover.classList.remove('arrow-top');
+            } else {
+                top = Math.min(window.innerHeight - popoverHeight - 12, rect.bottom + arrowClearance);
+                isArrowTop = true;
+                floatingWordPopover.classList.add('arrow-top');
+            }
+        } else {
+            // Plenty of room above
+            top = rect.top - popoverHeight - arrowClearance;
+            isArrowTop = false;
+            floatingWordPopover.classList.remove('arrow-top');
+        }
+
+        floatingWordPopover.style.left = `${left}px`;
+        floatingWordPopover.style.top = `${top}px`;
+
+        // Dynamically align arrow with word horizontal center
+        const arrowEl = floatingWordPopover.querySelector('.popover-arrow');
+        if (arrowEl) {
+            const elCenter = rect.left + (rect.width / 2);
+            const arrowLeft = Math.max(18, Math.min(popoverWidth - 18, elCenter - left));
+            arrowEl.style.left = `${arrowLeft}px`;
         }
     }
 
@@ -1655,6 +1719,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         updatePopoverStarState();
         refreshIcons();
+
+        // Reposition popover accurately with new rendered height
+        positionPopover(currentPopoverTarget);
+        requestAnimationFrame(() => positionPopover(currentPopoverTarget));
     }
 
     function updatePopoverStarState() {
@@ -1679,9 +1747,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!cleanWord || cleanWord.length > 40 || !/[a-zA-ZÀ-ÿ]/.test(cleanWord)) return;
 
         const rect = element.getBoundingClientRect();
-        if (rect.width === 0 && rect.height === 0) return;
+        if (!rect || (rect.width === 0 && rect.height === 0)) return;
 
-        const popoverWidth = 290;
+        currentPopoverTarget = element;
 
         // Show and set to fixed viewport positioning
         floatingWordPopover.hidden = false;
@@ -1689,47 +1757,16 @@ document.addEventListener('DOMContentLoaded', () => {
         floatingWordPopover.style.position = 'fixed';
         floatingWordPopover.style.zIndex = '9999';
 
-        const popoverHeight = floatingWordPopover.offsetHeight || 160;
-
-        let left = rect.left + (rect.width / 2) - (popoverWidth / 2);
-        left = Math.max(12, Math.min(left, window.innerWidth - popoverWidth - 12));
-
-        let top;
-        let isArrowTop = false;
-
-        // If clearance above the word in the viewport is less than popoverHeight + 60px, flip below
-        if (rect.top - popoverHeight < 60) {
-            top = rect.bottom + 10;
-            isArrowTop = true;
-            floatingWordPopover.classList.add('arrow-top');
-        } else {
-            top = rect.top - popoverHeight - 10;
-            isArrowTop = false;
-            floatingWordPopover.classList.remove('arrow-top');
-        }
-
-        floatingWordPopover.style.left = `${left}px`;
-        floatingWordPopover.style.top = `${top}px`;
-
-        // Dynamically align arrow with word center
-        const arrowEl = floatingWordPopover.querySelector('.popover-arrow');
-        if (arrowEl) {
-            const elCenter = rect.left + (rect.width / 2);
-            const arrowLeft = Math.max(16, Math.min(popoverWidth - 16, elCenter - left));
-            arrowEl.style.left = `${arrowLeft}px`;
-        }
-
         // Active highlight state on the element
         if (currentActiveWordEl && currentActiveWordEl !== element) {
-            currentActiveWordEl.classList.remove('is-active-word');
+            if (currentActiveWordEl.classList) {
+                currentActiveWordEl.classList.remove('is-active-word');
+            }
         }
-        currentActiveWordEl = element;
-        if (element && element.classList) {
-            element.classList.add('is-active-word');
+        currentActiveWordEl = (element && element.classList) ? element : null;
+        if (currentActiveWordEl) {
+            currentActiveWordEl.classList.add('is-active-word');
         }
-
-        floatingWordPopover.hidden = false;
-        floatingWordPopover.style.display = 'flex';
 
         // Pronounce single word immediately (handling elisions like c', d', l')
         const lower = cleanWord.toLowerCase();
@@ -1787,6 +1824,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         updatePopoverStarState();
         refreshIcons();
+        positionPopover(element);
 
         try {
             const token = getEffectiveAuthToken();
@@ -1818,6 +1856,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 popoverCn.textContent = '暂无法获取释义';
                 popoverEn.textContent = err.message;
+                positionPopover(element);
             }
         }
     }
@@ -2134,6 +2173,12 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('scroll', () => {
         if (floatingWordPopover && !floatingWordPopover.hidden) {
             closeWordPopover();
+        }
+    }, { passive: true });
+
+    window.addEventListener('resize', () => {
+        if (floatingWordPopover && !floatingWordPopover.hidden) {
+            positionPopover();
         }
     }, { passive: true });
 

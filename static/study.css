@@ -1518,12 +1518,13 @@
     flex-direction: column;
     gap: 8px;
     pointer-events: auto;
-    animation: popoverFadeIn 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: popoverFadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
     transform-origin: center bottom;
 }
 
 .floating-word-popover.arrow-top {
     transform-origin: center top;
+    animation-name: popoverFadeInBelow;
 }
 
 .floating-word-popover[hidden] {
@@ -1533,7 +1534,18 @@
 @keyframes popoverFadeIn {
     from {
         opacity: 0;
-        transform: translateY(4px) scale(0.97);
+        transform: translateY(-4px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes popoverFadeInBelow {
+    from {
+        opacity: 0;
+        transform: translateY(4px) scale(0.98);
     }
     to {
         opacity: 1;
