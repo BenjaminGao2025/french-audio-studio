@@ -8,7 +8,218 @@ if (typeof window.activeTokensMap === 'undefined') {
 }
 var activeTokensMap = window.activeTokensMap;
 
-document.addEventListener('DOMContentLoaded', () => {
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function cleanFrenchToken(str) {
+    return (str || '')
+        .toLowerCase()
+        .replace(/[.,/#!$%^&*;:{}=\-_`~()?"'’«»[\]]/g, '')
+        .trim();
+}
+
+function frenchPhoneticNormalize(word) {
+    if (!word) return '';
+    let w = word.toLowerCase().trim();
+    w = w.replace(/[.,/#!$%^&*;:{}=\-_`~()?"'’«»[\]]/g, '');
+    // Decompose accents for phonetic tolerance (e.g. é -> e, à -> a, ç -> c)
+    w = w.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    // In French, verbal 3rd person plural ending -ent is 100% silent (e.g. autorisent -> autorise)
+    if (w.endsWith('ent') && w.length >= 5) {
+        w = w.slice(0, -2);
+    }
+    // In French, plural nominal/adjectival endings -s and -x are silent (e.g. canadiennes -> canadienne, autorités -> autorite)
+    if ((w.endsWith('s') || w.endsWith('x')) && w.length >= 3) {
+        w = w.slice(0, -1);
+    }
+    return w;
+}
+
+function calculateLevenshteinSimilarity(s1, s2) {
+    if (!s1 && !s2) return 1.0;
+    if (!s1 || !s2) return 0.0;
+    if (s1 === s2) return 1.0;
+
+    const m = s1.length;
+    const n = s2.length;
+    const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+
+    for (let i = 0; i <= m; i++) dp[i][0] = i;
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+
+    for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+            const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
+            dp[i][j] = Math.min(
+                dp[i - 1][j] + 1,
+                dp[i][j - 1] + 1,
+                dp[i - 1][j - 1] + cost
+            );
+        }
+    }
+
+    const distance = dp[m][n];
+    const maxLen = Math.max(m, n);
+    return maxLen === 0 ? 1.0 : 1.0 - (distance / maxLen);
+}
+
+function evaluateFrenchPronunciation(targetSentence, spokenTranscript) {
+    // Extract words from target sentence, preserving elisions (e.g. n'autorisent, d'accord, c'est)
+    const rawTargetWords = (targetSentence || '').match(/(?:aujourd['’]hui|[A-Za-zÀ-ÖØ-öø-ÿŒœ]+(?:['’][A-Za-zÀ-ÖØ-öø-ÿŒœ]+)?['’]?|[0-9]+)/gi) || [];
+    const targetWords = rawTargetWords
+        .map(w => ({ raw: w, clean: cleanFrenchToken(w), norm: frenchPhoneticNormalize(w) }))
+        .filter(item => item.clean.length > 0);
+
+    if (targetWords.length === 0) {
+        return {
+            overallScore: 100,
+            accuracy: 100,
+            completeness: 100,
+            ratingText: '卓越 (Excellent !)',
+            ratingClass: 'excellent',
+            wordResults: [],
+        };
+    }
+
+    const spokenTokens = (spokenTranscript || '')
+        .split(/\s+/)
+        .filter(w => w.length > 0);
+
+    const wordResults = [];
+    let totalScoreSum = 0;
+    let matchedCount = 0;
+
+    targetWords.forEach((target, targetIdx) => {
+        let bestSim = 0;
+
+        // Check if target has an elision prefix (n', d', l', c', j', m', t', s', qu')
+        let baseNorm = '';
+        const elisionMatch = target.raw.match(/^(?:aujourd['’]hui|([cjdlnmstqu]|qu)['’](.+))$/i);
+        if (elisionMatch && elisionMatch[2]) {
+            baseNorm = frenchPhoneticNormalize(elisionMatch[2]);
+        }
+
+        // 1. Single token comparison (with phonetic normalization & silent endings tolerance)
+        for (let i = 0; i < spokenTokens.length; i++) {
+            const sp = spokenTokens[i];
+            const normSp = frenchPhoneticNormalize(sp);
+
+            // Check normalized Levenshtein similarity
+            let sim = calculateLevenshteinSimilarity(target.norm, normSp);
+
+            // If target is an elision word (e.g. n'autorisent, d'accord), also check against base word (e.g. autorisent)
+            // In connected French speech ("canadiennes n'autorisent"), the n' elision merges with preceding [n]
+            if (baseNorm) {
+                const baseSim = calculateLevenshteinSimilarity(baseNorm, normSp);
+                if (baseSim >= 0.82) {
+                    sim = Math.max(sim, Math.min(1.0, baseSim + 0.05));
+                }
+            }
+            if (sim > bestSim) bestSim = sim;
+        }
+
+        // 2. Adjacent two-token combination match
+        // Handles cases where ASR inserts a space after apostrophe: "n'" + "autorisent", or "l'" + "homme"
+        for (let i = 0; i < spokenTokens.length - 1; i++) {
+            const combo = spokenTokens[i] + spokenTokens[i + 1];
+            const normCombo = frenchPhoneticNormalize(combo);
+            const sim = calculateLevenshteinSimilarity(target.norm, normCombo);
+            if (sim > bestSim) bestSim = sim;
+        }
+
+        // 3. French enchaînement / assimilation check:
+        // When preceding word ends in 'n' (like "canadiennes") and current word starts with n' (like "n'autorisent"),
+        // the double [n] naturally fuses into a single [n] in fluent speech: [kanadjɛnotɔʁiz].
+        // If the base verb (autorisent) is recognized, it is an authentic continuous pronunciation.
+        if (baseNorm && targetIdx > 0) {
+            const prevTargetNorm = targetWords[targetIdx - 1].norm;
+            if (prevTargetNorm.endsWith('n') || prevTargetNorm.endsWith('ne')) {
+                for (let i = 0; i < spokenTokens.length; i++) {
+                    const normSp = frenchPhoneticNormalize(spokenTokens[i]);
+                    if (calculateLevenshteinSimilarity(baseNorm, normSp) >= 0.85) {
+                        bestSim = Math.max(bestSim, 1.0);
+                    }
+                }
+            }
+        }
+
+        let status = 'missed';
+        if (bestSim >= 0.82) {
+            status = 'correct';
+            matchedCount++;
+        } else if (bestSim >= 0.55) {
+            status = 'acceptable';
+            matchedCount += 0.5;
+        }
+
+        const wordScore = Math.round(bestSim * 100);
+        totalScoreSum += wordScore;
+
+        wordResults.push({
+            word: target.raw,
+            score: wordScore,
+            status: status,
+        });
+    });
+
+    const accuracy = Math.round(totalScoreSum / targetWords.length);
+    const completeness = Math.min(100, Math.round((matchedCount / targetWords.length) * 100));
+    const overallScore = Math.round(accuracy * 0.7 + completeness * 0.3);
+
+    let ratingText = '有待提高 (À travailler)';
+    let ratingClass = 'needs-work';
+
+    if (overallScore >= 90) {
+        ratingText = '卓越 (Excellent !)';
+        ratingClass = 'excellent';
+    } else if (overallScore >= 75) {
+        ratingText = '良好 (Très bien !)';
+        ratingClass = 'good';
+    } else if (overallScore >= 60) {
+        ratingText = '及格 (Passable)';
+        ratingClass = 'pass';
+    }
+
+    return {
+        overallScore,
+        accuracy,
+        completeness,
+        ratingText,
+        ratingClass,
+        wordResults,
+    };
+}
+
+function renderInteractiveWordsHtml(text) {
+    if (!text) return '';
+    // Match French words including internal apostrophes (e.g. n'autorisent, d'accord, l'homme, c'est)
+    const regex = /(aujourd['’]hui|[A-Za-zÀ-ÖØ-öø-ÿŒœ]+(?:['’][A-Za-zÀ-ÖØ-öø-ÿŒœ]+)?['’]?|[^\sA-Za-zÀ-ÖØ-öø-ÿŒœ]+|\s+)/gi;
+    const tokens = text.match(regex) || [text];
+    return tokens.map(token => {
+        if (/^[A-Za-zÀ-ÖØ-öø-ÿŒœ]/i.test(token)) {
+            const clean = token.replace(/['’]$/, '').trim() || token.trim();
+            return `<span class="interactive-word" role="button" tabindex="0" data-word="${escapeHtml(clean)}" data-token="${escapeHtml(token.trim())}" title="${escapeHtml(clean)} · 点击查看释义与单读发音">${escapeHtml(token)}</span>`;
+        }
+        return escapeHtml(token);
+    }).join('');
+}
+
+window.escapeHtml = escapeHtml;
+window.cleanFrenchToken = cleanFrenchToken;
+window.frenchPhoneticNormalize = frenchPhoneticNormalize;
+window.calculateLevenshteinSimilarity = calculateLevenshteinSimilarity;
+window.evaluateFrenchPronunciation = evaluateFrenchPronunciation;
+window.renderInteractiveWordsHtml = renderInteractiveWordsHtml;
+
+function initStudyWorkbench() {
     // Shared localStorage keys with main workbench
     const localKeyName = 'frenchStudio.perplexityApiKey';
     const sessionKeyName = 'frenchStudio.sessionApiKey';
@@ -390,8 +601,26 @@ document.addEventListener('DOMContentLoaded', () => {
     function cleanFrenchToken(str) {
         return (str || '')
             .toLowerCase()
-            .replace(/[.,/#!$%^&*;:{}=\-_`~()?"'«»[\]]/g, '')
+            .replace(/[.,/#!$%^&*;:{}=\-_`~()?"'’«»[\]]/g, '')
             .trim();
+    }
+
+    function frenchPhoneticNormalize(word) {
+        if (!word) return '';
+        let w = word.toLowerCase().trim();
+        w = w.replace(/[.,/#!$%^&*;:{}=\-_`~()?"'’«»[\]]/g, '');
+        // Decompose accents for phonetic tolerance (e.g. é -> e, à -> a, ç -> c)
+        w = w.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+        // In French, verbal 3rd person plural ending -ent is 100% silent (e.g. autorisent -> autorise)
+        if (w.endsWith('ent') && w.length >= 5) {
+            w = w.slice(0, -2);
+        }
+        // In French, plural nominal/adjectival endings -s and -x are silent (e.g. canadiennes -> canadienne, autorités -> autorite)
+        if ((w.endsWith('s') || w.endsWith('x')) && w.length >= 3) {
+            w = w.slice(0, -1);
+        }
+        return w;
     }
 
     function calculateLevenshteinSimilarity(s1, s2) {
@@ -423,9 +652,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function evaluateFrenchPronunciation(targetSentence, spokenTranscript) {
-        const rawTargetWords = targetSentence.match(/[\w'’\-À-ÿ]+|[^\s\w]/g) || [];
+        // Extract words from target sentence, preserving elisions (e.g. n'autorisent, d'accord, c'est)
+        const rawTargetWords = (targetSentence || '').match(/(?:aujourd['’]hui|[A-Za-zÀ-ÖØ-öø-ÿŒœ]+(?:['’][A-Za-zÀ-ÖØ-öø-ÿŒœ]+)?['’]?|[0-9]+)/gi) || [];
         const targetWords = rawTargetWords
-            .map(w => ({ raw: w, clean: cleanFrenchToken(w) }))
+            .map(w => ({ raw: w, clean: cleanFrenchToken(w), norm: frenchPhoneticNormalize(w) }))
             .filter(item => item.clean.length > 0);
 
         if (targetWords.length === 0) {
@@ -439,21 +669,67 @@ document.addEventListener('DOMContentLoaded', () => {
             };
         }
 
-        const spokenWords = (spokenTranscript || '')
+        const spokenTokens = (spokenTranscript || '')
             .split(/\s+/)
-            .map(cleanFrenchToken)
             .filter(w => w.length > 0);
 
         const wordResults = [];
         let totalScoreSum = 0;
         let matchedCount = 0;
 
-        targetWords.forEach(target => {
+        targetWords.forEach((target, targetIdx) => {
             let bestSim = 0;
-            spokenWords.forEach(spoken => {
-                const sim = calculateLevenshteinSimilarity(target.clean, spoken);
+
+            // Check if target has an elision prefix (n', d', l', c', j', m', t', s', qu')
+            let baseNorm = '';
+            const elisionMatch = target.raw.match(/^(?:aujourd['’]hui|([cjdlnmstqu]|qu)['’](.+))$/i);
+            if (elisionMatch && elisionMatch[2]) {
+                baseNorm = frenchPhoneticNormalize(elisionMatch[2]);
+            }
+
+            // 1. Single token comparison (with phonetic normalization & silent endings tolerance)
+            for (let i = 0; i < spokenTokens.length; i++) {
+                const sp = spokenTokens[i];
+                const normSp = frenchPhoneticNormalize(sp);
+
+                // Check normalized Levenshtein similarity
+                let sim = calculateLevenshteinSimilarity(target.norm, normSp);
+
+                // If target is an elision word (e.g. n'autorisent, d'accord), also check against base word (e.g. autorisent)
+                // In connected French speech ("canadiennes n'autorisent"), the n' elision merges with preceding [n]
+                if (baseNorm) {
+                    const baseSim = calculateLevenshteinSimilarity(baseNorm, normSp);
+                    if (baseSim >= 0.82) {
+                        sim = Math.max(sim, Math.min(1.0, baseSim + 0.05));
+                    }
+                }
                 if (sim > bestSim) bestSim = sim;
-            });
+            }
+
+            // 2. Adjacent two-token combination match
+            // Handles cases where ASR inserts a space after apostrophe: "n'" + "autorisent", or "l'" + "homme"
+            for (let i = 0; i < spokenTokens.length - 1; i++) {
+                const combo = spokenTokens[i] + spokenTokens[i + 1];
+                const normCombo = frenchPhoneticNormalize(combo);
+                const sim = calculateLevenshteinSimilarity(target.norm, normCombo);
+                if (sim > bestSim) bestSim = sim;
+            }
+
+            // 3. French enchaînement / assimilation check:
+            // When preceding word ends in 'n' (like "canadiennes") and current word starts with n' (like "n'autorisent"),
+            // the double [n] naturally fuses into a single [n] in fluent speech: [kanadjɛnotɔʁiz].
+            // If the base verb (autorisent) is recognized, it is an authentic continuous pronunciation.
+            if (baseNorm && targetIdx > 0) {
+                const prevTargetNorm = targetWords[targetIdx - 1].norm;
+                if (prevTargetNorm.endsWith('n') || prevTargetNorm.endsWith('ne')) {
+                    for (let i = 0; i < spokenTokens.length; i++) {
+                        const normSp = frenchPhoneticNormalize(spokenTokens[i]);
+                        if (calculateLevenshteinSimilarity(baseNorm, normSp) >= 0.85) {
+                            bestSim = Math.max(bestSim, 1.0);
+                        }
+                    }
+                }
+            }
 
             let status = 'missed';
             if (bestSim >= 0.82) {
@@ -501,6 +777,7 @@ document.addEventListener('DOMContentLoaded', () => {
             wordResults,
         };
     }
+    window.evaluateFrenchPronunciation = evaluateFrenchPronunciation;
 
     // -------------------------------------------------------------------------
     // 4. Anki Spaced Repetition (SM-2) Deck Integration
@@ -1590,7 +1867,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderInteractiveWordsHtml(text) {
         if (!text) return '';
-        const regex = /(aujourd['’]hui|[A-Za-zÀ-ÖØ-öø-ÿŒœ]+['’]|[A-Za-zÀ-ÖØ-öø-ÿŒœ]+|[^\sA-Za-zÀ-ÖØ-öø-ÿŒœ]+|\s+)/gi;
+        // Match French words including internal apostrophes (e.g. n'autorisent, d'accord, l'homme, c'est)
+        const regex = /(aujourd['’]hui|[A-Za-zÀ-ÖØ-öø-ÿŒœ]+(?:['’][A-Za-zÀ-ÖØ-öø-ÿŒœ]+)?['’]?|[^\sA-Za-zÀ-ÖØ-öø-ÿŒœ]+|\s+)/gi;
         const tokens = text.match(regex) || [text];
         return tokens.map(token => {
             if (/^[A-Za-zÀ-ÖØ-öø-ÿŒœ]/i.test(token)) {
@@ -1600,6 +1878,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return escapeHtml(token);
         }).join('');
     }
+    window.renderInteractiveWordsHtml = renderInteractiveWordsHtml;
 
     let currentPopoverCard = null;
     let currentActiveWordEl = null;
@@ -1776,9 +2055,16 @@ document.addEventListener('DOMContentLoaded', () => {
         playFrenchSpeech(speechWord);
 
         // 1. Check local cache from active tokens in analyzed sentence (0ms instant)
-        const localMatch = (window.activeTokensMap || new Map()).get(lower);
+        let localMatch = (window.activeTokensMap || new Map()).get(lower);
+        if (!localMatch) {
+            // Also check elision base word (e.g. n'autorisent -> autorisent, l'homme -> homme)
+            const elisionMatch = lower.match(/^(?:aujourd['’]hui|([cjdlnmstqu]|qu)['’](.+))$/i);
+            if (elisionMatch && elisionMatch[2]) {
+                localMatch = (window.activeTokensMap || new Map()).get(elisionMatch[2]);
+            }
+        }
         if (localMatch) {
-            const item = Object.assign({}, localMatch);
+            const item = Object.assign({}, localMatch, { token: cleanWord });
             if (context.sentence) item.sentence = context.sentence;
             if (context.sentence_cn) item.sentence_cn = context.sentence_cn;
             renderPopoverData(item);
@@ -1786,7 +2072,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // 2. Check built-in beginner A1 dictionary (0ms instant)
-        const basicMatch = BASIC_FRENCH_WORDS[lower];
+        let basicMatch = BASIC_FRENCH_WORDS[lower];
+        if (!basicMatch) {
+            const elisionMatch = lower.match(/^(?:aujourd['’]hui|([cjdlnmstqu]|qu)['’](.+))$/i);
+            if (elisionMatch && elisionMatch[2]) {
+                basicMatch = BASIC_FRENCH_WORDS[elisionMatch[2]];
+            }
+        }
         if (basicMatch) {
             const item = Object.assign({}, basicMatch, {
                 token: cleanWord,
@@ -2252,4 +2544,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }, 300);
     }
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initStudyWorkbench);
+} else {
+    initStudyWorkbench();
+}
+
