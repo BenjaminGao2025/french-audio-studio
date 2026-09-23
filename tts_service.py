@@ -154,7 +154,9 @@ FRENCH_WORD_RE = re.compile(
     r"[A-Za-zÀ-ÖØ-öø-ÿŒœ]+(?:[’'-][A-Za-zÀ-ÖØ-öø-ÿŒœ]+)*"
 )
 
-TransformModel = Literal["grok-4.6", "grok-4.6-thinking", "sonar-2"]
+TransformModel = Literal[
+    "gemini-3.8-flash", "grok-4.6", "grok-4.6-thinking", "sonar-2"
+]
 TaskMode = Literal["auto", "generate", "translate", "express", "polish"]
 ResolvedTaskMode = Literal["generate", "translate", "express", "polish"]
 QualityCheck = Literal["passed", "proofread"]
