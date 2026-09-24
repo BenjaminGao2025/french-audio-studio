@@ -2388,28 +2388,174 @@
     list-style: none;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
 }
 
 .pronunciation-tip-item {
     display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    background: #fafafa;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 10px 14px;
+    align-items: center;
+    gap: 12px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 9px 14px;
     font-size: 13.5px;
     line-height: 1.5;
     color: #1e293b;
+    transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-.pronunciation-tip-item svg {
-    width: 16px;
-    height: 16px;
-    color: var(--primary);
+.pronunciation-tip-item:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+
+.tip-audio-col {
+    display: flex;
+    align-items: center;
     flex-shrink: 0;
-    margin-top: 2px;
+}
+
+.tip-content-col {
+    flex: 1;
+    min-width: 180px;
+    color: #334155;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.tip-explanation-text {
+    display: inline;
+    line-height: 1.6;
+}
+
+.btn-tip-audio {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 11px;
+    background: #eef2ff;
+    color: #4338ca;
+    border: 1px solid #c7d2fe;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.btn-tip-audio:hover {
+    background: #e0e7ff;
+    border-color: #a5b4fc;
+    color: #3730a3;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(67, 56, 202, 0.12);
+}
+
+.btn-tip-audio:active {
+    transform: translateY(0);
+}
+
+.btn-tip-audio.playing {
+    background: #4338ca;
+    color: #ffffff;
+    border-color: #3730a3;
+    animation: pulse-tip-btn 1.2s infinite;
+}
+
+.btn-tip-audio svg {
+    width: 14px;
+    height: 14px;
+    color: inherit;
+    flex-shrink: 0;
+}
+
+.btn-tip-audio .tip-target-text {
+    font-size: 13px;
+    font-weight: 700;
+    color: inherit;
+    letter-spacing: 0.2px;
+}
+
+.btn-tip-audio .tip-badge-listen {
+    font-size: 10.5px;
+    font-weight: 500;
+    background: rgba(67, 56, 202, 0.1);
+    color: inherit;
+    padding: 1px 5px;
+    border-radius: 3px;
+    letter-spacing: 0.3px;
+}
+
+.btn-tip-audio.playing .tip-badge-listen {
+    background: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+}
+
+.btn-tip-audio.icon-only {
+    padding: 5px 9px;
+}
+
+.chip-tip-audio {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 7px;
+    margin: 0 2px;
+    background: #ffffff;
+    color: #1e293b;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    vertical-align: baseline;
+    transition: all 0.12s ease;
+    line-height: 1.4;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+}
+
+.chip-tip-audio:hover {
+    background: #f8fafc;
+    border-color: #818cf8;
+    color: #4338ca;
+    transform: translateY(-1px);
+}
+
+.chip-tip-audio:active {
+    transform: translateY(0);
+}
+
+.chip-tip-audio.playing {
+    background: #eef2ff;
+    border-color: #6366f1;
+    color: #4338ca;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.chip-tip-audio svg {
+    width: 12px;
+    height: 12px;
+    color: #6366f1;
+    flex-shrink: 0;
+}
+
+@keyframes pulse-tip-btn {
+    0% {
+        box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4);
+    }
+    70% {
+        box-shadow: 0 0 0 6px rgba(99, 102, 241, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+    }
 }
 
 /* 7. History Modal Schema Badges & Re-analyze Button */

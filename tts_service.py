@@ -777,7 +777,9 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
         "- 1–3 points, the most useful ones for this sentence.\n"
         "- Each has: a short title, a simple explanation, and a memory hook (word history, a comparison with English or Chinese, or a simple picture).\n\n"
         "Pronunciation tips:\n"
-        "- Only the tricky parts: silent letters (e.g. -ent at the end of verbs), liaison, nasal sounds.\n\n"
+        "- Only the tricky parts: silent letters (e.g. silent -ent in verbs), liaison between words, tricky vowels or nasals.\n"
+        "- Format each tip starting with the French word or phrase being taught, followed by a colon: 'French word/phrase: simple explanation'.\n"
+        "- Always enclose the French words or phonetic representations in single quotes, e.g. \"'leurs diplômes': The 's' in 'leurs' is silent before consonant 'diplômes'\".\n\n"
         "Output JSON format strictly matching this schema:\n"
         "{\n"
         '  "sentences": [\n'
@@ -819,10 +821,10 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
         '        {"title": "Describing words go after the noun", "explanation": "French names the thing first, then says what kind: les autorités canadiennes.", "hook": "Exceptions are short common words: beau, jeune, bon, grand, petit…"}\n'
         "      ],\n"
         '      "pronunciation_tips": [\n'
-        '        "les autorités: link the s → lé-zo-to-ri-té",\n'
-        '        "autorisée: s between two vowels sounds like z",\n'
-        '        "canadiennes: the ending -nes sounds like n"\n'
-        "      ]\n"
+        '        "\'les autorités\': link the \'s\' to make a /z/ sound → \'lé-zo-to-ri-té\'",\n'
+        '        "\'autorisée\': \'s\' between two vowels sounds like /z/",\n'
+        '        "\'canadiennes\': the ending \'-nes\' sounds like /n/"\n'
+        '      ]\n'
         "    }\n"
         "  ]\n"
         "}\n"
