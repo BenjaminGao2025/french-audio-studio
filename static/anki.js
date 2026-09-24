@@ -117,12 +117,19 @@
         /**
          * Add a new card to the deck. If card exists, update its metadata.
          */
-        addCard({ token, lemma, pos, phonetic, explanation_en, explanation_cn, sentence, sentence_cn }) {
+        addCard({ token, lemma, pos, phonetic, explanation_en, explanation_cn, sentence, sentence_cn, group, hook }) {
             const clean = this.normalizeToken(token);
             if (!clean) return null;
 
             const existingIndex = this.cards.findIndex(c => this.normalizeToken(c.token) === clean);
             const now = new Date().toISOString();
+
+            const determinedGroup = group || (
+                token.trim().includes(' ') || token.includes('...') || token.includes('(') ||
+                (pos && (pos.toLowerCase().includes('pattern') || pos.toLowerCase().includes('phrase') || pos.includes('词组') || pos.includes('固定') || pos.includes('搭配')))
+                    ? 'phrase'
+                    : 'word'
+            );
 
             if (existingIndex >= 0) {
                 // Update content fields without resetting SM-2 schedule
@@ -134,6 +141,8 @@
                 existing.explanation_cn = explanation_cn || existing.explanation_cn;
                 if (sentence) existing.sentence = sentence;
                 if (sentence_cn) existing.sentence_cn = sentence_cn;
+                if (group) existing.group = group;
+                if (hook) existing.hook = hook;
                 this.save();
                 return existing;
             }
@@ -148,6 +157,8 @@
                 explanation_cn: (explanation_cn || '').trim(),
                 sentence: (sentence || '').trim(),
                 sentence_cn: (sentence_cn || '').trim(),
+                group: determinedGroup,
+                hook: (hook || '').trim(),
                 createdAt: now,
                 repetitions: 0,
                 interval: 0,
@@ -174,26 +185,50 @@
         }
 
         /**
-         * Get cards due for review (dueDate <= now)
+         * Get cards due for review (dueDate <= now), optionally filtered by group ('all', 'word', 'phrase')
          */
-        getDueCards() {
+        getDueCards(filterGroup = 'all') {
             const nowIso = new Date().toISOString();
             return this.cards
-                .filter(c => !c.dueDate || c.dueDate <= nowIso)
+                .filter(c => {
+                    const isDue = !c.dueDate || c.dueDate <= nowIso;
+                    if (!isDue) return false;
+                    if (filterGroup === 'all') return true;
+                    return getCardGroup(c) === filterGroup;
+                })
                 .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
         }
 
-        getAllCards() {
-            return [...this.cards].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        getAllCards(filterGroup = 'all') {
+            return this.cards
+                .filter(c => filterGroup === 'all' || getCardGroup(c) === filterGroup)
+                .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
         }
 
-        countDue() {
+        countDue(filterGroup = 'all') {
             const nowIso = new Date().toISOString();
-            return this.cards.filter(c => !c.dueDate || c.dueDate <= nowIso).length;
+            return this.cards.filter(c => {
+                const isDue = !c.dueDate || c.dueDate <= nowIso;
+                if (!isDue) return false;
+                if (filterGroup === 'all') return true;
+                return getCardGroup(c) === filterGroup;
+            }).length;
         }
 
-        countTotal() {
-            return this.cards.length;
+        countTotal(filterGroup = 'all') {
+            if (filterGroup === 'all') return this.cards.length;
+            return this.cards.filter(c => getCardGroup(c) === filterGroup).length;
+        }
+
+        getStats() {
+            return {
+                allTotal: this.countTotal('all'),
+                allDue: this.countDue('all'),
+                wordTotal: this.countTotal('word'),
+                wordDue: this.countDue('word'),
+                phraseTotal: this.countTotal('phrase'),
+                phraseDue: this.countDue('phrase')
+            };
         }
 
         /**
@@ -228,21 +263,22 @@
         }
 
         /**
-         * Export entire deck as a standard Anki Tab-Separated Values (.tsv) file.
+         * Export deck as a standard Anki Tab-Separated Values (.tsv) file.
          * Fields:
          *   1. Front: Word / Phrase + IPA
          *   2. Back: Canonical base (lemma), POS, English Meaning, Chinese Meaning, Sentence with highlighted token
-         *   3. Tags: FrenchStudio
+         *   3. Tags: FrenchStudio::Vocabulary or FrenchStudio::Phrases
          */
-        exportToAnkiTsv() {
-            if (this.cards.length === 0) {
-                throw new Error('生词本为空，请先添加生词卡后再导出。');
+        exportToAnkiTsv(filterGroup = 'all') {
+            const targetCards = this.getAllCards(filterGroup);
+            if (targetCards.length === 0) {
+                throw new Error('当前所选卡片分组为空，请先添加后再导出。');
             }
 
             // Anki header comments define field separator and note structure
             let tsv = '#separator:tab\n#html:true\n#tags column:3\n';
 
-            this.cards.forEach(c => {
+            targetCards.forEach(c => {
                 const audioUrl = `https://tts.gaoyuze.com/tts?text=${encodeURIComponent(c.token)}&voice=fr-FR-DeniseNeural`;
                 const soundTag = `[sound:${audioUrl}]`;
 
@@ -257,9 +293,14 @@
                 }
                 back += `</div>`;
 
-                back += `<div style="margin-top: 8px; font-size: 15px; color: #1c2821;"><strong>释义:</strong> ${escapeHtml(c.explanation_cn)}</div>`;
+                if (c.explanation_cn) {
+                    back += `<div style="margin-top: 8px; font-size: 15px; color: #1c2821;"><strong>释义:</strong> ${escapeHtml(c.explanation_cn)}</div>`;
+                }
                 if (c.explanation_en) {
                     back += `<div style="color: #6b7770; font-size: 13px; margin-top: 4px;"><em>${escapeHtml(c.explanation_en)}</em></div>`;
+                }
+                if (c.hook) {
+                    back += `<div style="margin-top: 8px; font-size: 13px; color: #b45309; background: #fefce8; padding: 4px 8px; border-radius: 4px; border-left: 3px solid #f59e0b;">💡 <strong>Memory hook:</strong> ${escapeHtml(c.hook)}</div>`;
                 }
 
                 back += `<div style="margin-top: 10px;"><audio controls style="height: 32px; width: 100%; max-width: 320px;" src="${audioUrl}"></audio></div>`;
@@ -277,7 +318,8 @@
 
                 const cleanFront = front.replace(/\t/g, ' ').replace(/\n/g, '<br>');
                 const cleanBack = back.replace(/\t/g, ' ').replace(/\n/g, '<br>');
-                const tag = 'FrenchStudio::Vocabulary';
+                const groupName = getCardGroup(c);
+                const tag = groupName === 'phrase' ? 'FrenchStudio::Phrases' : 'FrenchStudio::Vocabulary';
 
                 tsv += `${cleanFront}\t${cleanBack}\t${tag}\n`;
             });
@@ -285,8 +327,8 @@
             return tsv;
         }
 
-        downloadAnkiFile(filename = 'FrenchStudio_AnkiDeck.tsv') {
-            const tsvContent = this.exportToAnkiTsv();
+        downloadAnkiFile(filename = 'FrenchStudio_AnkiDeck.tsv', filterGroup = 'all') {
+            const tsvContent = this.exportToAnkiTsv(filterGroup);
             const blob = new Blob([tsvContent], { type: 'text/tab-separated-values;charset=utf-8' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -297,6 +339,17 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
+    }
+
+    function getCardGroup(card) {
+        if (!card) return 'word';
+        if (card.group === 'phrase' || card.group === 'word') return card.group;
+        const token = (card.token || '').trim();
+        const pos = (card.pos || '').toLowerCase();
+        if (token.includes(' ') || token.includes('...') || token.includes('(') || pos.includes('phrase') || pos.includes('pattern') || pos.includes('词组') || pos.includes('固定') || pos.includes('搭配')) {
+            return 'phrase';
+        }
+        return 'word';
     }
 
     function escapeHtml(str) {
@@ -325,6 +378,7 @@
     return {
         DeckManager,
         scheduleSM2,
-        escapeHtml
+        escapeHtml,
+        getCardGroup
     };
 });

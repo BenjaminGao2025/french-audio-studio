@@ -7,12 +7,12 @@
     <title>法语拆解与跟读复述 - 1000H French</title>
     <link rel="icon" href="/favicon.ico?v=2" sizes="any">
     <link rel="stylesheet" href="/static/style.css?v=9.0">
-    <link rel="stylesheet" href="/static/study.css?v=20.0">
+    <link rel="stylesheet" href="/static/study.css?v=21.0">
     <script>window.activeTokensMap = new Map(); var activeTokensMap = window.activeTokensMap;</script>
     <script src="https://unpkg.com/lucide@1.34.0/dist/umd/lucide.min.js" defer></script>
-    <script src="/static/anki.js?v=10.0" defer></script>
+    <script src="/static/anki.js?v=11.0" defer></script>
     <script src="/static/history-v12.js?v=12.0" defer></script>
-    <script src="/static/study-v20.js?v=20.0" defer></script>
+    <script src="/static/study-v21.js?v=21.0" defer></script>
 </head>
 <body>
     <div class="app-shell">
@@ -166,11 +166,11 @@
             <header class="modal-header">
                 <div class="modal-title-group">
                     <i data-lucide="layers" class="modal-icon" aria-hidden="true"></i>
-                    <h3 id="modal-card-title">Anki 生词卡复习</h3>
+                    <h3 id="modal-card-title">Anki 记忆卡片复习</h3>
                     <span id="review-progress-badge" class="badge">0 / 0</span>
                 </div>
                 <div class="modal-header-actions">
-                    <button id="export-deck-btn" class="btn btn-secondary btn-sm" type="button" title="导出为 Anki 电脑/手机端支持的 .tsv 文件">
+                    <button id="export-deck-btn" class="btn btn-secondary btn-sm" type="button" title="导出当前分组为 Anki .tsv 文件">
                         <i data-lucide="download" aria-hidden="true"></i>
                         <span>导出 Anki</span>
                     </button>
@@ -180,12 +180,43 @@
                 </div>
             </header>
 
+            <!-- Group Selector Tabs & Mode Switcher -->
+            <div class="deck-toolbar">
+                <div class="deck-group-tabs" role="tablist">
+                    <button class="deck-group-tab active" data-group="all" type="button" role="tab" title="查看与复习全部卡片">
+                        <span>全部</span>
+                        <span class="tab-count-pill" id="tab-count-all">0</span>
+                    </button>
+                    <button class="deck-group-tab" data-group="word" type="button" role="tab" title="仅查看与复习独立单词">
+                        <span>📖 单词组</span>
+                        <span class="tab-count-pill" id="tab-count-word">0</span>
+                    </button>
+                    <button class="deck-group-tab" data-group="phrase" type="button" role="tab" title="仅查看与复习词组句式及固定搭配">
+                        <span>🧩 词组组</span>
+                        <span class="tab-count-pill" id="tab-count-phrase">0</span>
+                    </button>
+                </div>
+                <div class="deck-view-switcher">
+                    <button class="deck-view-btn active" id="btn-view-card" type="button" title="翻卡记忆模式">
+                        <i data-lucide="layers"></i>
+                        <span>翻卡复习</span>
+                    </button>
+                    <button class="deck-view-btn" id="btn-view-list" type="button" title="查看并检索卡片列表">
+                        <i data-lucide="list"></i>
+                        <span>卡片清单</span>
+                    </button>
+                </div>
+            </div>
+
             <div class="modal-body">
                 <!-- Active Card Stage -->
                 <div id="card-stage" class="card-stage" tabindex="0" role="button" title="点击或按空格键翻转卡片">
                     <!-- Front Side -->
                     <div class="card-face card-front" id="card-front-face">
-                        <div class="card-context-pill">正面 · 识记与发音</div>
+                        <div class="card-context-pill">
+                            <span id="card-front-group-badge" class="badge-card-group">📖 单词</span>
+                            <span>正面 · 识记与发音</span>
+                        </div>
                         <div class="card-main-word-row">
                             <h2 id="card-front-word" class="card-front-word">--</h2>
                             <button id="card-speak-btn" class="btn-token-speak btn-card-speak" type="button" title="点击发音">
@@ -205,7 +236,10 @@
 
                     <!-- Back Side -->
                     <div class="card-face card-back" id="card-back-face" hidden>
-                        <div class="card-context-pill">背面 · 详解与语法</div>
+                        <div class="card-context-pill">
+                            <span id="card-back-group-badge" class="badge-card-group">📖 单词</span>
+                            <span>背面 · 详解与语法</span>
+                        </div>
                         <div class="card-back-header">
                             <div class="tags-group">
                                 <span id="card-back-pos" class="pos-tag"></span>
@@ -216,14 +250,18 @@
                             </button>
                         </div>
                         <div class="card-explanations">
-                            <div class="card-exp-row">
+                            <div class="card-exp-row" id="card-exp-cn-row">
                                 <span class="exp-lang-tag">中文释义</span>
                                 <p id="card-back-cn" class="card-exp-cn"></p>
                             </div>
-                            <div class="card-exp-row">
+                            <div class="card-exp-row" id="card-exp-en-row">
                                 <span class="exp-lang-tag">英文解释</span>
                                 <p id="card-back-en" class="card-exp-en"></p>
                             </div>
+                        </div>
+                        <div id="card-back-hook-box" class="card-back-hook-box" hidden>
+                            <span class="hook-icon">💡</span>
+                            <span><strong>记忆钩子:</strong> <span id="card-back-hook-text"></span></span>
                         </div>
                         <div id="card-sentence-trans-box" class="card-sentence-trans-box">
                             <div class="quote-label-row">
@@ -235,6 +273,23 @@
                             </div>
                             <div id="card-sentence-cn" class="sentence-cn-text"></div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Card List View (Searchable list of saved cards) -->
+                <div id="deck-list-view" class="deck-list-view" hidden>
+                    <div class="deck-list-header">
+                        <div class="deck-search-box">
+                            <i data-lucide="search" class="search-icon"></i>
+                            <input type="text" id="deck-search-input" placeholder="搜索卡片（法语、英文或释义）..." />
+                            <button id="deck-search-clear-btn" class="icon-btn-sm" type="button" title="清除" hidden>
+                                <i data-lucide="x"></i>
+                            </button>
+                        </div>
+                        <div class="deck-list-stats" id="deck-list-stats">共 0 张卡片</div>
+                    </div>
+                    <div class="deck-cards-scrollable" id="deck-cards-list">
+                        <!-- Card Items rendered dynamically -->
                     </div>
                 </div>
 

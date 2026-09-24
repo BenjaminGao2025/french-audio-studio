@@ -300,9 +300,26 @@ function initStudyWorkbench() {
     const studyAllCardsBtn = document.getElementById('study-all-cards-btn');
     const totalCardCountSpan = document.getElementById('total-card-count');
 
+    // Group Tabs & View Mode Elements
+    const deckGroupTabs = document.querySelectorAll('.deck-group-tab');
+    const tabCountAll = document.getElementById('tab-count-all');
+    const tabCountWord = document.getElementById('tab-count-word');
+    const tabCountPhrase = document.getElementById('tab-count-phrase');
+    const btnViewCard = document.getElementById('btn-view-card');
+    const btnViewList = document.getElementById('btn-view-list');
+    const deckListView = document.getElementById('deck-list-view');
+    const deckCardsList = document.getElementById('deck-cards-list');
+    const deckSearchInput = document.getElementById('deck-search-input');
+    const deckSearchClearBtn = document.getElementById('deck-search-clear-btn');
+    const deckListStats = document.getElementById('deck-list-stats');
+
     const cardStage = document.getElementById('card-stage');
     const cardFrontFace = document.getElementById('card-front-face');
     const cardBackFace = document.getElementById('card-back-face');
+    const cardFrontGroupBadge = document.getElementById('card-front-group-badge');
+    const cardBackGroupBadge = document.getElementById('card-back-group-badge');
+    const cardBackHookBox = document.getElementById('card-back-hook-box');
+    const cardBackHookText = document.getElementById('card-back-hook-text');
     const cardFrontWord = document.getElementById('card-front-word');
     const cardSpeakBtn = document.getElementById('card-speak-btn');
     const cardFrontPhonetic = document.getElementById('card-front-phonetic');
@@ -341,6 +358,8 @@ function initStudyWorkbench() {
     let reviewQueue = [];
     let currentQueueIndex = 0;
     let isCardFlipped = false;
+    let currentDeckFilterGroup = 'all'; // 'all' | 'word' | 'phrase'
+    let currentDeckViewMode = 'card';    // 'card' | 'list'
 
     // Speech Recognition API Detection
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition || null;
@@ -797,8 +816,8 @@ function initStudyWorkbench() {
     // -------------------------------------------------------------------------
     function updateDeckBadge() {
         if (!deckManager || !dueCardBadge) return;
-        const dueCount = deckManager.countDue();
-        const totalCount = deckManager.countTotal();
+        const dueCount = deckManager.countDue('all');
+        const totalCount = deckManager.countTotal('all');
 
         dueCardBadge.textContent = `${dueCount}`;
         if (dueCount > 0) {
@@ -808,6 +827,19 @@ function initStudyWorkbench() {
             dueCardBadge.className = 'deck-badge all-done';
             dueCardBadge.title = `今日复习已完成 (总计 ${totalCount} 张)`;
         }
+        updateDeckTabsBadge();
+    }
+
+    function updateDeckTabsBadge() {
+        if (!deckManager) return;
+        const stats = deckManager.getStats ? deckManager.getStats() : {
+            allTotal: deckManager.countTotal(),
+            wordTotal: deckManager.countTotal('word'),
+            phraseTotal: deckManager.countTotal('phrase')
+        };
+        if (tabCountAll) tabCountAll.textContent = stats.allTotal;
+        if (tabCountWord) tabCountWord.textContent = stats.wordTotal;
+        if (tabCountPhrase) tabCountPhrase.textContent = stats.phraseTotal;
     }
 
     function highlightToken(sentence, token) {
@@ -820,18 +852,32 @@ function initStudyWorkbench() {
         }
     }
 
-    function openDeckModal(mode = 'due') {
+    function openDeckModal(mode = 'due', group = null) {
         if (!deckManager || !flashcardModal) return;
+        if (group) {
+            currentDeckFilterGroup = group;
+        }
+
+        deckGroupTabs.forEach(tab => {
+            if (tab.dataset.group === currentDeckFilterGroup) {
+                tab.classList.add('active');
+            } else {
+                tab.classList.remove('active');
+            }
+        });
 
         if (mode === 'due') {
-            reviewQueue = deckManager.getDueCards();
+            reviewQueue = deckManager.getDueCards(currentDeckFilterGroup);
         } else {
-            reviewQueue = deckManager.getAllCards();
+            reviewQueue = deckManager.getAllCards(currentDeckFilterGroup);
         }
 
         currentQueueIndex = 0;
         isCardFlipped = false;
         flashcardModal.hidden = false;
+        updateDeckTabsBadge();
+
+        switchDeckView('card');
         displayCurrentCard();
     }
 
@@ -849,30 +895,175 @@ function initStudyWorkbench() {
             const token = btn.dataset.token;
             if (token && deckManager.hasCard(token)) {
                 btn.classList.add('active');
-                btn.title = '已加入生词卡 (点击移除)';
+                btn.title = '已加入卡片 (点击移除)';
             } else {
                 btn.classList.remove('active');
                 btn.title = '加入生词卡 (Anki)';
             }
         });
+
+        const grammarStarBtns = document.querySelectorAll('.btn-grammar-star');
+        grammarStarBtns.forEach(btn => {
+            const token = btn.dataset.token;
+            const label = btn.querySelector('.grammar-star-label');
+            if (token && deckManager.hasCard(token)) {
+                btn.classList.add('active');
+                btn.title = '已存入词组卡 (点击移除)';
+                if (label) label.textContent = '已存词组';
+            } else {
+                btn.classList.remove('active');
+                btn.title = '存入词组卡 (Anki)';
+                if (label) label.textContent = '存为词组';
+            }
+        });
+    }
+
+    function switchDeckView(mode = 'card') {
+        currentDeckViewMode = mode;
+        if (mode === 'card') {
+            if (btnViewCard) btnViewCard.classList.add('active');
+            if (btnViewList) btnViewList.classList.remove('active');
+            if (deckListView) deckListView.hidden = true;
+            displayCurrentCard();
+        } else {
+            if (btnViewCard) btnViewCard.classList.remove('active');
+            if (btnViewList) btnViewList.classList.add('active');
+            if (cardStage) cardStage.hidden = true;
+            if (modalRatingFooter) modalRatingFooter.hidden = true;
+            if (deckEmptyScreen) deckEmptyScreen.hidden = true;
+            if (deckListView) deckListView.hidden = false;
+            renderDeckListView();
+        }
+        refreshIcons();
+    }
+
+    function renderDeckListView() {
+        if (!deckManager || !deckCardsList) return;
+        const allTargetCards = deckManager.getAllCards(currentDeckFilterGroup);
+        const query = (deckSearchInput ? deckSearchInput.value : '').trim().toLowerCase();
+
+        const filtered = allTargetCards.filter(c => {
+            if (!query) return true;
+            return (c.token || '').toLowerCase().includes(query) ||
+                (c.lemma || '').toLowerCase().includes(query) ||
+                (c.explanation_cn || '').toLowerCase().includes(query) ||
+                (c.explanation_en || '').toLowerCase().includes(query) ||
+                (c.hook || '').toLowerCase().includes(query);
+        });
+
+        if (deckListStats) {
+            const groupLabel = currentDeckFilterGroup === 'word' ? '单词' : (currentDeckFilterGroup === 'phrase' ? '词组' : '卡片');
+            deckListStats.textContent = query
+                ? `搜索结果: ${filtered.length} / ${allTargetCards.length} 张`
+                : `共 ${allTargetCards.length} 张${groupLabel}`;
+        }
+
+        if (deckSearchClearBtn) {
+            deckSearchClearBtn.hidden = !query;
+        }
+
+        if (filtered.length === 0) {
+            const groupName = currentDeckFilterGroup === 'word' ? '单词' : (currentDeckFilterGroup === 'phrase' ? '词组' : '卡片');
+            deckCardsList.innerHTML = `
+                <div class="deck-list-empty">
+                    <p style="font-size: 24px; margin-bottom: 8px;">📭</p>
+                    <p>${query ? '没有找到匹配的' + groupName : '当前「' + groupName + '」暂无已保存的卡片'}</p>
+                    <p style="color: var(--muted); font-size: 12px; margin-top: 4px;">
+                        ${currentDeckFilterGroup === 'phrase' ? '在「语法点与记忆钩子」中点击【⭐ 存为词组】即可加入此处' : '在逐词剖析表中点击 ⭐ 即可加入此处'}
+                    </p>
+                </div>
+            `;
+            return;
+        }
+
+        const nowIso = new Date().toISOString();
+        deckCardsList.innerHTML = filtered.map(c => {
+            const group = window.AnkiDeck && window.AnkiDeck.getCardGroup ? window.AnkiDeck.getCardGroup(c) : (c.group || 'word');
+            const isPhrase = group === 'phrase';
+            const isDue = !c.dueDate || c.dueDate <= nowIso;
+            const dueLabel = isDue ? '今日待复习' : `${c.interval || 0}天后复习`;
+
+            return `
+                <div class="deck-list-row" data-id="${escapeHtml(c.id)}">
+                    <div class="deck-row-left">
+                        <span class="badge-card-group ${isPhrase ? 'phrase' : 'word'}">${isPhrase ? '🧩 词组' : '📖 单词'}</span>
+                        <div class="deck-row-content">
+                            <div class="deck-row-title-line">
+                                <span class="deck-row-token">${escapeHtml(c.token)}</span>
+                                ${c.phonetic ? `<span class="deck-row-phonetic">${escapeHtml(c.phonetic)}</span>` : ''}
+                                ${c.pos ? `<span class="deck-row-pos">${escapeHtml(c.pos)}</span>` : ''}
+                            </div>
+                            <div class="deck-row-exp">
+                                ${escapeHtml(c.explanation_cn || c.explanation_en || '无释义')}
+                                ${c.explanation_en && c.explanation_cn ? `<span class="deck-row-exp-en"> (${escapeHtml(c.explanation_en)})</span>` : ''}
+                            </div>
+                            ${c.hook ? `<div style="font-size: 11.5px; color: #b45309; margin-top: 2px;">💡 <strong>记忆钩子:</strong> ${escapeHtml(c.hook)}</div>` : ''}
+                        </div>
+                    </div>
+                    <div class="deck-row-right">
+                        <span class="deck-row-due ${isDue ? 'due-now' : 'due-future'}">${dueLabel}</span>
+                        <button class="deck-btn-speak" data-token="${escapeHtml(c.token)}" type="button" title="发音">
+                            <i data-lucide="volume-2"></i>
+                        </button>
+                        <button class="deck-btn-delete" data-id="${escapeHtml(c.id)}" data-token="${escapeHtml(c.token)}" type="button" title="移出卡片库">
+                            <i data-lucide="trash-2"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        // Bind speak and delete
+        deckCardsList.querySelectorAll('.deck-btn-speak').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                playFrenchSpeech(btn.dataset.token);
+            });
+        });
+
+        deckCardsList.querySelectorAll('.deck-btn-delete').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const cardId = btn.dataset.id;
+                const token = btn.dataset.token;
+                if (!deckManager) return;
+                deckManager.removeCard(cardId || token);
+                updateDeckBadge();
+                updateDeckTabsBadge();
+                updateTableStarStates();
+                renderDeckListView();
+            });
+        });
+
+        refreshIcons();
     }
 
     function displayCurrentCard() {
+        if (currentDeckViewMode === 'list') {
+            renderDeckListView();
+            return;
+        }
+
         if (reviewQueue.length === 0 || currentQueueIndex >= reviewQueue.length) {
             // Completion / Empty state
             cardStage.hidden = true;
             modalRatingFooter.hidden = true;
             deckEmptyScreen.hidden = false;
 
-            const total = deckManager ? deckManager.countTotal() : 0;
+            const total = deckManager ? deckManager.countTotal(currentDeckFilterGroup) : 0;
+            const groupName = currentDeckFilterGroup === 'word' ? '单词' : (currentDeckFilterGroup === 'phrase' ? '词组' : '卡片');
             if (total === 0) {
-                emptyScreenTitle.textContent = '生词本还是空的';
-                emptyScreenDesc.textContent = '在文本拆解列表中点击词组或单词旁的 ⭐ 按钮，即可将生词加入 Anki 记忆库。';
+                emptyScreenTitle.textContent = `${groupName}库还是空的`;
+                emptyScreenDesc.textContent = currentDeckFilterGroup === 'phrase'
+                    ? '在文本精析中的「语法点与记忆钩子」卡片右上角点击【⭐ 存为词组】，或划选短语即可加入词组复习库。'
+                    : '在文本拆解列表中点击单词旁的 ⭐ 按钮，即可将生词加入 Anki 记忆库。';
                 studyAllCardsBtn.hidden = true;
             } else {
-                emptyScreenTitle.textContent = '🎉 今日待复习生词已全部完成！';
+                emptyScreenTitle.textContent = `🎉 今日待复习${groupName}已全部完成！`;
                 emptyScreenDesc.textContent = '遵循 Anki SM-2 间隔记忆算法，已复习的卡片将在未来最佳艾宾浩斯复习节点再次出现。';
                 studyAllCardsBtn.hidden = false;
+                const btnSpan = studyAllCardsBtn.querySelector('span');
+                if (btnSpan) btnSpan.textContent = `复习全部${groupName} (${total})`;
                 totalCardCountSpan.textContent = total;
             }
             modalProgressBadge.textContent = '已完成';
@@ -889,6 +1080,18 @@ function initStudyWorkbench() {
         cardFrontFace.hidden = false;
         cardBackFace.hidden = true;
         modalRatingFooter.hidden = true;
+
+        // Group pill
+        const group = window.AnkiDeck && window.AnkiDeck.getCardGroup ? window.AnkiDeck.getCardGroup(currentCard) : (currentCard.group || 'word');
+        const isPhrase = group === 'phrase';
+        if (cardFrontGroupBadge) {
+            cardFrontGroupBadge.textContent = isPhrase ? '🧩 词组句式' : '📖 单词';
+            cardFrontGroupBadge.className = `badge-card-group ${isPhrase ? 'phrase' : 'word'}`;
+        }
+        if (cardBackGroupBadge) {
+            cardBackGroupBadge.textContent = isPhrase ? '🧩 词组句式' : '📖 单词';
+            cardBackGroupBadge.className = `badge-card-group ${isPhrase ? 'phrase' : 'word'}`;
+        }
 
         // Populate front content
         cardFrontWord.textContent = currentCard.token;
@@ -916,12 +1119,21 @@ function initStudyWorkbench() {
         cardBackEn.textContent = currentCard.explanation_en || '';
         cardSentenceCn.textContent = currentCard.sentence_cn || '';
 
+        if (cardBackHookBox && cardBackHookText) {
+            if (currentCard.hook) {
+                cardBackHookText.textContent = currentCard.hook;
+                cardBackHookBox.hidden = false;
+            } else {
+                cardBackHookBox.hidden = true;
+            }
+        }
+
         modalProgressBadge.textContent = `${currentQueueIndex + 1} / ${reviewQueue.length}`;
 
         // Compute estimated interval labels for 4 grade buttons based on SM-2
         updateGradeButtonIntervals(currentCard);
 
-        // Auto-play pronunciation of the French word
+        // Auto-play pronunciation of the French word / phrase
         if (currentCard.token) {
             try {
                 playFrenchSpeech(currentCard.token);
@@ -1311,23 +1523,41 @@ function initStudyWorkbench() {
                 // 5. Grammar Points + Memory Hooks
                 let grammarHtml = '';
                 if (s.grammar_points && s.grammar_points.length > 0) {
-                    const pointsHtml = s.grammar_points.map(g => `
-                        <div class="grammar-point-card">
-                            <div class="grammar-point-header">
-                                <span class="grammar-bullet">📌</span>
-                                <h4 class="grammar-point-title">${escapeHtml(g.title)}</h4>
-                            </div>
-                            <div class="grammar-point-body">
-                                <p class="grammar-point-exp">${escapeHtml(g.explanation)}</p>
-                                ${g.hook ? `
-                                    <div class="grammar-point-hook">
-                                        <span class="hook-icon">💡</span>
-                                        <span><strong>Memory hook:</strong> ${escapeHtml(g.hook)}</span>
+                    const pointsHtml = s.grammar_points.map(g => {
+                        let patternToken = (g.title || '').replace(/^(?:Fixed pattern:\s*|Grammar pattern:\s*|Pattern:\s*|搭配\/句式:\s*)/i, '').trim();
+                        if (!patternToken) patternToken = g.title || '';
+                        const isSaved = deckManager ? deckManager.hasCard(patternToken) : false;
+                        return `
+                            <div class="grammar-point-card">
+                                <div class="grammar-point-header">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <span class="grammar-bullet">📌</span>
+                                        <h4 class="grammar-point-title">${escapeHtml(g.title)}</h4>
                                     </div>
-                                ` : ''}
+                                    <button class="btn-grammar-star ${isSaved ? 'active' : ''}" type="button"
+                                        title="${isSaved ? '已存入词组卡 (点击移除)' : '存入词组卡 (Anki)'}"
+                                        data-token="${escapeHtml(patternToken)}"
+                                        data-title="${escapeHtml(g.title)}"
+                                        data-exp="${escapeHtml(g.explanation || '')}"
+                                        data-hook="${escapeHtml(g.hook || '')}"
+                                        data-sentence="${escapeHtml(sentenceText)}"
+                                        data-sentence-cn="${escapeHtml(transZh)}">
+                                        <i data-lucide="star"></i>
+                                        <span class="grammar-star-label">${isSaved ? '已存词组' : '存为词组'}</span>
+                                    </button>
+                                </div>
+                                <div class="grammar-point-body">
+                                    <p class="grammar-point-exp">${escapeHtml(g.explanation)}</p>
+                                    ${g.hook ? `
+                                        <div class="grammar-point-hook">
+                                            <span class="hook-icon">💡</span>
+                                            <span><strong>Memory hook:</strong> ${escapeHtml(g.hook)}</span>
+                                        </div>
+                                    ` : ''}
+                                </div>
                             </div>
-                        </div>
-                    `).join('');
+                        `;
+                    }).join('');
 
                     grammarHtml = `
                         <div class="study-card-section grammar-section">
@@ -1551,8 +1781,6 @@ function initStudyWorkbench() {
 
                 if (deckManager.hasCard(token)) {
                     deckManager.removeCard(token);
-                    btn.classList.remove('active');
-                    btn.title = '加入生词卡 (Anki)';
                 } else {
                     deckManager.addCard({
                         token: token,
@@ -1563,12 +1791,44 @@ function initStudyWorkbench() {
                         explanation_cn: btn.dataset.expCn,
                         sentence: btn.dataset.sentence,
                         sentence_cn: btn.dataset.sentenceCn,
+                        group: 'word'
                     });
-                    btn.classList.add('active');
-                    btn.title = '已加入生词卡 (点击移除)';
                 }
 
                 updateDeckBadge();
+                updateTableStarStates();
+                refreshIcons();
+            });
+        });
+
+        // 3b. Grammar Star Buttons (存为词组)
+        const grammarStarBtns = card.querySelectorAll('.btn-grammar-star');
+        grammarStarBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (!deckManager) return;
+                const token = btn.dataset.token;
+                if (!token) return;
+
+                if (deckManager.hasCard(token)) {
+                    deckManager.removeCard(token);
+                } else {
+                    deckManager.addCard({
+                        token: token,
+                        lemma: token,
+                        pos: 'Fixed pattern / 常用搭配',
+                        phonetic: '',
+                        explanation_en: btn.dataset.exp || '',
+                        explanation_cn: btn.dataset.hook ? `💡 ${btn.dataset.hook}` : (btn.dataset.exp || ''),
+                        sentence: btn.dataset.sentence || '',
+                        sentence_cn: btn.dataset.sentenceCn || '',
+                        group: 'phrase',
+                        hook: btn.dataset.hook || ''
+                    });
+                }
+
+                updateDeckBadge();
+                updateTableStarStates();
                 refreshIcons();
             });
         });
@@ -2759,7 +3019,38 @@ function initStudyWorkbench() {
     // Study all cards button from completion screen
     if (studyAllCardsBtn) {
         studyAllCardsBtn.addEventListener('click', () => {
-            openDeckModal('all');
+            openDeckModal('all', currentDeckFilterGroup);
+        });
+    }
+
+    // Group Tab switching
+    deckGroupTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            currentDeckFilterGroup = tab.dataset.group || 'all';
+            deckGroupTabs.forEach(t => t.classList.toggle('active', t === tab));
+            if (currentDeckViewMode === 'card') {
+                openDeckModal('due', currentDeckFilterGroup);
+            } else {
+                renderDeckListView();
+            }
+        });
+    });
+
+    // View mode switching (Card Flip vs Card List)
+    if (btnViewCard) btnViewCard.addEventListener('click', () => switchDeckView('card'));
+    if (btnViewList) btnViewList.addEventListener('click', () => switchDeckView('list'));
+
+    // Card List Search
+    if (deckSearchInput) {
+        deckSearchInput.addEventListener('input', () => renderDeckListView());
+    }
+    if (deckSearchClearBtn) {
+        deckSearchClearBtn.addEventListener('click', () => {
+            if (deckSearchInput) {
+                deckSearchInput.value = '';
+                deckSearchInput.focus();
+            }
+            renderDeckListView();
         });
     }
 
@@ -2767,7 +3058,8 @@ function initStudyWorkbench() {
     function handleExportDeck() {
         if (!deckManager) return;
         try {
-            deckManager.downloadAnkiFile('FrenchStudio_AnkiDeck.tsv');
+            const groupLabel = currentDeckFilterGroup === 'all' ? 'All' : (currentDeckFilterGroup === 'word' ? 'Words' : 'Phrases');
+            deckManager.downloadAnkiFile(`FrenchStudio_Deck_${groupLabel}.tsv`, currentDeckFilterGroup);
         } catch (err) {
             alert(err.message);
         }
@@ -2801,6 +3093,8 @@ function initStudyWorkbench() {
             if (deckManager.hasCard(currentPopoverCard.token)) {
                 deckManager.removeCard(currentPopoverCard.token);
             } else {
+                const tok = (currentPopoverCard.token || '').trim();
+                const isPhrase = tok.includes(' ') || tok.includes('...') || (currentPopoverCard.pos && (currentPopoverCard.pos.includes('phrase') || currentPopoverCard.pos.includes('词组') || currentPopoverCard.pos.includes('搭配')));
                 deckManager.addCard({
                     token: currentPopoverCard.token,
                     lemma: currentPopoverCard.lemma,
@@ -2810,6 +3104,8 @@ function initStudyWorkbench() {
                     explanation_en: currentPopoverCard.explanation_en,
                     sentence: currentPopoverCard.sentence || '',
                     sentence_cn: currentPopoverCard.sentence_cn || '',
+                    group: isPhrase ? 'phrase' : 'word',
+                    hook: currentPopoverCard.hook || ''
                 });
             }
             updatePopoverStarState();

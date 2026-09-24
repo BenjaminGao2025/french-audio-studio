@@ -2481,6 +2481,411 @@
         flex-direction: column;
         gap: 8px;
     }
+
+    .deck-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
+
+/* =========================================================================
+   Flashcard Modal Deck Toolbar & Group Tabs (Word Group vs Phrase Group)
+   ========================================================================= */
+.deck-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.deck-group-tabs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface-muted);
+    padding: 3px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+}
+
+.deck-group-tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--muted-dark);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.deck-group-tab:hover {
+    color: var(--ink);
+}
+
+.deck-group-tab.active {
+    background: #ffffff;
+    color: var(--primary);
+    font-weight: 700;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.tab-count-pill {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-size: 11px;
+    background: rgba(0, 0, 0, 0.06);
+    color: inherit;
+}
+
+.deck-group-tab.active .tab-count-pill {
+    background: var(--primary-soft);
+    color: var(--primary);
+}
+
+.deck-view-switcher {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--surface-muted);
+    padding: 3px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+}
+
+.deck-view-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.deck-view-btn:hover {
+    color: var(--ink);
+}
+
+.deck-view-btn.active {
+    background: #ffffff;
+    color: var(--ink);
+    font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.deck-view-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* Card Face Group Badge */
+.badge-card-group {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 7px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    margin-right: 6px;
+}
+
+.badge-card-group.word {
+    background: #eef2ff;
+    color: #4f46e5;
+}
+
+.badge-card-group.phrase {
+    background: #fdf2f8;
+    color: #be185d;
+}
+
+/* Card Back Hook Box */
+.card-back-hook-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: #fefce8;
+    border: 1px solid #fef08a;
+    border-left: 3px solid #f59e0b;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #92400e;
+    margin-top: 8px;
+}
+
+/* Card List View */
+.deck-list-view {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 380px;
+}
+
+.deck-list-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.deck-search-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    background: #ffffff;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 6px 12px;
+}
+
+.deck-search-box .search-icon {
+    width: 15px;
+    height: 15px;
+    color: var(--muted);
+}
+
+.deck-search-box input {
+    border: none;
+    outline: none;
+    background: transparent;
+    font-size: 13px;
+    width: 100%;
+    color: var(--ink);
+}
+
+.icon-btn-sm {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    padding: 2px;
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+}
+
+.icon-btn-sm:hover {
+    color: var(--ink);
+}
+
+.icon-btn-sm svg {
+    width: 14px;
+    height: 14px;
+}
+
+.deck-list-stats {
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+.deck-cards-scrollable {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 380px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.deck-list-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: #ffffff;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    gap: 12px;
+    transition: all 0.15s ease;
+}
+
+.deck-list-row:hover {
+    border-color: var(--primary);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.deck-row-left {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+}
+
+.deck-row-content {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex: 1;
+    min-width: 0;
+}
+
+.deck-row-title-line {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.deck-row-token {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--ink);
+}
+
+.deck-row-phonetic {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.deck-row-pos {
+    font-size: 11px;
+    background: #f1f5f9;
+    color: #475569;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-weight: 600;
+}
+
+.deck-row-exp {
+    font-size: 12.5px;
+    color: #475569;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.deck-row-exp-en {
+    color: #64748b;
+    font-size: 12px;
+}
+
+.deck-row-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.deck-row-due {
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+.deck-row-due.due-now {
+    background: #fef2f2;
+    color: #dc2626;
+    font-weight: 600;
+}
+
+.deck-row-due.due-future {
+    background: #f0fdf4;
+    color: #16a34a;
+}
+
+.deck-btn-speak,
+.deck-btn-delete {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    color: var(--muted);
+    transition: all 0.15s ease;
+}
+
+.deck-btn-speak:hover {
+    color: var(--primary);
+    border-color: var(--primary);
+    background: var(--primary-soft);
+}
+
+.deck-btn-delete:hover {
+    color: #dc2626;
+    border-color: #fca5a5;
+    background: #fef2f2;
+}
+
+.deck-btn-speak svg,
+.deck-btn-delete svg {
+    width: 13px;
+    height: 13px;
+}
+
+.deck-list-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+/* Grammar Card Star Save Button */
+.btn-grammar-star {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    height: 26px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--muted-dark);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.btn-grammar-star:hover {
+    border-color: #f59e0b;
+    color: #b45309;
+    background: #fffbeb;
+}
+
+.btn-grammar-star.active {
+    background: #fefce8;
+    border-color: #f59e0b;
+    color: #b45309;
+    font-weight: 600;
+}
+
+.btn-grammar-star svg {
+    width: 13px;
+    height: 13px;
+    color: #94a3b8;
+    transition: all 0.15s ease;
+}
+
+.btn-grammar-star:hover svg {
+    color: #f59e0b;
+}
+
+.btn-grammar-star.active svg {
+    color: #f59e0b;
+    fill: #f59e0b;
 }
 
 
