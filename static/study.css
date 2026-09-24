@@ -2082,6 +2082,144 @@
     margin-right: 5px;
 }
 
+/* Build-up Step Shadowing & Scoring */
+.btn-buildup-record {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 700;
+    border: 1px solid var(--danger);
+    background: var(--surface);
+    color: var(--danger);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.btn-buildup-record:hover {
+    background: var(--danger-soft);
+    transform: scale(1.04);
+}
+
+.btn-buildup-record.recording {
+    background: var(--danger);
+    color: #ffffff;
+    animation: recordPulse 1.4s infinite;
+}
+
+.btn-buildup-record svg {
+    width: 12px;
+    height: 12px;
+}
+
+.buildup-score-card {
+    margin-top: 10px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 10px 14px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+    animation: fadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.buildup-score-card[hidden] {
+    display: none !important;
+}
+
+.buildup-score-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+.buildup-score-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.score-number-pill.sm {
+    font-size: 12.5px;
+    padding: 2px 7px;
+    border-radius: 5px;
+    min-width: 32px;
+    text-align: center;
+}
+
+.score-rating-text.sm {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--ink);
+}
+
+.buildup-score-metrics {
+    font-size: 11.5px;
+    color: var(--muted);
+    margin-left: 2px;
+}
+
+.buildup-audio-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-mini-audio {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    font-size: 11.5px;
+    font-weight: 600;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--ink);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-mini-audio:hover:not(:disabled) {
+    background: var(--surface-muted);
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.btn-mini-audio.playing {
+    background: var(--primary-soft);
+    color: var(--primary);
+    border-color: var(--primary);
+    font-weight: 700;
+}
+
+.btn-mini-audio:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.btn-mini-audio svg {
+    width: 13px;
+    height: 13px;
+}
+
+.diff-result-box.sm {
+    font-size: 13.5px;
+    line-height: 1.7;
+    margin-top: 4px;
+    padding: 6px 10px;
+    background: #fafafa;
+    border-radius: 6px;
+    border: 1px solid #f1f5f9;
+}
+
 /* 4. 3-Column V2 Word Breakdown Table */
 .v2-breakdown-table th:first-child {
     width: 32%;

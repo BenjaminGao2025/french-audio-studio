@@ -502,6 +502,7 @@ function initStudyWorkbench() {
     // -------------------------------------------------------------------------
     let currentActiveAudio = null;
     let currentAudioCleanup = null;
+    let currentGlobalRecordingStopper = null;
 
     function stopAllAudio() {
         if (currentAudioCleanup) {
@@ -525,6 +526,18 @@ function initStudyWorkbench() {
             try {
                 window.speechSynthesis.cancel();
             } catch (e) {}
+        }
+    }
+
+    function stopAnyOngoingRecording() {
+        if (currentGlobalRecordingStopper) {
+            const stopper = currentGlobalRecordingStopper;
+            currentGlobalRecordingStopper = null;
+            try {
+                stopper();
+            } catch (e) {
+                console.warn('Error stopping current recording:', e);
+            }
         }
     }
 
@@ -1145,6 +1158,10 @@ function initStudyWorkbench() {
                                         </button>
                                         <span class="buildup-fr-text">${escapeHtml(step.fr)}</span>
                                         ${isFinal ? `<span class="final-step-tag">原句</span>` : ''}
+                                        <button class="btn-buildup-record" type="button" title="录音跟读此递进步骤并智能打分" data-sentence="${escapeHtml(step.fr)}">
+                                            <i data-lucide="mic"></i>
+                                            <span class="record-btn-text">跟读打分</span>
+                                        </button>
                                     </div>
                                     <div class="buildup-en-text">${escapeHtml(step.en)}</div>
                                     ${step.new ? `
@@ -1152,6 +1169,30 @@ function initStudyWorkbench() {
                                             <span class="new-tag">New:</span> ${escapeHtml(step.new)}
                                         </div>
                                     ` : ''}
+                                    <div class="buildup-score-card" hidden>
+                                        <div class="buildup-score-bar">
+                                            <div class="buildup-score-left">
+                                                <span class="score-number-pill sm excellent">--</span>
+                                                <span class="score-rating-text sm">评测中...</span>
+                                                <span class="buildup-score-metrics">准确度: <strong class="metric-acc">--%</strong> | 完整度: <strong class="metric-comp">--%</strong></span>
+                                            </div>
+                                            <div class="buildup-audio-controls">
+                                                <button class="btn-mini-audio btn-play-model" type="button" title="官方范读" data-label="范读">
+                                                    <i data-lucide="volume-2"></i>
+                                                    <span>范读</span>
+                                                </button>
+                                                <button class="btn-mini-audio btn-play-user" type="button" title="回听我的录音" disabled>
+                                                    <i data-lucide="play"></i>
+                                                    <span>我的录音</span>
+                                                </button>
+                                                <button class="btn-mini-audio btn-retry" type="button" title="重新录音跟读">
+                                                    <i data-lucide="rotate-ccw"></i>
+                                                    <span>重练</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="diff-result-box sm"></div>
+                                    </div>
                                 </div>
                             </div>
                         `;
@@ -1532,237 +1573,288 @@ function initStudyWorkbench() {
             });
         });
 
-        // 4. Shadowing Recording & Scoring Logic
-        const recordBtn = card.querySelector('.btn-record');
-        const recordBtnText = recordBtn.querySelector('.record-btn-text');
-        const scoreCard = card.querySelector('.score-result-card');
-        const scorePill = card.querySelector('.score-number-pill');
-        const scoreRatingText = card.querySelector('.score-rating-text');
-        const metricAcc = card.querySelector('.metric-acc');
-        const metricComp = card.querySelector('.metric-comp');
-        const diffBox = card.querySelector('.diff-result-box');
-        const playModelBtn = card.querySelector('.btn-play-model');
-        const playUserBtn = card.querySelector('.btn-play-user');
-        const retryBtn = card.querySelector('.btn-retry');
+        // 4. Shadowing Controllers (Main sentence + Every buildup step!)
+        function bindShadowingController(scopeElement, sentenceText, transNote = '', isCompact = false) {
+            if (!scopeElement || !sentenceText) return;
 
-        let mediaRecorder = null;
-        let audioChunks = [];
-        let userAudioUrl = null;
-        let isRecording = false;
-        let recognition = null;
-        let recognitionTranscript = '';
+            const recordBtn = scopeElement.querySelector('.btn-record, .btn-buildup-record');
+            if (!recordBtn) return;
 
-        let isModelPlaying = false;
-        let isUserPlaying = false;
+            const recordBtnText = recordBtn.querySelector('.record-btn-text, .buildup-record-label');
+            const scoreCard = scopeElement.querySelector('.score-result-card, .buildup-score-card');
+            if (!scoreCard) return;
 
-        function resetModelBtn() {
-            isModelPlaying = false;
+            const scorePill = scoreCard.querySelector('.score-number-pill');
+            const scoreRatingText = scoreCard.querySelector('.score-rating-text');
+            const metricAcc = scoreCard.querySelector('.metric-acc');
+            const metricComp = scoreCard.querySelector('.metric-comp');
+            const diffBox = scoreCard.querySelector('.diff-result-box');
+            const playModelBtn = scoreCard.querySelector('.btn-play-model, .btn-buildup-play-model');
+            const playUserBtn = scoreCard.querySelector('.btn-play-user, .btn-buildup-play-user');
+            const retryBtn = scoreCard.querySelector('.btn-retry, .btn-buildup-retry');
+
+            let mediaRecorder = null;
+            let audioChunks = [];
+            let userAudioUrl = null;
+            let isRecording = false;
+            let recognition = null;
+            let recognitionTranscript = '';
+
+            let isModelPlaying = false;
+            let isUserPlaying = false;
+
+            const modelLabel = (playModelBtn && playModelBtn.dataset.label) || (isCompact ? '范读' : '官方范读');
+
+            function resetModelBtn() {
+                isModelPlaying = false;
+                if (playModelBtn) {
+                    playModelBtn.classList.remove('playing');
+                    playModelBtn.innerHTML = `<i data-lucide="volume-2"></i><span>${modelLabel}</span>`;
+                    refreshIcons();
+                }
+            }
+
+            function resetUserBtn() {
+                isUserPlaying = false;
+                if (playUserBtn) {
+                    playUserBtn.classList.remove('playing');
+                    playUserBtn.innerHTML = `<i data-lucide="play"></i><span>我的录音</span>`;
+                    refreshIcons();
+                }
+            }
+
             if (playModelBtn) {
-                playModelBtn.classList.remove('playing');
-                playModelBtn.innerHTML = `<i data-lucide="volume-2"></i><span>官方范读</span>`;
-                refreshIcons();
-            }
-        }
+                playModelBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (isModelPlaying) {
+                        stopAllAudio();
+                        return;
+                    }
 
-        function resetUserBtn() {
-            isUserPlaying = false;
+                    stopAllAudio();
+
+                    isModelPlaying = true;
+                    playModelBtn.classList.add('playing');
+                    playModelBtn.innerHTML = `<i data-lucide="square"></i><span>停止</span>`;
+                    refreshIcons();
+
+                    playFrenchSpeech(sentenceText, () => {
+                        resetModelBtn();
+                    });
+                });
+            }
+
             if (playUserBtn) {
-                playUserBtn.classList.remove('playing');
-                playUserBtn.innerHTML = `<i data-lucide="play"></i><span>我的录音</span>`;
+                playUserBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (!userAudioUrl) return;
+
+                    if (isUserPlaying) {
+                        stopAllAudio();
+                        return;
+                    }
+
+                    stopAllAudio();
+
+                    const userAudio = new Audio(userAudioUrl);
+                    currentActiveAudio = userAudio;
+
+                    isUserPlaying = true;
+                    playUserBtn.classList.add('playing');
+                    playUserBtn.innerHTML = `<i data-lucide="square"></i><span>停止</span>`;
+                    refreshIcons();
+
+                    let finished = false;
+                    const handleUserAudioEnd = () => {
+                        if (finished) return;
+                        finished = true;
+                        if (currentActiveAudio === userAudio) {
+                            currentActiveAudio = null;
+                        }
+                        if (currentAudioCleanup === userCleanup) {
+                            currentAudioCleanup = null;
+                        }
+                        resetUserBtn();
+                    };
+
+                    const userCleanup = () => {
+                        if (!finished) {
+                            finished = true;
+                            resetUserBtn();
+                        }
+                    };
+                    currentAudioCleanup = userCleanup;
+
+                    userAudio.addEventListener('ended', handleUserAudioEnd);
+                    userAudio.addEventListener('error', handleUserAudioEnd);
+
+                    userAudio.play().catch(err => {
+                        console.warn('User audio play interrupted or failed:', err);
+                        handleUserAudioEnd();
+                    });
+                });
+            }
+
+            if (diffBox) {
+                diffBox.addEventListener('click', (e) => {
+                    const diffWord = e.target.closest('.diff-word');
+                    if (!diffWord) return;
+                    e.stopPropagation();
+                    const word = diffWord.dataset.word || diffWord.textContent.trim();
+                    showPopoverForElement(word, diffWord, {
+                        sentence: sentenceText,
+                        sentence_cn: transNote
+                    });
+                });
+            }
+
+            if (retryBtn) {
+                retryBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    stopAllAudio();
+                    scoreCard.hidden = true;
+                    recordBtn.click();
+                });
+            }
+
+            recordBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (isRecording) {
+                    stopRecording();
+                } else {
+                    await startRecording();
+                }
+            });
+
+            async function startRecording() {
+                try {
+                    stopAllAudio();
+                    stopAnyOngoingRecording();
+
+                    audioChunks = [];
+                    recognitionTranscript = '';
+
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    mediaRecorder.ondataavailable = (e) => {
+                        if (e.data.size > 0) audioChunks.push(e.data);
+                    };
+                    mediaRecorder.onstop = () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        if (userAudioUrl) URL.revokeObjectURL(userAudioUrl);
+                        userAudioUrl = URL.createObjectURL(audioBlob);
+                        if (playUserBtn) playUserBtn.disabled = false;
+                        resetUserBtn();
+                        stream.getTracks().forEach(track => track.stop());
+                    };
+                    mediaRecorder.start();
+
+                    if (SpeechRecognition) {
+                        recognition = new SpeechRecognition();
+                        recognition.lang = 'fr-FR';
+                        recognition.continuous = true;
+                        recognition.interimResults = true;
+
+                        recognition.onresult = (event) => {
+                            let finalTrans = '';
+                            for (let i = 0; i < event.results.length; ++i) {
+                                finalTrans += event.results[i][0].transcript + ' ';
+                            }
+                            recognitionTranscript = finalTrans.trim();
+                        };
+
+                        recognition.onerror = (event) => {
+                            console.warn('SpeechRecognition error:', event.error);
+                        };
+
+                        recognition.start();
+                    }
+
+                    isRecording = true;
+                    currentGlobalRecordingStopper = stopRecording;
+                    recordBtn.classList.add('recording');
+                    if (recordBtnText) {
+                        recordBtnText.textContent = isCompact ? '⏹ 点击评测' : '⏹ 朗读完成，点击评测';
+                    }
+                } catch (err) {
+                    alert('无法调用麦克风：' + err.message);
+                }
+            }
+
+            function stopRecording() {
+                if (!isRecording) return;
+                isRecording = false;
+                if (currentGlobalRecordingStopper === stopRecording) {
+                    currentGlobalRecordingStopper = null;
+                }
+                recordBtn.classList.remove('recording');
+                if (recordBtnText) {
+                    recordBtnText.textContent = '🎙 再次跟读';
+                }
+
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                }
+
+                if (recognition) {
+                    try {
+                        recognition.stop();
+                    } catch (e) {}
+                }
+
+                setTimeout(() => {
+                    evaluateAndDisplay();
+                }, 500);
+            }
+
+            function evaluateAndDisplay() {
+                const evaluation = evaluateFrenchPronunciation(sentenceText, recognitionTranscript);
+
+                if (scorePill) {
+                    scorePill.textContent = `${evaluation.overallScore}`;
+                    scorePill.className = `score-number-pill ${isCompact ? 'sm' : ''} ${evaluation.ratingClass}`;
+                }
+                if (scoreRatingText) scoreRatingText.textContent = evaluation.ratingText;
+                if (metricAcc) metricAcc.textContent = `${evaluation.accuracy}%`;
+                if (metricComp) metricComp.textContent = `${evaluation.completeness}%`;
+
+                if (diffBox) {
+                    diffBox.innerHTML = '';
+                    if (evaluation.wordResults.length > 0) {
+                        evaluation.wordResults.forEach(item => {
+                            const wordSpan = document.createElement('span');
+                            wordSpan.className = `diff-word ${item.status}`;
+                            wordSpan.textContent = item.word;
+                            wordSpan.dataset.word = item.word;
+                            wordSpan.title = `相似度得分: ${item.score} / 100 · 点击查看释义与单读发音`;
+                            diffBox.appendChild(wordSpan);
+                            diffBox.appendChild(document.createTextNode(' '));
+                        });
+                    } else {
+                        diffBox.textContent = recognitionTranscript || '未检测到清晰发音，请重试。';
+                    }
+                }
+
+                scoreCard.hidden = false;
                 refreshIcons();
             }
         }
 
-        playModelBtn.addEventListener('click', () => {
-            if (isModelPlaying) {
-                stopAllAudio();
-                return;
-            }
-
-            stopAllAudio();
-
-            isModelPlaying = true;
-            playModelBtn.classList.add('playing');
-            playModelBtn.innerHTML = `<i data-lucide="square"></i><span>停止范读</span>`;
-            refreshIcons();
-
-            playFrenchSpeech(targetSentence, () => {
-                resetModelBtn();
-            });
-        });
-
-        playUserBtn.addEventListener('click', () => {
-            if (!userAudioUrl) return;
-
-            if (isUserPlaying) {
-                stopAllAudio();
-                return;
-            }
-
-            stopAllAudio();
-
-            const userAudio = new Audio(userAudioUrl);
-            currentActiveAudio = userAudio;
-
-            isUserPlaying = true;
-            playUserBtn.classList.add('playing');
-            playUserBtn.innerHTML = `<i data-lucide="square"></i><span>停止播放</span>`;
-            refreshIcons();
-
-            let finished = false;
-            const handleUserAudioEnd = () => {
-                if (finished) return;
-                finished = true;
-                if (currentActiveAudio === userAudio) {
-                    currentActiveAudio = null;
-                }
-                if (currentAudioCleanup === userCleanup) {
-                    currentAudioCleanup = null;
-                }
-                resetUserBtn();
-            };
-
-            const userCleanup = () => {
-                if (!finished) {
-                    finished = true;
-                    resetUserBtn();
-                }
-            };
-            currentAudioCleanup = userCleanup;
-
-            userAudio.addEventListener('ended', handleUserAudioEnd);
-            userAudio.addEventListener('error', handleUserAudioEnd);
-
-            userAudio.play().catch(e => {
-                console.warn('User audio play interrupted or failed:', e);
-                handleUserAudioEnd();
-            });
-        });
-
-        if (diffBox) {
-            diffBox.addEventListener('click', (e) => {
-                const diffWord = e.target.closest('.diff-word');
-                if (!diffWord) return;
-                e.stopPropagation();
-                const word = diffWord.dataset.word || diffWord.textContent.trim();
-                showPopoverForElement(word, diffWord, {
-                    sentence: targetSentence,
-                    sentence_cn: transCn
-                });
-            });
+        // Attach controller to the main sentence shadowing panel (bottom of card)
+        const mainShadowingPanel = card.querySelector('.shadowing-panel');
+        if (mainShadowingPanel) {
+            bindShadowingController(mainShadowingPanel, targetSentence, transCn, false);
         }
 
-        retryBtn.addEventListener('click', () => {
-            stopAllAudio();
-            scoreCard.hidden = true;
-            recordBtn.click();
-        });
-
-        recordBtn.addEventListener('click', async () => {
-            if (isRecording) {
-                stopRecording();
-            } else {
-                await startRecording();
+        // Attach controller to EVERY step in Sentence Build-up (一层一层搭句子逐句跟读打分!)
+        const stepRows = card.querySelectorAll('.buildup-step-row');
+        stepRows.forEach(stepRow => {
+            const stepRecordBtn = stepRow.querySelector('.btn-buildup-record');
+            const stepSentence = stepRecordBtn ? stepRecordBtn.dataset.sentence : null;
+            if (stepSentence) {
+                bindShadowingController(stepRow, stepSentence, transCn, true);
             }
         });
-
-        async function startRecording() {
-            try {
-                stopAllAudio();
-                audioChunks = [];
-                recognitionTranscript = '';
-
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorder = new MediaRecorder(stream);
-                mediaRecorder.ondataavailable = (e) => {
-                    if (e.data.size > 0) audioChunks.push(e.data);
-                };
-                mediaRecorder.onstop = () => {
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                    if (userAudioUrl) URL.revokeObjectURL(userAudioUrl);
-                    userAudioUrl = URL.createObjectURL(audioBlob);
-                    playUserBtn.disabled = false;
-                    resetUserBtn();
-                    stream.getTracks().forEach(track => track.stop());
-                };
-                mediaRecorder.start();
-
-                if (SpeechRecognition) {
-                    recognition = new SpeechRecognition();
-                    recognition.lang = 'fr-FR';
-                    recognition.continuous = true;
-                    recognition.interimResults = true;
-
-                    recognition.onresult = (event) => {
-                        let finalTrans = '';
-                        for (let i = 0; i < event.results.length; ++i) {
-                            finalTrans += event.results[i][0].transcript + ' ';
-                        }
-                        recognitionTranscript = finalTrans.trim();
-                    };
-
-                    recognition.onerror = (event) => {
-                        console.warn('SpeechRecognition error:', event.error);
-                    };
-
-                    recognition.start();
-                }
-
-                isRecording = true;
-                recordBtn.classList.add('recording');
-                recordBtnText.textContent = '⏹ 朗读完成，点击评测';
-            } catch (err) {
-                alert('无法调用麦克风：' + err.message);
-            }
-        }
-
-        function stopRecording() {
-            if (!isRecording) return;
-            isRecording = false;
-            recordBtn.classList.remove('recording');
-            recordBtnText.textContent = '🎙 再次跟读';
-
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
-            }
-
-            if (recognition) {
-                try {
-                    recognition.stop();
-                } catch (e) {}
-            }
-
-            setTimeout(() => {
-                evaluateAndDisplay();
-            }, 500);
-        }
-
-        function evaluateAndDisplay() {
-            const evaluation = evaluateFrenchPronunciation(targetSentence, recognitionTranscript);
-
-            scorePill.textContent = `${evaluation.overallScore}`;
-            scorePill.className = `score-number-pill ${evaluation.ratingClass}`;
-            scoreRatingText.textContent = evaluation.ratingText;
-            metricAcc.textContent = `${evaluation.accuracy}%`;
-            metricComp.textContent = `${evaluation.completeness}%`;
-
-            diffBox.innerHTML = '';
-            if (evaluation.wordResults.length > 0) {
-                evaluation.wordResults.forEach(item => {
-                    const wordSpan = document.createElement('span');
-                    wordSpan.className = `diff-word ${item.status}`;
-                    wordSpan.textContent = item.word;
-                    wordSpan.dataset.word = item.word;
-                    wordSpan.title = `相似度得分: ${item.score} / 100 · 点击查看释义与单读发音`;
-                    diffBox.appendChild(wordSpan);
-                    diffBox.appendChild(document.createTextNode(' '));
-                });
-            } else {
-                diffBox.textContent = recognitionTranscript || '未检测到清晰发音，请重试。';
-            }
-
-            scoreCard.hidden = false;
-        }
     }
 
     function escapeHtml(str) {
