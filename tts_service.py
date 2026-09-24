@@ -751,80 +751,88 @@ def format_friendly_phonetic(raw: str) -> str:
 
 def _analyze_payload(request: AnalyzeRequest) -> dict:
     prompt = (
-        "You are an elite French pedagogical lexicographer and teacher dedicated to A1 beginners who know almost zero French.\n"
-        "Analyze the French text and output a valid JSON object strictly matching the schema below.\n\n"
-        "STRICT PEDAGOGICAL RULES FOR A1 BEGINNERS:\n"
-        "1. FINE-GRAINED WORD-LEVEL ANALYSIS (NO CLAUSES OR LONG PHRASES):\n"
-        "   - The user is an A1 beginner. They DO NOT understand long multi-word clauses.\n"
-        "   - NEVER bundle verb phrases, clauses, or verb+noun+adjective combinations into a single entry!\n"
-        "   - BAD: 'ayant des objectifs différents' (Too complex! The beginner cannot tell what 'ayant' or 'objectifs' means).\n"
-        "   - MUST BREAK DOWN INDIVIDUALLY:\n"
-        "     * 'ayant': explain that this is the present participle (participe présent) of verb 'avoir' (to have / 具有，拥有).\n"
-        "     * 'objectifs': noun (objectives, goals / 目标，目的).\n"
-        "     * 'différents': adjective (different, various / 不同的).\n"
-        "2. SHORT INSEPARABLE COLLOCATIONS (2-3 words only):\n"
-        "   - Only group very short, fixed prepositional links or idioms:\n"
-        "     * 'portant sur' (loc. verb., meaning 'dealing with, focusing on / 涉及，关于')\n"
-        "     * 'de la vie quotidienne' (loc. adj., meaning 'of daily life / 日常生活的')\n"
-        "     * 'de temps en temps' (loc. adv., meaning 'from time to time / 有时')\n"
-        "   - Never include the following content nouns or verbs in these phrases (e.g. 'documents' must be its own entry).\n"
-        "3. VERBS & GRAMMAR FOR A1 LEARNERS:\n"
-        "   - For every conjugated verb or participle (e.g. 'comprend', 'ayant', 'va', 'suis'), ALWAYS provide the infinitive base lemma (comprendre, avoir, aller, être) and explain the tense, person, and form clearly in Chinese!\n"
-        "4. EXCLUDE GRAMMATICAL FLUFF & NOISE:\n"
-        "   - NEVER create entries for punctuation (., ,, !, ?).\n"
-        "   - NEVER create entries for numbers (40, 1).\n"
-        "   - NEVER create entries for isolated elementary articles/conjunctions standing alone ('et', 'des', 'la').\n"
-        "5. Output JSON object ONLY matching the schema.\n\n"
-        "SCHEMA:\n"
+        "You are explaining a French sentence to an A1–A2 learner. Their native language is Chinese and their English is basic.\n\n"
+        "Language rules:\n"
+        "- Write in simple English: short sentences, common words (about A2 level).\n"
+        '- Avoid grammar jargon. If you must use a term, explain it in plain words. Say "a describing word (adjective)", not "indefinite adjective". Do not use words like "elided", "auxiliary", "particle".\n'
+        '- Always explain WHY a word looks the way it does. Example: "autorisée ends in -e because dispense is a feminine word."\n\n'
+        "Accuracy rules:\n"
+        "- The word table must cover every word in the sentence, in order, including small words like par, les, de, à.\n"
+        '- Never list a word that is not in the sentence. Example: if the sentence uses ne … aucune, do not list "ne … pas".\n'
+        "- Every French sentence in the build-up must be correct French.\n\n"
+        "English bridge:\n"
+        "- If a French word looks like an English word with the same meaning, show it (autorisée → authorized).\n"
+        '- If it looks like an English word but means something different, warn clearly: "False friend! actuellement = currently, not actually."\n'
+        "- If there is no English look-alike, leave it empty. Do not force one.\n\n"
+        "Word-by-word alignment:\n"
+        "- Top row French, bottom row English, word by word, keeping the French order.\n"
+        "- Then one short sentence on where French and English order differ. If they are the same, say so.\n\n"
+        "Build-up:\n"
+        "- Start from the shortest correct core sentence (usually subject + verb).\n"
+        "- Add ONE new thing per step. Each step is a full, correct sentence.\n"
+        "- The last step must be exactly the original sentence.\n"
+        "- 3–6 steps (fewer if the sentence is short).\n"
+        '- Each step has: French, English, and "New:" (what was added, in simple English).\n\n'
+        "Grammar points:\n"
+        "- 1–3 points, the most useful ones for this sentence.\n"
+        "- Each has: a short title, a simple explanation, and a memory hook (word history, a comparison with English or Chinese, or a simple picture).\n\n"
+        "Pronunciation tips:\n"
+        "- Only the tricky parts: silent letters (e.g. -ent at the end of verbs), liaison, nasal sounds.\n\n"
+        "Output JSON format strictly matching this schema:\n"
         "{\n"
         '  "sentences": [\n'
-        '    {\n'
-        '      "original": "Je me suis rendu compte de son absence au fur et à mesure que le temps passait.",\n'
-        '      "translation_en": "I realized his absence gradually as time passed.",\n'
-        '      "translation_cn": "随着时间的流逝，我逐渐意识到了他的缺席。",\n'
-        '      "tokens": [\n'
-        '        {\n'
-        '          "token": "se rendre compte de",\n'
-        '          "lemma": "se rendre compte de",\n'
-        '          "pos": "loc. verb.",\n'
-        '          "phonetic": "/sə ʁɑ̃dʁ kɔ̃t də/",\n'
-        '          "explanation_en": "to realize, to become aware of",\n'
-        '          "explanation_cn": "意识到，发觉（动词短语）"\n'
-        '        },\n'
-        '        {\n'
-        '          "token": "absence",\n'
-        '          "lemma": "absence",\n'
-        '          "pos": "n.f.",\n'
-        '          "phonetic": "/ap.sɑ̃s/",\n'
-        '          "explanation_en": "absence, non-attendance",\n'
-        '          "explanation_cn": "不在，缺席（名词）"\n'
-        '        },\n'
-        '        {\n'
-        '          "token": "au fur et à mesure",\n'
-        '          "lemma": "au fur et à mesure",\n'
-        '          "pos": "loc. adv.",\n'
-        '          "phonetic": "/o fyʁ e a mə.zyʁ/",\n'
-        '          "explanation_en": "gradually, as time goes on",\n'
-        '          "explanation_cn": "逐渐地，随着……的进行（固定副词短语）"\n'
-        '        },\n'
-        '        {\n'
-        '          "token": "passait",\n'
-        '          "lemma": "passer",\n'
-        '          "pos": "v.",\n'
-        '          "phonetic": "/pa.sɛ/",\n'
-        '          "explanation_en": "passed, was passing (imparfait tense of passer)",\n'
-        '          "explanation_cn": "流逝，过去（动词 passer 未完成过去时）"\n'
-        '        }\n'
-        '      ]\n'
-        '    }\n'
-        '  ]\n'
-        '}'
+        "    {\n"
+        '      "schemaVersion": 2,\n'
+        '      "sentence": "Aucune dispense n\'est autorisée par les autorités canadiennes.",\n'
+        '      "translation_en": "No exemption is authorized by the Canadian authorities.",\n'
+        '      "translation_zh": "加拿大当局不允许任何豁免。",\n'
+        '      "alignment": [\n'
+        '        {"fr": "Aucune", "en": "No"},\n'
+        '        {"fr": "dispense", "en": "exemption"},\n'
+        '        {"fr": "n\'est", "en": "is"},\n'
+        '        {"fr": "autorisée", "en": "authorized"},\n'
+        '        {"fr": "par", "en": "by"},\n'
+        '        {"fr": "les autorités", "en": "the authorities"},\n'
+        '        {"fr": "canadiennes", "en": "Canadian"}\n'
+        "      ],\n"
+        '      "order_note": "Almost the same order as English. Only difference: French puts canadiennes after the noun. English says Canadian authorities.",\n'
+        '      "build_up": [\n'
+        '        {"fr": "Les autorités autorisent.", "en": "The authorities authorize.", "new": "Basic sentence: who + does what."},\n'
+        '        {"fr": "Les autorités canadiennes autorisent.", "en": "The Canadian authorities authorize.", "new": "canadiennes = Canadian. In French it goes after the noun."},\n'
+        '        {"fr": "Les autorités canadiennes n\'autorisent pas la dispense.", "en": "The Canadian authorities do not authorize the exemption.", "new": "ne … pas = not. It wraps around the verb."},\n'
+        '        {"fr": "Les autorités canadiennes n\'autorisent aucune dispense.", "en": "The Canadian authorities authorize no exemption.", "new": "pas changes to aucune = no / not any."},\n'
+        '        {"fr": "Aucune dispense n\'est autorisée par les autorités canadiennes.", "en": "No exemption is authorized by the Canadian authorities.", "new": "Passive, just like English: is authorized by = est autorisée par."}\n'
+        "      ],\n"
+        '      "words": [\n'
+        '        {"fr": "aucune", "ipa": "okyn", "lemma": "aucun", "type": "describing word", "meaning": "no, not any", "why": "Ends in -e because dispense is a feminine word. Used with ne, but without pas.", "english_link": "", "false_friend": false},\n'
+        '        {"fr": "dispense", "ipa": "dispɑ̃s", "lemma": "dispense", "type": "naming word", "meaning": "exemption", "why": "Feminine noun.", "english_link": "dispensation", "false_friend": false},\n'
+        '        {"fr": "n\'est", "ipa": "nɛ", "lemma": "être", "type": "action word form", "meaning": "is (negative)", "why": "ne becomes n\' before a vowel. Combined with aucune.", "english_link": "", "false_friend": false},\n'
+        '        {"fr": "autorisée", "ipa": "otɔʁize", "lemma": "autoriser", "type": "action word form", "meaning": "authorized", "why": "Ends in -e because dispense is a feminine word.", "english_link": "authorized", "false_friend": false},\n'
+        '        {"fr": "par", "ipa": "paʁ", "lemma": "par", "type": "small linking word", "meaning": "by", "why": "Shows who does the action.", "english_link": "", "false_friend": false},\n'
+        '        {"fr": "les", "ipa": "le", "lemma": "le", "type": "small pointer word", "meaning": "the (plural)", "why": "Points to more than one authority.", "english_link": "", "false_friend": false},\n'
+        '        {"fr": "autorités", "ipa": "otɔʁite", "lemma": "autorité", "type": "naming word", "meaning": "authorities", "why": "Ends in -s because it is plural.", "english_link": "authorities", "false_friend": false},\n'
+        '        {"fr": "canadiennes", "ipa": "kanadjɛn", "lemma": "canadien", "type": "describing word", "meaning": "Canadian (plural)", "why": "Ends in -nes because autorités is feminine plural.", "english_link": "Canadian", "false_friend": false}\n'
+        "      ],\n"
+        '      "grammar_points": [\n'
+        '        {"title": "aucune … ne = no / not any (no pas!)", "explanation": "aucune already means no. Adding pas would say no twice.", "hook": "Aucun problème! = No problem! Same aucun."},\n'
+        '        {"title": "Passive: est autorisée par = is authorized by", "explanation": "être + verb form + par works like English is + verb form + by.", "hook": "Same word order as English."},\n'
+        '        {"title": "Describing words go after the noun", "explanation": "French names the thing first, then says what kind: les autorités canadiennes.", "hook": "Exceptions are short common words: beau, jeune, bon, grand, petit…"}\n'
+        "      ],\n"
+        '      "pronunciation_tips": [\n'
+        '        "les autorités: link the s → lé-zo-to-ri-té",\n'
+        '        "autorisée: s between two vowels sounds like z",\n'
+        '        "canadiennes: the ending -nes sounds like n"\n'
+        "      ]\n"
+        "    }\n"
+        "  ]\n"
+        "}\n"
+        "NOTE: The words array must cover every single word in the sentence in sequential order, including small words (articles, prepositions, etc.)."
     )
     return {
         "model": _map_upstream_model(request.model),
         "messages": [
             {"role": "system", "content": prompt},
-            {"role": "user", "content": f"Analyze this French text for an A1 beginner:\n\n{request.text}"},
+            {"role": "user", "content": f"Explain this French text for an A1–A2 learner in valid JSON strictly following the schema:\n\n{request.text}"},
         ],
         "response_format": {"type": "json_object"},
         "stream": False,
@@ -874,38 +882,131 @@ def _parse_analysis_json(raw_text: str, fallback_text: str) -> dict:
     elif isinstance(parsed_data, dict):
         if "sentences" in parsed_data and isinstance(parsed_data["sentences"], list):
             sentences_raw = parsed_data["sentences"]
-        elif "original" in parsed_data:
+        elif "sentence" in parsed_data or "original" in parsed_data or "alignment" in parsed_data or "words" in parsed_data:
             sentences_raw = [parsed_data]
 
     if sentences_raw:
         valid_sentences = []
         for s in sentences_raw:
-            if isinstance(s, dict) and "original" in s:
+            if not isinstance(s, dict):
+                continue
+            is_v2 = (
+                s.get("schemaVersion") == 2
+                or "words" in s
+                or "build_up" in s
+                or "alignment" in s
+            )
+            sentence_text = str(s.get("sentence") or s.get("original") or "").strip()
+            if not sentence_text:
+                continue
+
+            if is_v2:
+                raw_words = s.get("words", [])
+                clean_words = []
+                for w in raw_words:
+                    if isinstance(w, dict):
+                        fr = str(w.get("fr") or w.get("token") or "").strip()
+                        if fr:
+                            clean_words.append({
+                                "fr": fr,
+                                "ipa": format_friendly_phonetic(str(w.get("ipa") or w.get("phonetic") or "")),
+                                "lemma": str(w.get("lemma") or fr),
+                                "type": str(w.get("type") or w.get("pos") or ""),
+                                "meaning": str(w.get("meaning") or w.get("explanation_en") or ""),
+                                "why": str(w.get("why") or ""),
+                                "english_link": str(w.get("english_link") or ""),
+                                "false_friend": bool(w.get("false_friend", False)),
+                            })
+
+                raw_alignment = s.get("alignment", [])
+                clean_alignment = []
+                for a in raw_alignment:
+                    if isinstance(a, dict):
+                        fr = str(a.get("fr", "")).strip()
+                        en = str(a.get("en", "")).strip()
+                        if fr or en:
+                            clean_alignment.append({"fr": fr, "en": en})
+
+                raw_buildup = s.get("build_up", [])
+                clean_buildup = []
+                for b in raw_buildup:
+                    if isinstance(b, dict):
+                        fr = str(b.get("fr", "")).strip()
+                        en = str(b.get("en", "")).strip()
+                        new_note = str(b.get("new", "")).strip()
+                        if fr:
+                            clean_buildup.append({"fr": fr, "en": en, "new": new_note})
+
+                raw_grammar = s.get("grammar_points", [])
+                clean_grammar = []
+                for g in raw_grammar:
+                    if isinstance(g, dict):
+                        title = str(g.get("title", "")).strip()
+                        exp = str(g.get("explanation", "")).strip()
+                        hook = str(g.get("hook", "")).strip()
+                        if title or exp:
+                            clean_grammar.append({"title": title, "explanation": exp, "hook": hook})
+
+                raw_tips = s.get("pronunciation_tips", [])
+                clean_tips = [str(tip).strip() for tip in raw_tips if str(tip).strip()]
+
+                trans_en = str(s.get("translation_en") or "")
+                trans_zh = str(s.get("translation_zh") or s.get("translation_cn") or "")
+
+                # Tokens fallback for popover & legacy export
+                legacy_tokens = [
+                    {
+                        "token": w["fr"],
+                        "lemma": w["lemma"],
+                        "pos": w["type"],
+                        "phonetic": w["ipa"],
+                        "explanation_en": f"{w['meaning']}. {w['why']}".strip(". "),
+                        "explanation_cn": "",
+                    }
+                    for w in clean_words
+                ]
+
+                valid_sentences.append({
+                    "schemaVersion": 2,
+                    "sentence": sentence_text,
+                    "original": sentence_text,
+                    "translation_en": trans_en,
+                    "translation_zh": trans_zh,
+                    "translation_cn": trans_zh,
+                    "alignment": clean_alignment,
+                    "order_note": str(s.get("order_note", "")),
+                    "build_up": clean_buildup,
+                    "words": clean_words,
+                    "tokens": legacy_tokens,
+                    "grammar_points": clean_grammar,
+                    "pronunciation_tips": clean_tips,
+                })
+            else:
+                # Legacy V1
                 raw_tokens = s.get("tokens", [])
                 clean_tokens = []
                 for tok in raw_tokens:
                     if isinstance(tok, dict) and "token" in tok:
                         t_str = str(tok.get("token", "")).strip()
                         if t_str:
-                            clean_tokens.append(
-                                {
-                                    "token": t_str,
-                                    "lemma": str(tok.get("lemma", t_str)),
-                                    "pos": str(tok.get("pos", "")),
-                                    "phonetic": format_friendly_phonetic(str(tok.get("phonetic", ""))),
-                                    "explanation_en": str(tok.get("explanation_en", "")),
-                                    "explanation_cn": str(tok.get("explanation_cn", "")),
-                                }
-                            )
+                            clean_tokens.append({
+                                "token": t_str,
+                                "lemma": str(tok.get("lemma", t_str)),
+                                "pos": str(tok.get("pos", "")),
+                                "phonetic": format_friendly_phonetic(str(tok.get("phonetic", ""))),
+                                "explanation_en": str(tok.get("explanation_en", "")),
+                                "explanation_cn": str(tok.get("explanation_cn", "")),
+                            })
                 filtered_tokens = _filter_sentence_tokens(clean_tokens)
-                valid_sentences.append(
-                    {
-                        "original": str(s.get("original", "")),
-                        "translation_en": str(s.get("translation_en", "")),
-                        "translation_cn": str(s.get("translation_cn", "")),
-                        "tokens": filtered_tokens,
-                    }
-                )
+                valid_sentences.append({
+                    "schemaVersion": 1,
+                    "original": sentence_text,
+                    "sentence": sentence_text,
+                    "translation_en": str(s.get("translation_en", "")),
+                    "translation_cn": str(s.get("translation_cn", "")),
+                    "translation_zh": str(s.get("translation_cn", "")),
+                    "tokens": filtered_tokens,
+                })
         if valid_sentences:
             return {"sentences": valid_sentences}
 
@@ -921,26 +1022,44 @@ def _parse_analysis_json(raw_text: str, fallback_text: str) -> dict:
     fallback_sentences = []
     for sent in raw_sentences:
         raw_words = re.findall(r"[\w'’\-]+", sent)
-        fallback_tokens = [
+        fallback_words = [
             {
-                "token": word,
+                "fr": word,
+                "ipa": "",
                 "lemma": word.lower(),
-                "pos": "word",
-                "phonetic": "",
-                "explanation_en": "Vocabulary item in sentence context",
-                "explanation_cn": "语境词汇",
+                "type": "word",
+                "meaning": "Vocabulary item in sentence context",
+                "why": "Word from original sentence.",
+                "english_link": "",
+                "false_friend": False,
             }
             for word in raw_words
-            if not _is_unwanted_token(word)
         ]
-        fallback_sentences.append(
-            {
-                "original": sent,
-                "translation_en": "",
-                "translation_cn": "",
-                "tokens": fallback_tokens,
-            }
-        )
+        fallback_sentences.append({
+            "schemaVersion": 2,
+            "sentence": sent,
+            "original": sent,
+            "translation_en": "",
+            "translation_zh": "",
+            "translation_cn": "",
+            "alignment": [{"fr": w["fr"], "en": ""} for w in fallback_words],
+            "order_note": "",
+            "build_up": [{"fr": sent, "en": "", "new": "Original sentence"}],
+            "words": fallback_words,
+            "tokens": [
+                {
+                    "token": w["fr"],
+                    "lemma": w["lemma"],
+                    "pos": w["type"],
+                    "phonetic": "",
+                    "explanation_en": w["meaning"],
+                    "explanation_cn": "",
+                }
+                for w in fallback_words
+            ],
+            "grammar_points": [],
+            "pronunciation_tips": [],
+        })
     return {"sentences": fallback_sentences}
 
 

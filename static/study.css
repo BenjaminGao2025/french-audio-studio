@@ -1793,4 +1793,557 @@
     stroke: #d97706;
 }
 
+/* ==========================================================================
+   Schema V2: English-first Sentence Analysis & Breakdown Enhancements
+   ========================================================================== */
+
+/* 1. Sentence Hero V2 Badges & Translations */
+.v2-badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #e0f2fe;
+    color: #0369a1;
+    border: 1px solid #bae6fd;
+    letter-spacing: 0.02em;
+}
+
+.sentence-translations .translation-primary {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1.5;
+}
+
+.sentence-translations .translation-secondary {
+    font-size: 13.5px;
+    color: var(--muted);
+    font-weight: 450;
+    line-height: 1.4;
+    margin-top: 2px;
+}
+
+/* Common Section Container for Breakdown Cards */
+.study-card-section {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface);
+}
+
+.study-card-section:last-child {
+    border-bottom: none;
+}
+
+.study-card-section .section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--ink);
+    margin-bottom: 12px;
+}
+
+.study-card-section .section-title svg {
+    width: 16px;
+    height: 16px;
+    color: var(--primary);
+    flex-shrink: 0;
+}
+
+/* 2. Word-by-word Alignment Table */
+.alignment-section {
+    background: #fafbfa;
+}
+
+.alignment-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 6px;
+}
+
+.alignment-table {
+    width: auto;
+    min-width: 100%;
+    border-collapse: separate;
+    border-spacing: 8px 6px;
+    margin: 0;
+}
+
+.alignment-label {
+    width: 40px;
+    min-width: 40px;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--muted);
+    background: var(--surface-muted);
+    border-radius: 4px;
+    padding: 6px 8px;
+    border: 1px solid var(--line);
+    letter-spacing: 0.05em;
+}
+
+.alignment-row-fr td,
+.alignment-row-en td {
+    padding: 0;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.align-chip-fr {
+    display: inline-block;
+    width: 100%;
+    min-width: 65px;
+    padding: 6px 12px;
+    background: #ffffff;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    font-weight: 700;
+    color: var(--ink);
+    white-space: nowrap;
+    font-size: 14px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.align-chip-en {
+    display: inline-block;
+    width: 100%;
+    min-width: 65px;
+    padding: 5px 12px;
+    background: #f1f5f9;
+    border: 1px dashed #cbd5e1;
+    border-radius: 6px;
+    font-weight: 500;
+    color: #475569;
+    white-space: nowrap;
+    font-size: 13px;
+}
+
+.alignment-note {
+    margin-top: 12px;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #475569;
+    background: #ffffff;
+    padding: 10px 14px;
+    border-radius: 6px;
+    border-left: 3px solid var(--accent);
+    border: 1px solid var(--line);
+    border-left-width: 3px;
+    border-left-color: var(--accent);
+}
+
+.alignment-note svg {
+    width: 16px;
+    height: 16px;
+    color: var(--accent);
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+/* 3. Sentence Build-up (一层一层搭句子) */
+.buildup-section {
+    background: var(--surface);
+}
+
+.buildup-steps-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.buildup-step-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    background: #fcfdfc;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px 16px;
+    transition: all 0.15s ease;
+}
+
+.buildup-step-row:hover {
+    border-color: var(--primary-soft);
+    background: #ffffff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+
+.buildup-step-row.is-final-step {
+    background: #f0fdf4;
+    border-color: #86efac;
+}
+
+.buildup-step-badge {
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 800;
+    background: var(--surface-muted);
+    border: 1px solid var(--line);
+    color: var(--muted);
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-top: 2px;
+}
+
+.buildup-step-row.is-final-step .buildup-step-badge {
+    background: #dcfce7;
+    border-color: #86efac;
+    color: #166534;
+}
+
+.buildup-step-content {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    flex-grow: 1;
+}
+
+.buildup-fr-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.btn-buildup-speak {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--primary);
+    cursor: pointer;
+    padding: 0;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+
+.btn-buildup-speak:hover {
+    background: var(--primary-soft);
+    border-color: var(--primary);
+    transform: scale(1.1);
+}
+
+.btn-buildup-speak svg {
+    width: 14px;
+    height: 14px;
+}
+
+.buildup-fr-text {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1.4;
+}
+
+.final-step-tag {
+    font-size: 11px;
+    font-weight: 700;
+    background: #22c55e;
+    color: #ffffff;
+    padding: 1px 7px;
+    border-radius: 4px;
+    letter-spacing: 0.02em;
+}
+
+.buildup-en-text {
+    font-size: 13.5px;
+    color: var(--muted);
+    line-height: 1.4;
+}
+
+.buildup-new-note {
+    margin-top: 3px;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: #0369a1;
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    padding: 4px 10px;
+    border-radius: 5px;
+    display: inline-block;
+    width: fit-content;
+}
+
+.buildup-new-note .new-tag {
+    font-weight: 800;
+    color: #0284c7;
+    margin-right: 5px;
+}
+
+/* 4. 3-Column V2 Word Breakdown Table */
+.v2-breakdown-table th:first-child {
+    width: 32%;
+}
+
+.v2-breakdown-table th:nth-child(2) {
+    width: 44%;
+}
+
+.v2-breakdown-table th:nth-child(3) {
+    width: 24%;
+}
+
+.explanation-meaning-cell {
+    vertical-align: top;
+}
+
+.word-meaning {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    line-height: 1.45;
+}
+
+.word-why {
+    margin-top: 5px;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: #475569;
+    background: #f8fafc;
+    padding: 5px 9px;
+    border-radius: 4px;
+    border-left: 3px solid #94a3b8;
+}
+
+.word-why .why-label {
+    font-weight: 750;
+    color: #64748b;
+    margin-right: 5px;
+    text-transform: uppercase;
+    font-size: 11px;
+}
+
+.explanation-link-cell {
+    vertical-align: top;
+}
+
+.false-friend-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #b91c1c;
+    padding: 5px 9px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.false-friend-badge svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    color: #ef4444;
+}
+
+.english-link-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #f8fafc;
+    border: 1px solid var(--line);
+    color: var(--ink);
+    padding: 5px 9px;
+    border-radius: 6px;
+    font-size: 12.5px;
+    line-height: 1.35;
+}
+
+.english-link-pill svg {
+    width: 13px;
+    height: 13px;
+    color: var(--primary);
+    flex-shrink: 0;
+}
+
+/* 5. Grammar & Memory Hooks */
+.grammar-section {
+    background: #fafbfa;
+}
+
+.grammar-points-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.grammar-point-card {
+    background: #ffffff;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 14px 16px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.grammar-point-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.grammar-bullet {
+    font-size: 14px;
+}
+
+.grammar-point-title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink);
+}
+
+.grammar-point-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.grammar-point-exp {
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: #334155;
+}
+
+.grammar-point-hook {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: #92400e;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin-top: 4px;
+}
+
+.grammar-point-hook .hook-icon {
+    flex-shrink: 0;
+    font-size: 14px;
+}
+
+/* 6. Pronunciation Tips */
+.pronunciation-section {
+    background: #ffffff;
+}
+
+.pronunciation-tips-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.pronunciation-tip-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: #fafafa;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: #1e293b;
+}
+
+.pronunciation-tip-item svg {
+    width: 16px;
+    height: 16px;
+    color: var(--primary);
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+/* 7. History Modal Schema Badges & Re-analyze Button */
+.history-v2-badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: #e0f2fe;
+    color: #0369a1;
+    border: 1px solid #bae6fd;
+}
+
+.history-v1-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: var(--surface-muted);
+    color: var(--muted);
+    border: 1px solid var(--line);
+}
+
+.btn-reanalyze-v2 {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 5px 10px;
+    border-radius: 5px;
+    background: var(--primary-soft);
+    color: var(--primary);
+    border: 1px solid var(--primary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-reanalyze-v2:hover {
+    background: var(--primary);
+    color: #ffffff;
+}
+
+.btn-reanalyze-v2 svg {
+    width: 13px;
+    height: 13px;
+}
+
+/* Responsive Overrides */
+@media (max-width: 768px) {
+    .v2-breakdown-table th:first-child,
+    .v2-breakdown-table th:nth-child(2),
+    .v2-breakdown-table th:nth-child(3) {
+        width: auto;
+    }
+
+    .alignment-table {
+        border-spacing: 4px 4px;
+    }
+
+    .align-chip-fr,
+    .align-chip-en {
+        min-width: 50px;
+        padding: 4px 8px;
+        font-size: 12.5px;
+    }
+
+    .buildup-step-row {
+        flex-direction: column;
+        gap: 8px;
+    }
+}
+
+
 

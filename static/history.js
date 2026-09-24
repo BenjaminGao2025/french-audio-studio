@@ -320,9 +320,11 @@
             const now = new Date();
             const id = 'hist_study_' + Date.now();
             const totalTokens = sentences.reduce((acc, s) => acc + (s.tokens ? s.tokens.length : 0), 0);
+            const isV2 = Boolean(sentences[0] && (sentences[0].schemaVersion === 2 || sentences[0].words));
             const record = {
                 id,
                 type: 'study',
+                schemaVersion: isV2 ? 2 : 1,
                 timestamp: Date.now(),
                 timeFormatted: formatTime(now),
                 text: text.trim(),
@@ -457,8 +459,10 @@
                 if (item.taskLabel) metaTags += `<span class="history-stat-tag">${escapeHtml(item.taskLabel)}</span>`;
                 if (item.model) metaTags += `<span class="history-stat-tag model-tag">${escapeHtml(item.model)}</span>`;
             } else {
+                const isV2 = item.schemaVersion === 2 || Boolean(item.sentences && item.sentences[0] && (item.sentences[0].schemaVersion === 2 || item.sentences[0].words));
+                metaTags += `<span class="history-stat-tag ${isV2 ? 'model-tag' : ''}">${isV2 ? 'V2 英文精析' : '旧版中文精析'}</span>`;
                 metaTags += `<span class="history-stat-tag">${item.sentenceCount || 1} 句子</span>`;
-                metaTags += `<span class="history-stat-tag">${item.tokenCount || 0} 词汇/短语</span>`;
+                metaTags += `<span class="history-stat-tag">${item.tokenCount || 0} 词汇</span>`;
             }
 
             let audioSection = '';
@@ -511,12 +515,21 @@
             } else {
                 // Study page
                 if (!isTts) {
+                    const isV2 = item.schemaVersion === 2 || Boolean(item.sentences && item.sentences[0] && (item.sentences[0].schemaVersion === 2 || item.sentences[0].words));
                     actionButtons += `
                         <button class="btn btn-primary btn-sm btn-restore-item" data-id="${escapeHtml(item.id)}" type="button" title="免消耗 Token 立即恢复全套词汇卡片">
                             <i data-lucide="rotate-ccw"></i>
                             <span>恢复并学习</span>
                         </button>
                     `;
+                    if (!isV2) {
+                        actionButtons += `
+                            <button class="btn btn-secondary btn-sm btn-reanalyze-v2" data-id="${escapeHtml(item.id)}" type="button" title="使用新版英文精析、词序对照与搭句子重新分析此文本">
+                                <i data-lucide="sparkles"></i>
+                                <span>用新版重新精析</span>
+                            </button>
+                        `;
+                    }
                 } else {
                     actionButtons += `
                         <button class="btn btn-primary btn-sm btn-import-study" data-id="${escapeHtml(item.id)}" type="button" title="导入此段音频文本并拆解">
@@ -615,6 +628,22 @@
                         this.onRestoreTts(item);
                     } else if (item.type === 'study' && typeof this.onRestoreStudy === 'function') {
                         this.onRestoreStudy(item);
+                    }
+                });
+            });
+
+            // Reanalyze study record with V2
+            container.querySelectorAll('.btn-reanalyze-v2').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const id = btn.dataset.id;
+                    const item = loadRawHistory().find(x => x.id === id);
+                    if (!item) return;
+
+                    this.closeModal();
+                    if (typeof this.onReanalyzeStudy === 'function') {
+                        this.onReanalyzeStudy(item);
+                    } else if (typeof this.onRestoreStudy === 'function') {
+                        this.onRestoreStudy({ text: item.text, forceReanalyze: true });
                     }
                 });
             });

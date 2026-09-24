@@ -986,56 +986,43 @@ function initStudyWorkbench() {
         sentenceCountBadge.textContent = `共 ${sentences.length} 句`;
 
         sentences.forEach((s, idx) => {
-            const originalText = s.original || '';
+            const isV2 = s.schemaVersion === 2 || Boolean(s.words && s.words.length > 0) || Boolean(s.build_up && s.build_up.length > 0) || Boolean(s.alignment && s.alignment.length > 0);
+            const sentenceText = s.sentence || s.original || '';
             const transEn = s.translation_en || '';
-            const transCn = s.translation_cn || '';
-            const tokens = s.tokens || [];
+            const transZh = s.translation_zh || s.translation_cn || '';
 
-            // Index tokens for instant double-click lookup
-            tokens.forEach(tok => {
-                if (tok.token) {
+            // Index words/tokens for instant popover lookup
+            const wordsList = isV2 ? (s.words || []) : (s.tokens || []);
+            wordsList.forEach(w => {
+                const tokenText = w.fr || w.token || '';
+                if (tokenText) {
+                    const lemma = w.lemma || tokenText;
+                    const pos = w.type || w.pos || '';
+                    const ipa = w.ipa || w.phonetic || '';
+                    const meaning = w.meaning || w.explanation_en || '';
+                    const why = w.why || '';
+                    const fullExpEn = `${meaning}${why ? ' (' + why + ')' : ''}`;
                     const entry = {
-                        token: tok.token,
-                        lemma: tok.lemma || tok.token,
-                        pos: tok.pos || '',
-                        phonetic: tok.phonetic || '',
-                        explanation_cn: tok.explanation_cn || '',
-                        explanation_en: tok.explanation_en || '',
-                        sentence: originalText,
-                        sentence_cn: transCn,
+                        token: tokenText,
+                        lemma: lemma,
+                        pos: pos,
+                        phonetic: ipa,
+                        explanation_cn: w.explanation_cn || '',
+                        explanation_en: fullExpEn,
+                        sentence: sentenceText,
+                        sentence_cn: transZh,
+                        sentence_en: transEn,
                     };
-                    window.activeTokensMap.set(tok.token.toLowerCase(), entry);
-                    if (tok.lemma) window.activeTokensMap.set(tok.lemma.toLowerCase(), entry);
+                    window.activeTokensMap.set(tokenText.toLowerCase(), entry);
+                    if (lemma) window.activeTokensMap.set(lemma.toLowerCase(), entry);
                 }
             });
 
             const card = document.createElement('article');
-            card.className = 'sentence-card';
+            card.className = `sentence-card ${isV2 ? 'is-v2-card' : 'is-v1-card'}`;
             card.dataset.index = idx;
 
-            // 1. Hero / Header
-            const heroHtml = `
-                <div class="sentence-hero">
-                    <div class="sentence-meta-row">
-                        <span class="sentence-index-pill">Phrase ${idx + 1}</span>
-                        <div class="sentence-hero-actions">
-                            <!-- reserved -->
-                        </div>
-                    </div>
-                    <div class="sentence-text-row">
-                        <p class="sentence-french-text">${renderInteractiveWordsHtml(originalText)}</p>
-                        <button class="btn-speak-round" type="button" title="收听整句标准发音" aria-label="朗读句子">
-                            <i data-lucide="volume-2"></i>
-                        </button>
-                    </div>
-                    <div class="sentence-translations">
-                        <div class="translation-cn">${escapeHtml(transCn)}</div>
-                        <div class="translation-en">${escapeHtml(transEn)}</div>
-                    </div>
-                </div>
-            `;
-
-            // 2. Shadowing & Scoring Panel
+            // Shared Shadowing & Scoring HTML
             const shadowingHtml = `
                 <div class="shadowing-panel">
                     <div class="shadowing-header">
@@ -1086,75 +1073,348 @@ function initStudyWorkbench() {
                 </div>
             `;
 
-            // 3. Three-Column Table with Star (Anki) and Speaker buttons
-            let rowsHtml = '';
-            tokens.forEach(tok => {
-                const tokenText = tok.token || '';
-                const lemma = tok.lemma && tok.lemma !== tokenText ? tok.lemma : '';
-                const pos = tok.pos || '';
-                const phonetic = tok.phonetic || '';
-                const expEn = tok.explanation_en || '';
-                const expCn = tok.explanation_cn || '';
-                const isSaved = deckManager ? deckManager.hasCard(tokenText) : false;
+            if (isV2) {
+                // ==================== SCHEMA V2 RENDERING ====================
+                // 1. Sentence Hero: French text + Large English translation + Small Chinese translation
+                const heroHtml = `
+                    <div class="sentence-hero">
+                        <div class="sentence-meta-row">
+                            <span class="sentence-index-pill">Phrase ${idx + 1}</span>
+                            <span class="v2-badge">Simple English Breakdown</span>
+                        </div>
+                        <div class="sentence-text-row">
+                            <p class="sentence-french-text">${renderInteractiveWordsHtml(sentenceText)}</p>
+                            <button class="btn-speak-round" type="button" title="收听整句标准发音" aria-label="朗读句子">
+                                <i data-lucide="volume-2"></i>
+                            </button>
+                        </div>
+                        <div class="sentence-translations">
+                            <div class="translation-en translation-primary">${escapeHtml(transEn)}</div>
+                            ${transZh ? `<div class="translation-zh translation-secondary">${escapeHtml(transZh)}</div>` : ''}
+                        </div>
+                    </div>
+                `;
 
-                rowsHtml += `
-                    <tr>
-                        <td>
-                            <div class="token-cell">
-                                <div class="token-main-row">
-                                    <span class="token-word">${escapeHtml(tokenText)}</span>
-                                    <div class="token-actions">
-                                        <button class="btn-token-speak" type="button" title="点击发音" data-speech="${escapeHtml(tokenText)}">
+                // 2. Word-by-word Alignment Table
+                let alignmentHtml = '';
+                if (s.alignment && s.alignment.length > 0) {
+                    const alignColsFr = s.alignment.map(a => `<td><span class="align-chip-fr">${escapeHtml(a.fr)}</span></td>`).join('');
+                    const alignColsEn = s.alignment.map(a => `<td><span class="align-chip-en">${escapeHtml(a.en)}</span></td>`).join('');
+                    alignmentHtml = `
+                        <div class="study-card-section alignment-section">
+                            <div class="section-title">
+                                <i data-lucide="arrow-left-right"></i>
+                                <span>词序对照 (Word-by-word Alignment)</span>
+                            </div>
+                            <div class="alignment-table-wrapper">
+                                <table class="alignment-table">
+                                    <tbody>
+                                        <tr class="alignment-row-fr">
+                                            <th class="alignment-label">FR</th>
+                                            ${alignColsFr}
+                                        </tr>
+                                        <tr class="alignment-row-en">
+                                            <th class="alignment-label">EN</th>
+                                            ${alignColsEn}
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            ${s.order_note ? `
+                                <div class="alignment-note">
+                                    <i data-lucide="info"></i>
+                                    <span>${escapeHtml(s.order_note)}</span>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }
+
+                // 3. Sentence Build-up (一层一层搭句子)
+                let buildupHtml = '';
+                if (s.build_up && s.build_up.length > 0) {
+                    const stepsHtml = s.build_up.map((step, sIdx) => {
+                        const isFinal = sIdx === s.build_up.length - 1;
+                        return `
+                            <div class="buildup-step-row ${isFinal ? 'is-final-step' : ''}">
+                                <div class="buildup-step-badge">Step ${sIdx + 1}</div>
+                                <div class="buildup-step-content">
+                                    <div class="buildup-fr-row">
+                                        <button class="btn-buildup-speak" type="button" title="点击朗读该递进步骤" data-speech="${escapeHtml(step.fr)}">
                                             <i data-lucide="volume-2"></i>
                                         </button>
-                                        <button class="btn-token-star ${isSaved ? 'active' : ''}" type="button"
-                                            title="${isSaved ? '已加入生词卡 (点击移除)' : '加入生词卡 (Anki)'}"
-                                            data-token="${escapeHtml(tokenText)}"
-                                            data-lemma="${escapeHtml(lemma)}"
-                                            data-pos="${escapeHtml(pos)}"
-                                            data-phonetic="${escapeHtml(phonetic)}"
-                                            data-exp-en="${escapeHtml(expEn)}"
-                                            data-exp-cn="${escapeHtml(expCn)}"
-                                            data-sentence="${escapeHtml(originalText)}"
-                                            data-sentence-cn="${escapeHtml(transCn)}">
-                                            <i data-lucide="star"></i>
-                                        </button>
+                                        <span class="buildup-fr-text">${escapeHtml(step.fr)}</span>
+                                        ${isFinal ? `<span class="final-step-tag">原句</span>` : ''}
                                     </div>
-                                </div>
-                                <div class="token-details">
-                                    ${pos ? `<span class="pos-tag">${escapeHtml(pos)}</span>` : ''}
-                                    ${phonetic ? `<span class="phonetic-tag">${escapeHtml(formatFriendlyPhonetic(phonetic))}</span>` : ''}
-                                    ${lemma ? `<span class="lemma-tag">原形: ${escapeHtml(lemma)}</span>` : ''}
+                                    <div class="buildup-en-text">${escapeHtml(step.en)}</div>
+                                    ${step.new ? `
+                                        <div class="buildup-new-note">
+                                            <span class="new-tag">New:</span> ${escapeHtml(step.new)}
+                                        </div>
+                                    ` : ''}
                                 </div>
                             </div>
-                        </td>
-                        <td class="explanation-en-cell">${escapeHtml(expEn)}</td>
-                        <td class="explanation-cn-cell">${escapeHtml(expCn)}</td>
-                    </tr>
+                        `;
+                    }).join('');
+
+                    buildupHtml = `
+                        <div class="study-card-section buildup-section">
+                            <div class="section-title">
+                                <i data-lucide="layers"></i>
+                                <span>一层一层搭句子 (Sentence Build-up)</span>
+                            </div>
+                            <div class="buildup-steps-list">
+                                ${stepsHtml}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // 4. Word-by-word Analysis Table (3 columns)
+                let wordRowsHtml = '';
+                wordsList.forEach(w => {
+                    const tokenText = w.fr || w.token || '';
+                    const lemma = w.lemma && w.lemma !== tokenText ? w.lemma : '';
+                    const pos = w.type || w.pos || '';
+                    const ipa = w.ipa || w.phonetic || '';
+                    const meaning = w.meaning || w.explanation_en || '';
+                    const why = w.why || '';
+                    const engLink = w.english_link || '';
+                    const falseFriend = Boolean(w.false_friend);
+                    const isSaved = deckManager ? deckManager.hasCard(tokenText) : false;
+
+                    let linkCellHtml = '<span class="text-muted">—</span>';
+                    if (falseFriend) {
+                        linkCellHtml = `
+                            <div class="false-friend-badge" title="假朋友警示：与英文形似但含义不同">
+                                <i data-lucide="alert-triangle"></i>
+                                <span>False friend! ${escapeHtml(engLink || why || 'Different meaning')}</span>
+                            </div>
+                        `;
+                    } else if (engLink) {
+                        linkCellHtml = `
+                            <div class="english-link-pill" title="英文联想借词">
+                                <i data-lucide="link"></i>
+                                <span>${escapeHtml(tokenText)} → <strong>${escapeHtml(engLink)}</strong></span>
+                            </div>
+                        `;
+                    }
+
+                    const fullExpEn = `${meaning}${why ? ' (' + why + ')' : ''}`;
+
+                    wordRowsHtml += `
+                        <tr>
+                            <td>
+                                <div class="token-cell">
+                                    <div class="token-main-row">
+                                        <span class="token-word">${escapeHtml(tokenText)}</span>
+                                        <div class="token-actions">
+                                            <button class="btn-token-speak" type="button" title="点击发音" data-speech="${escapeHtml(tokenText)}">
+                                                <i data-lucide="volume-2"></i>
+                                            </button>
+                                            <button class="btn-token-star ${isSaved ? 'active' : ''}" type="button"
+                                                title="${isSaved ? '已加入生词卡 (点击移除)' : '加入生词卡 (Anki)'}"
+                                                data-token="${escapeHtml(tokenText)}"
+                                                data-lemma="${escapeHtml(lemma)}"
+                                                data-pos="${escapeHtml(pos)}"
+                                                data-phonetic="${escapeHtml(ipa)}"
+                                                data-exp-en="${escapeHtml(fullExpEn)}"
+                                                data-exp-cn="${escapeHtml(w.explanation_cn || '')}"
+                                                data-sentence="${escapeHtml(sentenceText)}"
+                                                data-sentence-cn="${escapeHtml(transZh)}">
+                                                <i data-lucide="star"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="token-details">
+                                        ${pos ? `<span class="pos-tag">${escapeHtml(pos)}</span>` : ''}
+                                        ${ipa ? `<span class="phonetic-tag">${escapeHtml(formatFriendlyPhonetic(ipa))}</span>` : ''}
+                                        ${lemma ? `<span class="lemma-tag">原形: ${escapeHtml(lemma)}</span>` : ''}
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="explanation-meaning-cell">
+                                <div class="word-meaning">${escapeHtml(meaning)}</div>
+                                ${why ? `<div class="word-why"><span class="why-label">Why:</span>${escapeHtml(why)}</div>` : ''}
+                            </td>
+                            <td class="explanation-link-cell">
+                                ${linkCellHtml}
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                const wordsTableHtml = `
+                    <div class="study-card-section words-table-section">
+                        <div class="section-title">
+                            <i data-lucide="book-open"></i>
+                            <span>逐词剖析表 (Word Breakdown)</span>
+                        </div>
+                        <div class="table-wrapper">
+                            <table class="breakdown-table v2-breakdown-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 32%;">① 词汇 / 原形 (Word & Form)</th>
+                                        <th style="width: 44%;">② 英文简释与原因 (Meaning & Why)</th>
+                                        <th style="width: 24%;">③ 英文关联 (English Link)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${wordRowsHtml}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 `;
-            });
 
-            const tableHtml = `
-                <div class="table-wrapper">
-                    <table class="breakdown-table">
-                        <thead>
-                            <tr>
-                                <th>① 词汇 / 词组短语 (Forme & Audio)</th>
-                                <th>② 英文简明解释 (Anglais)</th>
-                                <th>③ 中文释义与语法搭配 (Chinois)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${rowsHtml}
-                        </tbody>
-                    </table>
-                </div>
-            `;
+                // 5. Grammar Points + Memory Hooks
+                let grammarHtml = '';
+                if (s.grammar_points && s.grammar_points.length > 0) {
+                    const pointsHtml = s.grammar_points.map(g => `
+                        <div class="grammar-point-card">
+                            <div class="grammar-point-header">
+                                <span class="grammar-bullet">📌</span>
+                                <h4 class="grammar-point-title">${escapeHtml(g.title)}</h4>
+                            </div>
+                            <div class="grammar-point-body">
+                                <p class="grammar-point-exp">${escapeHtml(g.explanation)}</p>
+                                ${g.hook ? `
+                                    <div class="grammar-point-hook">
+                                        <span class="hook-icon">💡</span>
+                                        <span><strong>Memory hook:</strong> ${escapeHtml(g.hook)}</span>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `).join('');
 
-            card.innerHTML = heroHtml + shadowingHtml + tableHtml;
+                    grammarHtml = `
+                        <div class="study-card-section grammar-section">
+                            <div class="section-title">
+                                <i data-lucide="sparkles"></i>
+                                <span>语法点与记忆钩子 (Grammar & Memory Hooks)</span>
+                            </div>
+                            <div class="grammar-points-list">
+                                ${pointsHtml}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // 6. Pronunciation Tips
+                let pronTipsHtml = '';
+                if (s.pronunciation_tips && s.pronunciation_tips.length > 0) {
+                    const tipsHtml = s.pronunciation_tips.map(tip => `
+                        <li class="pronunciation-tip-item">
+                            <i data-lucide="volume-1"></i>
+                            <span>${escapeHtml(tip)}</span>
+                        </li>
+                    `).join('');
+
+                    pronTipsHtml = `
+                        <div class="study-card-section pronunciation-section">
+                            <div class="section-title">
+                                <i data-lucide="volume-2"></i>
+                                <span>发音重点与连音提示 (Pronunciation Tips)</span>
+                            </div>
+                            <ul class="pronunciation-tips-list">
+                                ${tipsHtml}
+                            </ul>
+                        </div>
+                    `;
+                }
+
+                card.innerHTML = heroHtml + alignmentHtml + buildupHtml + wordsTableHtml + grammarHtml + pronTipsHtml + shadowingHtml;
+            } else {
+                // ==================== LEGACY V1 RENDERING ====================
+                const heroHtml = `
+                    <div class="sentence-hero">
+                        <div class="sentence-meta-row">
+                            <span class="sentence-index-pill">Phrase ${idx + 1}</span>
+                            <span class="schema-version-pill legacy-pill">旧版中文精析</span>
+                        </div>
+                        <div class="sentence-text-row">
+                            <p class="sentence-french-text">${renderInteractiveWordsHtml(sentenceText)}</p>
+                            <button class="btn-speak-round" type="button" title="收听整句标准发音" aria-label="朗读句子">
+                                <i data-lucide="volume-2"></i>
+                            </button>
+                        </div>
+                        <div class="sentence-translations">
+                            <div class="translation-cn">${escapeHtml(transZh)}</div>
+                            <div class="translation-en">${escapeHtml(transEn)}</div>
+                        </div>
+                    </div>
+                `;
+
+                let rowsHtml = '';
+                wordsList.forEach(tok => {
+                    const tokenText = tok.token || tok.fr || '';
+                    const lemma = tok.lemma && tok.lemma !== tokenText ? tok.lemma : '';
+                    const pos = tok.pos || tok.type || '';
+                    const phonetic = tok.phonetic || tok.ipa || '';
+                    const expEn = tok.explanation_en || tok.meaning || '';
+                    const expCn = tok.explanation_cn || '';
+                    const isSaved = deckManager ? deckManager.hasCard(tokenText) : false;
+
+                    rowsHtml += `
+                        <tr>
+                            <td>
+                                <div class="token-cell">
+                                    <div class="token-main-row">
+                                        <span class="token-word">${escapeHtml(tokenText)}</span>
+                                        <div class="token-actions">
+                                            <button class="btn-token-speak" type="button" title="点击发音" data-speech="${escapeHtml(tokenText)}">
+                                                <i data-lucide="volume-2"></i>
+                                            </button>
+                                            <button class="btn-token-star ${isSaved ? 'active' : ''}" type="button"
+                                                title="${isSaved ? '已加入生词卡 (点击移除)' : '加入生词卡 (Anki)'}"
+                                                data-token="${escapeHtml(tokenText)}"
+                                                data-lemma="${escapeHtml(lemma)}"
+                                                data-pos="${escapeHtml(pos)}"
+                                                data-phonetic="${escapeHtml(phonetic)}"
+                                                data-exp-en="${escapeHtml(expEn)}"
+                                                data-exp-cn="${escapeHtml(expCn)}"
+                                                data-sentence="${escapeHtml(sentenceText)}"
+                                                data-sentence-cn="${escapeHtml(transZh)}">
+                                                <i data-lucide="star"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="token-details">
+                                        ${pos ? `<span class="pos-tag">${escapeHtml(pos)}</span>` : ''}
+                                        ${phonetic ? `<span class="phonetic-tag">${escapeHtml(formatFriendlyPhonetic(phonetic))}</span>` : ''}
+                                        ${lemma ? `<span class="lemma-tag">原形: ${escapeHtml(lemma)}</span>` : ''}
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="explanation-en-cell">${escapeHtml(expEn)}</td>
+                            <td class="explanation-cn-cell">${escapeHtml(expCn)}</td>
+                        </tr>
+                    `;
+                });
+
+                const tableHtml = `
+                    <div class="table-wrapper">
+                        <table class="breakdown-table">
+                            <thead>
+                                <tr>
+                                    <th>① 词汇 / 词组短语 (Forme & Audio)</th>
+                                    <th>② 英文简明解释 (Anglais)</th>
+                                    <th>③ 中文释义与语法搭配 (Chinois)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${rowsHtml}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+
+                card.innerHTML = heroHtml + shadowingHtml + tableHtml;
+            }
+
             sentencesContainer.appendChild(card);
-
-            attachSentenceCardEvents(card, originalText, transCn, transEn);
+            attachSentenceCardEvents(card, sentenceText, transZh, transEn);
         });
 
         refreshIcons();
@@ -1218,6 +1478,21 @@ function initStudyWorkbench() {
                 if (word) {
                     btn.style.transform = 'scale(1.2)';
                     playFrenchSpeech(word, () => {
+                        btn.style.transform = '';
+                    });
+                }
+            });
+        });
+
+        // 2b. Build-up Step Pronunciation Buttons
+        const buildupSpeakBtns = card.querySelectorAll('.btn-buildup-speak');
+        buildupSpeakBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const phrase = btn.dataset.speech;
+                if (phrase) {
+                    btn.style.transform = 'scale(1.2)';
+                    playFrenchSpeech(phrase, () => {
                         btn.style.transform = '';
                     });
                 }
@@ -1985,8 +2260,13 @@ function initStudyWorkbench() {
             popoverLemma.hidden = true;
         }
 
-        popoverCn.textContent = item.explanation_cn || '语境词汇';
-        popoverEn.textContent = item.explanation_en || '';
+        if (item.explanation_cn) {
+            popoverCn.textContent = item.explanation_cn;
+            popoverEn.textContent = item.explanation_en || '';
+        } else {
+            popoverCn.textContent = item.explanation_en || '语境词汇';
+            popoverEn.textContent = '';
+        }
         if (popoverLoading) {
             popoverLoading.hidden = true;
             popoverLoading.style.display = 'none';
@@ -2306,6 +2586,14 @@ function initStudyWorkbench() {
                 } else if (item.text) {
                     statusMessage.className = 'status-message status-info';
                     statusMessage.textContent = '已填入历史音频文本，点击“开始拆解与精析”即可生成语法词汇卡片。';
+                }
+            },
+            onReanalyzeStudy: (item) => {
+                stopAllAudio();
+                if (item.text) {
+                    frenchInput.value = item.text;
+                    charCounter.textContent = `${item.text.length} / 15000`;
+                    startAnalysis();
                 }
             },
         });
