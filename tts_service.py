@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 import auth_db
+import srs
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -1536,6 +1537,122 @@ async def clear_all_history(
     count = auth_db.clear_history_records(user_id=user_id, record_type=type)
     return {"deleted": count}
 
+
+
+# ---------------------------------------------------------------------------
+# Spaced repetition (sentence notes + FSRS cards), per logged-in user
+# ---------------------------------------------------------------------------
+class SrsTarget(BaseModel):
+    text: str = Field(min_length=1, max_length=200)
+    mode: Literal["cloze", "recognize"] = "cloze"
+    meta: dict[str, Any] = Field(default_factory=dict)
+
+
+class SrsNoteRequest(BaseModel):
+    sentence: str = Field(min_length=1, max_length=1000)
+    translation_zh: str = Field(default="", max_length=2000)
+    translation_en: str = Field(default="", max_length=2000)
+    extra: dict[str, Any] = Field(default_factory=dict)
+    modes: list[Literal["listen", "speak"]] = Field(default_factory=list)
+    targets: list[SrsTarget] = Field(default_factory=list, max_length=20)
+
+
+class SrsLookupRequest(BaseModel):
+    sentences: list[str] = Field(default_factory=list, max_length=200)
+
+
+class SrsReviewRequest(BaseModel):
+    rating: int = Field(ge=1, le=4)
+    duration_ms: int | None = Field(default=None, ge=0, le=3_600_000)
+    score: int | None = Field(default=None, ge=0, le=100)
+    answer: str | None = Field(default=None, max_length=500)
+
+
+class SrsImportRequest(BaseModel):
+    cards: list[dict[str, Any]] = Field(default_factory=list, max_length=5000)
+
+
+@app.get("/review")
+async def review_page():
+    return _html_page("review.html")
+
+
+@app.get("/api/srs/queue")
+async def srs_queue(
+    tz_offset: int = Query(default=0, ge=-840, le=840),
+    new_limit: int = Query(default=srs.DEFAULT_NEW_LIMIT, ge=0, le=100),
+    authorization: str | None = Header(default=None),
+):
+    return srs.build_queue(_require_user_id(authorization), tz_offset, new_limit)
+
+
+@app.post("/api/srs/notes")
+async def srs_add_note(
+    req: SrsNoteRequest,
+    authorization: str | None = Header(default=None),
+):
+    user_id = _require_user_id(authorization)
+    try:
+        return srs.add_note(
+            user_id,
+            req.sentence,
+            translation_zh=req.translation_zh,
+            translation_en=req.translation_en,
+            extra=req.extra,
+            modes=req.modes,
+            targets=[t.model_dump() for t in req.targets],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail={"message": str(exc)})
+
+
+@app.post("/api/srs/notes/lookup")
+async def srs_lookup_notes(
+    req: SrsLookupRequest,
+    authorization: str | None = Header(default=None),
+):
+    return {"notes": srs.lookup_notes(_require_user_id(authorization), req.sentences)}
+
+
+@app.delete("/api/srs/notes/{note_id}")
+async def srs_delete_note(note_id: str, authorization: str | None = Header(default=None)):
+    return {"success": srs.delete_note(_require_user_id(authorization), note_id)}
+
+
+@app.get("/api/srs/cards")
+async def srs_list_cards(
+    q: str = Query(default="", max_length=100),
+    authorization: str | None = Header(default=None),
+):
+    return {"cards": srs.list_cards(_require_user_id(authorization), q)}
+
+
+@app.delete("/api/srs/cards/{card_id}")
+async def srs_delete_card(card_id: str, authorization: str | None = Header(default=None)):
+    return {"success": srs.delete_card(_require_user_id(authorization), card_id)}
+
+
+@app.post("/api/srs/cards/{card_id}/review")
+async def srs_review_card(
+    card_id: str,
+    req: SrsReviewRequest,
+    authorization: str | None = Header(default=None),
+):
+    user_id = _require_user_id(authorization)
+    try:
+        return srs.review_card(
+            user_id, card_id, req.rating, req.duration_ms, req.score, req.answer
+        )
+    except KeyError:
+        raise HTTPException(status_code=404, detail={"message": "卡片不存在。"})
+
+
+@app.post("/api/srs/import")
+async def srs_import_legacy(
+    req: SrsImportRequest,
+    authorization: str | None = Header(default=None),
+):
+    return srs.import_legacy_cards(_require_user_id(authorization), req.cards)
 
 if __name__ == "__main__":
     import uvicorn

@@ -1,4 +1,5 @@
 edge-tts
 fastapi
+fsrs>=6.3,<7
 httpx
 uvicorn

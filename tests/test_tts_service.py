@@ -1,16 +1,10 @@
+import testenv  # noqa: F401  (must run before the app is imported)
+
 import asyncio
 import json
-import os
-import tempfile
 import unittest
 import uuid
 from unittest.mock import AsyncMock, Mock, patch
-
-# Isolate all file/DB writes from the real ./outputs before the app is imported.
-os.environ["OUTPUT_DIR"] = tempfile.mkdtemp(prefix="tts-tests-")
-os.environ["AUTH_SECRET"] = "test-only-secret-" + "x" * 32
-os.environ["ALLOW_REGISTRATION"] = "true"
-os.environ["WEB2API_API_KEY"] = "server-test-key"
 
 from fastapi.testclient import TestClient
 
@@ -714,11 +708,10 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertEqual(ts1, ts2)
         self.assertTrue(ts1.startswith("snip_"))
 
-    def test_anki_js_served(self):
-        response = self.client.get("/static/anki.js")
+    def test_speech_eval_js_served(self):
+        response = self.client.get("/static/speech-eval.js")
         self.assertEqual(response.status_code, 200)
-        self.assertIn("AnkiDeck", response.text)
-        self.assertIn("scheduleSM2", response.text)
+        self.assertIn("evaluateFrenchPronunciation", response.text)
 
     def test_parse_analysis_json_handles_direct_list_and_filters_punct_and_trivial(self):
         raw = json.dumps([

@@ -1,6 +1,6 @@
 /* ==========================================================================
    French Audio Studio - Study & Shadowing Workbench Script
-   Includes Spaced-Repetition Flashcard (Anki SM-2) Deck Manager
+   Saves sentences/words as server-side FSRS review cards (reviewed on /review)
    ========================================================================== */
 
 if (typeof window.activeTokensMap === 'undefined') {
@@ -18,185 +18,7 @@ function escapeHtml(str) {
         .replace(/'/g, '&#039;');
 }
 
-function cleanFrenchToken(str) {
-    return (str || '')
-        .toLowerCase()
-        .replace(/[.,/#!$%^&*;:{}=\-_`~()?"'’«»[\]]/g, '')
-        .trim();
-}
-
-function frenchPhoneticNormalize(word) {
-    if (!word) return '';
-    let w = word.toLowerCase().trim();
-    w = w.replace(/[.,/#!$%^&*;:{}=\-_`~()?"'’«»[\]]/g, '');
-    // Decompose accents for phonetic tolerance (e.g. é -> e, à -> a, ç -> c)
-    w = w.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-
-    // In French, verbal 3rd person plural ending -ent is 100% silent (e.g. autorisent -> autorise)
-    if (w.endsWith('ent') && w.length >= 5) {
-        w = w.slice(0, -2);
-    }
-    // In French, plural nominal/adjectival endings -s and -x are silent (e.g. canadiennes -> canadienne, autorités -> autorite)
-    if ((w.endsWith('s') || w.endsWith('x')) && w.length >= 3) {
-        w = w.slice(0, -1);
-    }
-    return w;
-}
-
-function calculateLevenshteinSimilarity(s1, s2) {
-    if (!s1 && !s2) return 1.0;
-    if (!s1 || !s2) return 0.0;
-    if (s1 === s2) return 1.0;
-
-    const m = s1.length;
-    const n = s2.length;
-    const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
-
-    for (let i = 0; i <= m; i++) dp[i][0] = i;
-    for (let j = 0; j <= n; j++) dp[0][j] = j;
-
-    for (let i = 1; i <= m; i++) {
-        for (let j = 1; j <= n; j++) {
-            const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
-            dp[i][j] = Math.min(
-                dp[i - 1][j] + 1,
-                dp[i][j - 1] + 1,
-                dp[i - 1][j - 1] + cost
-            );
-        }
-    }
-
-    const distance = dp[m][n];
-    const maxLen = Math.max(m, n);
-    return maxLen === 0 ? 1.0 : 1.0 - (distance / maxLen);
-}
-
-function evaluateFrenchPronunciation(targetSentence, spokenTranscript) {
-    // Extract words from target sentence, preserving elisions (e.g. n'autorisent, d'accord, c'est)
-    const rawTargetWords = (targetSentence || '').match(/(?:aujourd['’]hui|[A-Za-zÀ-ÖØ-öø-ÿŒœ]+(?:['’][A-Za-zÀ-ÖØ-öø-ÿŒœ]+)?['’]?|[0-9]+)/gi) || [];
-    const targetWords = rawTargetWords
-        .map(w => ({ raw: w, clean: cleanFrenchToken(w), norm: frenchPhoneticNormalize(w) }))
-        .filter(item => item.clean.length > 0);
-
-    if (targetWords.length === 0) {
-        return {
-            overallScore: 100,
-            accuracy: 100,
-            completeness: 100,
-            ratingText: '卓越 (Excellent !)',
-            ratingClass: 'excellent',
-            wordResults: [],
-        };
-    }
-
-    const spokenTokens = (spokenTranscript || '')
-        .split(/\s+/)
-        .filter(w => w.length > 0);
-
-    const wordResults = [];
-    let totalScoreSum = 0;
-    let matchedCount = 0;
-
-    targetWords.forEach((target, targetIdx) => {
-        let bestSim = 0;
-
-        // Check if target has an elision prefix (n', d', l', c', j', m', t', s', qu')
-        let baseNorm = '';
-        const elisionMatch = target.raw.match(/^(?:aujourd['’]hui|([cjdlnmstqu]|qu)['’](.+))$/i);
-        if (elisionMatch && elisionMatch[2]) {
-            baseNorm = frenchPhoneticNormalize(elisionMatch[2]);
-        }
-
-        // 1. Single token comparison (with phonetic normalization & silent endings tolerance)
-        for (let i = 0; i < spokenTokens.length; i++) {
-            const sp = spokenTokens[i];
-            const normSp = frenchPhoneticNormalize(sp);
-
-            // Check normalized Levenshtein similarity
-            let sim = calculateLevenshteinSimilarity(target.norm, normSp);
-
-            // If target is an elision word (e.g. n'autorisent, d'accord), also check against base word (e.g. autorisent)
-            // In connected French speech ("canadiennes n'autorisent"), the n' elision merges with preceding [n]
-            if (baseNorm) {
-                const baseSim = calculateLevenshteinSimilarity(baseNorm, normSp);
-                if (baseSim >= 0.82) {
-                    sim = Math.max(sim, Math.min(1.0, baseSim + 0.05));
-                }
-            }
-            if (sim > bestSim) bestSim = sim;
-        }
-
-        // 2. Adjacent two-token combination match
-        // Handles cases where ASR inserts a space after apostrophe: "n'" + "autorisent", or "l'" + "homme"
-        for (let i = 0; i < spokenTokens.length - 1; i++) {
-            const combo = spokenTokens[i] + spokenTokens[i + 1];
-            const normCombo = frenchPhoneticNormalize(combo);
-            const sim = calculateLevenshteinSimilarity(target.norm, normCombo);
-            if (sim > bestSim) bestSim = sim;
-        }
-
-        // 3. French enchaînement / assimilation check:
-        // When preceding word ends in 'n' (like "canadiennes") and current word starts with n' (like "n'autorisent"),
-        // the double [n] naturally fuses into a single [n] in fluent speech: [kanadjɛnotɔʁiz].
-        // If the base verb (autorisent) is recognized, it is an authentic continuous pronunciation.
-        if (baseNorm && targetIdx > 0) {
-            const prevTargetNorm = targetWords[targetIdx - 1].norm;
-            if (prevTargetNorm.endsWith('n') || prevTargetNorm.endsWith('ne')) {
-                for (let i = 0; i < spokenTokens.length; i++) {
-                    const normSp = frenchPhoneticNormalize(spokenTokens[i]);
-                    if (calculateLevenshteinSimilarity(baseNorm, normSp) >= 0.85) {
-                        bestSim = Math.max(bestSim, 1.0);
-                    }
-                }
-            }
-        }
-
-        let status = 'missed';
-        if (bestSim >= 0.82) {
-            status = 'correct';
-            matchedCount++;
-        } else if (bestSim >= 0.55) {
-            status = 'acceptable';
-            matchedCount += 0.5;
-        }
-
-        const wordScore = Math.round(bestSim * 100);
-        totalScoreSum += wordScore;
-
-        wordResults.push({
-            word: target.raw,
-            score: wordScore,
-            status: status,
-        });
-    });
-
-    const accuracy = Math.round(totalScoreSum / targetWords.length);
-    const completeness = Math.min(100, Math.round((matchedCount / targetWords.length) * 100));
-    const overallScore = Math.round(accuracy * 0.7 + completeness * 0.3);
-
-    let ratingText = '有待提高 (À travailler)';
-    let ratingClass = 'needs-work';
-
-    if (overallScore >= 90) {
-        ratingText = '卓越 (Excellent !)';
-        ratingClass = 'excellent';
-    } else if (overallScore >= 75) {
-        ratingText = '良好 (Très bien !)';
-        ratingClass = 'good';
-    } else if (overallScore >= 60) {
-        ratingText = '及格 (Passable)';
-        ratingClass = 'pass';
-    }
-
-    return {
-        overallScore,
-        accuracy,
-        completeness,
-        ratingText,
-        ratingClass,
-        wordResults,
-    };
-}
+const { cleanFrenchToken, frenchPhoneticNormalize, calculateLevenshteinSimilarity, evaluateFrenchPronunciation } = window.SpeechEval;
 
 function renderInteractiveWordsHtml(text) {
     if (!text) return '';
@@ -224,10 +46,6 @@ function initStudyWorkbench() {
     const localKeyName = 'frenchStudio.perplexityApiKey';
     const sessionKeyName = 'frenchStudio.sessionApiKey';
     const modelKeyName = 'frenchStudio.perplexityModel';
-
-    // Initialize Anki Deck Manager
-    const deckManager = window.AnkiDeck ? new window.AnkiDeck.DeckManager() : null;
-    window.deckManager = deckManager;
 
     // DOM Elements - Connection
     const apiKeyInput = document.getElementById('api-key');
@@ -283,9 +101,11 @@ function initStudyWorkbench() {
     const sentenceCountBadge = document.getElementById('sentence-count-badge');
     const sentencesContainer = document.getElementById('sentences-container');
 
-    // DOM Elements - Topbar & Deck Launcher
-    const openDeckBtn = document.getElementById('open-deck-btn');
+    // DOM Elements - Topbar & Review Launcher
     const dueCardBadge = document.getElementById('due-card-badge');
+    const todayReviewBanner = document.getElementById('today-review-banner');
+    const todayReviewTitle = document.getElementById('today-review-title');
+    const todayReviewDetail = document.getElementById('today-review-detail');
 
     // DOM Elements - User Auth & Trial
     const userAuthBtn = document.getElementById('user-auth-btn');
@@ -316,48 +136,6 @@ function initStudyWorkbench() {
     const historyList = document.getElementById('history-list');
     const historyEmpty = document.getElementById('history-empty');
 
-    // DOM Elements - Flashcard Review Modal
-    const flashcardModal = document.getElementById('flashcard-modal');
-    const modalProgressBadge = document.getElementById('review-progress-badge');
-    const exportDeckBtn = document.getElementById('export-deck-btn');
-    const exportDeckBtn2 = document.getElementById('export-deck-btn-2');
-    const closeModalBtn = document.getElementById('close-modal-btn');
-    const studyAllCardsBtn = document.getElementById('study-all-cards-btn');
-    const totalCardCountSpan = document.getElementById('total-card-count');
-
-    // Group Tabs & View Mode Elements
-    const deckGroupTabs = document.querySelectorAll('.deck-group-tab');
-    const tabCountAll = document.getElementById('tab-count-all');
-    const tabCountWord = document.getElementById('tab-count-word');
-    const tabCountPhrase = document.getElementById('tab-count-phrase');
-    const btnViewCard = document.getElementById('btn-view-card');
-    const btnViewList = document.getElementById('btn-view-list');
-    const deckListView = document.getElementById('deck-list-view');
-    const deckCardsList = document.getElementById('deck-cards-list');
-    const deckSearchInput = document.getElementById('deck-search-input');
-    const deckSearchClearBtn = document.getElementById('deck-search-clear-btn');
-    const deckListStats = document.getElementById('deck-list-stats');
-
-    const cardStage = document.getElementById('card-stage');
-    const cardFrontFace = document.getElementById('card-front-face');
-    const cardBackFace = document.getElementById('card-back-face');
-    const cardFrontGroupBadge = document.getElementById('card-front-group-badge');
-    const cardBackGroupBadge = document.getElementById('card-back-group-badge');
-    const cardBackHookBox = document.getElementById('card-back-hook-box');
-    const cardBackHookText = document.getElementById('card-back-hook-text');
-    const cardFrontWord = document.getElementById('card-front-word');
-    const cardSpeakBtn = document.getElementById('card-speak-btn');
-    const cardFrontPhonetic = document.getElementById('card-front-phonetic');
-    const cardQuoteBox = document.getElementById('card-quote-box');
-    const cardFrontSentence = document.getElementById('card-front-sentence');
-    const cardBackPos = document.getElementById('card-back-pos');
-    const cardBackLemma = document.getElementById('card-back-lemma');
-    const cardBackCn = document.getElementById('card-back-cn');
-    const cardBackEn = document.getElementById('card-back-en');
-    const cardSentenceCn = document.getElementById('card-sentence-cn');
-    const cardBackSpeakBtn = document.getElementById('card-back-speak-btn');
-    const cardSentenceSpeakBtn = document.getElementById('card-sentence-speak-btn');
-
     // DOM Elements - Floating Word Popover
     const floatingWordPopover = document.getElementById('floating-word-popover');
     const popoverWord = document.getElementById('popover-word');
@@ -372,19 +150,6 @@ function initStudyWorkbench() {
     const popoverEn = document.getElementById('popover-en');
     const popoverStarBtn = document.getElementById('popover-star-btn');
     const popoverStarText = document.getElementById('popover-star-text');
-
-    const deckEmptyScreen = document.getElementById('deck-empty-screen');
-    const emptyScreenTitle = document.getElementById('empty-screen-title');
-    const emptyScreenDesc = document.getElementById('empty-screen-desc');
-    const modalRatingFooter = document.getElementById('modal-rating-footer');
-    const gradeButtons = document.querySelectorAll('.btn-grade');
-
-    // Flashcard Session State
-    let reviewQueue = [];
-    let currentQueueIndex = 0;
-    let isCardFlipped = false;
-    let currentDeckFilterGroup = 'all'; // 'all' | 'word' | 'phrase'
-    let currentDeckViewMode = 'card';    // 'card' | 'list'
 
     // Speech Recognition API Detection
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition || null;
@@ -424,9 +189,9 @@ function initStudyWorkbench() {
             setConnectionState('idle', '未填写 Key', '在右上角连接设置填写 Key 或登录账号直接使用');
         }
 
-        updateDeckBadge();
         updateHistoryBadges();
         checkCurrentUser();
+        refreshDueBadge();
     }
 
     async function syncModelsFromBackend() {
@@ -653,583 +418,183 @@ function initStudyWorkbench() {
     }
 
     // -------------------------------------------------------------------------
-    // 3. Pronunciation & Shadowing Scoring Algorithm
+    // 4. Spaced Repetition — server-side FSRS deck (reviewed on /review)
     // -------------------------------------------------------------------------
-    function cleanFrenchToken(str) {
-        return (str || '')
-            .toLowerCase()
-            .replace(/[.,/#!$%^&*;:{}=\-_`~()?"'’«»[\]]/g, '')
-            .trim();
+    const srsNotesByKey = new Map();       // sentence key -> saved note with its cards
+    const sentenceContextByKey = new Map(); // sentence key -> translations + grammar from analysis
+
+    function srsSentenceKey(sentence) {
+        return (sentence || '').replace(/’/g, "'").replace(/ /g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
     }
 
-    function frenchPhoneticNormalize(word) {
-        if (!word) return '';
-        let w = word.toLowerCase().trim();
-        w = w.replace(/[.,/#!$%^&*;:{}=\-_`~()?"'’«»[\]]/g, '');
-        // Decompose accents for phonetic tolerance (e.g. é -> e, à -> a, ç -> c)
-        w = w.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-
-        // In French, verbal 3rd person plural ending -ent is 100% silent (e.g. autorisent -> autorise)
-        if (w.endsWith('ent') && w.length >= 5) {
-            w = w.slice(0, -2);
-        }
-        // In French, plural nominal/adjectival endings -s and -x are silent (e.g. canadiennes -> canadienne, autorités -> autorite)
-        if ((w.endsWith('s') || w.endsWith('x')) && w.length >= 3) {
-            w = w.slice(0, -1);
-        }
-        return w;
+    function getUserToken() {
+        return localStorage.getItem(userTokenKey) || '';
     }
 
-    function calculateLevenshteinSimilarity(s1, s2) {
-        if (!s1 && !s2) return 1.0;
-        if (!s1 || !s2) return 0.0;
-        if (s1 === s2) return 1.0;
-
-        const m = s1.length;
-        const n = s2.length;
-        const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
-
-        for (let i = 0; i <= m; i++) dp[i][0] = i;
-        for (let j = 0; j <= n; j++) dp[0][j] = j;
-
-        for (let i = 1; i <= m; i++) {
-            for (let j = 1; j <= n; j++) {
-                const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
-                dp[i][j] = Math.min(
-                    dp[i - 1][j] + 1,
-                    dp[i][j - 1] + 1,
-                    dp[i - 1][j - 1] + cost
-                );
-            }
-        }
-
-        const distance = dp[m][n];
-        const maxLen = Math.max(m, n);
-        return maxLen === 0 ? 1.0 : 1.0 - (distance / maxLen);
+    function getNewCardLimit() {
+        const saved = parseInt(localStorage.getItem('frenchStudio.srs.newLimit') || '', 10);
+        return Number.isFinite(saved) ? saved : 10;
     }
 
-    function evaluateFrenchPronunciation(targetSentence, spokenTranscript) {
-        // Extract words from target sentence, preserving elisions (e.g. n'autorisent, d'accord, c'est)
-        const rawTargetWords = (targetSentence || '').match(/(?:aujourd['’]hui|[A-Za-zÀ-ÖØ-öø-ÿŒœ]+(?:['’][A-Za-zÀ-ÖØ-öø-ÿŒœ]+)?['’]?|[0-9]+)/gi) || [];
-        const targetWords = rawTargetWords
-            .map(w => ({ raw: w, clean: cleanFrenchToken(w), norm: frenchPhoneticNormalize(w) }))
-            .filter(item => item.clean.length > 0);
-
-        if (targetWords.length === 0) {
-            return {
-                overallScore: 100,
-                accuracy: 100,
-                completeness: 100,
-                ratingText: '卓越 (Excellent !)',
-                ratingClass: 'excellent',
-                wordResults: [],
-            };
+    async function srsApi(method, path, body) {
+        const token = getUserToken();
+        if (!token) {
+            openAuthModal();
+            throw new Error('复习卡片保存在服务器上，请先登录。');
         }
-
-        const spokenTokens = (spokenTranscript || '')
-            .split(/\s+/)
-            .filter(w => w.length > 0);
-
-        const wordResults = [];
-        let totalScoreSum = 0;
-        let matchedCount = 0;
-
-        targetWords.forEach((target, targetIdx) => {
-            let bestSim = 0;
-
-            // Check if target has an elision prefix (n', d', l', c', j', m', t', s', qu')
-            let baseNorm = '';
-            const elisionMatch = target.raw.match(/^(?:aujourd['’]hui|([cjdlnmstqu]|qu)['’](.+))$/i);
-            if (elisionMatch && elisionMatch[2]) {
-                baseNorm = frenchPhoneticNormalize(elisionMatch[2]);
-            }
-
-            // 1. Single token comparison (with phonetic normalization & silent endings tolerance)
-            for (let i = 0; i < spokenTokens.length; i++) {
-                const sp = spokenTokens[i];
-                const normSp = frenchPhoneticNormalize(sp);
-
-                // Check normalized Levenshtein similarity
-                let sim = calculateLevenshteinSimilarity(target.norm, normSp);
-
-                // If target is an elision word (e.g. n'autorisent, d'accord), also check against base word (e.g. autorisent)
-                // In connected French speech ("canadiennes n'autorisent"), the n' elision merges with preceding [n]
-                if (baseNorm) {
-                    const baseSim = calculateLevenshteinSimilarity(baseNorm, normSp);
-                    if (baseSim >= 0.82) {
-                        sim = Math.max(sim, Math.min(1.0, baseSim + 0.05));
-                    }
-                }
-                if (sim > bestSim) bestSim = sim;
-            }
-
-            // 2. Adjacent two-token combination match
-            // Handles cases where ASR inserts a space after apostrophe: "n'" + "autorisent", or "l'" + "homme"
-            for (let i = 0; i < spokenTokens.length - 1; i++) {
-                const combo = spokenTokens[i] + spokenTokens[i + 1];
-                const normCombo = frenchPhoneticNormalize(combo);
-                const sim = calculateLevenshteinSimilarity(target.norm, normCombo);
-                if (sim > bestSim) bestSim = sim;
-            }
-
-            // 3. French enchaînement / assimilation check:
-            // When preceding word ends in 'n' (like "canadiennes") and current word starts with n' (like "n'autorisent"),
-            // the double [n] naturally fuses into a single [n] in fluent speech: [kanadjɛnotɔʁiz].
-            // If the base verb (autorisent) is recognized, it is an authentic continuous pronunciation.
-            if (baseNorm && targetIdx > 0) {
-                const prevTargetNorm = targetWords[targetIdx - 1].norm;
-                if (prevTargetNorm.endsWith('n') || prevTargetNorm.endsWith('ne')) {
-                    for (let i = 0; i < spokenTokens.length; i++) {
-                        const normSp = frenchPhoneticNormalize(spokenTokens[i]);
-                        if (calculateLevenshteinSimilarity(baseNorm, normSp) >= 0.85) {
-                            bestSim = Math.max(bestSim, 1.0);
-                        }
-                    }
-                }
-            }
-
-            let status = 'missed';
-            if (bestSim >= 0.82) {
-                status = 'correct';
-                matchedCount++;
-            } else if (bestSim >= 0.55) {
-                status = 'acceptable';
-                matchedCount += 0.5;
-            }
-
-            const wordScore = Math.round(bestSim * 100);
-            totalScoreSum += wordScore;
-
-            wordResults.push({
-                word: target.raw,
-                score: wordScore,
-                status: status,
-            });
+        const res = await fetch(path, {
+            method,
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: body ? JSON.stringify(body) : undefined,
         });
-
-        const accuracy = Math.round(totalScoreSum / targetWords.length);
-        const completeness = Math.min(100, Math.round((matchedCount / targetWords.length) * 100));
-        const overallScore = Math.round(accuracy * 0.7 + completeness * 0.3);
-
-        let ratingText = '有待提高 (À travailler)';
-        let ratingClass = 'needs-work';
-
-        if (overallScore >= 90) {
-            ratingText = '卓越 (Excellent !)';
-            ratingClass = 'excellent';
-        } else if (overallScore >= 75) {
-            ratingText = '良好 (Très bien !)';
-            ratingClass = 'good';
-        } else if (overallScore >= 60) {
-            ratingText = '及格 (Passable)';
-            ratingClass = 'pass';
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            throw new Error(data.detail?.message || `请求失败（HTTP ${res.status}）`);
         }
-
-        return {
-            overallScore,
-            accuracy,
-            completeness,
-            ratingText,
-            ratingClass,
-            wordResults,
-        };
+        return data;
     }
-    window.evaluateFrenchPronunciation = evaluateFrenchPronunciation;
 
-    // -------------------------------------------------------------------------
-    // 4. Anki Spaced Repetition (SM-2) Deck Integration
-    // -------------------------------------------------------------------------
-    function updateDeckBadge() {
-        if (!deckManager || !dueCardBadge) return;
-        const dueCount = deckManager.countDue('all');
-        const totalCount = deckManager.countTotal('all');
+    function rememberNote(note) {
+        if (note && note.sentence) srsNotesByKey.set(srsSentenceKey(note.sentence), note);
+    }
 
-        dueCardBadge.textContent = `${dueCount}`;
-        if (dueCount > 0) {
-            dueCardBadge.className = 'deck-badge has-due';
-            dueCardBadge.title = `今日有 ${dueCount} 张卡片待复习 (总计 ${totalCount} 张)`;
-        } else {
-            dueCardBadge.className = 'deck-badge all-done';
-            dueCardBadge.title = `今日复习已完成 (总计 ${totalCount} 张)`;
+    function forgetCard(sentence, cardId) {
+        const key = srsSentenceKey(sentence);
+        const note = srsNotesByKey.get(key);
+        if (!note) return;
+        note.cards = note.cards.filter(c => c.id !== cardId);
+        if (note.cards.length === 0) srsNotesByKey.delete(key);
+    }
+
+    function findTargetCard(sentence, token) {
+        const note = srsNotesByKey.get(srsSentenceKey(sentence || token));
+        const clean = (token || '').trim().toLowerCase();
+        if (!note || !clean) return null;
+        return note.cards.find(c => (c.mode === 'cloze' || c.mode === 'recognize') && c.target.toLowerCase() === clean) || null;
+    }
+
+    function sentenceCards(sentence) {
+        const note = srsNotesByKey.get(srsSentenceKey(sentence));
+        return note ? note.cards.filter(c => c.mode === 'listen' || c.mode === 'speak') : [];
+    }
+
+    function showSrsError(err) {
+        statusMessage.className = 'status-message status-error';
+        statusMessage.textContent = err.message;
+    }
+
+    async function refreshDueBadge() {
+        if (!getUserToken()) {
+            if (dueCardBadge) dueCardBadge.hidden = true;
+            if (todayReviewBanner) todayReviewBanner.hidden = true;
+            return;
         }
-        updateDeckTabsBadge();
-    }
-
-    function updateDeckTabsBadge() {
-        if (!deckManager) return;
-        const stats = deckManager.getStats ? deckManager.getStats() : {
-            allTotal: deckManager.countTotal(),
-            wordTotal: deckManager.countTotal('word'),
-            phraseTotal: deckManager.countTotal('phrase')
-        };
-        if (tabCountAll) tabCountAll.textContent = stats.allTotal;
-        if (tabCountWord) tabCountWord.textContent = stats.wordTotal;
-        if (tabCountPhrase) tabCountPhrase.textContent = stats.phraseTotal;
-    }
-
-    function highlightToken(sentence, token) {
-        if (!sentence || !token) return escapeHtml(sentence || '');
         try {
-            const regex = new RegExp(`(${token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-            return escapeHtml(sentence).replace(regex, '<strong style="color: var(--primary); text-decoration: underline;">$1</strong>');
-        } catch (e) {
-            return escapeHtml(sentence);
-        }
-    }
-
-    function openDeckModal(mode = 'due', group = null) {
-        if (!deckManager || !flashcardModal) return;
-        if (group) {
-            currentDeckFilterGroup = group;
-        }
-
-        deckGroupTabs.forEach(tab => {
-            if (tab.dataset.group === currentDeckFilterGroup) {
-                tab.classList.add('active');
-            } else {
-                tab.classList.remove('active');
+            const data = await srsApi('GET', `/api/srs/queue?tz_offset=${new Date().getTimezoneOffset()}&new_limit=${getNewCardLimit()}`);
+            const { total, review, learning, new: fresh, reviewed_today: done } = data.counts;
+            if (dueCardBadge) {
+                dueCardBadge.textContent = String(total);
+                dueCardBadge.hidden = total === 0;
             }
-        });
-
-        if (mode === 'due') {
-            reviewQueue = deckManager.getDueCards(currentDeckFilterGroup);
-        } else {
-            reviewQueue = deckManager.getAllCards(currentDeckFilterGroup);
+            if (todayReviewBanner) {
+                todayReviewBanner.hidden = total === 0;
+                todayReviewBanner.classList.toggle('is-done', total === 0);
+                if (todayReviewTitle) todayReviewTitle.textContent = `今天有 ${total} 张卡片要复习`;
+                if (todayReviewDetail) {
+                    const minutes = Math.max(1, Math.round(total * 20 / 60));
+                    const parts = [];
+                    if (review + learning) parts.push(`复习 ${review + learning}`);
+                    if (fresh) parts.push(`新卡 ${fresh}`);
+                    todayReviewDetail.textContent = `${parts.join(' · ')} · 约 ${minutes} 分钟${done ? ` · 今天已复习 ${done} 次` : ''}。先复习，再学新句子。`;
+                }
+            }
+        } catch (err) {
+            console.warn('Failed to load review counts:', err);
         }
-
-        currentQueueIndex = 0;
-        isCardFlipped = false;
-        flashcardModal.hidden = false;
-        updateDeckTabsBadge();
-
-        switchDeckView('card');
-        displayCurrentCard();
     }
 
-    function closeDeckModal() {
-        if (!flashcardModal) return;
-        flashcardModal.hidden = true;
-        updateDeckBadge();
+    async function refreshSrsStates(sentences) {
+        if (!getUserToken() || !sentences || sentences.length === 0) {
+            updateTableStarStates();
+            return;
+        }
+        try {
+            const data = await srsApi('POST', '/api/srs/notes/lookup', {
+                sentences: sentences.map(s => s.sentence || s.original || '').filter(Boolean),
+            });
+            (data.notes || []).forEach(rememberNote);
+        } catch (err) {
+            console.warn('Failed to load saved cards:', err);
+        }
         updateTableStarStates();
     }
 
     function updateTableStarStates() {
-        if (!deckManager) return;
-        const starBtns = document.querySelectorAll('.btn-token-star');
-        starBtns.forEach(btn => {
-            const token = btn.dataset.token;
-            if (token && deckManager.hasCard(token)) {
-                btn.classList.add('active');
-                btn.title = '已加入卡片 (点击移除)';
+        document.querySelectorAll('.btn-token-star').forEach(btn => {
+            const saved = Boolean(findTargetCard(btn.dataset.sentence, btn.dataset.token));
+            btn.classList.toggle('active', saved);
+            btn.title = saved ? '已加入复习（点击移除这张挖空卡）' : '加入复习：在句子里挖空这个词';
+        });
+        document.querySelectorAll('.btn-sentence-save').forEach(btn => {
+            const saved = sentenceCards(btn.dataset.sentence).length > 0;
+            btn.classList.toggle('active', saved);
+            btn.title = saved ? '已加入复习（点击移除这句的「听」「说」卡片）' : '加入复习：生成「听」和「说」两张卡片';
+            const label = btn.querySelector('.sentence-save-label');
+            if (label) label.textContent = saved ? '已加入复习' : '加入复习';
+        });
+        updatePopoverStarState();
+    }
+
+    function sentenceNotePayload(sentence) {
+        const ctx = sentenceContextByKey.get(srsSentenceKey(sentence)) || {};
+        return {
+            sentence,
+            translation_zh: ctx.translation_zh || '',
+            translation_en: ctx.translation_en || '',
+            extra: ctx.grammar && ctx.grammar.length ? { grammar: ctx.grammar } : {},
+        };
+    }
+
+    async function toggleTargetCard({ token, sentence, meta }) {
+        const cleanToken = (token || '').trim();
+        if (!cleanToken) return;
+        const existing = findTargetCard(sentence, cleanToken);
+        try {
+            if (existing) {
+                await srsApi('DELETE', `/api/srs/cards/${encodeURIComponent(existing.id)}`);
+                forgetCard(sentence || cleanToken, existing.id);
             } else {
-                btn.classList.remove('active');
-                btn.title = '加入生词卡 (Anki)';
+                const inSentence = Boolean(sentence) && sentence.toLowerCase().includes(cleanToken.toLowerCase());
+                const payload = sentence ? sentenceNotePayload(sentence) : { sentence: cleanToken };
+                payload.targets = [{ text: cleanToken, mode: inSentence ? 'cloze' : 'recognize', meta: meta || {} }];
+                rememberNote(await srsApi('POST', '/api/srs/notes', payload));
             }
-        });
+        } catch (err) {
+            showSrsError(err);
+        }
+        updateTableStarStates();
+        refreshDueBadge();
+    }
 
-        const grammarStarBtns = document.querySelectorAll('.btn-grammar-star');
-        grammarStarBtns.forEach(btn => {
-            const token = btn.dataset.token;
-            const label = btn.querySelector('.grammar-star-label');
-            if (token && deckManager.hasCard(token)) {
-                btn.classList.add('active');
-                btn.title = '已存入记忆卡 (点击移除)';
-                if (label) label.textContent = '已存记忆卡';
+    async function toggleSentenceCards(sentence) {
+        if (!sentence) return;
+        const existing = sentenceCards(sentence);
+        try {
+            if (existing.length > 0) {
+                for (const card of existing) {
+                    await srsApi('DELETE', `/api/srs/cards/${encodeURIComponent(card.id)}`);
+                    forgetCard(sentence, card.id);
+                }
             } else {
-                btn.classList.remove('active');
-                btn.title = '存入记忆卡 (Anki)';
-                if (label) label.textContent = '存为记忆卡';
+                const payload = sentenceNotePayload(sentence);
+                payload.modes = ['listen', 'speak'];
+                rememberNote(await srsApi('POST', '/api/srs/notes', payload));
             }
-        });
-
-        const anchorBtns = document.querySelectorAll('.btn-anchor-save');
-        anchorBtns.forEach(btn => {
-            const token = btn.dataset.token;
-            const label = btn.querySelector('.anchor-save-label');
-            if (token && deckManager.hasCard(token)) {
-                btn.classList.add('active');
-                btn.title = '已存入记忆卡 (点击移除)';
-                if (label) label.textContent = '已存记忆卡';
-            } else {
-                btn.classList.remove('active');
-                btn.title = '存入 Anki 记忆卡';
-                if (label) label.textContent = '存为记忆卡';
-            }
-        });
-    }
-
-    function switchDeckView(mode = 'card') {
-        currentDeckViewMode = mode;
-        if (mode === 'card') {
-            if (btnViewCard) btnViewCard.classList.add('active');
-            if (btnViewList) btnViewList.classList.remove('active');
-            if (deckListView) deckListView.hidden = true;
-            displayCurrentCard();
-        } else {
-            if (btnViewCard) btnViewCard.classList.remove('active');
-            if (btnViewList) btnViewList.classList.add('active');
-            if (cardStage) cardStage.hidden = true;
-            if (modalRatingFooter) modalRatingFooter.hidden = true;
-            if (deckEmptyScreen) deckEmptyScreen.hidden = true;
-            if (deckListView) deckListView.hidden = false;
-            renderDeckListView();
+        } catch (err) {
+            showSrsError(err);
         }
-        refreshIcons();
-    }
-
-    function renderDeckListView() {
-        if (!deckManager || !deckCardsList) return;
-        const allTargetCards = deckManager.getAllCards(currentDeckFilterGroup);
-        const query = (deckSearchInput ? deckSearchInput.value : '').trim().toLowerCase();
-
-        const filtered = allTargetCards.filter(c => {
-            if (!query) return true;
-            return (c.token || '').toLowerCase().includes(query) ||
-                (c.lemma || '').toLowerCase().includes(query) ||
-                (c.explanation_cn || '').toLowerCase().includes(query) ||
-                (c.explanation_en || '').toLowerCase().includes(query) ||
-                (c.hook || '').toLowerCase().includes(query);
-        });
-
-        if (deckListStats) {
-            const groupLabel = currentDeckFilterGroup === 'word' ? '单词' : (currentDeckFilterGroup === 'phrase' ? '词组' : '卡片');
-            deckListStats.textContent = query
-                ? `搜索结果: ${filtered.length} / ${allTargetCards.length} 张`
-                : `共 ${allTargetCards.length} 张${groupLabel}`;
-        }
-
-        if (deckSearchClearBtn) {
-            deckSearchClearBtn.hidden = !query;
-        }
-
-        if (filtered.length === 0) {
-            const groupName = currentDeckFilterGroup === 'word' ? '单词' : (currentDeckFilterGroup === 'phrase' ? '词组' : '卡片');
-            deckCardsList.innerHTML = `
-                <div class="deck-list-empty">
-                    <p style="font-size: 24px; margin-bottom: 8px;">📭</p>
-                    <p>${query ? '没有找到匹配的' + groupName : '当前「' + groupName + '」暂无已保存的卡片'}</p>
-                    <p style="color: var(--muted); font-size: 12px; margin-top: 4px;">
-                        ${currentDeckFilterGroup === 'phrase' ? '在「费曼记忆锚」或语法考点中点击【⭐ 存为记忆卡】即可加入此处' : '在逐词剖析表中点击 ⭐ 即可加入此处'}
-                    </p>
-                </div>
-            `;
-            return;
-        }
-
-        const nowIso = new Date().toISOString();
-        deckCardsList.innerHTML = filtered.map(c => {
-            const group = window.AnkiDeck && window.AnkiDeck.getCardGroup ? window.AnkiDeck.getCardGroup(c) : (c.group || 'word');
-            const isPhrase = group === 'phrase';
-            const isDue = !c.dueDate || c.dueDate <= nowIso;
-            const dueLabel = isDue ? '今日待复习' : `${c.interval || 0}天后复习`;
-
-            return `
-                <div class="deck-list-row" data-id="${escapeHtml(c.id)}">
-                    <div class="deck-row-left">
-                        <span class="badge-card-group ${isPhrase ? 'phrase' : 'word'}">${isPhrase ? '🧩 词组句式' : '📖 单词'}</span>
-                        <div class="deck-row-content">
-                            <div class="deck-row-title-line">
-                                <span class="deck-row-token">${escapeHtml(c.token)}</span>
-                                ${c.phonetic ? `<span class="deck-row-phonetic">${escapeHtml(c.phonetic)}</span>` : ''}
-                                ${c.pos ? `<span class="deck-row-pos">${escapeHtml(c.pos)}</span>` : ''}
-                            </div>
-                            <div class="deck-row-exp">
-                                ${escapeHtml(c.explanation_cn || c.explanation_en || '无释义')}
-                                ${c.explanation_en && c.explanation_cn ? `<span class="deck-row-exp-en"> (${escapeHtml(c.explanation_en)})</span>` : ''}
-                            </div>
-                            ${c.hook ? `<div style="font-size: 11.5px; color: #6b21a8; margin-top: 2px;">🧠 <strong>费曼记忆锚:</strong> ${escapeHtml(c.hook)}</div>` : ''}
-                        </div>
-                    </div>
-                    <div class="deck-row-right">
-                        <span class="deck-row-due ${isDue ? 'due-now' : 'due-future'}">${dueLabel}</span>
-                        <button class="deck-btn-speak" data-token="${escapeHtml(c.token)}" type="button" title="发音">
-                            <i data-lucide="volume-2"></i>
-                        </button>
-                        <button class="deck-btn-delete" data-id="${escapeHtml(c.id)}" data-token="${escapeHtml(c.token)}" type="button" title="移出卡片库">
-                            <i data-lucide="trash-2"></i>
-                        </button>
-                    </div>
-                </div>
-            `;
-        }).join('');
-
-        // Bind speak and delete
-        deckCardsList.querySelectorAll('.deck-btn-speak').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                playFrenchSpeech(btn.dataset.token);
-            });
-        });
-
-        deckCardsList.querySelectorAll('.deck-btn-delete').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const cardId = btn.dataset.id;
-                const token = btn.dataset.token;
-                if (!deckManager) return;
-                deckManager.removeCard(cardId || token);
-                updateDeckBadge();
-                updateDeckTabsBadge();
-                updateTableStarStates();
-                renderDeckListView();
-            });
-        });
-
-        refreshIcons();
-    }
-
-    function displayCurrentCard() {
-        if (currentDeckViewMode === 'list') {
-            renderDeckListView();
-            return;
-        }
-
-        if (reviewQueue.length === 0 || currentQueueIndex >= reviewQueue.length) {
-            // Completion / Empty state
-            cardStage.hidden = true;
-            modalRatingFooter.hidden = true;
-            deckEmptyScreen.hidden = false;
-
-            const total = deckManager ? deckManager.countTotal(currentDeckFilterGroup) : 0;
-            const groupName = currentDeckFilterGroup === 'word' ? '单词' : (currentDeckFilterGroup === 'phrase' ? '词组' : '卡片');
-            if (total === 0) {
-                emptyScreenTitle.textContent = `${groupName}库还是空的`;
-                emptyScreenDesc.textContent = currentDeckFilterGroup === 'phrase'
-                    ? '在文本精析中的「语法点与记忆钩子」卡片右上角点击【⭐ 存为词组】，或划选短语即可加入词组复习库。'
-                    : '在文本拆解列表中点击单词旁的 ⭐ 按钮，即可将生词加入 Anki 记忆库。';
-                studyAllCardsBtn.hidden = true;
-            } else {
-                emptyScreenTitle.textContent = `🎉 今日待复习${groupName}已全部完成！`;
-                emptyScreenDesc.textContent = '遵循 Anki SM-2 间隔记忆算法，已复习的卡片将在未来最佳艾宾浩斯复习节点再次出现。';
-                studyAllCardsBtn.hidden = false;
-                const btnSpan = studyAllCardsBtn.querySelector('span');
-                if (btnSpan) btnSpan.textContent = `复习全部${groupName} (${total})`;
-                totalCardCountSpan.textContent = total;
-            }
-            modalProgressBadge.textContent = '已完成';
-            refreshIcons();
-            return;
-        }
-
-        const currentCard = reviewQueue[currentQueueIndex];
-        cardStage.hidden = false;
-        deckEmptyScreen.hidden = true;
-
-        // Reset to front face
-        isCardFlipped = false;
-        cardFrontFace.hidden = false;
-        cardBackFace.hidden = true;
-        modalRatingFooter.hidden = true;
-
-        // Group pill
-        const group = window.AnkiDeck && window.AnkiDeck.getCardGroup ? window.AnkiDeck.getCardGroup(currentCard) : (currentCard.group || 'word');
-        const isPhrase = group === 'phrase';
-        if (cardFrontGroupBadge) {
-            cardFrontGroupBadge.textContent = isPhrase ? '🧩 词组句式' : '📖 单词';
-            cardFrontGroupBadge.className = `badge-card-group ${isPhrase ? 'phrase' : 'word'}`;
-        }
-        if (cardBackGroupBadge) {
-            cardBackGroupBadge.textContent = isPhrase ? '🧩 词组句式' : '📖 单词';
-            cardBackGroupBadge.className = `badge-card-group ${isPhrase ? 'phrase' : 'word'}`;
-        }
-
-        // Populate front content
-        cardFrontWord.textContent = currentCard.token;
-        cardFrontPhonetic.textContent = formatFriendlyPhonetic(currentCard.phonetic || '');
-
-        if (currentCard.sentence) {
-            cardFrontSentence.innerHTML = highlightToken(currentCard.sentence, currentCard.token);
-            cardQuoteBox.hidden = false;
-        } else {
-            cardQuoteBox.hidden = true;
-        }
-
-        // Populate back content
-        cardBackPos.textContent = currentCard.pos || '';
-        cardBackPos.hidden = !currentCard.pos;
-
-        if (currentCard.lemma && currentCard.lemma.toLowerCase() !== currentCard.token.toLowerCase()) {
-            cardBackLemma.textContent = `原形: ${currentCard.lemma}`;
-            cardBackLemma.hidden = false;
-        } else {
-            cardBackLemma.hidden = true;
-        }
-
-        cardBackCn.textContent = currentCard.explanation_cn || '暂无释义';
-        cardBackEn.textContent = currentCard.explanation_en || '';
-        cardSentenceCn.textContent = currentCard.sentence_cn || '';
-
-        if (cardBackHookBox && cardBackHookText) {
-            if (currentCard.hook) {
-                cardBackHookText.textContent = currentCard.hook;
-                cardBackHookBox.hidden = false;
-            } else {
-                cardBackHookBox.hidden = true;
-            }
-        }
-
-        modalProgressBadge.textContent = `${currentQueueIndex + 1} / ${reviewQueue.length}`;
-
-        // Compute estimated interval labels for 4 grade buttons based on SM-2
-        updateGradeButtonIntervals(currentCard);
-
-        // Auto-play pronunciation of the French word / phrase
-        if (currentCard.token) {
-            try {
-                playFrenchSpeech(currentCard.token);
-            } catch (e) {
-                console.warn('Auto play speech prevented:', e);
-            }
-        }
-
-        refreshIcons();
-    }
-
-    function updateGradeButtonIntervals(card) {
-        const interval = card.interval || 0;
-        const ef = card.easeFactor || 2.5;
-        const rep = card.repetitions || 0;
-
-        let hardDays = rep === 0 ? 1 : Math.max(1, Math.round(interval * 1.2));
-        let goodDays = rep === 0 ? 1 : (rep === 1 ? 6 : Math.round(interval * ef));
-        let easyDays = rep === 0 ? 3 : (rep === 1 ? 8 : Math.round(interval * ef * 1.3));
-
-        const gradeInterval1 = document.querySelector('.btn-grade.grade-1 .grade-interval');
-        const gradeInterval2 = document.querySelector('.btn-grade.grade-2 .grade-interval');
-        const gradeInterval3 = document.querySelector('.btn-grade.grade-3 .grade-interval');
-        const gradeInterval4 = document.querySelector('.btn-grade.grade-4 .grade-interval');
-
-        if (gradeInterval1) gradeInterval1.textContent = '<1天';
-        if (gradeInterval2) gradeInterval2.textContent = `${hardDays}天`;
-        if (gradeInterval3) gradeInterval3.textContent = `${goodDays}天`;
-        if (gradeInterval4) gradeInterval4.textContent = `${easyDays}天`;
-    }
-
-    function flipCurrentCard() {
-        if (cardStage.hidden || currentQueueIndex >= reviewQueue.length) return;
-        if (!isCardFlipped) {
-            isCardFlipped = true;
-            cardFrontFace.hidden = true;
-            cardBackFace.hidden = false;
-            modalRatingFooter.hidden = false;
-            refreshIcons();
-        }
-    }
-
-    function rateCurrentCard(grade) {
-        if (!deckManager || currentQueueIndex >= reviewQueue.length) return;
-        const currentCard = reviewQueue[currentQueueIndex];
-
-        deckManager.reviewCard(currentCard.id, grade);
-
-        // If grade === 1 (Again), append back to review queue for this session
-        if (grade === 1) {
-            reviewQueue.push(currentCard);
-        }
-
-        currentQueueIndex++;
-        displayCurrentCard();
-        updateDeckBadge();
+        updateTableStarStates();
+        refreshDueBadge();
     }
 
     // -------------------------------------------------------------------------
@@ -1561,7 +926,7 @@ function initStudyWorkbench() {
         const why = w.why || '';
         const engLink = w.english_link || '';
         const falseFriend = Boolean(w.false_friend);
-        const isSaved = deckManager ? deckManager.hasCard(tokenText) : false;
+        const isSaved = Boolean(findTargetCard(sentenceText, tokenText));
         const posCat = getPosCategory(pos);
         const posClass = getPosTagClass(pos);
         const isFunc = isFunctionWordPos(pos);
@@ -1594,7 +959,7 @@ function initStudyWorkbench() {
                             <i data-lucide="volume-2"></i>
                         </button>
                         <button class="btn-token-star ${isSaved ? 'active' : ''}" type="button"
-                            title="${isSaved ? '已加入生词卡 (点击移除)' : '加入生词卡 (Anki)'}"
+                            title="${isSaved ? '已加入复习（点击移除这张挖空卡）' : '加入复习：在句子里挖空这个词'}"
                             data-token="${escapeHtml(tokenText)}"
                             data-lemma="${escapeHtml(lemma)}"
                             data-pos="${escapeHtml(pos)}"
@@ -1646,6 +1011,15 @@ function initStudyWorkbench() {
             const sentenceText = s.sentence || s.original || '';
             const transEn = s.translation_en || '';
             const transZh = s.translation_zh || s.translation_cn || '';
+            sentenceContextByKey.set(srsSentenceKey(sentenceText), {
+                translation_zh: transZh,
+                translation_en: transEn,
+                grammar: (s.grammar_points || []).slice(0, 3).map(g => ({
+                    title: g.title || '',
+                    explanation: g.explanation || '',
+                    hook: g.hook || '',
+                })),
+            });
 
             // Index words/tokens for instant popover lookup
             const wordsList = isV2 ? (s.words || []) : (s.tokens || []);
@@ -1760,9 +1134,6 @@ function initStudyWorkbench() {
                 if (s.grammar_points && s.grammar_points.length > 0) {
                     const topAnchors = s.grammar_points.slice(0, 2);
                     const anchorsHtml = topAnchors.map((g, pIdx) => {
-                        let patternToken = (g.title || '').replace(/^(?:Fixed pattern:\s*|Grammar pattern:\s*|Pattern:\s*|搭配\/句式:\s*)/i, '').split('=')[0].trim();
-                        if (!patternToken) patternToken = g.title || '';
-                        const isSaved = deckManager ? deckManager.hasCard(patternToken) : false;
                         return `
                             <div class="feynman-hero-anchor">
                                 <div class="feynman-anchor-top">
@@ -1770,17 +1141,6 @@ function initStudyWorkbench() {
                                         <span class="feynman-anchor-badge">🧠 费曼记忆锚${topAnchors.length > 1 ? ' #' + (pIdx + 1) : ''}</span>
                                         <strong class="feynman-anchor-title">${escapeHtml(g.title)}</strong>
                                     </div>
-                                    <button class="btn-anchor-save ${isSaved ? 'active' : ''}" type="button"
-                                        title="${isSaved ? '已存入记忆卡 (点击移除)' : '存入 Anki 记忆卡'}"
-                                        data-token="${escapeHtml(patternToken)}"
-                                        data-title="${escapeHtml(g.title)}"
-                                        data-exp="${escapeHtml(g.explanation || '')}"
-                                        data-hook="${escapeHtml(g.hook || '')}"
-                                        data-sentence="${escapeHtml(sentenceText)}"
-                                        data-sentence-cn="${escapeHtml(transZh)}">
-                                        <i data-lucide="star"></i>
-                                        <span class="anchor-save-label">${isSaved ? '已存记忆卡' : '存为记忆卡'}</span>
-                                    </button>
                                 </div>
                                 <div class="feynman-anchor-content">
                                     ${g.hook ? `
@@ -1828,6 +1188,10 @@ function initStudyWorkbench() {
                             <p class="sentence-french-text">${renderInteractiveWordsHtml(sentenceText)}</p>
                             <button class="btn-speak-round" type="button" title="收听整句标准发音" aria-label="朗读句子">
                                 <i data-lucide="volume-2"></i>
+                            </button>
+                            <button class="btn-sentence-save" type="button" data-sentence="${escapeHtml(sentenceText)}" title="加入复习：生成「听」和「说」两张卡片">
+                                <i data-lucide="bookmark-plus"></i>
+                                <span class="sentence-save-label">加入复习</span>
                             </button>
                         </div>
                         ${interlinearHtml}
@@ -1998,9 +1362,6 @@ function initStudyWorkbench() {
                 let grammarHtml = '';
                 if (s.grammar_points && s.grammar_points.length > 0) {
                     const pointsHtml = s.grammar_points.map(g => {
-                        let patternToken = (g.title || '').replace(/^(?:Fixed pattern:\s*|Grammar pattern:\s*|Pattern:\s*|搭配\/句式:\s*)/i, '').split('=')[0].trim();
-                        if (!patternToken) patternToken = g.title || '';
-                        const isSaved = deckManager ? deckManager.hasCard(patternToken) : false;
                         return `
                             <div class="grammar-point-card">
                                 <div class="grammar-point-header">
@@ -2008,17 +1369,6 @@ function initStudyWorkbench() {
                                         <span class="grammar-bullet">📌</span>
                                         <h4 class="grammar-point-title">${escapeHtml(g.title)}</h4>
                                     </div>
-                                    <button class="btn-grammar-star ${isSaved ? 'active' : ''}" type="button"
-                                        title="${isSaved ? '已存入记忆卡 (点击移除)' : '存入记忆卡 (Anki)'}"
-                                        data-token="${escapeHtml(patternToken)}"
-                                        data-title="${escapeHtml(g.title)}"
-                                        data-exp="${escapeHtml(g.explanation || '')}"
-                                        data-hook="${escapeHtml(g.hook || '')}"
-                                        data-sentence="${escapeHtml(sentenceText)}"
-                                        data-sentence-cn="${escapeHtml(transZh)}">
-                                        <i data-lucide="star"></i>
-                                        <span class="grammar-star-label">${isSaved ? '已存记忆卡' : '存为记忆卡'}</span>
-                                    </button>
                                 </div>
                                 <div class="grammar-point-body">
                                     <p class="grammar-point-exp">${escapeHtml(g.explanation)}</p>
@@ -2145,6 +1495,10 @@ function initStudyWorkbench() {
                             <button class="btn-speak-round" type="button" title="收听整句标准发音" aria-label="朗读句子">
                                 <i data-lucide="volume-2"></i>
                             </button>
+                            <button class="btn-sentence-save" type="button" data-sentence="${escapeHtml(sentenceText)}" title="加入复习：生成「听」和「说」两张卡片">
+                                <i data-lucide="bookmark-plus"></i>
+                                <span class="sentence-save-label">加入复习</span>
+                            </button>
                         </div>
                         <div class="sentence-translations">
                             <div class="translation-cn">${escapeHtml(transZh)}</div>
@@ -2161,7 +1515,7 @@ function initStudyWorkbench() {
                     const phonetic = tok.phonetic || tok.ipa || '';
                     const expEn = tok.explanation_en || tok.meaning || '';
                     const expCn = tok.explanation_cn || '';
-                    const isSaved = deckManager ? deckManager.hasCard(tokenText) : false;
+                    const isSaved = Boolean(findTargetCard(sentenceText, tokenText));
 
                     rowsHtml += `
                         <tr>
@@ -2174,7 +1528,7 @@ function initStudyWorkbench() {
                                                 <i data-lucide="volume-2"></i>
                                             </button>
                                             <button class="btn-token-star ${isSaved ? 'active' : ''}" type="button"
-                                                title="${isSaved ? '已加入生词卡 (点击移除)' : '加入生词卡 (Anki)'}"
+                                                title="${isSaved ? '已加入复习（点击移除这张挖空卡）' : '加入复习：在句子里挖空这个词'}"
                                                 data-token="${escapeHtml(tokenText)}"
                                                 data-lemma="${escapeHtml(lemma)}"
                                                 data-pos="${escapeHtml(pos)}"
@@ -2225,6 +1579,7 @@ function initStudyWorkbench() {
         });
 
         refreshIcons();
+        refreshSrsStates(sentences);
     }
 
     function attachSentenceCardEvents(card, targetSentence, transCn = '', transEn = '') {
@@ -2376,98 +1731,28 @@ function initStudyWorkbench() {
             });
         });
 
-        // 3. Token Anki Star Buttons
-        const tokenStarBtns = card.querySelectorAll('.btn-token-star');
-        tokenStarBtns.forEach(btn => {
+        // 3. Review cards: word star = cloze card, hero button = listen + speak cards
+        card.querySelectorAll('.btn-token-star').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (!deckManager) return;
-                const token = btn.dataset.token;
-                if (!token) return;
-
-                if (deckManager.hasCard(token)) {
-                    deckManager.removeCard(token);
-                } else {
-                    deckManager.addCard({
-                        token: token,
+                toggleTargetCard({
+                    token: btn.dataset.token,
+                    sentence: btn.dataset.sentence,
+                    meta: {
+                        meaning_zh: btn.dataset.expCn,
+                        meaning_en: btn.dataset.expEn,
                         lemma: btn.dataset.lemma,
                         pos: btn.dataset.pos,
-                        phonetic: btn.dataset.phonetic,
-                        explanation_en: btn.dataset.expEn,
-                        explanation_cn: btn.dataset.expCn,
-                        sentence: btn.dataset.sentence,
-                        sentence_cn: btn.dataset.sentenceCn,
-                        group: 'word'
-                    });
-                }
-
-                updateDeckBadge();
-                updateTableStarStates();
-                refreshIcons();
+                        ipa: btn.dataset.phonetic,
+                    },
+                });
             });
         });
 
-        // 3b. Grammar Star Buttons (存为记忆卡)
-        const grammarStarBtns = card.querySelectorAll('.btn-grammar-star');
-        grammarStarBtns.forEach(btn => {
+        card.querySelectorAll('.btn-sentence-save').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (!deckManager) return;
-                const token = btn.dataset.token;
-                if (!token) return;
-
-                if (deckManager.hasCard(token)) {
-                    deckManager.removeCard(token);
-                } else {
-                    deckManager.addCard({
-                        token: token,
-                        lemma: token,
-                        pos: '🧠 费曼核心句型',
-                        phonetic: '',
-                        explanation_en: btn.dataset.exp || '',
-                        explanation_cn: btn.dataset.hook ? `💡 ${btn.dataset.hook}` : (btn.dataset.exp || ''),
-                        sentence: btn.dataset.sentence || '',
-                        sentence_cn: btn.dataset.sentenceCn || '',
-                        group: 'phrase',
-                        hook: btn.dataset.hook || ''
-                    });
-                }
-
-                updateDeckBadge();
-                updateTableStarStates();
-                refreshIcons();
-            });
-        });
-
-        // 3b2. Feynman Hero Anchor Star Buttons (存为记忆卡)
-        const anchorSaveBtns = card.querySelectorAll('.btn-anchor-save');
-        anchorSaveBtns.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (!deckManager) return;
-                const token = btn.dataset.token;
-                if (!token) return;
-
-                if (deckManager.hasCard(token)) {
-                    deckManager.removeCard(token);
-                } else {
-                    deckManager.addCard({
-                        token: token,
-                        lemma: token,
-                        pos: '🧠 费曼核心句型',
-                        phonetic: '',
-                        explanation_en: btn.dataset.exp || '',
-                        explanation_cn: btn.dataset.hook ? `💡 ${btn.dataset.hook}` : (btn.dataset.exp || ''),
-                        sentence: btn.dataset.sentence || '',
-                        sentence_cn: btn.dataset.sentenceCn || '',
-                        group: 'phrase',
-                        hook: btn.dataset.hook || ''
-                    });
-                }
-
-                updateDeckBadge();
-                updateTableStarStates();
-                refreshIcons();
+                toggleSentenceCards(btn.dataset.sentence);
             });
         });
 
@@ -3006,6 +2291,10 @@ function initStudyWorkbench() {
             localStorage.setItem(userTokenKey, data.token);
             updateAuthUI(data.user);
             closeAuthModal();
+            refreshDueBadge();
+            const renderedSentences = Array.from(document.querySelectorAll('.btn-sentence-save'))
+                .map(btn => ({ sentence: btn.dataset.sentence }));
+            refreshSrsStates(renderedSentences);
             statusMessage.className = 'status-message status-success';
             statusMessage.textContent = '登录成功！欢迎回来。';
         } catch (err) {
@@ -3020,6 +2309,9 @@ function initStudyWorkbench() {
 
     function handleLogout() {
         localStorage.removeItem(userTokenKey);
+        srsNotesByKey.clear();
+        updateTableStarStates();
+        refreshDueBadge();
         updateAuthUI(null);
         closeAuthModal();
         statusMessage.className = 'status-message status-info';
@@ -3393,17 +2685,11 @@ function initStudyWorkbench() {
     }
 
     function updatePopoverStarState() {
-        if (!popoverStarBtn || !currentPopoverCard || !deckManager) return;
-        const exists = deckManager.hasCard(currentPopoverCard.token);
-        if (exists) {
-            popoverStarBtn.classList.add('active');
-            popoverStarBtn.title = '已存生词卡 (点击移出)';
-            if (popoverStarText) popoverStarText.textContent = '已存生词卡';
-        } else {
-            popoverStarBtn.classList.remove('active');
-            popoverStarBtn.title = '存入 Anki 生词卡';
-            if (popoverStarText) popoverStarText.textContent = '加入生词卡';
-        }
+        if (!popoverStarBtn || !currentPopoverCard) return;
+        const exists = Boolean(findTargetCard(currentPopoverCard.sentence, currentPopoverCard.token));
+        popoverStarBtn.classList.toggle('active', exists);
+        popoverStarBtn.title = exists ? '已加入复习（点击移除）' : '加入复习 (快捷键 S)';
+        if (popoverStarText) popoverStarText.textContent = exists ? '已加入复习' : '加入复习';
     }
 
     async function showPopoverForElement(rawWord, element, context = {}) {
@@ -3604,7 +2890,7 @@ function initStudyWorkbench() {
             collapseInputPanel(text);
 
             statusMessage.className = 'status-message status-success';
-            statusMessage.textContent = '拆解完成！您可以查阅释义、点击 ⭐ 存入 Anki 生词卡、点击 🔊 即时发音，或进行跟读打分。';
+            statusMessage.textContent = '拆解完成！先试着自己讲讲这句话（费曼自测），再看讲解；想背的句子点「加入复习」，想背的词点 ⭐、点击 🔊 即时发音，或进行跟读打分。';
         } catch (err) {
             statusMessage.className = 'status-message status-error';
             statusMessage.textContent = `拆解失败: ${err.message}`;
@@ -3711,123 +2997,6 @@ function initStudyWorkbench() {
         });
     }
 
-    // Flashcard Deck Modal Open/Close
-    if (openDeckBtn) {
-        openDeckBtn.addEventListener('click', () => openDeckModal('due'));
-    }
-
-    if (closeModalBtn) {
-        closeModalBtn.addEventListener('click', closeDeckModal);
-    }
-
-    if (flashcardModal) {
-        flashcardModal.addEventListener('click', (e) => {
-            if (e.target === flashcardModal) {
-                closeDeckModal();
-            }
-        });
-    }
-
-    // Card Stage Flip & Speak
-    if (cardStage) {
-        cardStage.addEventListener('click', () => {
-            flipCurrentCard();
-        });
-    }
-
-    if (cardSpeakBtn) {
-        cardSpeakBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (reviewQueue.length > 0 && currentQueueIndex < reviewQueue.length) {
-                const cur = reviewQueue[currentQueueIndex];
-                if (cur && cur.token) playFrenchSpeech(cur.token);
-            }
-        });
-    }
-
-    if (cardBackSpeakBtn) {
-        cardBackSpeakBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (reviewQueue.length > 0 && currentQueueIndex < reviewQueue.length) {
-                const cur = reviewQueue[currentQueueIndex];
-                if (cur && cur.token) playFrenchSpeech(cur.token);
-            }
-        });
-    }
-
-    if (cardSentenceSpeakBtn) {
-        cardSentenceSpeakBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (reviewQueue.length > 0 && currentQueueIndex < reviewQueue.length) {
-                const cur = reviewQueue[currentQueueIndex];
-                if (cur && cur.sentence) playFrenchSpeech(cur.sentence);
-            }
-        });
-    }
-
-    // Flashcard SM-2 Grade Buttons
-    gradeButtons.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const grade = parseInt(btn.dataset.grade, 10);
-            if (grade >= 1 && grade <= 4) {
-                rateCurrentCard(grade);
-            }
-        });
-    });
-
-    // Study all cards button from completion screen
-    if (studyAllCardsBtn) {
-        studyAllCardsBtn.addEventListener('click', () => {
-            openDeckModal('all', currentDeckFilterGroup);
-        });
-    }
-
-    // Group Tab switching
-    deckGroupTabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            currentDeckFilterGroup = tab.dataset.group || 'all';
-            deckGroupTabs.forEach(t => t.classList.toggle('active', t === tab));
-            if (currentDeckViewMode === 'card') {
-                openDeckModal('due', currentDeckFilterGroup);
-            } else {
-                renderDeckListView();
-            }
-        });
-    });
-
-    // View mode switching (Card Flip vs Card List)
-    if (btnViewCard) btnViewCard.addEventListener('click', () => switchDeckView('card'));
-    if (btnViewList) btnViewList.addEventListener('click', () => switchDeckView('list'));
-
-    // Card List Search
-    if (deckSearchInput) {
-        deckSearchInput.addEventListener('input', () => renderDeckListView());
-    }
-    if (deckSearchClearBtn) {
-        deckSearchClearBtn.addEventListener('click', () => {
-            if (deckSearchInput) {
-                deckSearchInput.value = '';
-                deckSearchInput.focus();
-            }
-            renderDeckListView();
-        });
-    }
-
-    // Anki TSV Export
-    function handleExportDeck() {
-        if (!deckManager) return;
-        try {
-            const groupLabel = currentDeckFilterGroup === 'all' ? 'All' : (currentDeckFilterGroup === 'word' ? 'Words' : 'Phrases');
-            deckManager.downloadAnkiFile(`FrenchStudio_Deck_${groupLabel}.tsv`, currentDeckFilterGroup);
-        } catch (err) {
-            alert(err.message);
-        }
-    }
-
-    if (exportDeckBtn) exportDeckBtn.addEventListener('click', handleExportDeck);
-    if (exportDeckBtn2) exportDeckBtn2.addEventListener('click', handleExportDeck);
-
     // Floating Lexical Popover Bindings
     if (popoverCloseBtn) popoverCloseBtn.addEventListener('click', closeWordPopover);
     if (popoverSpeakBtn) {
@@ -3847,30 +3016,22 @@ function initStudyWorkbench() {
         });
     }
     if (popoverStarBtn) {
-        popoverStarBtn.addEventListener('click', (e) => {
+        popoverStarBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            if (!currentPopoverCard || !deckManager) return;
-            if (deckManager.hasCard(currentPopoverCard.token)) {
-                deckManager.removeCard(currentPopoverCard.token);
-            } else {
-                const tok = (currentPopoverCard.token || '').trim();
-                const isPhrase = tok.includes(' ') || tok.includes('...') || (currentPopoverCard.pos && (currentPopoverCard.pos.includes('phrase') || currentPopoverCard.pos.includes('词组') || currentPopoverCard.pos.includes('搭配')));
-                deckManager.addCard({
-                    token: currentPopoverCard.token,
-                    lemma: currentPopoverCard.lemma,
-                    pos: currentPopoverCard.pos,
-                    phonetic: currentPopoverCard.phonetic,
-                    explanation_cn: currentPopoverCard.explanation_cn,
-                    explanation_en: currentPopoverCard.explanation_en,
-                    sentence: currentPopoverCard.sentence || '',
-                    sentence_cn: currentPopoverCard.sentence_cn || '',
-                    group: isPhrase ? 'phrase' : 'word',
-                    hook: currentPopoverCard.hook || ''
-                });
-            }
-            updatePopoverStarState();
-            updateDeckBadge();
-            updateTableStarStates();
+            if (!currentPopoverCard) return;
+            const c = currentPopoverCard;
+            await toggleTargetCard({
+                token: c.token,
+                sentence: c.sentence || '',
+                meta: {
+                    meaning_zh: c.explanation_cn,
+                    meaning_en: c.explanation_en,
+                    lemma: c.lemma,
+                    pos: c.pos,
+                    ipa: c.phonetic,
+                    hook: c.hook,
+                },
+            });
         });
     }
 
@@ -3910,7 +3071,7 @@ function initStudyWorkbench() {
         }
     }, { passive: true });
 
-    // Global Keyboard listener for Flashcard review & Popover
+    // Global Keyboard listener for the word popover
     document.addEventListener('keydown', (e) => {
         // Close word popover on Escape
         if (e.key === 'Escape' && floatingWordPopover && !floatingWordPopover.hidden) {
@@ -3935,43 +3096,15 @@ function initStudyWorkbench() {
                 return;
             }
         }
-
-        if (!flashcardModal || flashcardModal.hidden) return;
-
-        if (e.key === 'Escape') {
-            closeDeckModal();
-            return;
-        }
-
-        // 'R' or 'r' key to replay audio in flashcard
-        if (e.key === 'r' || e.key === 'R') {
-            e.preventDefault();
-            if (reviewQueue.length > 0 && currentQueueIndex < reviewQueue.length) {
-                const cur = reviewQueue[currentQueueIndex];
-                if (cur && cur.token) playFrenchSpeech(cur.token);
-            }
-            return;
-        }
-
-        if (e.code === 'Space') {
-            e.preventDefault();
-            if (!isCardFlipped) {
-                flipCurrentCard();
-            }
-            return;
-        }
-
-        // When card is flipped, keys 1, 2, 3, 4 trigger rating
-        if (isCardFlipped && ['1', '2', '3', '4'].includes(e.key)) {
-            e.preventDefault();
-            rateCurrentCard(parseInt(e.key, 10));
-        }
     });
 
     // Check prefilled URL query param `?text=...`
     window.renderStudyDeck = renderStudyDeck;
     const urlParams = new URLSearchParams(window.location.search);
     const prefillText = urlParams.get('text');
+    if (urlParams.get('login') === '1' && !localStorage.getItem(userTokenKey)) {
+        openAuthModal();
+    }
     if (prefillText) {
         frenchInput.value = decodeURIComponent(prefillText);
         charCounter.textContent = `${frenchInput.value.length} / 15000`;

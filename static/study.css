@@ -4000,3 +4000,127 @@
 .function-words-summary-bar.is-expanded .fw-chevron {
     transform: rotate(180deg);
 }
+
+/* ==========================================================================
+   Server-side review (FSRS): hero "加入复习" button + today banner
+   ========================================================================== */
+.sentence-text-row .sentence-french-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.btn-sentence-save {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 38px;
+    padding: 0 14px;
+    border-radius: 19px;
+    border: 1px solid var(--primary);
+    background: var(--surface);
+    color: var(--primary);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.btn-sentence-save:hover {
+    background: var(--primary-soft);
+}
+
+.btn-sentence-save.active {
+    background: var(--primary);
+    color: #ffffff;
+}
+
+.btn-sentence-save svg {
+    width: 16px;
+    height: 16px;
+}
+
+.today-review-banner {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 16px;
+    padding: 14px 18px;
+    border-radius: 12px;
+    border: 1px solid var(--primary);
+    background: var(--primary-soft);
+    color: var(--ink);
+    text-decoration: none;
+    box-shadow: var(--shadow);
+}
+
+.today-review-banner > svg {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    color: var(--primary);
+}
+
+.today-review-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+
+.today-review-text strong {
+    font-size: 16px;
+}
+
+.today-review-text span {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.today-review-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    padding: 8px 14px;
+    border-radius: 8px;
+    background: var(--primary);
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 14px;
+}
+
+.today-review-cta svg {
+    width: 16px;
+    height: 16px;
+}
+
+a.nav-deck-btn {
+    text-decoration: none;
+}
+
+@media (max-width: 640px) {
+    .sentence-text-row {
+        flex-wrap: wrap;
+    }
+
+    .sentence-text-row .sentence-french-text {
+        flex-basis: 100%;
+    }
+
+    .btn-sentence-save .sentence-save-label {
+        display: none;
+    }
+
+    .today-review-banner {
+        flex-wrap: wrap;
+    }
+
+    .today-review-cta {
+        width: 100%;
+        justify-content: center;
+    }
+}

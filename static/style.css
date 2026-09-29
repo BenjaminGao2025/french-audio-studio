@@ -1423,3 +1423,28 @@ audio {
     margin-left: 2px;
 }
 
+
+/* Three-page navigation (工作台 / 拆解 / 复习) on narrow screens */
+.nav-tab span {
+    white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+    .topbar {
+        flex-wrap: wrap;
+        gap: 10px 12px;
+        padding-block: 10px;
+    }
+
+    .nav-tabs {
+        order: 3;
+        width: 100%;
+    }
+
+    .nav-tab {
+        flex: 1;
+        justify-content: center;
+        gap: 5px;
+        padding: 7px 8px;
+    }
+}

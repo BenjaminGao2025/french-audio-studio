@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light">
+    <title>今日复习 - 1000H French</title>
+    <link rel="icon" href="/favicon.ico?v=2" sizes="any">
+    <link rel="stylesheet" href="/static/style.css?v=__ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/review.css?v=__ASSET_VERSION__">
+    <script src="https://unpkg.com/lucide@1.34.0/dist/umd/lucide.min.js" defer></script>
+    <script src="/static/speech-eval.js?v=__ASSET_VERSION__" defer></script>
+    <script src="/static/review.js?v=__ASSET_VERSION__" defer></script>
+</head>
+<body>
+    <div class="app-shell">
+        <header class="topbar">
+            <div class="brand-block">
+                <div class="brand-mark" aria-hidden="true">
+                    <i data-lucide="brain"></i>
+                </div>
+                <div>
+                    <p class="product-label">1000H French</p>
+                    <h1>今日复习</h1>
+                </div>
+            </div>
+
+            <nav class="nav-tabs" aria-label="页面切换">
+                <a href="/" class="nav-tab">
+                    <i data-lucide="headphones" aria-hidden="true"></i>
+                    <span>音频工作台</span>
+                </a>
+                <a href="/study" class="nav-tab">
+                    <i data-lucide="sparkles" aria-hidden="true"></i>
+                    <span>拆解与复述</span>
+                </a>
+                <a href="/review" class="nav-tab active" aria-current="page">
+                    <i data-lucide="brain" aria-hidden="true"></i>
+                    <span>今日复习</span>
+                </a>
+            </nav>
+
+            <div class="topbar-actions review-topbar-actions">
+                <label class="new-limit-control" title="每天最多引入多少张新卡">
+                    <span>每天新卡</span>
+                    <select id="new-limit-select">
+                        <option value="0">0</option>
+                        <option value="5">5</option>
+                        <option value="10">10</option>
+                        <option value="15">15</option>
+                        <option value="20">20</option>
+                    </select>
+                </label>
+                <button id="toggle-browser-btn" class="btn btn-secondary" type="button">
+                    <i data-lucide="library" aria-hidden="true"></i>
+                    <span>卡片库</span>
+                </button>
+            </div>
+        </header>
+
+        <main class="review-main">
+            <section id="login-required" class="review-panel review-message" hidden>
+                <i data-lucide="lock" aria-hidden="true"></i>
+                <h2>复习卡片保存在服务器上，请先登录</h2>
+                <p>登录后，手机和电脑看到的是同一套卡片和复习进度。</p>
+                <a class="btn btn-primary" href="/study?login=1">去登录</a>
+            </section>
+
+            <section id="legacy-import" class="review-panel legacy-import" hidden>
+                <div>
+                    <strong>这个浏览器里还有 <span id="legacy-count">0</span> 张旧生词卡</strong>
+                    <p>导入后会变成新的复习卡：词在例句里的，变成「填空」卡；其余变成「认词」卡。旧数据不会删除。</p>
+                </div>
+                <div class="legacy-actions">
+                    <button id="legacy-import-btn" class="btn btn-primary" type="button">导入</button>
+                    <button id="legacy-dismiss-btn" class="btn btn-secondary" type="button">暂不</button>
+                </div>
+            </section>
+
+            <section id="review-summary" class="review-summary" hidden>
+                <div class="summary-counts">
+                    <span class="count-pill count-learning" title="刚学、几分钟后要再见一次的卡"><strong id="count-learning">0</strong> 学习中</span>
+                    <span class="count-pill count-review" title="到期该复习的卡"><strong id="count-review">0</strong> 复习</span>
+                    <span class="count-pill count-new" title="今天新引入的卡"><strong id="count-new">0</strong> 新卡</span>
+                </div>
+                <div class="summary-progress" aria-label="今日进度">
+                    <div class="progress-track"><div id="progress-bar" class="progress-bar"></div></div>
+                    <span id="progress-text">0 / 0</span>
+                </div>
+            </section>
+
+            <section id="review-stage" class="review-panel review-card" hidden aria-live="polite">
+                <div class="card-meta-row">
+                    <span id="mode-badge" class="mode-badge"></span>
+                    <span id="card-state" class="card-state"></span>
+                </div>
+
+                <div id="prompt-area" class="prompt-area"></div>
+                <div id="attempt-area" class="attempt-area"></div>
+
+                <button id="reveal-btn" class="btn btn-primary reveal-btn" type="button">
+                    显示答案 <kbd>空格</kbd>
+                </button>
+
+                <div id="answer-area" class="answer-area" hidden></div>
+
+                <div id="grade-row" class="grade-row" hidden>
+                    <p class="grade-hint">刚才想起来有多难？<span id="grade-suggestion"></span></p>
+                    <div class="grade-buttons">
+                        <button class="btn-grade grade-1" type="button" data-rating="1"><span class="grade-name">重来</span><span class="grade-interval"></span><kbd>1</kbd></button>
+                        <button class="btn-grade grade-2" type="button" data-rating="2"><span class="grade-name">困难</span><span class="grade-interval"></span><kbd>2</kbd></button>
+                        <button class="btn-grade grade-3" type="button" data-rating="3"><span class="grade-name">良好</span><span class="grade-interval"></span><kbd>3</kbd></button>
+                        <button class="btn-grade grade-4" type="button" data-rating="4"><span class="grade-name">简单</span><span class="grade-interval"></span><kbd>4</kbd></button>
+                    </div>
+                </div>
+            </section>
+
+            <section id="review-done" class="review-panel review-message" hidden>
+                <i data-lucide="party-popper" aria-hidden="true"></i>
+                <h2 id="done-title">今天的复习完成了</h2>
+                <p id="done-detail">间隔重复会在你快要忘记的时候再把卡片送回来。</p>
+                <a class="btn btn-primary" href="/study">去学新句子</a>
+            </section>
+
+            <section id="deck-browser" class="review-panel deck-browser" hidden>
+                <div class="deck-browser-head">
+                    <h2>卡片库</h2>
+                    <input id="deck-search" type="search" placeholder="搜索句子、词或中文意思" autocomplete="off">
+                </div>
+                <p id="deck-stats" class="deck-stats"></p>
+                <div id="deck-list" class="deck-list"></div>
+            </section>
+
+            <p id="review-error" class="review-error" hidden role="alert"></p>
+        </main>
+    </div>
+</body>
+</html>
