@@ -1518,7 +1518,7 @@ _asr_model = None
 _asr_lock = threading.Lock()  # one transcription at a time; also guards lazy loading
 
 
-def _transcribe_sync(audio: bytes, sentence: str) -> dict:
+def _transcribe_sync(audio: bytes, sentence: str, context: str = "") -> dict:
     global _asr_model
     with _asr_lock:
         if _asr_model is None:
@@ -1533,13 +1533,15 @@ def _transcribe_sync(audio: bytes, sentence: str) -> dict:
                 str(ASR_MODEL_DIR), device="cpu", compute_type="int8", cpu_threads=ASR_CPU_THREADS
             )
         # Forcing Chinese is ~2x faster than auto-detect and still keeps English/French
-        # words in Latin script; the sentence as prompt biases towards its French words.
+        # words in Latin script; the text as prompt biases towards its French words.
+        # Whisper keeps only the prompt's last ~220 tokens, so the current sentence goes last.
+        prompt = f"{context} 我在用中文讲解这句法语：{sentence}".strip() if sentence else None
         segments, info = _asr_model.transcribe(
             io.BytesIO(audio),
             language="zh",
             beam_size=5,
             vad_filter=True,
-            initial_prompt=f"我在用中文讲解这句法语：{sentence}" if sentence else None,
+            initial_prompt=prompt,
         )
         text = "".join(segment.text for segment in segments).strip()
     return {"text": text, "duration": round(info.duration, 1)}
@@ -1549,6 +1551,7 @@ def _transcribe_sync(audio: bytes, sentence: str) -> dict:
 async def transcribe_audio(
     request: Request,
     sentence: str = Query(default="", max_length=1000),
+    context: str = Query(default="", max_length=2000),
     authorization: str | None = Header(default=None),
 ):
     _require_user_id(authorization)
@@ -1558,7 +1561,7 @@ async def transcribe_audio(
     if len(audio) > ASR_MAX_BYTES:
         raise HTTPException(status_code=413, detail={"message": "录音太长了，请分段说。"})
     try:
-        return await run_in_threadpool(_transcribe_sync, audio, sentence.strip())
+        return await run_in_threadpool(_transcribe_sync, audio, sentence.strip(), context.strip())
     except HTTPException:
         raise
     except Exception as exc:
@@ -1568,6 +1571,7 @@ async def transcribe_audio(
 
 class TranscriptFixRequest(BaseModel):
     sentence: str = Field(min_length=1, max_length=1000)
+    context: str = Field(default="", max_length=4000)
     text: str = Field(min_length=1, max_length=5000)
     model: TransformModel = PERPLEXITY_MODEL
 
@@ -1577,9 +1581,10 @@ def _transcript_fix_payload(request: TranscriptFixRequest) -> dict:
         "You fix speech-to-text errors. The text is a learner explaining a French sentence, "
         "mostly in Chinese with some French or English words mixed in. The recognizer often mishears the French parts.\n"
         f"The French sentence being discussed: {request.sentence}\n"
+        f"Other text from the same passage (the learner may mention it too): {request.context or '(none)'}\n"
         "Rules:\n"
         "- Only fix words that are clearly mis-heard: gibberish or wrong-language words that SOUND like a word or phrase "
-        "from the sentence (e.g. 'a part or die' -> 'à partir de', 'd'preuves' -> 'd'épreuves'), "
+        "from the sentence or passage (e.g. 'a part or die' -> 'à partir de', 'd'preuves' -> 'd'épreuves'), "
         "and obvious English mis-hearings (e.g. 'mine starting from' -> 'means starting from').\n"
         "- Also fix Chinese homophone errors when the context makes the intended word obvious (e.g. 原因 vs 元音, 不在 vs 不再).\n"
         "- Never fix the learner's ideas, grammar claims or wrong explanations. "

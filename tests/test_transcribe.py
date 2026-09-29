@@ -35,13 +35,13 @@ class TranscribeTests(unittest.TestCase):
         transcribe.return_value = {"text": "à partir de 是固定搭配", "duration": 3.2}
         res = self.client.post(
             "/api/transcribe",
-            params={"sentence": "À partir de lundi."},
+            params={"sentence": "À partir de lundi.", "context": "Exemples d'épreuves du TCF"},
             content=b"webm-bytes",
             headers={**_login_headers(), "Content-Type": "audio/webm"},
         )
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json()["text"], "à partir de 是固定搭配")
-        transcribe.assert_called_once_with(b"webm-bytes", "À partir de lundi.")
+        transcribe.assert_called_once_with(b"webm-bytes", "À partir de lundi.", "Exemples d'épreuves du TCF")
 
     def test_missing_model_returns_503(self):
         with patch.object(tts_service, "ASR_MODEL_DIR", tts_service.BASE_DIR / "no-such-model"), \
@@ -52,11 +52,13 @@ class TranscribeTests(unittest.TestCase):
 
     @patch("tts_service._post_chat", new_callable=AsyncMock)
     def test_fix_uses_sentence_and_falls_back_on_runaway_output(self, post_chat):
-        body = {"sentence": "À partir de lundi.", "text": "a part or die 是固定搭配"}
+        body = {"sentence": "À partir de lundi.", "context": "Exemples d'épreuves du TCF", "text": "a part or die 是固定搭配"}
         post_chat.return_value = ({}, "à partir de 是固定搭配")
         res = self.client.post("/api/transcribe/fix", json=body, headers={"Authorization": "Bearer k"})
         self.assertEqual(res.json()["text"], "à partir de 是固定搭配")
-        self.assertIn("À partir de lundi.", post_chat.call_args.args[1]["messages"][0]["content"])
+        system = post_chat.call_args.args[1]["messages"][0]["content"]
+        self.assertIn("À partir de lundi.", system)
+        self.assertIn("Exemples d'épreuves du TCF", system)
 
         post_chat.return_value = ({}, "Here is a long essay " * 50)
         res = self.client.post("/api/transcribe/fix", json=body, headers={"Authorization": "Bearer k"})

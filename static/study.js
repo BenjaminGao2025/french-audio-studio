@@ -1611,6 +1611,14 @@ function initStudyWorkbench() {
             statusEl.classList.toggle('is-error', isError);
         };
 
+        // The whole analysed passage (other sentences first, this one excluded) as extra reference
+        function passageContext() {
+            const others = Array.from(document.querySelectorAll('.btn-sentence-save'))
+                .map(btn => btn.dataset.sentence)
+                .filter(text => text && text !== sentence);
+            return others.join(' ').slice(-1800);
+        }
+
         async function transcribe(blob) {
             button.disabled = true;
             setLabel('识别中…');
@@ -1621,7 +1629,8 @@ function initStudyWorkbench() {
                     openAuthModal();
                     throw new Error('语音识别需要先登录。');
                 }
-                const res = await fetch(`/api/transcribe?sentence=${encodeURIComponent(sentence)}`, {
+                const context = passageContext();
+                const res = await fetch(`/api/transcribe?sentence=${encodeURIComponent(sentence)}&context=${encodeURIComponent(context)}`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': blob.type || 'application/octet-stream' },
                     body: blob,
@@ -1636,11 +1645,11 @@ function initStudyWorkbench() {
                 const before = field.value.trim();
                 field.value = before ? `${before} ${heard}` : heard;
                 setLabel('校正法语词…');
-                setStatus('已填入识别结果，正在校正听错的法语词…');
+                setStatus('已填入识别结果，正在校正听错的法语词（约 5–10 秒）…');
                 const fixRes = await fetch('/api/transcribe/fix', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${requireAuthToken()}` },
-                    body: JSON.stringify({ sentence, text: heard, model: modelSelect.value }),
+                    body: JSON.stringify({ sentence, context, text: heard, model: modelSelect.value }),
                 });
                 const fixed = fixRes.ok ? ((await fixRes.json()).text || '').trim() : '';
                 if (fixed && fixed !== heard && field.value.includes(heard)) {
