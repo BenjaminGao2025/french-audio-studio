@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import datetime
 import hashlib
+import io
 import json
 import logging
 import os
 import re
+import threading
 import uuid
 from pathlib import Path
 from typing import Any, Literal
@@ -14,9 +16,10 @@ import edge_tts
 import httpx
 
 logger = logging.getLogger("tts_service")
-from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
 import auth_db
@@ -38,6 +41,11 @@ PERPLEXITY_PROOFREAD_MODEL = os.getenv(
 PERPLEXITY_TIMEOUT_SECONDS = float(os.getenv("PERPLEXITY_TIMEOUT_SECONDS", "120"))
 MAX_TEXT_CHARS = int(os.getenv("MAX_TEXT_CHARS", "15000"))
 TTS_SNIPPET_MAX_CHARS = 600
+ASR_MODEL_DIR = Path(
+    os.getenv("ASR_MODEL_DIR", str(BASE_DIR / "models" / "faster-whisper-large-v3-turbo"))
+)
+ASR_CPU_THREADS = int(os.getenv("ASR_CPU_THREADS", "8"))
+ASR_MAX_BYTES = 15 * 1024 * 1024
 
 TRANSFORM_MODELS = {
     "gemini-3.8-flash": {
@@ -1500,6 +1508,110 @@ async def feynman_check(
     if not request.variation.strip():
         result["variation"] = None
     return result
+
+
+# ---------------------------------------------------------------------------
+# Speech-to-text for spoken explanations (Chinese with French words mixed in).
+# Local faster-whisper on CPU, then an LLM pass that only fixes mis-heard words.
+# ---------------------------------------------------------------------------
+_asr_model = None
+_asr_lock = threading.Lock()  # one transcription at a time; also guards lazy loading
+
+
+def _transcribe_sync(audio: bytes, sentence: str) -> dict:
+    global _asr_model
+    with _asr_lock:
+        if _asr_model is None:
+            if not ASR_MODEL_DIR.is_dir():
+                raise HTTPException(
+                    status_code=503,
+                    detail={"code": "asr_unavailable", "message": "服务器上还没有安装语音识别模型。"},
+                )
+            from faster_whisper import WhisperModel
+
+            _asr_model = WhisperModel(
+                str(ASR_MODEL_DIR), device="cpu", compute_type="int8", cpu_threads=ASR_CPU_THREADS
+            )
+        # Forcing Chinese is ~2x faster than auto-detect and still keeps English/French
+        # words in Latin script; the sentence as prompt biases towards its French words.
+        segments, info = _asr_model.transcribe(
+            io.BytesIO(audio),
+            language="zh",
+            beam_size=5,
+            vad_filter=True,
+            initial_prompt=f"我在用中文讲解这句法语：{sentence}" if sentence else None,
+        )
+        text = "".join(segment.text for segment in segments).strip()
+    return {"text": text, "duration": round(info.duration, 1)}
+
+
+@app.post("/api/transcribe")
+async def transcribe_audio(
+    request: Request,
+    sentence: str = Query(default="", max_length=1000),
+    authorization: str | None = Header(default=None),
+):
+    _require_user_id(authorization)
+    audio = await request.body()
+    if not audio:
+        raise HTTPException(status_code=422, detail={"message": "没有收到录音。"})
+    if len(audio) > ASR_MAX_BYTES:
+        raise HTTPException(status_code=413, detail={"message": "录音太长了，请分段说。"})
+    try:
+        return await run_in_threadpool(_transcribe_sync, audio, sentence.strip())
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("Transcription failed: %s", exc)
+        raise HTTPException(status_code=422, detail={"message": "录音无法识别，请再录一次。"}) from exc
+
+
+class TranscriptFixRequest(BaseModel):
+    sentence: str = Field(min_length=1, max_length=1000)
+    text: str = Field(min_length=1, max_length=5000)
+    model: TransformModel = PERPLEXITY_MODEL
+
+
+def _transcript_fix_payload(request: TranscriptFixRequest) -> dict:
+    system = (
+        "You fix speech-to-text errors. The text is a learner explaining a French sentence, "
+        "mostly in Chinese with some French or English words mixed in. The recognizer often mishears the French parts.\n"
+        f"The French sentence being discussed: {request.sentence}\n"
+        "Rules:\n"
+        "- Only fix words that are clearly mis-heard: gibberish or wrong-language words that SOUND like a word or phrase "
+        "from the sentence (e.g. 'a part or die' -> 'à partir de', 'd'preuves' -> 'd'épreuves'), "
+        "and obvious English mis-hearings (e.g. 'mine starting from' -> 'means starting from').\n"
+        "- Also fix Chinese homophone errors when the context makes the intended word obvious (e.g. 原因 vs 元音, 不在 vs 不再).\n"
+        "- Never fix the learner's ideas, grammar claims or wrong explanations. "
+        "If they said a real French word, keep it, even if it is wrong.\n"
+        "- Keep everything else exactly. Use Chinese punctuation for Chinese text.\n"
+        "Return only the corrected text."
+    )
+    return {
+        "model": _map_upstream_model(request.model),
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": request.text},
+        ],
+        "stream": False,
+        "temperature": 0,
+    }
+
+
+@app.post("/api/transcribe/fix")
+async def fix_transcript(
+    request: TranscriptFixRequest,
+    authorization: str | None = Header(default=None),
+):
+    api_key = _authorization_token(authorization)
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
+        _, raw_text = await _post_chat(client, _transcript_fix_payload(request), headers)
+    fixed = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip().strip("`").strip()
+    # A correction must stay close to the original; otherwise keep what was heard.
+    if not fixed or len(fixed) > len(request.text) * 1.6 + 40:
+        fixed = request.text
+    return {"text": fixed}
 
 
 class AskTurn(BaseModel):

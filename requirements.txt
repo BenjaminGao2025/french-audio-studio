@@ -1,5 +1,6 @@
 edge-tts
 fastapi
+faster-whisper>=1.1,<2
 fsrs>=6.3,<7
 httpx
 uvicorn

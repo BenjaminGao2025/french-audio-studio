@@ -6,3 +6,4 @@ __pycache__/
 cloudflared.log
 outputs/
 tests/
+models/

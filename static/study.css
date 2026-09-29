@@ -4393,3 +4393,32 @@ a.nav-deck-btn {
     width: 15px;
     height: 15px;
 }
+
+/* Server-side dictation status + mic in the ask row */
+.feynman-actions {
+    align-items: center;
+}
+
+.dictation-status {
+    flex: 1;
+    min-width: 0;
+    color: var(--muted);
+    font-size: 12.5px;
+}
+
+.dictation-status.is-error {
+    color: var(--danger);
+}
+
+.btn-ask.recording,
+.btn-feynman-mic.recording {
+    border-color: var(--danger);
+    background: var(--danger-soft);
+    color: var(--danger);
+}
+
+.btn-feynman-mic:disabled,
+.btn-ask-mic:disabled {
+    opacity: 0.7;
+    cursor: wait;
+}

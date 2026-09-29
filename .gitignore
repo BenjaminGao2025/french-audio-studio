@@ -6,3 +6,4 @@ outputs/
 *.db
 cloudflared.log
 config.yml
+models/

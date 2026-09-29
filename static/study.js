@@ -1133,9 +1133,10 @@ function initStudyWorkbench() {
                         <textarea class="feynman-input" rows="3" maxlength="2000" placeholder="例：这句是说……；aucune 本身就是否定，所以没有 pas……"></textarea>
                         <input class="feynman-variation" type="text" maxlength="500" autocomplete="off" spellcheck="false" placeholder="（可选）换一个词，自己造一个新的法语句子">
                         <div class="feynman-actions">
-                            ${SpeechRecognition ? `
-                                <button class="btn-feynman-mic" type="button" title="用中文说出你的讲解（语音转文字）">
-                                    <i data-lucide="mic"></i><span class="feynman-mic-label">用说的</span>
+                            <span class="dictation-status" aria-live="polite"></span>
+                            ${canRecordAudio ? `
+                                <button class="btn-feynman-mic" type="button" title="用说的（中文夹法语、英语都可以），服务器识别后填进上面的框，可以再改">
+                                    <i data-lucide="mic"></i><span class="dictation-label">用说的</span>
                                 </button>
                             ` : ''}
                             <button class="btn-feynman-check" type="button">
@@ -1147,6 +1148,9 @@ function initStudyWorkbench() {
                             <div class="ask-thread" aria-live="polite"></div>
                             <form class="ask-row" autocomplete="off">
                                 <input class="ask-input" type="text" maxlength="1000" placeholder="有问题随时问，或回答 AI 的追问（中文或英语都行）例：那 de + la 呢？">
+                                ${canRecordAudio ? `
+                                    <button class="btn-ask btn-ask-mic" type="button" title="用说的提问"><i data-lucide="mic"></i><span class="dictation-label">说</span></button>
+                                ` : ''}
                                 <button class="btn-ask" type="submit"><i data-lucide="send"></i><span>问</span></button>
                             </form>
                         </div>
@@ -1591,6 +1595,103 @@ function initStudyWorkbench() {
         await Promise.all([worker(), worker()]);
     }
 
+    const canRecordAudio = Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+
+    // Record speech, transcribe it on the server (Whisper), show it right away, then
+    // swap in the version where an LLM fixed only the mis-heard French words.
+    function attachServerDictation(button, field, sentence, statusEl) {
+        const label = button.querySelector('.dictation-label');
+        const idleText = label ? label.textContent : '';
+        let recorder = null;
+        let stopTimer = null;
+        const setLabel = (text) => { if (label) label.textContent = text; };
+        const setStatus = (text, isError = false) => {
+            if (!statusEl) return;
+            statusEl.textContent = text;
+            statusEl.classList.toggle('is-error', isError);
+        };
+
+        async function transcribe(blob) {
+            button.disabled = true;
+            setLabel('识别中…');
+            setStatus('');
+            try {
+                const token = localStorage.getItem(userTokenKey);
+                if (!token) {
+                    openAuthModal();
+                    throw new Error('语音识别需要先登录。');
+                }
+                const res = await fetch(`/api/transcribe?sentence=${encodeURIComponent(sentence)}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': blob.type || 'application/octet-stream' },
+                    body: blob,
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.detail?.message || `识别失败（HTTP ${res.status}）`);
+                const heard = (data.text || '').trim();
+                if (!heard) {
+                    setStatus('没听清，再说一次试试。', true);
+                    return;
+                }
+                const before = field.value.trim();
+                field.value = before ? `${before} ${heard}` : heard;
+                setLabel('校正法语词…');
+                setStatus('已填入识别结果，正在校正听错的法语词…');
+                const fixRes = await fetch('/api/transcribe/fix', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${requireAuthToken()}` },
+                    body: JSON.stringify({ sentence, text: heard, model: modelSelect.value }),
+                });
+                const fixed = fixRes.ok ? ((await fixRes.json()).text || '').trim() : '';
+                if (fixed && fixed !== heard && field.value.includes(heard)) {
+                    field.value = field.value.replace(heard, fixed);
+                    setStatus('已校正。不对的地方可以直接改。');
+                } else {
+                    setStatus('');
+                }
+            } catch (err) {
+                setStatus(err.message, true);
+            } finally {
+                button.disabled = false;
+                setLabel(idleText);
+            }
+        }
+
+        button.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (recorder) {
+                recorder.stop();
+                return;
+            }
+            stopAllAudio();
+            stopAnyOngoingRecording();
+            let stream;
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            } catch (err) {
+                setStatus(`无法使用麦克风：${err.message}`, true);
+                return;
+            }
+            const chunks = [];
+            const rec = new MediaRecorder(stream);
+            rec.ondataavailable = (ev) => { if (ev.data.size > 0) chunks.push(ev.data); };
+            rec.onstop = () => {
+                clearTimeout(stopTimer);
+                stream.getTracks().forEach(track => track.stop());
+                recorder = null;
+                button.classList.remove('recording');
+                transcribe(new Blob(chunks, { type: rec.mimeType || 'audio/webm' }));
+            };
+            rec.start();
+            recorder = rec;
+            button.classList.add('recording');
+            setLabel('说完点这里');
+            setStatus('');
+            stopTimer = setTimeout(() => { if (rec.state !== 'inactive') rec.stop(); }, 120000);
+        });
+    }
+
     function renderFeynmanFeedback(fb) {
         const verdictText = { solid: '讲清楚了', partial: '讲到了一部分', missing: '还没抓住要点' }[fb.verdict] || '';
         const list = (items, cls, mark) => items && items.length
@@ -1677,37 +1778,10 @@ function initStudyWorkbench() {
             }
         });
 
-        let micRecognition = null;
-        if (micBtn) {
-            micBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const label = micBtn.querySelector('.feynman-mic-label');
-                if (micRecognition) {
-                    micRecognition.stop();
-                    return;
-                }
-                stopAllAudio();
-                stopAnyOngoingRecording();
-                const base = input.value.trim();
-                micRecognition = new SpeechRecognition();
-                micRecognition.lang = 'zh-CN';
-                micRecognition.continuous = true;
-                micRecognition.interimResults = true;
-                micRecognition.onresult = (event) => {
-                    let text = '';
-                    for (let i = 0; i < event.results.length; i++) text += event.results[i][0].transcript;
-                    input.value = base ? `${base} ${text}` : text;
-                };
-                micRecognition.onend = () => {
-                    micRecognition = null;
-                    micBtn.classList.remove('recording');
-                    if (label) label.textContent = '用说的';
-                };
-                micRecognition.start();
-                micBtn.classList.add('recording');
-                if (label) label.textContent = '说完点这里';
-            });
-        }
+        const dictationStatus = root.querySelector('.dictation-status');
+        if (micBtn) attachServerDictation(micBtn, input, sentence, dictationStatus);
+        const askMicBtn = root.querySelector('.btn-ask-mic');
+        if (askMicBtn) attachServerDictation(askMicBtn, askInput, sentence, dictationStatus);
 
         checkBtn.addEventListener('click', async (e) => {
             e.stopPropagation();

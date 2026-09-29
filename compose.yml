@@ -15,3 +15,4 @@ services:
       MAX_TEXT_CHARS: "15000"
     volumes:
       - ./outputs:/app/outputs
+      - ./models:/app/models:ro
