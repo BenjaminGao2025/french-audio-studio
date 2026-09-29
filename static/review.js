@@ -59,7 +59,7 @@
             noAsr: 'This browser has no speech recognition (Chrome, Edge and Safari do). Say it out loud, then show the answer to compare.',
             speakFrench: 'Speak French', doneTapToScore: 'Done, tap to score', tryAgain: 'Try again', myRecording: 'My recording',
             points: '/100', heard: 'Heard: ', nothingHeard: '(no voice detected)',
-            diffLegend: 'Green = right · red = wrong or extra · red underlined = missing · orange = accent only',
+            diffLegend: 'Your answer: green = right, red = wrong or extra, orange = accent only. Highlighted letters in the answer = the ones you left out.',
             correct: 'Correct!', accentsOnly: 'Right, but check the accents', veryClose: 'Very close, check the spelling',
             notQuite: 'Not quite', noAnswer: 'No answer', youWrote: 'You wrote: ', answer: 'Answer: ',
             playSentence: 'Play the sentence', slowReplay: 'Slow replay',
@@ -117,7 +117,7 @@
             noAsr: '这个浏览器不支持语音识别（Chrome / Edge / Safari 支持）。请大声说出来，再点「显示答案」对照。',
             speakFrench: '开口说法语', doneTapToScore: '说完了，点这里评分', tryAgain: '再说一次', myRecording: '我的录音',
             points: '分', heard: '识别到：', nothingHeard: '（没有识别到声音）',
-            diffLegend: '绿色 = 对 · 红色 = 错或多写 · 红色下划线 = 漏写 · 橙色 = 只错了重音',
+            diffLegend: '你写的：绿色 = 对，红色 = 错或多写，橙色 = 只错了重音。答案里高亮的字母 = 你漏写的。',
             correct: '完全正确', accentsOnly: '对了，但注意重音符号', veryClose: '很接近，拼写有出入',
             notQuite: '不对', noAnswer: '没有作答', youWrote: '你写的：', answer: '答案：',
             playSentence: '播放句子', slowReplay: '慢速再听',
@@ -510,7 +510,7 @@
                 <div class="attempt-result cloze-result ${verdict.cls}">
                     <strong>${verdict.text}</strong>
                     ${diff ? `<span>${T.youWrote}<b class="letter-diff">${diff.typed}</b></span>` : ''}
-                    <span>${T.answer}<b class="letter-diff">${diff ? diff.answer : escapeHtml(answer)}</b></span>
+                    <span>${T.answer}<b class="letter-diff is-answer">${diff ? diff.answer : escapeHtml(answer)}</b></span>
                     ${diff && verdict.cls !== 'correct' ? `<small class="diff-legend-line">${T.diffLegend}</small>` : ''}
                 </div>`,
         };

@@ -1448,3 +1448,9 @@ audio {
         padding: 7px 8px;
     }
 }
+
+/* Global UI language switch (English / 中文), see static/i18n.js */
+.lang-toggle {
+    min-width: 58px;
+    font-weight: 800;
+}
