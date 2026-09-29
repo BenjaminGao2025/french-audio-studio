@@ -561,10 +561,12 @@
     async function loadQueue() {
         showError('');
         const data = await api('GET', `/api/srs/queue?tz_offset=${new Date().getTimezoneOffset()}&new_limit=${getNewLimit()}`);
-        session.queue = data.cards || [];
-        session.learning = [];
+        const now = Date.now();
+        const notYetDue = c => (c.state === 'learning' || c.state === 'relearning') && Date.parse(c.due) > now;
+        session.queue = (data.cards || []).filter(c => !notYetDue(c));
+        session.learning = (data.cards || []).filter(notYetDue);
         session.reviewed = 0;
-        session.total = session.queue.length;
+        session.total = session.queue.length + session.learning.length;
         els.countLearning.textContent = data.counts.learning;
         els.countReview.textContent = data.counts.review;
         els.countNew.textContent = data.counts.new;
