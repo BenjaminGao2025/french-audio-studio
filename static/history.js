@@ -11,6 +11,60 @@
     const LEGACY_STUDY_STORAGE_KEY = 'frenchStudio.queryHistory';
     const TOKEN_KEY = 'frenchStudio.userToken';
 
+    // i18n.js is loaded before this file; fall back to Chinese if it is missing.
+    const I18N = window.FrenchI18n;
+    const TEXT = {
+        en: {
+            totalCount: (n) => `${n} ${n === 1 ? 'item' : 'items'}`,
+            play: 'Play', pause: 'Pause',
+            emptyTts: 'No audio history yet. After you generate audio in Audio Studio, the recording and subtitle files are saved here automatically.',
+            emptyStudy: 'No breakdown history yet. Sentences you analyse on the Study page keep their word cards here for good, ready to restore instantly.',
+            emptyAll: 'No history yet. Audio you make in Audio Studio and French you analyse in Study are collected here automatically.',
+            badgeTts: 'Audio', badgeStudy: 'Breakdown',
+            tagV2: 'V2 English analysis', tagV1: 'Legacy Chinese analysis',
+            sentenceCount: (n) => `${n} ${n === 1 ? 'sentence' : 'sentences'}`,
+            tokenCount: (n) => `${n} ${n === 1 ? 'word' : 'words'}`,
+            taskLabels: { auto: 'Auto', generate: 'Generate', translate: 'Translate', express: 'Express', polish: 'Polish French' },
+            playTitle: 'Play preview', downloadMp3: 'Download MP3 audio', downloadSrt: 'Download SRT subtitles',
+            restoreTtsTitle: 'Restore the text and audio to Audio Studio', restoreTts: 'Restore',
+            loadTtsTitle: 'Put this text into Audio Studio to record it', loadTts: 'Use for audio',
+            sendStudyTitle: 'Send to Study', sendStudy: 'Break it down',
+            restoreStudyTitle: 'Restore all word cards instantly, without using tokens', restoreStudy: 'Restore and study',
+            reanalyzeTitle: 'Re-analyse this text with the new English analysis, word-order comparison and sentence building',
+            reanalyze: 'Re-analyse (new version)',
+            importStudyTitle: 'Import this audio text and break it down', importStudy: 'Import and break down',
+            openWorkbenchTitle: 'Make full read-aloud audio in Audio Studio', openWorkbench: 'Record in Audio Studio',
+            deleteTitle: 'Delete this entry', delete: 'Delete',
+            clearNameTts: 'audio', clearNameStudy: 'breakdown', clearNameAll: 'entire',
+            confirmClear: (name) => `Clear the ${name} history?`,
+        },
+        zh: {
+            totalCount: (n) => `共 ${n} 条`,
+            play: '试听', pause: '暂停',
+            emptyTts: '暂无音频生成历史。在音频工作台中生成语音或翻译后，录音与字幕文件将自动保存于此。',
+            emptyStudy: '暂无法语拆解历史。在拆解与跟读页面分析句子后，三列词汇卡片将永久保存在此，随时 0ms 恢复。',
+            emptyAll: '暂无任何历史记录。在音频工作台制作音频或在拆解台解析法语，均会自动沉淀至此。',
+            badgeTts: '音频制作', badgeStudy: '拆解精析',
+            tagV2: 'V2 英文精析', tagV1: '旧版中文精析',
+            sentenceCount: (n) => `${n} 句子`,
+            tokenCount: (n) => `${n} 词汇`,
+            taskLabels: { auto: '智能判断', generate: '按要求生成', translate: '忠实翻译', express: '自然表达', polish: '润色法语' },
+            playTitle: '在线试听', downloadMp3: '下载 MP3 音频', downloadSrt: '下载 SRT 字幕',
+            restoreTtsTitle: '恢复文本与音频至工作台', restoreTts: '恢复到工作台',
+            loadTtsTitle: '将此段拆解文本填入工作台制作录音', loadTts: '填入制作录音',
+            sendStudyTitle: '发送至拆解学习台', sendStudy: '送去拆解精析',
+            restoreStudyTitle: '免消耗 Token 立即恢复全套词汇卡片', restoreStudy: '恢复并学习',
+            reanalyzeTitle: '使用新版英文精析、词序对照与搭句子重新分析此文本',
+            reanalyze: '用新版重新精析',
+            importStudyTitle: '导入此段音频文本并拆解', importStudy: '导入并拆解',
+            openWorkbenchTitle: '在音频工作台制作完整朗读音频', openWorkbench: '去音频台录制',
+            deleteTitle: '删除此条记录', delete: '删除',
+            clearNameTts: '音频生成', clearNameStudy: '拆解精析', clearNameAll: '全部',
+            confirmClear: (name) => `确定要清空 ${name} 历史记录吗？`,
+        },
+    };
+    const T = TEXT[I18N && I18N.lang() === 'en' ? 'en' : 'zh'];
+
     function getAuthToken() {
         return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY) || '';
     }
@@ -377,7 +431,7 @@
 
             const totalBadges = document.querySelectorAll('#history-total-badge');
             totalBadges.forEach(b => {
-                b.textContent = `共 ${counts.all} 条`;
+                b.textContent = T.totalCount(counts.all);
             });
 
             // Update Tab counts if modal is open
@@ -399,7 +453,7 @@
             }
             document.querySelectorAll('.btn-hist-play.is-playing').forEach(btn => {
                 btn.classList.remove('is-playing');
-                btn.innerHTML = `<i data-lucide="play"></i><span>试听</span>`;
+                btn.innerHTML = `<i data-lucide="play"></i><span>${T.play}</span>`;
             });
             if (window.lucide) window.lucide.createIcons();
         },
@@ -434,11 +488,11 @@
                 const emptyDesc = emptyContainer.querySelector('p');
                 if (emptyDesc) {
                     if (this.activeTab === 'tts') {
-                        emptyDesc.textContent = '暂无音频生成历史。在音频工作台中生成语音或翻译后，录音与字幕文件将自动保存于此。';
+                        emptyDesc.textContent = T.emptyTts;
                     } else if (this.activeTab === 'study') {
-                        emptyDesc.textContent = '暂无法语拆解历史。在拆解与跟读页面分析句子后，三列词汇卡片将永久保存在此，随时 0ms 恢复。';
+                        emptyDesc.textContent = T.emptyStudy;
                     } else {
-                        emptyDesc.textContent = '暂无任何历史记录。在音频工作台制作音频或在拆解台解析法语，均会自动沉淀至此。';
+                        emptyDesc.textContent = T.emptyAll;
                     }
                 }
                 return;
@@ -453,36 +507,37 @@
         renderRecordItem(item) {
             const isTts = item.type === 'tts';
             const typeBadge = isTts
-                ? `<span class="badge history-type-badge tts-badge"><i data-lucide="headphones" style="width: 12px; height: 12px;"></i> 音频制作</span>`
-                : `<span class="badge history-type-badge study-badge"><i data-lucide="book-open" style="width: 12px; height: 12px;"></i> 拆解精析</span>`;
+                ? `<span class="badge history-type-badge tts-badge"><i data-lucide="headphones" style="width: 12px; height: 12px;"></i> ${T.badgeTts}</span>`
+                : `<span class="badge history-type-badge study-badge"><i data-lucide="book-open" style="width: 12px; height: 12px;"></i> ${T.badgeStudy}</span>`;
 
             let metaTags = '';
             if (isTts) {
                 if (item.voice) metaTags += `<span class="history-stat-tag voice-tag">${escapeHtml(item.voice.replace('Neural', ''))}</span>`;
-                if (item.taskLabel) metaTags += `<span class="history-stat-tag">${escapeHtml(item.taskLabel)}</span>`;
+                const taskLabel = T.taskLabels[item.taskMode] || item.taskLabel;
+                if (taskLabel) metaTags += `<span class="history-stat-tag">${escapeHtml(taskLabel)}</span>`;
                 if (item.model) metaTags += `<span class="history-stat-tag model-tag">${escapeHtml(item.model)}</span>`;
             } else {
                 const isV2 = item.schemaVersion === 2 || Boolean(item.sentences && item.sentences[0] && (item.sentences[0].schemaVersion === 2 || item.sentences[0].words));
-                metaTags += `<span class="history-stat-tag ${isV2 ? 'model-tag' : ''}">${isV2 ? 'V2 英文精析' : '旧版中文精析'}</span>`;
-                metaTags += `<span class="history-stat-tag">${item.sentenceCount || 1} 句子</span>`;
-                metaTags += `<span class="history-stat-tag">${item.tokenCount || 0} 词汇</span>`;
+                metaTags += `<span class="history-stat-tag ${isV2 ? 'model-tag' : ''}">${isV2 ? T.tagV2 : T.tagV1}</span>`;
+                metaTags += `<span class="history-stat-tag">${T.sentenceCount(item.sentenceCount || 1)}</span>`;
+                metaTags += `<span class="history-stat-tag">${T.tokenCount(item.tokenCount || 0)}</span>`;
             }
 
             let audioSection = '';
             if (isTts && item.audioUrl) {
                 audioSection = `
                     <div class="history-audio-bar">
-                        <button class="btn btn-secondary btn-sm btn-hist-play" data-url="${escapeHtml(item.audioUrl)}" type="button" title="在线试听">
+                        <button class="btn btn-secondary btn-sm btn-hist-play" data-url="${escapeHtml(item.audioUrl)}" type="button" title="${T.playTitle}">
                             <i data-lucide="play"></i>
-                            <span>试听</span>
+                            <span>${T.play}</span>
                         </button>
                         <div class="history-audio-links">
-                            <a href="${escapeHtml(item.audioUrl)}?download=true" download="${escapeHtml(item.audioFilename || 'french_audio.mp3')}" class="btn btn-secondary btn-sm" title="下载 MP3 音频">
+                            <a href="${escapeHtml(item.audioUrl)}?download=true" download="${escapeHtml(item.audioFilename || 'french_audio.mp3')}" class="btn btn-secondary btn-sm" title="${T.downloadMp3}">
                                 <i data-lucide="download"></i>
                                 <span>MP3</span>
                             </a>
                             ${item.srtUrl ? `
-                            <a href="${escapeHtml(item.srtUrl)}?download=true" download="${escapeHtml(item.srtFilename || 'french_subtitles.srt')}" class="btn btn-secondary btn-sm" title="下载 SRT 字幕">
+                            <a href="${escapeHtml(item.srtUrl)}?download=true" download="${escapeHtml(item.srtFilename || 'french_subtitles.srt')}" class="btn btn-secondary btn-sm" title="${T.downloadSrt}">
                                 <i data-lucide="file-text"></i>
                                 <span>SRT</span>
                             </a>` : ''}
@@ -496,23 +551,23 @@
             if (this.currentPage === 'workbench') {
                 if (isTts) {
                     actionButtons += `
-                        <button class="btn btn-secondary btn-sm btn-restore-item" data-id="${escapeHtml(item.id)}" type="button" title="恢复文本与音频至工作台">
+                        <button class="btn btn-secondary btn-sm btn-restore-item" data-id="${escapeHtml(item.id)}" type="button" title="${T.restoreTtsTitle}">
                             <i data-lucide="rotate-ccw"></i>
-                            <span>恢复到工作台</span>
+                            <span>${T.restoreTts}</span>
                         </button>
                     `;
                 } else {
                     actionButtons += `
-                        <button class="btn btn-secondary btn-sm btn-load-tts-text" data-id="${escapeHtml(item.id)}" type="button" title="将此段拆解文本填入工作台制作录音">
+                        <button class="btn btn-secondary btn-sm btn-load-tts-text" data-id="${escapeHtml(item.id)}" type="button" title="${T.loadTtsTitle}">
                             <i data-lucide="mic"></i>
-                            <span>填入制作录音</span>
+                            <span>${T.loadTts}</span>
                         </button>
                     `;
                 }
                 actionButtons += `
-                    <button class="btn btn-secondary btn-sm btn-send-to-study" data-id="${escapeHtml(item.id)}" type="button" title="发送至拆解学习台">
+                    <button class="btn btn-secondary btn-sm btn-send-to-study" data-id="${escapeHtml(item.id)}" type="button" title="${T.sendStudyTitle}">
                         <i data-lucide="sparkles"></i>
-                        <span>送去拆解精析</span>
+                        <span>${T.sendStudy}</span>
                     </button>
                 `;
             } else {
@@ -520,39 +575,39 @@
                 if (!isTts) {
                     const isV2 = item.schemaVersion === 2 || Boolean(item.sentences && item.sentences[0] && (item.sentences[0].schemaVersion === 2 || item.sentences[0].words));
                     actionButtons += `
-                        <button class="btn btn-primary btn-sm btn-restore-item" data-id="${escapeHtml(item.id)}" type="button" title="免消耗 Token 立即恢复全套词汇卡片">
+                        <button class="btn btn-primary btn-sm btn-restore-item" data-id="${escapeHtml(item.id)}" type="button" title="${T.restoreStudyTitle}">
                             <i data-lucide="rotate-ccw"></i>
-                            <span>恢复并学习</span>
+                            <span>${T.restoreStudy}</span>
                         </button>
                     `;
                     if (!isV2) {
                         actionButtons += `
-                            <button class="btn btn-secondary btn-sm btn-reanalyze-v2" data-id="${escapeHtml(item.id)}" type="button" title="使用新版英文精析、词序对照与搭句子重新分析此文本">
+                            <button class="btn btn-secondary btn-sm btn-reanalyze-v2" data-id="${escapeHtml(item.id)}" type="button" title="${T.reanalyzeTitle}">
                                 <i data-lucide="sparkles"></i>
-                                <span>用新版重新精析</span>
+                                <span>${T.reanalyze}</span>
                             </button>
                         `;
                     }
                 } else {
                     actionButtons += `
-                        <button class="btn btn-primary btn-sm btn-import-study" data-id="${escapeHtml(item.id)}" type="button" title="导入此段音频文本并拆解">
+                        <button class="btn btn-primary btn-sm btn-import-study" data-id="${escapeHtml(item.id)}" type="button" title="${T.importStudyTitle}">
                             <i data-lucide="sparkles"></i>
-                            <span>导入并拆解</span>
+                            <span>${T.importStudy}</span>
                         </button>
                     `;
                 }
                 actionButtons += `
-                    <button class="btn btn-secondary btn-sm btn-open-in-workbench" data-id="${escapeHtml(item.id)}" type="button" title="在音频工作台制作完整朗读音频">
+                    <button class="btn btn-secondary btn-sm btn-open-in-workbench" data-id="${escapeHtml(item.id)}" type="button" title="${T.openWorkbenchTitle}">
                         <i data-lucide="headphones"></i>
-                        <span>去音频台录制</span>
+                        <span>${T.openWorkbench}</span>
                     </button>
                 `;
             }
 
             actionButtons += `
-                <button class="btn btn-secondary btn-sm btn-delete-item" data-id="${escapeHtml(item.id)}" type="button" title="删除此条记录">
+                <button class="btn btn-secondary btn-sm btn-delete-item" data-id="${escapeHtml(item.id)}" type="button" title="${T.deleteTitle}">
                     <i data-lucide="trash-2"></i>
-                    <span>删除</span>
+                    <span>${T.delete}</span>
                 </button>
             `;
 
@@ -595,7 +650,7 @@
                     const audio = new Audio(url);
                     this.currentAudio = audio;
                     btn.classList.add('is-playing');
-                    btn.innerHTML = `<i data-lucide="pause"></i><span>暂停</span>`;
+                    btn.innerHTML = `<i data-lucide="pause"></i><span>${T.pause}</span>`;
                     if (window.lucide) window.lucide.createIcons();
 
                     audio.play().catch(e => {
@@ -759,8 +814,8 @@
             const clearBtn = document.getElementById('clear-history-btn');
             if (clearBtn) {
                 clearBtn.addEventListener('click', () => {
-                    const tabName = this.activeTab === 'tts' ? '音频生成' : this.activeTab === 'study' ? '拆解精析' : '全部';
-                    if (confirm(`确定要清空 ${tabName} 历史记录吗？`)) {
+                    const tabName = this.activeTab === 'tts' ? T.clearNameTts : this.activeTab === 'study' ? T.clearNameStudy : T.clearNameAll;
+                    if (confirm(T.confirmClear(tabName))) {
                         this.clearAll(this.activeTab);
                         this.renderList();
                     }

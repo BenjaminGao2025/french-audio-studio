@@ -8,6 +8,7 @@
     <link rel="icon" href="/favicon.ico?v=2" sizes="any">
     <link rel="stylesheet" href="/static/style.css?v=__ASSET_VERSION__">
     <script src="https://unpkg.com/lucide@1.34.0/dist/umd/lucide.min.js" defer></script>
+    <script src="/static/i18n.js?v=__ASSET_VERSION__" defer></script>
     <script src="/static/history.js?v=__ASSET_VERSION__" defer></script>
     <script src="/static/script.js?v=__ASSET_VERSION__" defer></script>
 </head>
@@ -20,39 +21,39 @@
                 </div>
                 <div>
                     <p class="product-label">1000H French</p>
-                    <h1>法语音频工作台</h1>
+                    <h1 data-i18n="heading">法语音频工作台</h1>
                 </div>
             </div>
 
-            <nav class="nav-tabs" aria-label="页面切换">
+            <nav class="nav-tabs" aria-label="页面切换" data-i18n-aria="navAria">
                 <a href="/" class="nav-tab active" aria-current="page">
                     <i data-lucide="headphones" aria-hidden="true"></i>
-                    <span>音频工作台</span>
+                    <span data-i18n="navAudio">音频工作台</span>
                 </a>
                 <a href="/study" class="nav-tab">
                     <i data-lucide="sparkles" aria-hidden="true"></i>
-                    <span>拆解与复述</span>
+                    <span data-i18n="navStudy">拆解与复述</span>
                 </a>
                 <a href="/review" class="nav-tab">
                     <i data-lucide="brain" aria-hidden="true"></i>
-                    <span>今日复习</span>
+                    <span data-i18n="navReview">今日复习</span>
                 </a>
             </nav>
 
             <div class="topbar-actions">
-                <button id="history-toggle-btn" class="btn btn-secondary nav-history-btn" type="button" title="查看并恢复过往历史记录">
+                <button id="history-toggle-btn" class="btn btn-secondary nav-history-btn" type="button" title="查看并恢复过往历史记录" data-i18n-title="historyBtnTitle">
                     <i data-lucide="history" aria-hidden="true"></i>
-                    <span>历史记录</span>
+                    <span data-i18n="history">历史记录</span>
                     <span id="history-count-badge" class="badge count-badge" hidden>0</span>
                 </button>
 
                 <details class="connection-settings">
                     <summary>
                         <i data-lucide="key-round" aria-hidden="true"></i>
-                        <span class="summary-label">连接设置</span>
-                        <span id="connection-summary-state" class="connection-summary-state" data-state="idle" title="连接尚未验证">
+                        <span class="summary-label" data-i18n="connectionSettings">连接设置</span>
+                        <span id="connection-summary-state" class="connection-summary-state" data-state="idle" title="连接尚未验证" data-i18n-title="connectionSummaryTitle">
                             <span class="connection-dot" aria-hidden="true"></span>
-                            <span class="connection-summary-text">未验证</span>
+                            <span class="connection-summary-text" data-i18n="notVerified">未验证</span>
                         </span>
                         <i data-lucide="chevron-down" class="summary-chevron" aria-hidden="true"></i>
                     </summary>
@@ -61,83 +62,84 @@
                             <label for="api-key">Perplexity web2api API Key</label>
                             <div class="password-row">
                                 <input id="api-key" type="password" autocomplete="off" spellcheck="false">
-                                <button id="toggle-key" class="icon-btn" type="button" title="显示或隐藏 API Key" aria-label="显示或隐藏 API Key">
+                                <button id="toggle-key" class="icon-btn" type="button" title="显示或隐藏 API Key" aria-label="显示或隐藏 API Key" data-i18n-title="toggleKey" data-i18n-aria="toggleKey">
                                     <i data-lucide="eye"></i>
                                 </button>
                             </div>
                         </div>
                         <div class="connection-field">
-                            <label for="model-select">转换模型</label>
+                            <label for="model-select" data-i18n="modelLabel">转换模型</label>
                             <select id="model-select">
-                                <option value="gemini-3.8-flash" selected>Gemini 3.8 Flash (AGY) · 极速推荐</option>
+                                <option value="gemini-3.8-flash" selected data-i18n="modelGeminiOption">Gemini 3.8 Flash (AGY) · 极速推荐</option>
                                 <option value="grok-4.6">Grok 4.6</option>
                                 <option value="grok-4.6-thinking">Grok 4.6 Thinking</option>
-                                <option value="sonar-2">Sonar 2 · 备用</option>
+                                <option value="sonar-2" data-i18n="modelSonarOption">Sonar 2 · 备用</option>
                             </select>
                         </div>
                         <label class="check-row" for="remember-key">
                             <input id="remember-key" type="checkbox">
-                            <span>记住在此设备</span>
+                            <span data-i18n="rememberKey">记住在此设备</span>
                         </label>
                         <div class="connection-test-row">
                             <div id="connection-result" class="connection-result" data-state="idle" role="status" aria-live="polite">
                                 <span class="connection-dot" aria-hidden="true"></span>
                                 <div>
-                                    <strong id="connection-result-title">尚未测试</strong>
-                                    <span id="connection-result-detail">填写 Key 后测试实际连接</span>
+                                    <strong id="connection-result-title" data-i18n="notTested">尚未测试</strong>
+                                    <span id="connection-result-detail" data-i18n="notTestedDetail">填写 Key 后测试实际连接</span>
                                 </div>
                             </div>
                             <button id="test-connection" class="btn btn-test" type="button">
                                 <i data-lucide="plug-zap" aria-hidden="true"></i>
-                                <span>测试连接</span>
+                                <span data-i18n="testConnection">测试连接</span>
                             </button>
                         </div>
                     </form>
                 </details>
+                <button id="lang-toggle" class="btn btn-secondary lang-toggle" type="button"></button>
             </div>
         </header>
 
         <main>
-            <section class="task-mode-band" aria-label="处理方式">
+            <section class="task-mode-band" aria-label="处理方式" data-i18n-aria="taskModeLegend">
                 <fieldset class="control-group task-mode-control">
-                    <legend>处理方式</legend>
+                    <legend data-i18n="taskModeLegend">处理方式</legend>
                     <div class="segmented-control task-segments">
-                        <label title="自动判断是生成、翻译、自然表达还是润色">
+                        <label title="自动判断是生成、翻译、自然表达还是润色" data-i18n-title="taskAutoTitle">
                             <input type="radio" name="task-mode" value="auto" checked>
-                            <span>智能判断</span>
+                            <span data-i18n="taskAuto">智能判断</span>
                         </label>
-                        <label title="把输入当作要求，直接创作所需法语内容">
+                        <label title="把输入当作要求，直接创作所需法语内容" data-i18n-title="taskGenerateTitle">
                             <input type="radio" name="task-mode" value="generate">
-                            <span>按要求生成</span>
+                            <span data-i18n="taskGenerate">按要求生成</span>
                         </label>
-                        <label title="忠实翻译原文，不扩写内容">
+                        <label title="忠实翻译原文，不扩写内容" data-i18n-title="taskTranslateTitle">
                             <input type="radio" name="task-mode" value="translate">
-                            <span>忠实翻译</span>
+                            <span data-i18n="taskTranslate">忠实翻译</span>
                         </label>
-                        <label title="整理口述或零散想法，表达成自然法语">
+                        <label title="整理口述或零散想法，表达成自然法语" data-i18n-title="taskExpressTitle">
                             <input type="radio" name="task-mode" value="express">
-                            <span>自然表达</span>
+                            <span data-i18n="taskExpress">自然表达</span>
                         </label>
-                        <label title="修正已有法语，同时保留原意">
+                        <label title="修正已有法语，同时保留原意" data-i18n-title="taskPolishTitle">
                             <input type="radio" name="task-mode" value="polish">
-                            <span>润色法语</span>
+                            <span data-i18n="taskPolish">润色法语</span>
                         </label>
                     </div>
                 </fieldset>
             </section>
 
-            <section class="editor-grid" aria-label="法语文本转换">
+            <section class="editor-grid" aria-label="法语文本转换" data-i18n-aria="editorAria">
                 <article class="editor-panel">
                     <div class="panel-heading">
                         <div>
                             <span class="step-number">01</span>
-                            <h2 id="source-heading">输入内容</h2>
+                            <h2 id="source-heading" data-i18n="sourceHeading">输入内容</h2>
                         </div>
-                        <button id="clear-source" class="icon-btn" type="button" title="清空原文" aria-label="清空原文">
+                        <button id="clear-source" class="icon-btn" type="button" title="清空原文" aria-label="清空原文" data-i18n-title="clearSource" data-i18n-aria="clearSource">
                             <i data-lucide="trash-2"></i>
                         </button>
                     </div>
-                    <textarea id="source-text" maxlength="15000" placeholder="粘贴中文、英文或已有法语文本..." spellcheck="true"></textarea>
+                    <textarea id="source-text" maxlength="15000" placeholder="粘贴中文、英文或已有法语文本..." data-i18n-placeholder="sourcePlaceholder" spellcheck="true"></textarea>
                     <div class="editor-footer">
                         <span id="source-count">0 / 15000</span>
                     </div>
@@ -147,98 +149,98 @@
                     <div class="panel-heading">
                         <div>
                             <span class="step-number">02</span>
-                            <h2>法语结果</h2>
+                            <h2 data-i18n="outputHeading">法语结果</h2>
                         </div>
                         <div class="panel-tools">
-                            <span id="task-used" class="task-used" data-state="pending">待判断</span>
-                            <span id="model-used" class="model-used" data-quality="pending">Grok 4.6 · 待生成</span>
-                            <button id="send-to-study-btn" class="icon-btn" type="button" title="发送到拆解与复述学习" aria-label="发送到拆解与复述学习">
+                            <span id="task-used" class="task-used" data-state="pending" data-i18n="taskPending">待判断</span>
+                            <span id="model-used" class="model-used" data-quality="pending" data-i18n="modelUsedDefault">Grok 4.6 · 待生成</span>
+                            <button id="send-to-study-btn" class="icon-btn" type="button" title="发送到拆解与复述学习" aria-label="发送到拆解与复述学习" data-i18n-title="sendToStudy" data-i18n-aria="sendToStudy">
                                 <i data-lucide="book-open"></i>
                             </button>
-                            <button id="copy-output" class="icon-btn" type="button" title="复制法语文本" aria-label="复制法语文本">
+                            <button id="copy-output" class="icon-btn" type="button" title="复制法语文本" aria-label="复制法语文本" data-i18n-title="copyOutput" data-i18n-aria="copyOutput">
                                 <i data-lucide="copy"></i>
                             </button>
                         </div>
                     </div>
-                    <textarea id="output-text" maxlength="15000" placeholder="转换后的法语会显示在这里，可继续编辑..." spellcheck="true"></textarea>
+                    <textarea id="output-text" maxlength="15000" placeholder="转换后的法语会显示在这里，可继续编辑..." data-i18n-placeholder="outputPlaceholder" spellcheck="true"></textarea>
                     <div class="editor-footer">
                         <span id="output-count">0 / 15000</span>
                     </div>
                 </article>
             </section>
 
-            <section class="controls-band" aria-label="转换参数">
+            <section class="controls-band" aria-label="转换参数" data-i18n-aria="controlsAria">
                 <fieldset class="control-group style-control">
-                    <legend>表达风格</legend>
+                    <legend data-i18n="styleLegend">表达风格</legend>
                     <div class="segmented-control">
                         <label>
                             <input type="radio" name="style" value="spoken" checked>
-                            <span>口语化</span>
+                            <span data-i18n="styleSpoken">口语化</span>
                         </label>
                         <label>
                             <input type="radio" name="style" value="neutral">
-                            <span>标准</span>
+                            <span data-i18n="styleNeutral">标准</span>
                         </label>
                         <label>
                             <input type="radio" name="style" value="formal">
-                            <span>书面化</span>
+                            <span data-i18n="styleFormal">书面化</span>
                         </label>
                         <label>
                             <input type="radio" name="style" value="polished">
-                            <span>写作润色</span>
+                            <span data-i18n="stylePolished">写作润色</span>
                         </label>
                     </div>
                 </fieldset>
 
                 <div class="control-group compact-control">
-                    <label for="level-select">语言难度</label>
+                    <label for="level-select" data-i18n="levelLabel">语言难度</label>
                     <select id="level-select">
-                        <option value="A1-A2">A1-A2 基础</option>
-                        <option value="B1-B2" selected>B1-B2 中级</option>
-                        <option value="C1-C2">C1-C2 高级</option>
+                        <option value="A1-A2" data-i18n="levelA">A1-A2 基础</option>
+                        <option value="B1-B2" selected data-i18n="levelB">B1-B2 中级</option>
+                        <option value="C1-C2" data-i18n="levelC">C1-C2 高级</option>
                     </select>
                 </div>
 
                 <div class="control-group compact-control">
-                    <label for="locale-select">法语地区</label>
+                    <label for="locale-select" data-i18n="localeLabel">法语地区</label>
                     <select id="locale-select">
-                        <option value="fr-FR" selected>法国法语</option>
-                        <option value="fr-CA">加拿大法语</option>
+                        <option value="fr-FR" selected data-i18n="localeFR">法国法语</option>
+                        <option value="fr-CA" data-i18n="localeCA">加拿大法语</option>
                     </select>
                 </div>
 
                 <div class="control-group voice-control">
-                    <label for="voice-select">朗读声音</label>
+                    <label for="voice-select" data-i18n="voiceLabel">朗读声音</label>
                     <select id="voice-select">
-                        <optgroup label="法国法语">
-                            <option value="fr-FR-DeniseNeural">Denise · 女声</option>
-                            <option value="fr-FR-HenriNeural">Henri · 男声</option>
-                            <option value="fr-FR-VivienneMultilingualNeural">Vivienne · 女声</option>
-                            <option value="fr-FR-RemyMultilingualNeural">Remy · 男声</option>
+                        <optgroup label="法国法语" data-i18n-label="localeFR">
+                            <option value="fr-FR-DeniseNeural" data-i18n="voiceDenise">Denise · 女声</option>
+                            <option value="fr-FR-HenriNeural" data-i18n="voiceHenri">Henri · 男声</option>
+                            <option value="fr-FR-VivienneMultilingualNeural" data-i18n="voiceVivienne">Vivienne · 女声</option>
+                            <option value="fr-FR-RemyMultilingualNeural" data-i18n="voiceRemy">Remy · 男声</option>
                         </optgroup>
-                        <optgroup label="加拿大法语">
-                            <option value="fr-CA-SylvieNeural">Sylvie · 女声</option>
-                            <option value="fr-CA-JeanNeural">Jean · 男声</option>
-                            <option value="fr-CA-AntoineNeural">Antoine · 男声</option>
+                        <optgroup label="加拿大法语" data-i18n-label="localeCA">
+                            <option value="fr-CA-SylvieNeural" data-i18n="voiceSylvie">Sylvie · 女声</option>
+                            <option value="fr-CA-JeanNeural" data-i18n="voiceJean">Jean · 男声</option>
+                            <option value="fr-CA-AntoineNeural" data-i18n="voiceAntoine">Antoine · 男声</option>
                         </optgroup>
                     </select>
                 </div>
             </section>
 
-            <section class="action-row" aria-label="生成操作">
+            <section class="action-row" aria-label="生成操作" data-i18n-aria="actionAria">
                 <div id="status-message" class="status-message" role="status" aria-live="polite"></div>
                 <div class="action-buttons">
                     <button id="speech-btn" class="btn btn-secondary" type="button">
                         <i data-lucide="volume-2" aria-hidden="true"></i>
-                        <span>朗读当前法语</span>
+                        <span data-i18n="speechBtn">朗读当前法语</span>
                     </button>
                     <button id="transform-btn" class="btn btn-secondary" type="button">
                         <i data-lucide="languages" aria-hidden="true"></i>
-                        <span id="transform-btn-label">智能生成法语</span>
+                        <span id="transform-btn-label" data-i18n="transformBtn">智能生成法语</span>
                     </button>
                     <button id="transform-speech-btn" class="btn btn-primary" type="button">
                         <i data-lucide="sparkles" aria-hidden="true"></i>
-                        <span id="transform-speech-btn-label">智能生成并制作音频</span>
+                        <span id="transform-speech-btn-label" data-i18n="transformSpeechBtn">智能生成并制作音频</span>
                     </button>
                 </div>
             </section>
@@ -247,7 +249,7 @@
                 <div class="audio-heading-row">
                     <div>
                         <span class="step-number">03</span>
-                        <h2 id="audio-heading">音频与字幕</h2>
+                        <h2 id="audio-heading" data-i18n="audioHeading">音频与字幕</h2>
                     </div>
                     <div class="download-actions">
                         <a id="download-mp3" class="btn btn-download" href="#" download>
@@ -271,15 +273,15 @@
             <header class="modal-header">
                 <div class="modal-title-group">
                     <i data-lucide="history" class="modal-icon" aria-hidden="true"></i>
-                    <h3 id="history-modal-title">历史记录</h3>
-                    <span id="history-total-badge" class="badge">共 0 条</span>
+                    <h3 id="history-modal-title" data-i18n="history">历史记录</h3>
+                    <span id="history-total-badge" class="badge" data-i18n="historyTotalZero">共 0 条</span>
                 </div>
                 <div class="modal-header-actions">
-                    <button id="clear-history-btn" class="btn btn-secondary btn-sm" type="button" title="清空当前分类历史">
+                    <button id="clear-history-btn" class="btn btn-secondary btn-sm" type="button" title="清空当前分类历史" data-i18n-title="clearHistoryTitle">
                         <i data-lucide="trash-2" aria-hidden="true"></i>
-                        <span>清空历史</span>
+                        <span data-i18n="clearHistory">清空历史</span>
                     </button>
-                    <button id="close-history-modal-btn" class="icon-btn modal-close-btn" type="button" title="关闭 (Esc)">
+                    <button id="close-history-modal-btn" class="icon-btn modal-close-btn" type="button" title="关闭 (Esc)" data-i18n-title="closeModal">
                         <i data-lucide="x" aria-hidden="true"></i>
                     </button>
                 </div>
@@ -287,15 +289,15 @@
             <div class="history-tabs-container">
                 <div class="history-tabs" role="tablist">
                     <button id="hist-tab-all" class="history-tab active" data-tab="all" type="button" role="tab" aria-selected="true">
-                        <span>全部</span>
+                        <span data-i18n="histTabAll">全部</span>
                         <span id="hist-tab-count-all" class="history-tab-badge">0</span>
                     </button>
                     <button id="hist-tab-tts" class="history-tab" data-tab="tts" type="button" role="tab" aria-selected="false">
-                        <span>🎧 音频制作</span>
+                        <span data-i18n="histTabTts">🎧 音频制作</span>
                         <span id="hist-tab-count-tts" class="history-tab-badge">0</span>
                     </button>
                     <button id="hist-tab-study" class="history-tab" data-tab="study" type="button" role="tab" aria-selected="false">
-                        <span>📖 拆解精析</span>
+                        <span data-i18n="histTabStudy">📖 拆解精析</span>
                         <span id="hist-tab-count-study" class="history-tab-badge">0</span>
                     </button>
                 </div>
@@ -304,8 +306,8 @@
                 <div id="history-list" class="history-list"></div>
                 <div id="history-empty" class="history-empty" hidden>
                     <div class="empty-icon-box">⏳</div>
-                    <h4>暂无历史记录</h4>
-                    <p>您每次生成的音频与拆解精析结果都会自动保存在这里，随时可以一键试听或恢复。</p>
+                    <h4 data-i18n="historyEmptyTitle">暂无历史记录</h4>
+                    <p data-i18n="historyEmptyDesc">您每次生成的音频与拆解精析结果都会自动保存在这里，随时可以一键试听或恢复。</p>
                 </div>
             </div>
         </div>

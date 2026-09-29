@@ -37,6 +37,205 @@ document.addEventListener('DOMContentLoaded', () => {
     const downloadMp3 = document.getElementById('download-mp3');
     const downloadSrt = document.getElementById('download-srt');
 
+    const TEXT = {
+        en: {
+            pageTitle: 'French Audio Studio',
+            heading: 'French Audio Studio',
+            navAria: 'Pages', navAudio: 'Audio Studio', navStudy: 'Study', navReview: 'Review',
+            history: 'History', historyBtnTitle: 'View and restore past history',
+            connectionSettings: 'Connection', connectionSummaryTitle: 'Connection not verified yet',
+            notVerified: 'Not verified', toggleKey: 'Show or hide the API key',
+            modelLabel: 'Model',
+            modelGeminiOption: 'Gemini 3.8 Flash (AGY) · fastest, recommended', modelSonarOption: 'Sonar 2 · backup',
+            recommendedSuffix: ' · fastest, recommended', modelSuffixPattern: /\s*·\s*(recommended|backup)$/,
+            rememberKey: 'Remember on this device',
+            notTested: 'Not tested yet', notTestedDetail: 'Enter a key, then test the real connection',
+            testConnection: 'Test connection',
+            taskModeLegend: 'Task',
+            taskAuto: 'Auto', taskAutoTitle: 'Automatically decide whether to generate, translate, express or polish',
+            taskGenerate: 'Generate', taskGenerateTitle: 'Treat the input as instructions and write the French it asks for',
+            taskTranslate: 'Translate', taskTranslateTitle: 'Translate the original faithfully, without adding anything',
+            taskExpress: 'Express', taskExpressTitle: 'Turn spoken notes or scattered ideas into natural French',
+            taskPolish: 'Polish French', taskPolishTitle: 'Correct existing French while keeping its meaning',
+            editorAria: 'French text conversion',
+            sourceHeading: 'Input', clearSource: 'Clear the input',
+            sourcePlaceholder: 'Paste Chinese, English or existing French text...',
+            outputHeading: 'French result', taskPending: 'Pending', modelUsedDefault: 'Grok 4.6 · pending',
+            sendToStudy: 'Send to Study', copyOutput: 'Copy the French text',
+            outputPlaceholder: 'The French result appears here, and you can keep editing it...',
+            controlsAria: 'Conversion settings',
+            styleLegend: 'Style', styleSpoken: 'Spoken', styleNeutral: 'Standard', styleFormal: 'Formal', stylePolished: 'Polished writing',
+            levelLabel: 'Level', levelA: 'A1-A2 Beginner', levelB: 'B1-B2 Intermediate', levelC: 'C1-C2 Advanced',
+            localeLabel: 'Region', localeFR: 'French (France)', localeCA: 'French (Canada)',
+            voiceLabel: 'Voice',
+            voiceDenise: 'Denise · female', voiceHenri: 'Henri · male', voiceVivienne: 'Vivienne · female', voiceRemy: 'Remy · male',
+            voiceSylvie: 'Sylvie · female', voiceJean: 'Jean · male', voiceAntoine: 'Antoine · male',
+            actionAria: 'Actions',
+            speechBtn: 'Read the French aloud', transformBtn: 'Generate French', transformSpeechBtn: 'Generate French and make audio',
+            audioHeading: 'Audio & subtitles',
+            historyTotalZero: '0 items', clearHistoryTitle: 'Clear the history in this tab', clearHistory: 'Clear history',
+            closeModal: 'Close (Esc)', histTabAll: 'All', histTabTts: '🎧 Audio', histTabStudy: '📖 Breakdowns',
+            historyEmptyTitle: 'No history yet',
+            historyEmptyDesc: 'Every audio you generate and every breakdown is saved here automatically, ready to replay or restore in one click.',
+            modeAutoHeading: 'Input', modeAutoPlaceholder: 'Enter a request, text to translate, spoken ideas or existing French...',
+            modeAutoAction: 'Generate French', modeAutoSpeechAction: 'Generate French and make audio',
+            modeAutoWorking: 'Choosing how to handle it and generating French...',
+            modeGenerateHeading: 'Request', modeGeneratePlaceholder: 'Describe the topic, length, setting, characters or what you want written...',
+            modeGenerateAction: 'Generate French', modeGenerateSpeechAction: 'Generate French and make audio',
+            modeGenerateWorking: 'Generating French from your request...',
+            modeTranslateHeading: 'Text to translate', modeTranslatePlaceholder: 'Paste the text to translate faithfully into French...',
+            modeTranslateAction: 'Translate into French', modeTranslateSpeechAction: 'Translate and make audio',
+            modeTranslateWorking: 'Translating faithfully into French...',
+            modeExpressHeading: 'What you want to say', modeExpressPlaceholder: 'Write spoken notes, scattered ideas or mixed Chinese and English...',
+            modeExpressAction: 'Say it in French', modeExpressSpeechAction: 'Say it in French and make audio',
+            modeExpressWorking: 'Working out the meaning and putting it into natural French...',
+            modePolishHeading: 'Original French', modePolishPlaceholder: 'Paste the French text you want corrected or polished...',
+            modePolishAction: 'Polish French', modePolishSpeechAction: 'Polish and make audio',
+            modePolishWorking: 'Polishing the French...',
+            summaryIdle: 'Not verified', summaryTesting: 'Testing', summaryConnected: 'Connected', summaryError: 'Failed',
+            titleDetail: (title, detail) => `${title}: ${detail}`,
+            qualityPending: 'pending', qualityPassed: 'French check passed', qualityProofread: 'proofread', qualityFailed: 'check failed',
+            proofreadTitle: (label, proofreader) => `Generated by ${label}, proofread against the source by ${proofreader}`,
+            taskFailed: (label) => `${label} · failed`, taskFailedTitle: (label) => `${label} failed`,
+            autoResolved: (label) => `Auto → ${label}`, autoResolvedTitle: (label) => `Auto-detected: ${label}`,
+            taskModeTitle: (label) => `Mode: ${label}`, autoPendingTitle: 'The detected mode appears after generating',
+            translateNoStyle: 'Faithful translation keeps the original meaning, so no style rewrite is applied',
+            translateNoLevel: 'Faithful translation keeps the original meaning, so the level is not adjusted',
+            needApiKey: 'Enter your web2api API key in Connection first.',
+            withCode: (message, code) => `${message} (${code})`,
+            modelFailed: 'The model failed, or its output did not pass the quality check. Please try again.',
+            requestFailed: (status) => `Request failed (HTTP ${status})`,
+            testingTitle: (label) => `Testing ${label}`, testingDetail: 'Checking the key, model access and French-only output',
+            testingStatus: (label) => `Testing the ${label} connection...`,
+            connectedTitle: (label) => `${label} connected`, testSample: (sample) => `Test translation: ${sample}`,
+            reviewerPassed: (label) => `, proofread by ${label}`,
+            connectedStatus: (label, reviewer) => `${label} connected${reviewer}.`,
+            testFailedTitle: (label) => `${label} test failed`, connectionFailed: 'Connection failed',
+            needFrenchText: 'Generate or enter some French text first.',
+            generatingAudio: 'Generating French audio...',
+            loginForAudio: 'Log in to generate full audio (top right of the Study page).',
+            audioReady: 'Audio and subtitles are ready.',
+            needSourceText: 'Enter the text to convert.',
+            workingThenAudio: (working) => `${working.replace(/\.\.\.$/, '')}, then making the audio...`,
+            detailProofread: 'was proofread in French', detailPassed: 'passed the French-only check',
+            lastRun: (label, detail, proofreader) => `Last run ("${label}") ${detail}${proofreader ? ` (${proofreader})` : ''}`,
+            autoDone: (label) => `Detected "${label}". The French text is ready and proofread.`,
+            modeDone: (label, detail) => `Done as "${label}": the text ${detail}.`,
+            requestFailedTitle: (label) => `${label} request failed`,
+            actionFailed: 'Something went wrong. Please try again later.',
+            keyChanged: 'Key changed', retestConnection: 'Please test the connection again',
+            modelUnverified: (label) => `${label} not verified`, modelSwitched: 'Model changed. Please test the connection.',
+            needStudyText: 'Generate or enter the French text you want to study first.',
+            nothingToCopy: 'There is no French text to copy.', copied: 'French text copied.',
+            keySaved: 'Key saved', clickToTest: (label) => `Click to test the real ${label} connection`,
+            noKey: 'No key yet', enterKeyToTest: 'Enter one, then test the real connection',
+            importedFromStudy: 'Imported the French text from Study. Make the audio right away or edit it first.',
+            restoredFromHistory: 'Text and audio restored from history.',
+        },
+        zh: {
+            pageTitle: '法语音频工作台',
+            heading: '法语音频工作台',
+            navAria: '页面切换', navAudio: '音频工作台', navStudy: '拆解与复述', navReview: '今日复习',
+            history: '历史记录', historyBtnTitle: '查看并恢复过往历史记录',
+            connectionSettings: '连接设置', connectionSummaryTitle: '连接尚未验证',
+            notVerified: '未验证', toggleKey: '显示或隐藏 API Key',
+            modelLabel: '转换模型',
+            modelGeminiOption: 'Gemini 3.8 Flash (AGY) · 极速推荐', modelSonarOption: 'Sonar 2 · 备用',
+            recommendedSuffix: ' · 极速推荐', modelSuffixPattern: /\s*·\s*(推荐|备用)$/,
+            rememberKey: '记住在此设备',
+            notTested: '尚未测试', notTestedDetail: '填写 Key 后测试实际连接',
+            testConnection: '测试连接',
+            taskModeLegend: '处理方式',
+            taskAuto: '智能判断', taskAutoTitle: '自动判断是生成、翻译、自然表达还是润色',
+            taskGenerate: '按要求生成', taskGenerateTitle: '把输入当作要求，直接创作所需法语内容',
+            taskTranslate: '忠实翻译', taskTranslateTitle: '忠实翻译原文，不扩写内容',
+            taskExpress: '自然表达', taskExpressTitle: '整理口述或零散想法，表达成自然法语',
+            taskPolish: '润色法语', taskPolishTitle: '修正已有法语，同时保留原意',
+            editorAria: '法语文本转换',
+            sourceHeading: '输入内容', clearSource: '清空原文',
+            sourcePlaceholder: '粘贴中文、英文或已有法语文本...',
+            outputHeading: '法语结果', taskPending: '待判断', modelUsedDefault: 'Grok 4.6 · 待生成',
+            sendToStudy: '发送到拆解与复述学习', copyOutput: '复制法语文本',
+            outputPlaceholder: '转换后的法语会显示在这里，可继续编辑...',
+            controlsAria: '转换参数',
+            styleLegend: '表达风格', styleSpoken: '口语化', styleNeutral: '标准', styleFormal: '书面化', stylePolished: '写作润色',
+            levelLabel: '语言难度', levelA: 'A1-A2 基础', levelB: 'B1-B2 中级', levelC: 'C1-C2 高级',
+            localeLabel: '法语地区', localeFR: '法国法语', localeCA: '加拿大法语',
+            voiceLabel: '朗读声音',
+            voiceDenise: 'Denise · 女声', voiceHenri: 'Henri · 男声', voiceVivienne: 'Vivienne · 女声', voiceRemy: 'Remy · 男声',
+            voiceSylvie: 'Sylvie · 女声', voiceJean: 'Jean · 男声', voiceAntoine: 'Antoine · 男声',
+            actionAria: '生成操作',
+            speechBtn: '朗读当前法语', transformBtn: '智能生成法语', transformSpeechBtn: '智能生成并制作音频',
+            audioHeading: '音频与字幕',
+            historyTotalZero: '共 0 条', clearHistoryTitle: '清空当前分类历史', clearHistory: '清空历史',
+            closeModal: '关闭 (Esc)', histTabAll: '全部', histTabTts: '🎧 音频制作', histTabStudy: '📖 拆解精析',
+            historyEmptyTitle: '暂无历史记录',
+            historyEmptyDesc: '您每次生成的音频与拆解精析结果都会自动保存在这里，随时可以一键试听或恢复。',
+            modeAutoHeading: '输入内容', modeAutoPlaceholder: '输入需求、待翻译文本、口述想法或已有法语...',
+            modeAutoAction: '智能生成法语', modeAutoSpeechAction: '智能生成并制作音频',
+            modeAutoWorking: '正在判断处理方式并生成法语...',
+            modeGenerateHeading: '创作要求', modeGeneratePlaceholder: '描述主题、长度、场景、人物或希望生成的内容...',
+            modeGenerateAction: '生成法语', modeGenerateSpeechAction: '生成法语并制作音频',
+            modeGenerateWorking: '正在按要求生成法语...',
+            modeTranslateHeading: '待翻译文本', modeTranslatePlaceholder: '粘贴需要忠实翻译成法语的文本...',
+            modeTranslateAction: '翻译成法语', modeTranslateSpeechAction: '翻译并制作音频',
+            modeTranslateWorking: '正在忠实翻译成法语...',
+            modeExpressHeading: '想表达的内容', modeExpressPlaceholder: '写下口述、零散想法或中英混合内容...',
+            modeExpressAction: '表达成法语', modeExpressSpeechAction: '表达成法语并制作音频',
+            modeExpressWorking: '正在整理意思并表达成自然法语...',
+            modePolishHeading: '法语原文', modePolishPlaceholder: '粘贴需要修改或润色的法语文本...',
+            modePolishAction: '润色法语', modePolishSpeechAction: '润色并制作音频',
+            modePolishWorking: '正在润色法语...',
+            summaryIdle: '待验证', summaryTesting: '测试中', summaryConnected: '已连接', summaryError: '失败',
+            titleDetail: (title, detail) => `${title}：${detail}`,
+            qualityPending: '待生成', qualityPassed: '纯法语通过', qualityProofread: '已校对', qualityFailed: '检查失败',
+            proofreadTitle: (label, proofreader) => `${label} 生成，${proofreader} 对照原文校对完成`,
+            taskFailed: (label) => `${label} · 失败`, taskFailedTitle: (label) => `${label}处理失败`,
+            autoResolved: (label) => `智能 → ${label}`, autoResolvedTitle: (label) => `智能判断结果：${label}`,
+            taskModeTitle: (label) => `处理方式：${label}`, autoPendingTitle: '生成后显示智能判断结果',
+            translateNoStyle: '忠实翻译保持原意，不应用表达风格改写',
+            translateNoLevel: '忠实翻译保持原意，不调整语言难度',
+            needApiKey: '请先在连接设置中填写 web2api API Key。',
+            withCode: (message, code) => `${message}（${code}）`,
+            modelFailed: '模型暂时失败或输出没有通过质量检查，请重试。',
+            requestFailed: (status) => `请求失败（HTTP ${status}）`,
+            testingTitle: (label) => `正在测试 ${label}`, testingDetail: '正在验证 Key、模型权限和纯法语输出',
+            testingStatus: (label) => `正在测试 ${label} 连接...`,
+            connectedTitle: (label) => `${label} 已连接`, testSample: (sample) => `测试译文：${sample}`,
+            reviewerPassed: (label) => `，${label} 校对通过`,
+            connectedStatus: (label, reviewer) => `${label} 连接成功${reviewer}。`,
+            testFailedTitle: (label) => `${label} 测试失败`, connectionFailed: '连接失败',
+            needFrenchText: '请先生成或填写法语文本。',
+            generatingAudio: '正在生成法语音频...',
+            loginForAudio: '生成整段音频需要先登录（在「拆解与复述」页右上角登录）。',
+            audioReady: '音频和字幕已生成。',
+            needSourceText: '请输入需要转换的对话。',
+            workingThenAudio: (working) => `${working.replace(/\.\.\.$/, '')}，随后制作音频...`,
+            detailProofread: '已完成法语校对', detailPassed: '已通过纯法语检查',
+            lastRun: (label, detail, proofreader) => `最近一次“${label}”${detail}${proofreader ? `（${proofreader}）` : ''}`,
+            autoDone: (label) => `智能判断为“${label}”，法语文本已生成并完成校对。`,
+            modeDone: (label, detail) => `已按“${label}”处理，${detail}。`,
+            requestFailedTitle: (label) => `${label} 请求失败`,
+            actionFailed: '操作失败，请稍后重试。',
+            keyChanged: 'Key 已修改', retestConnection: '请重新测试连接',
+            modelUnverified: (label) => `${label} 待验证`, modelSwitched: '模型已切换，请测试连接',
+            needStudyText: '请先生成或输入需要拆解复述的法语文本。',
+            nothingToCopy: '当前没有可复制的法语文本。', copied: '法语文本已复制。',
+            keySaved: 'Key 已保存', clickToTest: (label) => `点击测试 ${label} 实际连接`,
+            noKey: '尚未填写 Key', enterKeyToTest: '填写后测试实际连接',
+            importedFromStudy: '已从拆解学习台导入法语文本，可直接点击“制作音频”或进行调整。',
+            restoredFromHistory: '已从历史记录恢复文本与音频。',
+        },
+    };
+    const T = TEXT[FrenchI18n.lang() === 'en' ? 'en' : 'zh'];
+
+    // Fill the static labels first; the task-mode and connection code below then overwrites the dynamic ones.
+    FrenchI18n.apply(TEXT);
+    document.querySelectorAll('[data-i18n-label]').forEach((group) => {
+        group.label = T[group.getAttribute('data-i18n-label')] || group.label;
+    });
+    FrenchI18n.mountToggle(document.getElementById('lang-toggle'));
+
     const localKeyName = 'frenchStudio.perplexityApiKey';
     const sessionKeyName = 'frenchStudio.sessionApiKey';
     const modelKeyName = 'frenchStudio.perplexityModel';
@@ -44,44 +243,44 @@ document.addEventListener('DOMContentLoaded', () => {
     const busyButtons = [transformButton, transformSpeechButton, speechButton];
     const taskModes = {
         auto: {
-            label: '智能判断',
-            heading: '输入内容',
-            placeholder: '输入需求、待翻译文本、口述想法或已有法语...',
-            action: '智能生成法语',
-            speechAction: '智能生成并制作音频',
-            working: '正在判断处理方式并生成法语...',
+            label: T.taskAuto,
+            heading: T.modeAutoHeading,
+            placeholder: T.modeAutoPlaceholder,
+            action: T.modeAutoAction,
+            speechAction: T.modeAutoSpeechAction,
+            working: T.modeAutoWorking,
         },
         generate: {
-            label: '按要求生成',
-            heading: '创作要求',
-            placeholder: '描述主题、长度、场景、人物或希望生成的内容...',
-            action: '生成法语',
-            speechAction: '生成法语并制作音频',
-            working: '正在按要求生成法语...',
+            label: T.taskGenerate,
+            heading: T.modeGenerateHeading,
+            placeholder: T.modeGeneratePlaceholder,
+            action: T.modeGenerateAction,
+            speechAction: T.modeGenerateSpeechAction,
+            working: T.modeGenerateWorking,
         },
         translate: {
-            label: '忠实翻译',
-            heading: '待翻译文本',
-            placeholder: '粘贴需要忠实翻译成法语的文本...',
-            action: '翻译成法语',
-            speechAction: '翻译并制作音频',
-            working: '正在忠实翻译成法语...',
+            label: T.taskTranslate,
+            heading: T.modeTranslateHeading,
+            placeholder: T.modeTranslatePlaceholder,
+            action: T.modeTranslateAction,
+            speechAction: T.modeTranslateSpeechAction,
+            working: T.modeTranslateWorking,
         },
         express: {
-            label: '自然表达',
-            heading: '想表达的内容',
-            placeholder: '写下口述、零散想法或中英混合内容...',
-            action: '表达成法语',
-            speechAction: '表达成法语并制作音频',
-            working: '正在整理意思并表达成自然法语...',
+            label: T.taskExpress,
+            heading: T.modeExpressHeading,
+            placeholder: T.modeExpressPlaceholder,
+            action: T.modeExpressAction,
+            speechAction: T.modeExpressSpeechAction,
+            working: T.modeExpressWorking,
         },
         polish: {
-            label: '润色法语',
-            heading: '法语原文',
-            placeholder: '粘贴需要修改或润色的法语文本...',
-            action: '润色法语',
-            speechAction: '润色并制作音频',
-            working: '正在润色法语...',
+            label: T.taskPolish,
+            heading: T.modePolishHeading,
+            placeholder: T.modePolishPlaceholder,
+            action: T.modePolishAction,
+            speechAction: T.modePolishSpeechAction,
+            working: T.modePolishWorking,
         },
     };
 
@@ -109,7 +308,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 data.models.forEach((m) => {
                     const opt = document.createElement('option');
                     opt.value = m.id;
-                    opt.textContent = m.label + (m.recommended ? ' · 极速推荐' : '');
+                    opt.textContent = m.label + (m.recommended ? T.recommendedSuffix : '');
                     modelSelect.appendChild(opt);
                 });
                 const saved = localStorage.getItem(modelKeyName);
@@ -152,19 +351,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function modelLabel(modelId = modelSelect.value) {
         const option = Array.from(modelSelect.options).find((item) => item.value === modelId);
-        return option ? option.textContent.replace(/\s*·\s*(推荐|备用)$/, '') : modelId;
+        return option ? option.textContent.replace(T.modelSuffixPattern, '') : modelId;
     }
 
     function setConnectionState(state, title, detail) {
         const summaryLabels = {
-            idle: '待验证',
-            testing: '测试中',
-            connected: '已连接',
-            error: '失败',
+            idle: T.summaryIdle,
+            testing: T.summaryTesting,
+            connected: T.summaryConnected,
+            error: T.summaryError,
         };
         connectionSummaryState.dataset.state = state;
-        connectionSummaryText.textContent = summaryLabels[state] || '未验证';
-        connectionSummaryState.title = `${title}：${detail}`;
+        connectionSummaryText.textContent = summaryLabels[state] || T.notVerified;
+        connectionSummaryState.title = T.titleDetail(title, detail);
         connectionResult.dataset.state = state;
         connectionResultTitle.textContent = title;
         connectionResultDetail.textContent = detail;
@@ -173,18 +372,18 @@ document.addEventListener('DOMContentLoaded', () => {
     function setModelQuality(state, label = modelLabel(), proofreadLabel = '') {
         modelUsed.dataset.quality = state;
         const suffix = {
-            pending: '待生成',
-            passed: '纯法语通过',
-            proofread: '已校对',
-            failed: '检查失败',
-        }[state] || '待生成';
+            pending: T.qualityPending,
+            passed: T.qualityPassed,
+            proofread: T.qualityProofread,
+            failed: T.qualityFailed,
+        }[state] || T.qualityPending;
         const shortProofreader = proofreadLabel.replace(/^Claude\s+/i, '');
         const modelPath = state === 'proofread' && shortProofreader
             ? `${label} → ${shortProofreader}`
             : label;
         modelUsed.textContent = `${modelPath} · ${suffix}`;
         modelUsed.title = state === 'proofread' && proofreadLabel
-            ? `${label} 生成，${proofreadLabel} 对照原文校对完成`
+            ? T.proofreadTitle(label, proofreadLabel)
             : modelUsed.textContent;
     }
 
@@ -193,23 +392,23 @@ document.addEventListener('DOMContentLoaded', () => {
         const resolved = resolvedMode ? taskModes[resolvedMode] : null;
         taskUsed.dataset.state = state;
         if (state === 'failed') {
-            taskUsed.textContent = `${requested.label} · 失败`;
-            taskUsed.title = `${requested.label}处理失败`;
+            taskUsed.textContent = T.taskFailed(requested.label);
+            taskUsed.title = T.taskFailedTitle(requested.label);
             return;
         }
         if (resolved) {
             taskUsed.textContent = requestedMode === 'auto'
-                ? `智能 → ${resolved.label}`
+                ? T.autoResolved(resolved.label)
                 : resolved.label;
             taskUsed.title = requestedMode === 'auto'
-                ? `智能判断结果：${resolved.label}`
-                : `处理方式：${resolved.label}`;
+                ? T.autoResolvedTitle(resolved.label)
+                : T.taskModeTitle(resolved.label);
             return;
         }
         taskUsed.textContent = requested.label;
         taskUsed.title = requestedMode === 'auto'
-            ? '生成后显示智能判断结果'
-            : `处理方式：${requested.label}`;
+            ? T.autoPendingTitle
+            : T.taskModeTitle(requested.label);
     }
 
     function updateTaskModeUi() {
@@ -227,10 +426,10 @@ document.addEventListener('DOMContentLoaded', () => {
         styleControl.classList.toggle('is-disabled', faithfulTranslation);
         levelControl.classList.toggle('is-disabled', faithfulTranslation);
         styleControl.title = faithfulTranslation
-            ? '忠实翻译保持原意，不应用表达风格改写'
+            ? T.translateNoStyle
             : '';
         levelControl.title = faithfulTranslation
-            ? '忠实翻译保持原意，不调整语言难度'
+            ? T.translateNoLevel
             : '';
         localStorage.setItem(taskModeKeyName, mode);
         setTaskResult('pending', null, mode);
@@ -257,7 +456,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!key) {
             connectionSettings.open = true;
             apiKeyInput.focus();
-            throw new Error('请先在连接设置中填写 web2api API Key。');
+            throw new Error(T.needApiKey);
         }
         saveApiKey();
         return key;
@@ -291,7 +490,7 @@ document.addEventListener('DOMContentLoaded', () => {
             message = payload.error.message || fallback;
             code = payload.error.code || '';
         }
-        return code ? `${message}（${code}）` : message;
+        return code ? T.withCode(message, code) : message;
     }
 
     async function postJson(url, body, headers = {}) {
@@ -306,8 +505,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
             const fallback = response.status === 502
-                ? '模型暂时失败或输出没有通过质量检查，请重试。'
-                : `请求失败（HTTP ${response.status}）`;
+                ? T.modelFailed
+                : T.requestFailed(response.status);
             const error = new Error(errorMessage(payload, fallback));
             error.status = response.status;
             throw error;
@@ -320,8 +519,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const label = modelLabel();
         testConnectionButton.disabled = true;
         testConnectionButton.classList.add('is-loading');
-        setConnectionState('testing', `正在测试 ${label}`, '正在验证 Key、模型权限和纯法语输出');
-        setStatus(`正在测试 ${label} 连接...`, 'working');
+        setConnectionState('testing', T.testingTitle(label), T.testingDetail);
+        setStatus(T.testingStatus(label), 'working');
 
         try {
             const result = await postJson(
@@ -332,18 +531,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const actualLabel = result.label || modelLabel(result.model);
             setConnectionState(
                 'connected',
-                `${actualLabel} 已连接`,
-                `测试译文：${result.sample}`,
+                T.connectedTitle(actualLabel),
+                T.testSample(result.sample),
             );
             setModelQuality(
                 result.quality_check || 'passed',
                 actualLabel,
                 result.proofread_label || '',
             );
-            const reviewer = result.proofread_label ? `，${result.proofread_label} 校对通过` : '';
-            setStatus(`${actualLabel} 连接成功${reviewer}。`, 'success');
+            const reviewer = result.proofread_label ? T.reviewerPassed(result.proofread_label) : '';
+            setStatus(T.connectedStatus(actualLabel, reviewer), 'success');
         } catch (error) {
-            setConnectionState('error', `${label} 测试失败`, error.message || '连接失败');
+            setConnectionState('error', T.testFailedTitle(label), error.message || T.connectionFailed);
             setModelQuality('failed', label);
             throw error;
         } finally {
@@ -355,18 +554,18 @@ document.addEventListener('DOMContentLoaded', () => {
     async function generateSpeech({ manageBusy = true, activeButton = speechButton } = {}) {
         const text = outputText.value.trim();
         if (!text) {
-            throw new Error('请先生成或填写法语文本。');
+            throw new Error(T.needFrenchText);
         }
 
         if (manageBusy) {
             setBusy(true, activeButton);
-            setStatus('正在生成法语音频...', 'working');
+            setStatus(T.generatingAudio, 'working');
         }
 
         try {
             const userToken = localStorage.getItem('frenchStudio.userToken');
             if (!userToken) {
-                throw new Error('生成整段音频需要先登录（在「拆解与复述」页右上角登录）。');
+                throw new Error(T.loginForAudio);
             }
             const result = await postJson('/api/speech', {
                 text,
@@ -379,7 +578,7 @@ document.addEventListener('DOMContentLoaded', () => {
             downloadSrt.href = `${result.srt_url}?download=true`;
             downloadSrt.download = result.srt_filename;
             audioPanel.hidden = false;
-            setStatus('音频和字幕已生成。', 'success');
+            setStatus(T.audioReady, 'success');
             audioPlayer.play().catch(() => {});
             audioPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
@@ -409,7 +608,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function transformToFrench(withSpeech) {
         const text = sourceText.value.trim();
         if (!text) {
-            throw new Error('请输入需要转换的对话。');
+            throw new Error(T.needSourceText);
         }
         const apiKey = requireApiKey();
         const requestedTaskMode = selectedTaskMode();
@@ -418,7 +617,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setBusy(true, activeButton);
         setTaskResult('pending', null, requestedTaskMode);
         setStatus(
-            withSpeech ? `${taskConfiguration.working.replace(/\.\.\.$/, '')}，随后制作音频...` : taskConfiguration.working,
+            withSpeech ? T.workingThenAudio(taskConfiguration.working) : taskConfiguration.working,
             'working',
         );
 
@@ -438,27 +637,25 @@ document.addEventListener('DOMContentLoaded', () => {
             outputText.value = result.text;
             const actualLabel = modelLabel(result.model || modelSelect.value);
             const resolvedTaskMode = result.task_mode || requestedTaskMode;
-            const resolvedTaskLabel = result.task_label
-                || (taskModes[resolvedTaskMode] && taskModes[resolvedTaskMode].label)
+            const resolvedTaskLabel = (taskModes[resolvedTaskMode] && taskModes[resolvedTaskMode].label)
+                || result.task_label
                 || resolvedTaskMode;
             const qualityCheck = result.quality_check || 'passed';
             const qualityDetail = qualityCheck === 'proofread'
-                ? '已完成法语校对'
-                : '已通过纯法语检查';
+                ? T.detailProofread
+                : T.detailPassed;
             setModelQuality(qualityCheck, actualLabel, result.proofread_label || '');
             setTaskResult('resolved', resolvedTaskMode, requestedTaskMode);
             setConnectionState(
                 'connected',
-                `${actualLabel} 已连接`,
-                `最近一次“${resolvedTaskLabel}”${qualityDetail}${
-                    result.proofread_label ? `（${result.proofread_label}）` : ''
-                }`,
+                T.connectedTitle(actualLabel),
+                T.lastRun(resolvedTaskLabel, qualityDetail, result.proofread_label),
             );
             updateCount(outputText, outputCount);
             setStatus(
                 requestedTaskMode === 'auto'
-                    ? `智能判断为“${resolvedTaskLabel}”，法语文本已生成并完成校对。`
-                    : `已按“${resolvedTaskLabel}”处理，${qualityDetail}。`,
+                    ? T.autoDone(resolvedTaskLabel)
+                    : T.modeDone(resolvedTaskLabel, qualityDetail),
                 'success',
             );
 
@@ -467,7 +664,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             const label = modelLabel();
-            setConnectionState('error', `${label} 请求失败`, error.message || '连接失败');
+            setConnectionState('error', T.requestFailedTitle(label), error.message || T.connectionFailed);
             setModelQuality('failed', label);
             setTaskResult('failed', null, requestedTaskMode);
             throw error;
@@ -482,21 +679,21 @@ document.addEventListener('DOMContentLoaded', () => {
             await action();
         } catch (error) {
             setBusy(false);
-            setStatus(error.message || '操作失败，请稍后重试。', 'error');
+            setStatus(error.message || T.actionFailed, 'error');
         }
     }
 
     sourceText.addEventListener('input', () => updateCount(sourceText, sourceCount));
     outputText.addEventListener('input', () => updateCount(outputText, outputCount));
     apiKeyInput.addEventListener('input', () => {
-        setConnectionState('idle', 'Key 已修改', '请重新测试连接');
+        setConnectionState('idle', T.keyChanged, T.retestConnection);
         setModelQuality('pending');
     });
     apiKeyInput.addEventListener('change', saveApiKey);
     rememberKey.addEventListener('change', saveApiKey);
     modelSelect.addEventListener('change', () => {
         saveApiKey();
-        setConnectionState('idle', `${modelLabel()} 待验证`, '模型已切换，请测试连接');
+        setConnectionState('idle', T.modelUnverified(modelLabel()), T.modelSwitched);
         setModelQuality('pending');
     });
     document.querySelectorAll('input[name="task-mode"]').forEach((input) => {
@@ -529,7 +726,7 @@ document.addEventListener('DOMContentLoaded', () => {
         sendToStudyButton.addEventListener('click', () => {
             const textToStudy = outputText.value.trim() || sourceText.value.trim();
             if (!textToStudy) {
-                setStatus('请先生成或输入需要拆解复述的法语文本。', 'error');
+                setStatus(T.needStudyText, 'error');
                 return;
             }
             window.location.href = `/study?text=${encodeURIComponent(textToStudy)}`;
@@ -538,16 +735,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     copyOutputButton.addEventListener('click', async () => {
         if (!outputText.value.trim()) {
-            setStatus('当前没有可复制的法语文本。', 'error');
+            setStatus(T.nothingToCopy, 'error');
             return;
         }
         try {
             await navigator.clipboard.writeText(outputText.value);
-            setStatus('法语文本已复制。', 'success');
+            setStatus(T.copied, 'success');
         } catch (_) {
             outputText.select();
             document.execCommand('copy');
-            setStatus('法语文本已复制。', 'success');
+            setStatus(T.copied, 'success');
         }
     });
 
@@ -571,9 +768,9 @@ document.addEventListener('DOMContentLoaded', () => {
     updateTaskModeUi();
     setModelQuality('pending');
     if (apiKeyInput.value.trim()) {
-        setConnectionState('idle', 'Key 已保存', `点击测试 ${modelLabel()} 实际连接`);
+        setConnectionState('idle', T.keySaved, T.clickToTest(modelLabel()));
     } else {
-        setConnectionState('idle', '尚未填写 Key', '填写后测试实际连接');
+        setConnectionState('idle', T.noKey, T.enterKeyToTest);
     }
 
     // Support query param ?text= passed from study or elsewhere
@@ -582,7 +779,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (queryText) {
         outputText.value = queryText;
         updateCount(outputText, outputCount);
-        setStatus('已从拆解学习台导入法语文本，可直接点击“制作音频”或进行调整。', 'success');
+        setStatus(T.importedFromStudy, 'success');
     }
 
     // Initialize Unified History
@@ -612,7 +809,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     audioPanel.hidden = false;
                     audioPlayer.play().catch(() => {});
                 }
-                setStatus('已从历史记录恢复文本与音频。', 'success');
+                setStatus(T.restoredFromHistory, 'success');
             },
         });
     }

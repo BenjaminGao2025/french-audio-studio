@@ -10,6 +10,17 @@
         root.SpeechEval = factory();
     }
 })(typeof self !== 'undefined' ? self : this, function () {
+    // Rating labels follow the UI language of static/i18n.js; Chinese when it is absent (e.g. node tests).
+    const RATING_TEXT = {
+        zh: { excellent: '卓越 (Excellent !)', good: '良好 (Très bien !)', pass: '及格 (Passable)', 'needs-work': '有待提高 (À travailler)' },
+        en: { excellent: 'Outstanding (Excellent !)', good: 'Good (Très bien !)', pass: 'Pass (Passable)', 'needs-work': 'Needs work (À travailler)' },
+    };
+
+    function ratingLabel(ratingClass) {
+        const i18n = typeof window !== 'undefined' ? window.FrenchI18n : null;
+        return RATING_TEXT[i18n && i18n.lang() === 'en' ? 'en' : 'zh'][ratingClass];
+    }
+
     function cleanFrenchToken(str) {
         return (str || '')
             .toLowerCase()
@@ -75,7 +86,7 @@
                 overallScore: 100,
                 accuracy: 100,
                 completeness: 100,
-                ratingText: '卓越 (Excellent !)',
+                ratingText: ratingLabel('excellent'),
                 ratingClass: 'excellent',
                 wordResults: [],
             };
@@ -166,17 +177,17 @@
         const completeness = Math.min(100, Math.round((matchedCount / targetWords.length) * 100));
         const overallScore = Math.round(accuracy * 0.7 + completeness * 0.3);
 
-        let ratingText = '有待提高 (À travailler)';
+        let ratingText = ratingLabel('needs-work');
         let ratingClass = 'needs-work';
 
         if (overallScore >= 90) {
-            ratingText = '卓越 (Excellent !)';
+            ratingText = ratingLabel('excellent');
             ratingClass = 'excellent';
         } else if (overallScore >= 75) {
-            ratingText = '良好 (Très bien !)';
+            ratingText = ratingLabel('good');
             ratingClass = 'good';
         } else if (overallScore >= 60) {
-            ratingText = '及格 (Passable)';
+            ratingText = ratingLabel('pass');
             ratingClass = 'pass';
         }
 

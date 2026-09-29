@@ -27,6 +27,267 @@ window.calculateLevenshteinSimilarity = calculateLevenshteinSimilarity;
 window.evaluateFrenchPronunciation = evaluateFrenchPronunciation;
 
 function initStudyWorkbench() {
+    const I18N = window.FrenchI18n;
+    const EN = I18N.lang() === 'en';
+    const pick = I18N.pick;
+
+    const TEXT = {
+        en: {
+            pageTitle: 'French Breakdown & Shadowing - 1000H French',
+            heading: 'French Breakdown & Shadowing',
+            navAria: 'Pages', navAudio: 'Audio Studio', navStudy: 'Study', navReview: 'Review',
+            account: 'Account', login: 'Log in', trialBadgeTitle: 'Account validity',
+            reviewBtn: 'Review', reviewBtnTitle: "Today's review (listen · speak · fill in)", dueBadgeTitle: 'Cards due today',
+            connectionSettings: 'Connection', connectionNotVerified: 'Connection not verified yet', notVerified: 'Not verified',
+            toggleKey: 'Show or hide the API key', analysisModel: 'Analysis model',
+            modelGemini: 'Gemini 3.8 Flash (AGY) · fastest, recommended', modelSonar: 'Sonar 2 · backup',
+            recommendedSuffix: ' · fastest, recommended',
+            rememberDevice: 'Remember on this device',
+            notTested: 'Not tested yet', notTestedDetail: 'Enter a key, then test the real connection',
+            testConnection: 'Test connection',
+            todayReviewTitle: 'You have cards to review today', startReview: 'Start review',
+            inputAria: 'French text input', inputHeading: 'Enter the French text to break down and shadow',
+            historyBtn: 'History', historyBtnTitle: 'View and restore past queries',
+            exampleBtn: 'Example', exampleBtnTitle: 'Fill in a classic French example',
+            clear: 'Clear', clearTitle: 'Clear the input',
+            inputPlaceholder: 'Paste or type a French text (one sentence or several). It is split into B1 core words, chunks and collocations, with audio and shadowing scores...',
+            actionAria: 'Breakdown actions', analyze: 'Break down & analyse',
+            parsed: 'Analysed', expandInput: 'Edit / enter a new text', expandInputTitle: 'Open the input to edit it or enter a new text',
+            deckAria: 'Analysis and shadowing cards', deckHeading: 'Sentence analysis & pronunciation practice',
+            sentenceCountEmpty: '0 sentences',
+            historyTitle: 'History', historyTotalEmpty: '0 items',
+            clearHistory: 'Clear history', clearHistoryTitle: 'Clear the history in this category', closeEsc: 'Close (Esc)',
+            histAll: 'All', histStudy: '📖 Breakdowns', histTts: '🎧 Audio',
+            historyEmptyTitle: 'No history yet',
+            historyEmptyDesc: 'Every French text you break down is saved here with its cards. Restore it in one click, without spending API calls again.',
+            authTitle: 'Log in',
+            authNotice: 'Once you log in, the server calls the AI models for you, review cards sync between your phone and computer, and your history is saved in the cloud.',
+            email: 'Email', password: 'Password', passwordPlaceholder: 'Password (at least 6 characters)', logout: 'Log out',
+            popoverStarTitle: 'Add to review (shortcut S)', popoverReplayTitle: 'Replay (shortcut R)', replayTitle: 'Click to replay',
+            lookingUpMeaning: 'Looking up the meaning...',
+            keyLoaded: 'Key loaded', keyLoadedDetail: 'Click to test the real connection',
+            noKey: 'No key', noKeyDetail: 'Enter a key under Connection (top right), or log in to use the app directly',
+            needLogin: 'Please log in first, or enter an API key under Connection.',
+            connected: 'Connected', failed: 'Failed',
+            testing: 'Testing', testingDetail: 'Checking the API key / account access and the model connection...',
+            connectionTestFailed: 'Connection test failed', connectionOk: 'Connection OK',
+            connectionOkDetail: (label) => `${label} connected and responded normally`, connectionFailed: 'Connection failed',
+            serverError: (status) => `Server error (HTTP ${status}). Please try again.`,
+            srsLoginRequired: 'Review cards are saved on the server. Please log in first.',
+            requestFailed: (status) => `Request failed (HTTP ${status})`,
+            generatingExercise: 'Creating an exercise…',
+            todayDue: (n) => `${n} cards to review today`,
+            dueReview: (n) => `Review ${n}`, dueNew: (n) => `New ${n}`,
+            dueDetail: (parts, minutes, done) => `${parts} · about ${minutes} min${done ? ` · ${done} reviews done today` : ''}. Review first, then learn new sentences.`,
+            starSaved: 'In review (click to remove this fill-in card)', starAdd: 'Add to review: blank out this word in its sentence',
+            grammarSaved: 'In review (click to remove this grammar card)', grammarAdd: 'Add to review: the AI writes a new sentence with this rule for you to fill in',
+            sentenceSaved: 'In review (click to remove the “listen” and “speak” cards of this sentence)', sentenceAdd: 'Add to review: creates a “listen” card and a “speak” card',
+            inReview: 'In review', addToReview: 'Add to review',
+            clickToListen: 'Listen: ', listenTo: (text) => `Listen to “${text}”`, listenStandard: 'Listen to the standard pronunciation',
+            modelReading: 'Model', modelReadingFull: 'Model reading', listen: 'Listen',
+            falseFriendTitle: 'False friend: looks like an English word but means something else', englishLinkTitle: 'Related English word',
+            clickForMeaning: 'Click for the meaning', clickToPronounce: 'Click to pronounce', baseForm: 'base form: ',
+            sentenceCount: (n) => `${n} sentence${n === 1 ? '' : 's'}`,
+            shadowingTitle: 'Shadowing & Scoring',
+            shadowingGuide: 'Click the microphone and read the sentence aloud. You are scored on completeness, similarity and missed words.',
+            startRecording: 'Click to start recording', evaluating: 'Scoring...', accuracy: 'Accuracy: ', completeness: 'Completeness: ',
+            legendCorrect: 'Accurate', legendClose: 'Close / slight difference', legendMissed: 'Missed or needs fixing',
+            myRecording: 'My recording', retryShadowing: 'Try again',
+            feynmanBadge: '🧠 Feynman self-test',
+            feynmanSub: "Don't read the explanation below yet. In your own words (Chinese or English): what does this sentence say? Why is its key grammar or collocation used this way?",
+            feynmanPlaceholder: 'e.g. This sentence says…; aucune is already negative, so there is no pas…',
+            variationPlaceholder: '(Optional) Change a word and make a new French sentence of your own',
+            dictateTitle: 'Say it instead (Chinese mixed with French, or English). The server transcribes it into the box above, and you can still edit it.',
+            dictate: 'Say it', feynmanCheck: 'Let the AI find gaps',
+            askPlaceholder: "Ask anything, or answer the AI's follow-up question (Chinese or English). e.g. What about de + la?",
+            askMicTitle: 'Ask by speaking', askMic: 'Say', ask: 'Ask',
+            b1Badge: 'B1 analysis', shortPhrase: 'Short phrase', collapse: 'Collapse', collapseTitle: 'Collapse this sentence',
+            listenSentence: 'Listen to the whole sentence', readSentenceAria: 'Read the sentence aloud',
+            originalSentence: 'Original', pronounceTitle: 'Listen to the model pronunciation', pronounce: 'Listen',
+            buildupRecordTitle: 'Record yourself saying this step and get a score', shadowScore: 'Shadow & score',
+            playMyRecordingTitle: 'Play back my recording', retryTitle: 'Record again', retryShort: 'Retry',
+            buildupTitle: 'Sentence Build-up', modeSwitchAria: 'Study mode',
+            modeNormal: 'Read along', modeNormalTitle: 'Read along: show the full French text',
+            modeBlind: 'Blind recall', modeBlindTitle: 'Feynman blind recall: the key chunks are hidden, so you say the sentence from memory',
+            recommended: 'Recommended',
+            blindTipStrong: 'Feynman challenge', blindTipText: ': the new words of each step are hidden. Look at the meaning and say the French from memory!',
+            revealAll: 'Reveal all', hideAgain: 'Hide again',
+            wordBreakdownTitle: 'Word Breakdown',
+            filterContent: (n) => `Content words (${n})`, filterAll: (n) => `All (${n})`, filterFunction: (n) => `Function words only (${n})`,
+            fwToggleTitle: 'Show or hide the function word cards', fwBadge: 'Function words', fwCount: (n) => `${n} word${n === 1 ? '' : 's'}`,
+            expandDetails: 'Show details', collapseDetails: 'Hide details',
+            memoryHook: 'Memory hook:', grammarTitle: 'Grammar & Memory Hooks', pronTitle: 'Pronunciation Tips',
+            accordionTitle: 'Click to show or hide the analysis of this sentence', readOriginal: 'Play the sentence',
+            tabBuildup: 'Build-up', tabWords: 'Words', tabGrammar: 'Grammar', tabPron: 'Pronunciation',
+            legacyBadge: 'Legacy Chinese analysis',
+            thWord: '① Word / phrase (Forme & Audio)', thEnglish: '② English explanation (Anglais)', thChinese: '③ Chinese meaning & usage (Chinois)',
+            transcribing: 'Transcribing…', dictationLogin: 'Speech recognition requires logging in first.',
+            transcribeFailed: (status) => `Transcription failed (HTTP ${status})`, notHeard: "Didn't catch that. Please try again.",
+            fixingWords: 'Fixing French words…', fixingStatus: 'Transcript added. Fixing misheard French words (about 5–10 s)…',
+            fixedStatus: 'Fixed. You can edit anything that is still wrong.', micError: 'Cannot use the microphone: ', doneSpeaking: 'Tap when done',
+            verdictSolid: 'You explained it clearly', verdictPartial: 'You got part of it', verdictMissing: "You haven't got the key point yet",
+            variationOk: (note) => `✓ Your sentence is correct${note ? ': ' + note : ''}`, variationFix: '✗ Your sentence could be: ',
+            followUp: 'Follow-up: ', followUpHint: ' (answer in the question box below)',
+            requestFailedGeneric: 'Request failed',
+            feynmanEmpty: 'First write (or say) your own understanding, even if it is just one sentence.',
+            feynmanLoading: 'The AI is checking your explanation for gaps…',
+            stop: 'Stop', stopAndScoreShort: '⏹ Tap to score', stopAndScore: '⏹ Done reading, tap to score',
+            micUnavailable: 'Cannot access the microphone: ', shadowAgain: '🎙 Try again',
+            diffWordTitle: (score) => `Similarity: ${score} / 100 · click for the meaning and pronunciation`,
+            noClearSpeech: 'No clear speech detected. Please try again.',
+            daysLeftShort: (n) => `${n} days left`, planPro: 'No expiry', daysLeft: (n) => `Valid for ${n} more days`,
+            operationFailed: 'Something went wrong', loginSuccess: 'Logged in. Welcome back!', loggedOut: 'Logged out.',
+            wordTitleSuffix: ' · click for the meaning and pronunciation',
+            posOrdinal: 'ordinal', posTime: 'time', posNumber: 'number',
+            firstNote: (fem) => `First${fem ? ' (feminine)' : ''}. In French dates only the 1st uses an ordinal: le 1er mai is read le premier mai; other days are read as plain numbers.`,
+            ordinalNote: (n) => `${n}${[11, 12, 13].includes(n % 100) ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' })[n % 10] || 'th'}`,
+            timeNote: (h, minutes) => `${h}:${String(minutes).padStart(2, '0')}`,
+            decimalNote: 'French uses a comma as the decimal point',
+            numberNote: (n, isYear) => `${n}${isYear ? ' (a year is read the same way)' : ''}`,
+            contextWord: 'Word in context', popoverSaved: 'In review (click to remove)',
+            readAs: 'Read as: ',
+            partOfPhrase: (word, phrase) => `“${word}” is part of the fixed expression “${phrase}” here: learn it as a whole.`,
+            lookingUp: 'Looking up...', lookupFailed: 'Lookup failed', noDefinition: 'Could not get the meaning',
+            emptyInput: 'Please enter the French text you want to break down first.',
+            analyzing: 'Analysing...',
+            analyzingStatus: 'The AI is splitting the text into sentences, chunks and collocations and analysing them. Please wait...',
+            analyzeFailed: 'Analysis request failed',
+            analyzeDone: 'Done! First try explaining the sentence yourself (Feynman self-test), then read the explanation. Tap “Add to review” for sentences you want to learn and ⭐ for words; tap 🔊 to hear them, or try shadowing with scores.',
+            analyzeError: 'Breakdown failed: ',
+            restored: (n) => `Restored from history (${n} sentences), no tokens used.`,
+            restoredText: 'The text from your audio history is filled in. Click “Break down & analyse” to create the grammar and word cards.',
+        },
+        zh: {
+            pageTitle: '法语拆解与跟读复述 - 1000H French',
+            heading: '法语拆解与跟读复述',
+            navAria: '页面切换', navAudio: '音频工作台', navStudy: '拆解与复述', navReview: '今日复习',
+            account: '账号', login: '登录', trialBadgeTitle: '账号有效期',
+            reviewBtn: '复习', reviewBtnTitle: '今日复习（听 · 说 · 填）', dueBadgeTitle: '今天待复习卡片数',
+            connectionSettings: '连接设置', connectionNotVerified: '连接尚未验证', notVerified: '未验证',
+            toggleKey: '显示或隐藏 API Key', analysisModel: '分析模型',
+            modelGemini: 'Gemini 3.8 Flash (AGY) · 极速推荐', modelSonar: 'Sonar 2 · 备用',
+            recommendedSuffix: ' · 极速推荐',
+            rememberDevice: '记住在此设备',
+            notTested: '尚未测试', notTestedDetail: '填写 Key 后测试实际连接',
+            testConnection: '测试连接',
+            todayReviewTitle: '今天有卡片要复习', startReview: '开始复习',
+            inputAria: '输入法语文本', inputHeading: '输入待拆解与复述的法语文本',
+            historyBtn: '查询历史', historyBtnTitle: '查看并恢复过往查询历史',
+            exampleBtn: '填入示例', exampleBtnTitle: '填入经典法语示例',
+            clear: '清空', clearTitle: '清空输入框',
+            inputPlaceholder: '粘贴或输入一段法语文本（可包含单句或多句），系统将基于 B1 核心词汇标准切分词组/搭配并支持发音与跟读评测...',
+            actionAria: '拆解操作', analyze: '开始拆解与精析',
+            parsed: '已解析', expandInput: '重新编辑 / 输入新文本', expandInputTitle: '展开输入框以修改或输入新内容',
+            deckAria: '解析与跟读卡片', deckHeading: '句子精析与发音复述',
+            sentenceCountEmpty: '共 0 句',
+            historyTitle: '历史记录', historyTotalEmpty: '共 0 条',
+            clearHistory: '清空历史', clearHistoryTitle: '清空当前分类历史', closeEsc: '关闭 (Esc)',
+            histAll: '全部', histStudy: '📖 拆解精析', histTts: '🎧 音频制作',
+            historyEmptyTitle: '暂无查询历史',
+            historyEmptyDesc: '您每次拆解分析的法语文本和精析卡片都会自动保存在这里，随时可以一键恢复，无需重复耗费 API 资源。',
+            authTitle: '登录账号',
+            authNotice: '登录后：由服务器调用大模型、复习卡片在手机和电脑之间同步、历史记录云端保存。',
+            email: '电子邮箱', password: '密码', passwordPlaceholder: '请输入密码（至少 6 位）', logout: '退出当前账号',
+            popoverStarTitle: '加入复习 (快捷键 S)', popoverReplayTitle: '重播发音 (快捷键 R)', replayTitle: '点击重播发音',
+            lookingUpMeaning: '正在查询字义...',
+            keyLoaded: 'Key 已加载', keyLoadedDetail: '点击测试实际连接',
+            noKey: '未填写 Key', noKeyDetail: '在右上角连接设置填写 Key 或登录账号直接使用',
+            needLogin: '请先登录账号，或在【连接设置】中填写 API Key。',
+            connected: '已连接', failed: '失败',
+            testing: '正在测试', testingDetail: '正在验证 API Key / 用户权益与模型连通性...',
+            connectionTestFailed: '连接测试失败', connectionOk: '连接正常',
+            connectionOkDetail: (label) => `${label} 连接成功并正常响应`, connectionFailed: '连接失败',
+            serverError: (status) => `服务器暂时出错（HTTP ${status}），请再试一次。`,
+            srsLoginRequired: '复习卡片保存在服务器上，请先登录。',
+            requestFailed: (status) => `请求失败（HTTP ${status}）`,
+            generatingExercise: '生成练习中…',
+            todayDue: (n) => `今天有 ${n} 张卡片要复习`,
+            dueReview: (n) => `复习 ${n}`, dueNew: (n) => `新卡 ${n}`,
+            dueDetail: (parts, minutes, done) => `${parts} · 约 ${minutes} 分钟${done ? ` · 今天已复习 ${done} 次` : ''}。先复习，再学新句子。`,
+            starSaved: '已加入复习（点击移除这张挖空卡）', starAdd: '加入复习：在句子里挖空这个词',
+            grammarSaved: '已加入复习（点击移除这张语法卡）', grammarAdd: '加入复习：AI 用这条规则造一个新例句让你填空',
+            sentenceSaved: '已加入复习（点击移除这句的「听」「说」卡片）', sentenceAdd: '加入复习：生成「听」和「说」两张卡片',
+            inReview: '已加入复习', addToReview: '加入复习',
+            clickToListen: '点击试听: ', listenTo: (text) => `收听「${text}」标准发音`, listenStandard: '收听标准发音',
+            modelReading: '范读', modelReadingFull: '官方范读', listen: '收听',
+            falseFriendTitle: '假朋友警示：与英文形似但含义不同', englishLinkTitle: '英文联想借词',
+            clickForMeaning: '点击查看释义', clickToPronounce: '点击发音', baseForm: '原形: ',
+            sentenceCount: (n) => `共 ${n} 句`,
+            shadowingTitle: '即时跟读打分 (Shadowing & Scoring)',
+            shadowingGuide: '点击麦克风朗读该句，AI 将从发音完整度、相似度与漏读进行智能评测',
+            startRecording: '点击开始录音跟读', evaluating: '评测中...', accuracy: '准确度: ', completeness: '完整度: ',
+            legendCorrect: '发音准确', legendClose: '接近/轻微差异', legendMissed: '漏读或需纠正',
+            myRecording: '我的录音', retryShadowing: '重新跟读',
+            feynmanBadge: '🧠 费曼自测',
+            feynmanSub: '先别看下面的讲解。用自己的话讲（中文或英语都行）：这句话在说什么？最关键的语法或搭配为什么这么用？',
+            feynmanPlaceholder: '例：这句是说……；aucune 本身就是否定，所以没有 pas……',
+            variationPlaceholder: '（可选）换一个词，自己造一个新的法语句子',
+            dictateTitle: '用说的（中文夹法语、英语都可以），服务器识别后填进上面的框，可以再改',
+            dictate: '用说的', feynmanCheck: '让 AI 找漏洞',
+            askPlaceholder: '有问题随时问，或回答 AI 的追问（中文或英语都行）例：那 de + la 呢？',
+            askMicTitle: '用说的提问', askMic: '说', ask: '问',
+            b1Badge: 'B1 精析', shortPhrase: '短语', collapse: '收起', collapseTitle: '折叠本句',
+            listenSentence: '收听整句标准发音', readSentenceAria: '朗读句子',
+            originalSentence: '原句', pronounceTitle: '点击听范读发音', pronounce: '发音',
+            buildupRecordTitle: '录音跟读此递进步骤并智能打分', shadowScore: '跟读打分',
+            playMyRecordingTitle: '回听我的录音', retryTitle: '重新录音跟读', retryShort: '重练',
+            buildupTitle: '一层一层搭句子 (Sentence Build-up)', modeSwitchAria: '学习模式切换',
+            modeNormal: '对照跟读', modeNormalTitle: '对照跟读：显示完整法语文本',
+            modeBlind: '费曼盲测复述', modeBlindTitle: '费曼盲测复述：遮挡关键句式，检验记忆并闭卷复述',
+            recommended: '推荐',
+            blindTipStrong: '费曼认知挑战', blindTipText: '：递进关键词已遮挡。看着释义，凭借脑内记忆说出这句法语！',
+            revealAll: '一键揭晓', hideAgain: '重新遮挡',
+            wordBreakdownTitle: '逐词剖析 (Word Breakdown)',
+            filterContent: (n) => `核心实词 (${n})`, filterAll: (n) => `全部 (${n})`, filterFunction: (n) => `仅看虚词 (${n})`,
+            fwToggleTitle: '点击展开/收起基础虚词详细卡片', fwBadge: '基础虚词', fwCount: (n) => `共 ${n} 词`,
+            expandDetails: '展开解析', collapseDetails: '收起解析',
+            memoryHook: '记忆钩子：', grammarTitle: '语法考点与记忆钩子 (Grammar & Memory Hooks)', pronTitle: '发音重点与连音提示 (Pronunciation Tips)',
+            accordionTitle: '点击展开/折叠此句分析', readOriginal: '朗读原句',
+            tabBuildup: '搭句子', tabWords: '逐词剖析', tabGrammar: '语法考点', tabPron: '发音重点',
+            legacyBadge: '旧版中文精析',
+            thWord: '① 词汇 / 词组短语 (Forme & Audio)', thEnglish: '② 英文简明解释 (Anglais)', thChinese: '③ 中文释义与语法搭配 (Chinois)',
+            transcribing: '识别中…', dictationLogin: '语音识别需要先登录。',
+            transcribeFailed: (status) => `识别失败（HTTP ${status}）`, notHeard: '没听清，再说一次试试。',
+            fixingWords: '校正法语词…', fixingStatus: '已填入识别结果，正在校正听错的法语词（约 5–10 秒）…',
+            fixedStatus: '已校正。不对的地方可以直接改。', micError: '无法使用麦克风：', doneSpeaking: '说完点这里',
+            verdictSolid: '讲清楚了', verdictPartial: '讲到了一部分', verdictMissing: '还没抓住要点',
+            variationOk: (note) => `✓ 你造的句子没问题${note ? '：' + note : ''}`, variationFix: '✗ 你造的句子可以改成：',
+            followUp: '追问：', followUpHint: '（直接在下面的提问框里回答）',
+            requestFailedGeneric: '请求失败',
+            feynmanEmpty: '先写（或说）几句你自己的理解，哪怕只有一句。',
+            feynmanLoading: 'AI 正在对照你的讲解找漏洞…',
+            stop: '停止', stopAndScoreShort: '⏹ 点击评测', stopAndScore: '⏹ 朗读完成，点击评测',
+            micUnavailable: '无法调用麦克风：', shadowAgain: '🎙 再次跟读',
+            diffWordTitle: (score) => `相似度得分: ${score} / 100 · 点击查看释义与单读发音`,
+            noClearSpeech: '未检测到清晰发音，请重试。',
+            daysLeftShort: (n) => `剩 ${n} 天`, planPro: '长期有效', daysLeft: (n) => `有效期剩 ${n} 天`,
+            operationFailed: '操作失败', loginSuccess: '登录成功！欢迎回来。', loggedOut: '已退出登录。',
+            wordTitleSuffix: ' · 点击查看释义与单读发音',
+            posOrdinal: '序数词', posTime: '时间', posNumber: '数字',
+            firstNote: (fem) => `第一${fem ? '（阴性）' : ''}。法语日期里只有 1 号用序数词：le 1er mai 读作 le premier mai，其他日子直接读数字。`,
+            ordinalNote: (n) => `第 ${n}`,
+            timeNote: (h, minutes) => `${h} 点${minutes ? ' ' + minutes + ' 分' : ''}`,
+            decimalNote: '法语用逗号表示小数点',
+            numberNote: (n, isYear) => `${n}${isYear ? '（作年份时也这样读）' : ''}`,
+            contextWord: '语境词汇', popoverSaved: '已加入复习（点击移除）',
+            readAs: '读作：',
+            partOfPhrase: (word, phrase) => `「${word}」在这句里是固定搭配「${phrase}」的一部分，要整体理解。`,
+            lookingUp: '查询中...', lookupFailed: '查词失败', noDefinition: '暂无法获取释义',
+            emptyInput: '请先输入需要拆解或学习的法语文本。',
+            analyzing: '正在智能拆解与精析...',
+            analyzingStatus: '正在调用 LLM 进行全句切分与意群搭配深度三列解析，请稍候...',
+            analyzeFailed: '分析请求失败',
+            analyzeDone: '拆解完成！先试着自己讲讲这句话（费曼自测），再看讲解；想背的句子点「加入复习」，想背的词点 ⭐、点击 🔊 即时发音，或进行跟读打分。',
+            analyzeError: '拆解失败: ',
+            restored: (n) => `已成功从历史记录恢复（共 ${n} 句），无需重新消耗 Token。`,
+            restoredText: '已填入历史音频文本，点击“开始拆解与精析”即可生成语法词汇卡片。',
+        },
+    };
+    const T = TEXT[EN ? 'en' : 'zh'];
+
+    I18N.apply(TEXT);
+    I18N.mountToggle(document.getElementById('lang-toggle'));
+
     // Shared localStorage keys with main workbench
     const localKeyName = 'frenchStudio.perplexityApiKey';
     const sessionKeyName = 'frenchStudio.sessionApiKey';
@@ -169,9 +430,9 @@ function initStudyWorkbench() {
         syncModelsFromBackend();
 
         if (apiKeyInput.value.trim()) {
-            setConnectionState('idle', 'Key 已加载', '点击测试实际连接');
+            setConnectionState('idle', T.keyLoaded, T.keyLoadedDetail);
         } else {
-            setConnectionState('idle', '未填写 Key', '在右上角连接设置填写 Key 或登录账号直接使用');
+            setConnectionState('idle', T.noKey, T.noKeyDetail);
         }
 
         updateHistoryBadges();
@@ -190,7 +451,7 @@ function initStudyWorkbench() {
                 data.models.forEach(m => {
                     const opt = document.createElement('option');
                     opt.value = m.id;
-                    opt.textContent = m.label + (m.recommended ? ' · 极速推荐' : '');
+                    opt.textContent = m.label + (m.recommended ? T.recommendedSuffix : '');
                     modelSelect.appendChild(opt);
                 });
                 const savedModel = localStorage.getItem(modelKeyName);
@@ -235,7 +496,7 @@ function initStudyWorkbench() {
         const token = getEffectiveAuthToken();
         if (!token) {
             openAuthModal();
-            throw new Error('请先登录账号，或在【连接设置】中填写 API Key。');
+            throw new Error(T.needLogin);
         }
         if (apiKeyInput.value.trim()) {
             saveApiKey();
@@ -258,7 +519,7 @@ function initStudyWorkbench() {
             connectionSummaryState.dataset.state = state;
             connectionSummaryState.title = `${title}: ${detail}`;
             if (connectionSummaryText) {
-                connectionSummaryText.textContent = state === 'success' ? '已连接' : (state === 'error' ? '失败' : title);
+                connectionSummaryText.textContent = state === 'success' ? T.connected : (state === 'error' ? T.failed : title);
             }
         }
     }
@@ -267,7 +528,7 @@ function initStudyWorkbench() {
         try {
             const token = requireAuthToken();
             const model = modelSelect.value;
-            setConnectionState('testing', '正在测试', '正在验证 API Key / 用户权益与模型连通性...');
+            setConnectionState('testing', T.testing, T.testingDetail);
             testConnectionButton.disabled = true;
 
             const res = await fetch('/api/connection/test', {
@@ -281,11 +542,11 @@ function initStudyWorkbench() {
 
             const data = await readJsonSafely(res);
             if (!res.ok) {
-                throw new Error(data.detail?.message || data.detail || '连接测试失败');
+                throw new Error(data.detail?.message || data.detail || T.connectionTestFailed);
             }
-            setConnectionState('success', '连接正常', `${data.label} 连接成功并正常响应`);
+            setConnectionState('success', T.connectionOk, T.connectionOkDetail(data.label));
         } catch (err) {
-            setConnectionState('error', '连接失败', err.message);
+            setConnectionState('error', T.connectionFailed, err.message);
         } finally {
             testConnectionButton.disabled = false;
         }
@@ -427,7 +688,7 @@ function initStudyWorkbench() {
         try {
             return await res.json();
         } catch (_) {
-            return { detail: { message: `服务器暂时出错（HTTP ${res.status}），请再试一次。` } };
+            return { detail: { message: T.serverError(res.status) } };
         }
     }
 
@@ -435,7 +696,7 @@ function initStudyWorkbench() {
         const token = getUserToken();
         if (!token) {
             openAuthModal();
-            throw new Error('复习卡片保存在服务器上，请先登录。');
+            throw new Error(T.srsLoginRequired);
         }
         const res = await fetch(path, {
             method,
@@ -444,7 +705,7 @@ function initStudyWorkbench() {
         });
         const data = await readJsonSafely(res);
         if (!res.ok) {
-            throw new Error(data.detail?.message || `请求失败（HTTP ${res.status}）`);
+            throw new Error(data.detail?.message || T.requestFailed(res.status));
         }
         return data;
     }
@@ -484,7 +745,7 @@ function initStudyWorkbench() {
                 await srsApi('DELETE', `/api/srs/cards/${encodeURIComponent(existing.id)}`);
                 forgetCard(sentence, existing.id);
             } else {
-                if (label) label.textContent = '生成练习中…';
+                if (label) label.textContent = T.generatingExercise;
                 const payload = sentenceNotePayload(sentence);
                 rememberNote(await srsApi('POST', '/api/srs/grammar', {
                     sentence,
@@ -530,13 +791,13 @@ function initStudyWorkbench() {
             if (todayReviewBanner) {
                 todayReviewBanner.hidden = total === 0;
                 todayReviewBanner.classList.toggle('is-done', total === 0);
-                if (todayReviewTitle) todayReviewTitle.textContent = `今天有 ${total} 张卡片要复习`;
+                if (todayReviewTitle) todayReviewTitle.textContent = T.todayDue(total);
                 if (todayReviewDetail) {
                     const minutes = Math.max(1, Math.round(total * 20 / 60));
                     const parts = [];
-                    if (review + learning) parts.push(`复习 ${review + learning}`);
-                    if (fresh) parts.push(`新卡 ${fresh}`);
-                    todayReviewDetail.textContent = `${parts.join(' · ')} · 约 ${minutes} 分钟${done ? ` · 今天已复习 ${done} 次` : ''}。先复习，再学新句子。`;
+                    if (review + learning) parts.push(T.dueReview(review + learning));
+                    if (fresh) parts.push(T.dueNew(fresh));
+                    todayReviewDetail.textContent = T.dueDetail(parts.join(' · '), minutes, done);
                 }
             }
         } catch (err) {
@@ -564,22 +825,22 @@ function initStudyWorkbench() {
         document.querySelectorAll('.btn-token-star').forEach(btn => {
             const saved = Boolean(findTargetCard(btn.dataset.sentence, btn.dataset.token));
             btn.classList.toggle('active', saved);
-            btn.title = saved ? '已加入复习（点击移除这张挖空卡）' : '加入复习：在句子里挖空这个词';
+            btn.title = saved ? T.starSaved : T.starAdd;
         });
         document.querySelectorAll('.btn-grammar-card').forEach(btn => {
             if (btn.classList.contains('is-busy')) return;
             const saved = Boolean(findGrammarCard(btn.dataset.sentence, btn.dataset.title));
             btn.classList.toggle('active', saved);
-            btn.title = saved ? '已加入复习（点击移除这张语法卡）' : '加入复习：AI 用这条规则造一个新例句让你填空';
+            btn.title = saved ? T.grammarSaved : T.grammarAdd;
             const label = btn.querySelector('.grammar-card-label');
-            if (label) label.textContent = saved ? '已加入复习' : '加入复习';
+            if (label) label.textContent = saved ? T.inReview : T.addToReview;
         });
         document.querySelectorAll('.btn-sentence-save').forEach(btn => {
             const saved = sentenceCards(btn.dataset.sentence).length > 0;
             btn.classList.toggle('active', saved);
-            btn.title = saved ? '已加入复习（点击移除这句的「听」「说」卡片）' : '加入复习：生成「听」和「说」两张卡片';
+            btn.title = saved ? T.sentenceSaved : T.sentenceAdd;
             const label = btn.querySelector('.sentence-save-label');
-            if (label) label.textContent = saved ? '已加入复习' : '加入复习';
+            if (label) label.textContent = saved ? T.inReview : T.addToReview;
         });
         updatePopoverStarState();
     }
@@ -806,7 +1067,7 @@ function initStudyWorkbench() {
             const cleanWord = word.trim();
             if (isFrenchPronunciationFragment(cleanWord, sentenceText)) {
                 const speechText = cleanWord.replace(/^-+|-+$/g, '') || cleanWord;
-                return `<button class="chip-tip-audio" type="button" data-speech="${escapeHtml(speechText)}" title="点击试听: ${escapeHtml(cleanWord)}"><span>${escapeHtml(cleanWord)}</span><i data-lucide="volume-2"></i></button>`;
+                return `<button class="chip-tip-audio" type="button" data-speech="${escapeHtml(speechText)}" title="${T.clickToListen}${escapeHtml(cleanWord)}"><span>${escapeHtml(cleanWord)}</span><i data-lucide="volume-2"></i></button>`;
             }
             return `‘${escapeHtml(cleanWord)}’`;
         });
@@ -816,20 +1077,20 @@ function initStudyWorkbench() {
             const cleanWord = word.trim();
             if (isFrenchPronunciationFragment(cleanWord, sentenceText)) {
                 const speechText = cleanWord.replace(/^-+|-+$/g, '') || cleanWord;
-                return `(<button class="chip-tip-audio" type="button" data-speech="${escapeHtml(speechText)}" title="点击试听: ${escapeHtml(cleanWord)}"><span>${escapeHtml(cleanWord)}</span><i data-lucide="volume-2"></i></button>)`;
+                return `(<button class="chip-tip-audio" type="button" data-speech="${escapeHtml(speechText)}" title="${T.clickToListen}${escapeHtml(cleanWord)}"><span>${escapeHtml(cleanWord)}</span><i data-lucide="volume-2"></i></button>)`;
             }
             return match;
         });
 
         const buttonHtml = hasTarget
-            ? `<button class="btn-tip-audio" type="button" data-speech="${escapeHtml(audioText)}" title="收听「${escapeHtml(audioText)}」标准发音">
+            ? `<button class="btn-tip-audio" type="button" data-speech="${escapeHtml(audioText)}" title="${T.listenTo(escapeHtml(audioText))}">
                 <i data-lucide="volume-2"></i>
                 <span class="tip-target-text">${escapeHtml(parsed.target)}</span>
-                <span class="tip-badge-listen">范读</span>
+                <span class="tip-badge-listen">${T.modelReading}</span>
                </button>`
-            : `<button class="btn-tip-audio icon-only" type="button" data-speech="${escapeHtml(audioText)}" title="收听标准发音">
+            : `<button class="btn-tip-audio icon-only" type="button" data-speech="${escapeHtml(audioText)}" title="${T.listenStandard}">
                 <i data-lucide="volume-2"></i>
-                <span class="tip-badge-listen">收听</span>
+                <span class="tip-badge-listen">${T.listen}</span>
                </button>`;
 
         return `
@@ -973,14 +1234,14 @@ function initStudyWorkbench() {
         let linkCellHtml = '';
         if (falseFriend) {
             linkCellHtml = `
-                <div class="false-friend-badge" title="假朋友警示：与英文形似但含义不同">
+                <div class="false-friend-badge" title="${T.falseFriendTitle}">
                     <i data-lucide="alert-triangle"></i>
                     <span>False friend! ${escapeHtml(engLink || why || 'Different meaning')}</span>
                 </div>
             `;
         } else if (engLink) {
             linkCellHtml = `
-                <div class="english-link-pill" title="英文联想借词">
+                <div class="english-link-pill" title="${T.englishLinkTitle}">
                     <i data-lucide="link"></i>
                     <span>${escapeHtml(tokenText)} → <strong>${escapeHtml(engLink)}</strong></span>
                 </div>
@@ -993,12 +1254,12 @@ function initStudyWorkbench() {
             <div class="word-card ${isFunc ? 'is-function-word' : 'is-content-word'}" data-pos-cat="${posCat}">
                 <div class="word-card-top">
                     <div class="word-card-token-group">
-                        <span class="token-word" title="点击查看释义">${escapeHtml(tokenText)}</span>
-                        <button class="btn-token-speak" type="button" title="点击发音" data-speech="${escapeHtml(tokenText)}">
+                        <span class="token-word" title="${T.clickForMeaning}">${escapeHtml(tokenText)}</span>
+                        <button class="btn-token-speak" type="button" title="${T.clickToPronounce}" data-speech="${escapeHtml(tokenText)}">
                             <i data-lucide="volume-2"></i>
                         </button>
                         <button class="btn-token-star ${isSaved ? 'active' : ''}" type="button"
-                            title="${isSaved ? '已加入复习（点击移除这张挖空卡）' : '加入复习：在句子里挖空这个词'}"
+                            title="${isSaved ? T.starSaved : T.starAdd}"
                             data-token="${escapeHtml(tokenText)}"
                             data-lemma="${escapeHtml(lemma)}"
                             data-pos="${escapeHtml(pos)}"
@@ -1013,12 +1274,12 @@ function initStudyWorkbench() {
                     <div class="word-card-tags">
                         ${pos ? `<span class="pos-tag ${posClass}">${escapeHtml(pos)}</span>` : ''}
                         ${ipa ? `<span class="phonetic-tag">${escapeHtml(formatFriendlyPhonetic(ipa))}</span>` : ''}
-                        ${lemma ? `<span class="lemma-tag">原形: ${escapeHtml(lemma)}</span>` : ''}
+                        ${lemma ? `<span class="lemma-tag">${T.baseForm}${escapeHtml(lemma)}</span>` : ''}
                     </div>
                 </div>
                 <div class="word-card-body">
-                    <div class="word-meaning">${escapeHtml(meaning)}</div>
-                    ${w.meaning_zh ? `<div class="word-meaning-zh">${escapeHtml(w.meaning_zh)}</div>` : ''}
+                    <div class="word-meaning">${escapeHtml(EN ? pick(w.meaning_zh || w.explanation_cn, meaning) : meaning)}</div>
+                    ${!EN && w.meaning_zh ? `<div class="word-meaning-zh">${escapeHtml(w.meaning_zh)}</div>` : ''}
                     ${why ? `<div class="word-why"><span class="why-label">Why:</span> ${escapeHtml(why)}</div>` : ''}
                 </div>
                 ${linkCellHtml ? `
@@ -1045,7 +1306,7 @@ function initStudyWorkbench() {
         }
 
         studyDeckSection.hidden = false;
-        sentenceCountBadge.textContent = `共 ${sentences.length} 句`;
+        sentenceCountBadge.textContent = T.sentenceCount(sentences.length);
 
         sentences.forEach((s, idx) => {
             const isV2 = s.schemaVersion === 2 || Boolean(s.words && s.words.length > 0) || Boolean(s.build_up && s.build_up.length > 0) || Boolean(s.alignment && s.alignment.length > 0);
@@ -1105,45 +1366,45 @@ function initStudyWorkbench() {
                     <div class="shadowing-header">
                         <div class="shadowing-title">
                             <i data-lucide="mic"></i>
-                            <span>即时跟读打分 (Shadowing & Scoring)</span>
+                            <span>${T.shadowingTitle}</span>
                         </div>
-                        <span class="shadowing-guide">点击麦克风朗读该句，AI 将从发音完整度、相似度与漏读进行智能评测</span>
+                        <span class="shadowing-guide">${T.shadowingGuide}</span>
                     </div>
                     <div class="shadowing-body">
                         <button class="btn-record" type="button">
                             <i data-lucide="mic"></i>
-                            <span class="record-btn-text">点击开始录音跟读</span>
+                            <span class="record-btn-text">${T.startRecording}</span>
                         </button>
                     </div>
                     <div class="score-result-card" hidden>
                         <div class="score-summary-bar">
                             <div class="score-badge-group">
                                 <span class="score-number-pill excellent">--</span>
-                                <span class="score-rating-text">评测中...</span>
+                                <span class="score-rating-text">${T.evaluating}</span>
                             </div>
                             <div class="score-metrics">
-                                <span>准确度: <strong class="metric-acc">--%</strong></span>
-                                <span>完整度: <strong class="metric-comp">--%</strong></span>
+                                <span>${T.accuracy}<strong class="metric-acc">--%</strong></span>
+                                <span>${T.completeness}<strong class="metric-comp">--%</strong></span>
                             </div>
                         </div>
                         <div class="diff-result-box"></div>
                         <div class="diff-legend">
-                            <span class="diff-legend-item"><span class="diff-dot dot-green"></span> 发音准确</span>
-                            <span class="diff-legend-item"><span class="diff-dot dot-yellow"></span> 接近/轻微差异</span>
-                            <span class="diff-legend-item"><span class="diff-dot dot-red"></span> 漏读或需纠正</span>
+                            <span class="diff-legend-item"><span class="diff-dot dot-green"></span> ${T.legendCorrect}</span>
+                            <span class="diff-legend-item"><span class="diff-dot dot-yellow"></span> ${T.legendClose}</span>
+                            <span class="diff-legend-item"><span class="diff-dot dot-red"></span> ${T.legendMissed}</span>
                         </div>
                         <div class="shadow-audio-controls">
                             <button class="btn-audio-pill btn-play-model" type="button">
                                 <i data-lucide="volume-2"></i>
-                                <span>官方范读</span>
+                                <span>${T.modelReadingFull}</span>
                             </button>
                             <button class="btn-audio-pill btn-play-user" type="button" disabled>
                                 <i data-lucide="play"></i>
-                                <span>我的录音</span>
+                                <span>${T.myRecording}</span>
                             </button>
                             <button class="btn-audio-pill btn-retry" type="button">
                                 <i data-lucide="rotate-ccw"></i>
-                                <span>重新跟读</span>
+                                <span>${T.retryShadowing}</span>
                             </button>
                         </div>
                     </div>
@@ -1180,31 +1441,31 @@ function initStudyWorkbench() {
                 const feynmanSelfTestHtml = `
                     <div class="feynman-selftest">
                         <div class="feynman-selftest-head">
-                            <span class="feynman-anchor-badge">🧠 费曼自测</span>
-                            <span class="feynman-selftest-sub">先别看下面的讲解。用自己的话讲（中文或英语都行）：这句话在说什么？最关键的语法或搭配为什么这么用？</span>
+                            <span class="feynman-anchor-badge">${T.feynmanBadge}</span>
+                            <span class="feynman-selftest-sub">${T.feynmanSub}</span>
                         </div>
-                        <textarea class="feynman-input" rows="3" maxlength="2000" placeholder="例：这句是说……；aucune 本身就是否定，所以没有 pas……"></textarea>
-                        <input class="feynman-variation" type="text" maxlength="500" autocomplete="off" spellcheck="false" placeholder="（可选）换一个词，自己造一个新的法语句子">
+                        <textarea class="feynman-input" rows="3" maxlength="2000" placeholder="${T.feynmanPlaceholder}"></textarea>
+                        <input class="feynman-variation" type="text" maxlength="500" autocomplete="off" spellcheck="false" placeholder="${T.variationPlaceholder}">
                         <div class="feynman-actions">
                             <span class="dictation-status" aria-live="polite"></span>
                             ${canRecordAudio ? `
-                                <button class="btn-feynman-mic" type="button" title="用说的（中文夹法语、英语都可以），服务器识别后填进上面的框，可以再改">
-                                    <i data-lucide="mic"></i><span class="dictation-label">用说的</span>
+                                <button class="btn-feynman-mic" type="button" title="${T.dictateTitle}">
+                                    <i data-lucide="mic"></i><span class="dictation-label">${T.dictate}</span>
                                 </button>
                             ` : ''}
                             <button class="btn-feynman-check" type="button">
-                                <i data-lucide="search-check"></i><span>让 AI 找漏洞</span>
+                                <i data-lucide="search-check"></i><span>${T.feynmanCheck}</span>
                             </button>
                         </div>
                         <div class="feynman-feedback" hidden></div>
                         <div class="feynman-ask">
                             <div class="ask-thread" aria-live="polite"></div>
                             <form class="ask-row" autocomplete="off">
-                                <input class="ask-input" type="text" maxlength="1000" placeholder="有问题随时问，或回答 AI 的追问（中文或英语都行）例：那 de + la 呢？">
+                                <input class="ask-input" type="text" maxlength="1000" placeholder="${T.askPlaceholder}">
                                 ${canRecordAudio ? `
-                                    <button class="btn-ask btn-ask-mic" type="button" title="用说的提问"><i data-lucide="mic"></i><span class="dictation-label">说</span></button>
+                                    <button class="btn-ask btn-ask-mic" type="button" title="${T.askMicTitle}"><i data-lucide="mic"></i><span class="dictation-label">${T.askMic}</span></button>
                                 ` : ''}
-                                <button class="btn-ask" type="submit"><i data-lucide="send"></i><span>问</span></button>
+                                <button class="btn-ask" type="submit"><i data-lucide="send"></i><span>${T.ask}</span></button>
                             </form>
                         </div>
                     </div>
@@ -1216,31 +1477,31 @@ function initStudyWorkbench() {
                             <div class="meta-row-left" style="display: flex; align-items: center; gap: 8px;">
                                 <span class="sentence-index-pill">Phrase ${idx + 1}</span>
                                 <div class="hero-tags">
-                                    <span class="v2-badge">B1 精析</span>
-                                    ${isShortSentence ? '<span class="badge badge-short-phrase">短语</span>' : ''}
+                                    <span class="v2-badge">${T.b1Badge}</span>
+                                    ${isShortSentence ? `<span class="badge badge-short-phrase">${T.shortPhrase}</span>` : ''}
                                 </div>
                             </div>
                             ${sentences.length > 1 ? `
-                                <button class="btn-hero-collapse" type="button" title="折叠本句">
+                                <button class="btn-hero-collapse" type="button" title="${T.collapseTitle}">
                                     <i data-lucide="chevron-up"></i>
-                                    <span>收起</span>
+                                    <span>${T.collapse}</span>
                                 </button>
                             ` : ''}
                         </div>
                         <div class="sentence-text-row">
                             <p class="sentence-french-text">${renderInteractiveWordsHtml(sentenceText)}</p>
-                            <button class="btn-speak-round" type="button" title="收听整句标准发音" aria-label="朗读句子">
+                            <button class="btn-speak-round" type="button" title="${T.listenSentence}" aria-label="${T.readSentenceAria}">
                                 <i data-lucide="volume-2"></i>
                             </button>
-                            <button class="btn-sentence-save" type="button" data-sentence="${escapeHtml(sentenceText)}" title="加入复习：生成「听」和「说」两张卡片">
+                            <button class="btn-sentence-save" type="button" data-sentence="${escapeHtml(sentenceText)}" title="${T.sentenceAdd}">
                                 <i data-lucide="bookmark-plus"></i>
-                                <span class="sentence-save-label">加入复习</span>
+                                <span class="sentence-save-label">${T.addToReview}</span>
                             </button>
                         </div>
                         ${interlinearHtml}
                         <div class="sentence-translations">
-                            <div class="translation-en translation-primary">${escapeHtml(transEn)}</div>
-                            ${transZh ? `<div class="translation-zh translation-secondary">${escapeHtml(transZh)}</div>` : ''}
+                            <div class="translation-en translation-primary">${escapeHtml(EN ? pick(transZh, transEn) : transEn)}</div>
+                            ${transZh && !EN ? `<div class="translation-zh translation-secondary">${escapeHtml(transZh)}</div>` : ''}
                         </div>
                         ${feynmanSelfTestHtml}
                     </div>
@@ -1260,15 +1521,15 @@ function initStudyWorkbench() {
                                 <div class="buildup-step-content">
                                     <div class="buildup-fr-row">
                                         <span class="buildup-fr-text">${highlightedFr}</span>
-                                        ${isFinal ? `<span class="final-step-tag">原句</span>` : ''}
+                                        ${isFinal ? `<span class="final-step-tag">${T.originalSentence}</span>` : ''}
                                         <div class="buildup-action-group">
-                                            <button class="btn-buildup-speak" type="button" title="点击听范读发音" data-speech="${escapeHtml(step.fr)}">
+                                            <button class="btn-buildup-speak" type="button" title="${T.pronounceTitle}" data-speech="${escapeHtml(step.fr)}">
                                                 <i data-lucide="volume-2"></i>
-                                                <span>发音</span>
+                                                <span>${T.pronounce}</span>
                                             </button>
-                                            <button class="btn-buildup-record" type="button" title="录音跟读此递进步骤并智能打分" data-sentence="${escapeHtml(step.fr)}">
+                                            <button class="btn-buildup-record" type="button" title="${T.buildupRecordTitle}" data-sentence="${escapeHtml(step.fr)}">
                                                 <i data-lucide="mic"></i>
-                                                <span class="record-btn-text">跟读打分</span>
+                                                <span class="record-btn-text">${T.shadowScore}</span>
                                             </button>
                                         </div>
                                     </div>
@@ -1282,21 +1543,21 @@ function initStudyWorkbench() {
                                         <div class="buildup-score-bar">
                                             <div class="buildup-score-left">
                                                 <span class="score-number-pill sm excellent">--</span>
-                                                <span class="score-rating-text sm">评测中...</span>
-                                                <span class="buildup-score-metrics">准确度: <strong class="metric-acc">--%</strong> | 完整度: <strong class="metric-comp">--%</strong></span>
+                                                <span class="score-rating-text sm">${T.evaluating}</span>
+                                                <span class="buildup-score-metrics">${T.accuracy}<strong class="metric-acc">--%</strong> | ${T.completeness}<strong class="metric-comp">--%</strong></span>
                                             </div>
                                             <div class="buildup-audio-controls">
-                                                <button class="btn-mini-audio btn-play-model" type="button" title="官方范读" data-label="范读">
+                                                <button class="btn-mini-audio btn-play-model" type="button" title="${T.modelReadingFull}" data-label="${T.modelReading}">
                                                     <i data-lucide="volume-2"></i>
-                                                    <span>范读</span>
+                                                    <span>${T.modelReading}</span>
                                                 </button>
-                                                <button class="btn-mini-audio btn-play-user" type="button" title="回听我的录音" disabled>
+                                                <button class="btn-mini-audio btn-play-user" type="button" title="${T.playMyRecordingTitle}" disabled>
                                                     <i data-lucide="play"></i>
-                                                    <span>我的录音</span>
+                                                    <span>${T.myRecording}</span>
                                                 </button>
-                                                <button class="btn-mini-audio btn-retry" type="button" title="重新录音跟读">
+                                                <button class="btn-mini-audio btn-retry" type="button" title="${T.retryTitle}">
                                                     <i data-lucide="rotate-ccw"></i>
-                                                    <span>重练</span>
+                                                    <span>${T.retryShort}</span>
                                                 </button>
                                             </div>
                                         </div>
@@ -1312,23 +1573,23 @@ function initStudyWorkbench() {
                             <div class="buildup-section-header">
                                 <div class="section-title" style="margin-bottom: 0;">
                                     <i data-lucide="layers"></i>
-                                    <span>一层一层搭句子 (Sentence Build-up)</span>
+                                    <span>${T.buildupTitle}</span>
                                 </div>
-                                <div class="feynman-mode-switch" role="group" aria-label="学习模式切换">
-                                    <button class="btn-feynman-toggle active" data-mode="normal" type="button" title="对照跟读：显示完整法语文本">
+                                <div class="feynman-mode-switch" role="group" aria-label="${T.modeSwitchAria}">
+                                    <button class="btn-feynman-toggle active" data-mode="normal" type="button" title="${T.modeNormalTitle}">
                                         <i data-lucide="eye"></i>
-                                        <span>对照跟读</span>
+                                        <span>${T.modeNormal}</span>
                                     </button>
-                                    <button class="btn-feynman-toggle" data-mode="blind" type="button" title="费曼盲测复述：遮挡关键句式，检验记忆并闭卷复述">
+                                    <button class="btn-feynman-toggle" data-mode="blind" type="button" title="${T.modeBlindTitle}">
                                         <i data-lucide="brain"></i>
-                                        <span>费曼盲测复述</span>
-                                        <span class="feynman-badge">推荐</span>
+                                        <span>${T.modeBlind}</span>
+                                        <span class="feynman-badge">${T.recommended}</span>
                                     </button>
                                 </div>
                             </div>
                             <div class="feynman-tip-banner" hidden>
-                                <span>🧠 <strong>费曼认知挑战</strong>：递进关键词已遮挡。看着释义，凭借脑内记忆说出这句法语！</span>
-                                <button class="btn-reveal-all" type="button">一键揭晓</button>
+                                <span>🧠 <strong>${T.blindTipStrong}</strong>${T.blindTipText}</span>
+                                <button class="btn-reveal-all" type="button">${T.revealAll}</button>
                             </div>
                             <div class="buildup-steps-list">
                                 ${stepsHtml}
@@ -1363,13 +1624,13 @@ function initStudyWorkbench() {
                         <div class="section-title">
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <i data-lucide="book-open"></i>
-                                <span>逐词剖析 (Word Breakdown)</span>
+                                <span>${T.wordBreakdownTitle}</span>
                             </div>
                             <div class="words-filter-tabs">
-                                <button class="btn-words-filter ${hasFunctionWords ? 'active' : ''}" data-filter="content" type="button">核心实词 (${effectiveContentWords.length})</button>
-                                <button class="btn-words-filter ${!hasFunctionWords ? 'active' : ''}" data-filter="all" type="button">全部 (${wordsList.length})</button>
+                                <button class="btn-words-filter ${hasFunctionWords ? 'active' : ''}" data-filter="content" type="button">${T.filterContent(effectiveContentWords.length)}</button>
+                                <button class="btn-words-filter ${!hasFunctionWords ? 'active' : ''}" data-filter="all" type="button">${T.filterAll(wordsList.length)}</button>
                                 ${hasFunctionWords ? `
-                                    <button class="btn-words-filter" data-filter="function" type="button">仅看虚词 (${effectiveFunctionWords.length})</button>
+                                    <button class="btn-words-filter" data-filter="function" type="button">${T.filterFunction(effectiveFunctionWords.length)}</button>
                                 ` : ''}
                             </div>
                         </div>
@@ -1381,14 +1642,14 @@ function initStudyWorkbench() {
 
                             ${hasFunctionWords ? `
                                 <div class="function-words-collapse-section">
-                                    <div class="function-words-summary-bar" role="button" tabindex="0" title="点击展开/收起基础虚词详细卡片">
+                                    <div class="function-words-summary-bar" role="button" tabindex="0" title="${T.fwToggleTitle}">
                                         <div class="fw-summary-left">
-                                            <span class="fw-summary-badge">基础虚词</span>
+                                            <span class="fw-summary-badge">${T.fwBadge}</span>
                                             <span class="fw-summary-tokens">${functionTokensPreview}</span>
-                                            <span class="fw-summary-count">共 ${effectiveFunctionWords.length} 词</span>
+                                            <span class="fw-summary-count">${T.fwCount(effectiveFunctionWords.length)}</span>
                                         </div>
                                         <div class="fw-summary-right">
-                                            <span class="fw-toggle-label">展开解析</span>
+                                            <span class="fw-toggle-label">${T.expandDetails}</span>
                                             <i data-lucide="chevron-down" class="fw-chevron"></i>
                                         </div>
                                     </div>
@@ -1413,13 +1674,13 @@ function initStudyWorkbench() {
                                         <h4 class="grammar-point-title">${escapeHtml(g.title)}</h4>
                                     </div>
                                     <button class="btn-grammar-star btn-grammar-card" type="button"
-                                        title="加入复习：AI 用这条规则造一个新例句让你填空"
+                                        title="${T.grammarAdd}"
                                         data-sentence="${escapeHtml(sentenceText)}"
                                         data-title="${escapeHtml(g.title)}"
                                         data-exp="${escapeHtml(g.explanation || '')}"
                                         data-hook="${escapeHtml(g.hook || '')}">
                                         <i data-lucide="star"></i>
-                                        <span class="grammar-card-label">加入复习</span>
+                                        <span class="grammar-card-label">${T.addToReview}</span>
                                     </button>
                                 </div>
                                 <div class="grammar-point-body">
@@ -1427,7 +1688,7 @@ function initStudyWorkbench() {
                                     ${g.hook ? `
                                         <div class="grammar-hook-inline feynman-hook-pill">
                                             <span class="hook-icon">🧠</span>
-                                            <span class="hook-text"><strong>记忆钩子：</strong> ${escapeHtml(g.hook)}</span>
+                                            <span class="hook-text"><strong>${T.memoryHook}</strong> ${escapeHtml(g.hook)}</span>
                                         </div>
                                     ` : ''}
                                 </div>
@@ -1439,7 +1700,7 @@ function initStudyWorkbench() {
                         <div class="study-card-section grammar-section">
                             <div class="section-title">
                                 <i data-lucide="sparkles"></i>
-                                <span>语法考点与记忆钩子 (Grammar & Memory Hooks)</span>
+                                <span>${T.grammarTitle}</span>
                             </div>
                             <div class="grammar-points-list">
                                 ${pointsHtml}
@@ -1457,7 +1718,7 @@ function initStudyWorkbench() {
                         <div class="study-card-section pronunciation-section">
                             <div class="section-title">
                                 <i data-lucide="volume-2"></i>
-                                <span>发音重点与连音提示 (Pronunciation Tips)</span>
+                                <span>${T.pronTitle}</span>
                             </div>
                             <ul class="pronunciation-tips-list">
                                 ${tipsHtml}
@@ -1470,16 +1731,16 @@ function initStudyWorkbench() {
                 const isCollapsed = isMultiSentence && idx > 0;
 
                 const accordionHeaderHtml = isMultiSentence ? `
-                    <div class="card-accordion-header" role="button" tabindex="0" title="点击展开/折叠此句分析">
+                    <div class="card-accordion-header" role="button" tabindex="0" title="${T.accordionTitle}">
                         <div class="accordion-header-left">
                             <span class="sentence-index-pill">Phrase ${idx + 1}</span>
                             <span class="accordion-preview-fr">${escapeHtml(sentenceText.length > 65 ? sentenceText.slice(0, 65) + '...' : sentenceText)}</span>
                         </div>
                         <div class="accordion-header-right">
-                            <button class="btn-token-speak btn-accordion-speak" type="button" title="朗读原句" data-speech="${escapeHtml(sentenceText)}">
+                            <button class="btn-token-speak btn-accordion-speak" type="button" title="${T.readOriginal}" data-speech="${escapeHtml(sentenceText)}">
                                 <i data-lucide="volume-2"></i>
                             </button>
-                            <span class="accordion-preview-trans">${escapeHtml(transZh || transEn)}</span>
+                            <span class="accordion-preview-trans">${escapeHtml(pick(transZh, transEn))}</span>
                             <i data-lucide="chevron-down" class="accordion-chevron"></i>
                         </div>
                     </div>
@@ -1492,33 +1753,33 @@ function initStudyWorkbench() {
                             ${hasValidBuildup ? `
                                 <button class="card-tab-btn active" data-tab="buildup" type="button" role="tab" aria-selected="true">
                                     <i data-lucide="layers"></i>
-                                    <span>搭句子</span>
+                                    <span>${T.tabBuildup}</span>
                                     <span class="tab-pill">${s.build_up.length}</span>
                                 </button>
                             ` : ''}
                             <button class="card-tab-btn ${!hasValidBuildup ? 'active' : ''}" data-tab="words" type="button" role="tab" aria-selected="${!hasValidBuildup}">
                                 <i data-lucide="book-open"></i>
-                                <span>逐词剖析</span>
+                                <span>${T.tabWords}</span>
                                 <span class="tab-pill">${wordsList.length}</span>
                             </button>
                             ${s.grammar_points && s.grammar_points.length > 0 ? `
                                 <button class="card-tab-btn" data-tab="grammar" type="button" role="tab" aria-selected="false">
                                     <i data-lucide="sparkles"></i>
-                                    <span>语法考点</span>
+                                    <span>${T.tabGrammar}</span>
                                     <span class="tab-pill">${s.grammar_points.length}</span>
                                 </button>
                             ` : ''}
                             ${s.pronunciation_tips && s.pronunciation_tips.length > 0 ? `
                                 <button class="card-tab-btn" data-tab="pron" type="button" role="tab" aria-selected="false">
                                     <i data-lucide="volume-2"></i>
-                                    <span>发音重点</span>
+                                    <span>${T.tabPron}</span>
                                     <span class="tab-pill">${s.pronunciation_tips.length}</span>
                                 </button>
                             ` : ''}
                             ${!hasValidBuildup ? `
                                 <button class="card-tab-btn" data-tab="shadowing" type="button" role="tab" aria-selected="false">
                                     <i data-lucide="mic"></i>
-                                    <span>跟读打分</span>
+                                    <span>${T.shadowScore}</span>
                                 </button>
                             ` : ''}
                         </div>
@@ -1540,20 +1801,20 @@ function initStudyWorkbench() {
                     <div class="sentence-hero">
                         <div class="sentence-meta-row">
                             <span class="sentence-index-pill">Phrase ${idx + 1}</span>
-                            <span class="schema-version-pill legacy-pill">旧版中文精析</span>
+                            <span class="schema-version-pill legacy-pill">${T.legacyBadge}</span>
                         </div>
                         <div class="sentence-text-row">
                             <p class="sentence-french-text">${renderInteractiveWordsHtml(sentenceText)}</p>
-                            <button class="btn-speak-round" type="button" title="收听整句标准发音" aria-label="朗读句子">
+                            <button class="btn-speak-round" type="button" title="${T.listenSentence}" aria-label="${T.readSentenceAria}">
                                 <i data-lucide="volume-2"></i>
                             </button>
-                            <button class="btn-sentence-save" type="button" data-sentence="${escapeHtml(sentenceText)}" title="加入复习：生成「听」和「说」两张卡片">
+                            <button class="btn-sentence-save" type="button" data-sentence="${escapeHtml(sentenceText)}" title="${T.sentenceAdd}">
                                 <i data-lucide="bookmark-plus"></i>
-                                <span class="sentence-save-label">加入复习</span>
+                                <span class="sentence-save-label">${T.addToReview}</span>
                             </button>
                         </div>
                         <div class="sentence-translations">
-                            <div class="translation-cn">${escapeHtml(transZh)}</div>
+                            <div class="translation-cn"${EN && transEn ? ' hidden' : ''}>${escapeHtml(transZh)}</div>
                             <div class="translation-en">${escapeHtml(transEn)}</div>
                         </div>
                     </div>
@@ -1576,11 +1837,11 @@ function initStudyWorkbench() {
                                     <div class="token-main-row">
                                         <span class="token-word">${escapeHtml(tokenText)}</span>
                                         <div class="token-actions">
-                                            <button class="btn-token-speak" type="button" title="点击发音" data-speech="${escapeHtml(tokenText)}">
+                                            <button class="btn-token-speak" type="button" title="${T.clickToPronounce}" data-speech="${escapeHtml(tokenText)}">
                                                 <i data-lucide="volume-2"></i>
                                             </button>
                                             <button class="btn-token-star ${isSaved ? 'active' : ''}" type="button"
-                                                title="${isSaved ? '已加入复习（点击移除这张挖空卡）' : '加入复习：在句子里挖空这个词'}"
+                                                title="${isSaved ? T.starSaved : T.starAdd}"
                                                 data-token="${escapeHtml(tokenText)}"
                                                 data-lemma="${escapeHtml(lemma)}"
                                                 data-pos="${escapeHtml(pos)}"
@@ -1596,12 +1857,12 @@ function initStudyWorkbench() {
                                     <div class="token-details">
                                         ${pos ? `<span class="pos-tag">${escapeHtml(pos)}</span>` : ''}
                                         ${phonetic ? `<span class="phonetic-tag">${escapeHtml(formatFriendlyPhonetic(phonetic))}</span>` : ''}
-                                        ${lemma ? `<span class="lemma-tag">原形: ${escapeHtml(lemma)}</span>` : ''}
+                                        ${lemma ? `<span class="lemma-tag">${T.baseForm}${escapeHtml(lemma)}</span>` : ''}
                                     </div>
                                 </div>
                             </td>
-                            <td class="explanation-en-cell">${escapeHtml(expEn)}</td>
-                            <td class="explanation-cn-cell">${escapeHtml(expCn)}</td>
+                            <td class="explanation-en-cell">${escapeHtml(EN ? pick(expCn, expEn) : expEn)}</td>
+                            ${EN ? '' : `<td class="explanation-cn-cell">${escapeHtml(expCn)}</td>`}
                         </tr>
                     `;
                 });
@@ -1611,9 +1872,9 @@ function initStudyWorkbench() {
                         <table class="breakdown-table">
                             <thead>
                                 <tr>
-                                    <th>① 词汇 / 词组短语 (Forme & Audio)</th>
-                                    <th>② 英文简明解释 (Anglais)</th>
-                                    <th>③ 中文释义与语法搭配 (Chinois)</th>
+                                    <th>${T.thWord}</th>
+                                    <th>${T.thEnglish}</th>
+                                    ${EN ? '' : `<th>${T.thChinese}</th>`}
                                 </tr>
                             </thead>
                             <tbody>
@@ -1683,13 +1944,13 @@ function initStudyWorkbench() {
 
         async function transcribe(blob) {
             button.disabled = true;
-            setLabel('识别中…');
+            setLabel(T.transcribing);
             setStatus('');
             try {
                 const token = localStorage.getItem(userTokenKey);
                 if (!token) {
                     openAuthModal();
-                    throw new Error('语音识别需要先登录。');
+                    throw new Error(T.dictationLogin);
                 }
                 const context = passageContext();
                 const res = await fetch(`/api/transcribe?sentence=${encodeURIComponent(sentence)}&context=${encodeURIComponent(context)}`, {
@@ -1698,16 +1959,16 @@ function initStudyWorkbench() {
                     body: blob,
                 });
                 const data = await readJsonSafely(res);
-                if (!res.ok) throw new Error(data.detail?.message || `识别失败（HTTP ${res.status}）`);
+                if (!res.ok) throw new Error(data.detail?.message || T.transcribeFailed(res.status));
                 const heard = (data.text || '').trim();
                 if (!heard) {
-                    setStatus('没听清，再说一次试试。', true);
+                    setStatus(T.notHeard, true);
                     return;
                 }
                 const before = field.value.trim();
                 field.value = before ? `${before} ${heard}` : heard;
-                setLabel('校正法语词…');
-                setStatus('已填入识别结果，正在校正听错的法语词（约 5–10 秒）…');
+                setLabel(T.fixingWords);
+                setStatus(T.fixingStatus);
                 const fixRes = await fetch('/api/transcribe/fix', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${requireAuthToken()}` },
@@ -1716,7 +1977,7 @@ function initStudyWorkbench() {
                 const fixed = fixRes.ok ? ((await readJsonSafely(fixRes)).text || '').trim() : '';
                 if (fixed && fixed !== heard && field.value.includes(heard)) {
                     field.value = field.value.replace(heard, fixed);
-                    setStatus('已校正。不对的地方可以直接改。');
+                    setStatus(T.fixedStatus);
                 } else {
                     setStatus('');
                 }
@@ -1741,7 +2002,7 @@ function initStudyWorkbench() {
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             } catch (err) {
-                setStatus(`无法使用麦克风：${err.message}`, true);
+                setStatus(`${T.micError}${err.message}`, true);
                 return;
             }
             const chunks = [];
@@ -1757,29 +2018,29 @@ function initStudyWorkbench() {
             rec.start();
             recorder = rec;
             button.classList.add('recording');
-            setLabel('说完点这里');
+            setLabel(T.doneSpeaking);
             setStatus('');
             stopTimer = setTimeout(() => { if (rec.state !== 'inactive') rec.stop(); }, 120000);
         });
     }
 
     function renderFeynmanFeedback(fb) {
-        const verdictText = { solid: '讲清楚了', partial: '讲到了一部分', missing: '还没抓住要点' }[fb.verdict] || '';
+        const verdictText = { solid: T.verdictSolid, partial: T.verdictPartial, missing: T.verdictMissing }[fb.verdict] || '';
         const list = (items, cls, mark) => items && items.length
             ? `<ul class="${cls}">${items.map(t => `<li><span class="fb-mark">${mark}</span>${escapeHtml(t)}</li>`).join('')}</ul>`
             : '';
         let variationHtml = '';
         if (fb.variation) {
             variationHtml = fb.variation.ok
-                ? `<p class="fb-variation ok">✓ 你造的句子没问题${fb.variation.note ? '：' + escapeHtml(fb.variation.note) : ''}</p>`
-                : `<p class="fb-variation fix">✗ 你造的句子可以改成：<strong>${escapeHtml(fb.variation.corrected)}</strong>${fb.variation.note ? '<br>' + escapeHtml(fb.variation.note) : ''}</p>`;
+                ? `<p class="fb-variation ok">${T.variationOk(fb.variation.note ? escapeHtml(fb.variation.note) : '')}</p>`
+                : `<p class="fb-variation fix">${T.variationFix}<strong>${escapeHtml(fb.variation.corrected)}</strong>${fb.variation.note ? '<br>' + escapeHtml(fb.variation.note) : ''}</p>`;
         }
         return `
             <p class="fb-verdict verdict-${escapeHtml(fb.verdict)}">${verdictText}</p>
             ${list(fb.got_right, 'fb-right', '✓')}
             ${list(fb.gaps, 'fb-gaps', '△')}
             ${variationHtml}
-            ${fb.follow_up ? `<p class="fb-followup"><strong>追问：</strong>${escapeHtml(fb.follow_up)}<span class="fb-followup-hint">（直接在下面的提问框里回答）</span></p>` : ''}
+            ${fb.follow_up ? `<p class="fb-followup"><strong>${T.followUp}</strong>${escapeHtml(fb.follow_up)}<span class="fb-followup-hint">${T.followUpHint}</span></p>` : ''}
         `;
     }
 
@@ -1807,7 +2068,7 @@ function initStudyWorkbench() {
 
         function apiError(data) {
             const detail = Array.isArray(data.detail) ? data.detail.map(d => d.msg).join('；') : (data.detail?.message || data.detail);
-            return new Error(detail || '请求失败');
+            return new Error(detail || T.requestFailedGeneric);
         }
 
         function addBubble(role, text) {
@@ -1859,12 +2120,12 @@ function initStudyWorkbench() {
             const explanation = input.value.trim();
             if (!explanation) {
                 input.focus();
-                input.placeholder = '先写（或说）几句你自己的理解，哪怕只有一句。';
+                input.placeholder = T.feynmanEmpty;
                 return;
             }
             checkBtn.disabled = true;
             feedback.hidden = false;
-            feedback.innerHTML = '<p class="fb-loading">AI 正在对照你的讲解找漏洞…</p>';
+            feedback.innerHTML = `<p class="fb-loading">${T.feynmanLoading}</p>`;
             try {
                 const res = await fetch('/api/feynman', {
                     method: 'POST',
@@ -2098,7 +2359,7 @@ function initStudyWorkbench() {
                         if (fwSummary) {
                             fwSummary.classList.add('is-expanded');
                             const label = fwSummary.querySelector('.fw-toggle-label');
-                            if (label) label.textContent = '收起解析';
+                            if (label) label.textContent = T.collapseDetails;
                         }
                     }
                 } else if (filter === 'content') {
@@ -2109,7 +2370,7 @@ function initStudyWorkbench() {
                         if (fwSummary) {
                             fwSummary.classList.remove('is-expanded');
                             const label = fwSummary.querySelector('.fw-toggle-label');
-                            if (label) label.textContent = '展开解析';
+                            if (label) label.textContent = T.expandDetails;
                         }
                     }
                 } else if (filter === 'function') {
@@ -2120,7 +2381,7 @@ function initStudyWorkbench() {
                         if (fwSummary) {
                             fwSummary.classList.add('is-expanded');
                             const label = fwSummary.querySelector('.fw-toggle-label');
-                            if (label) label.textContent = '收起解析';
+                            if (label) label.textContent = T.collapseDetails;
                         }
                     }
                 }
@@ -2136,7 +2397,7 @@ function initStudyWorkbench() {
                 fwCardsGrid.hidden = !isHidden;
                 fwSummaryBar.classList.toggle('is-expanded', isHidden);
                 const label = fwSummaryBar.querySelector('.fw-toggle-label');
-                if (label) label.textContent = isHidden ? '收起解析' : '展开解析';
+                if (label) label.textContent = isHidden ? T.collapseDetails : T.expandDetails;
                 refreshIcons();
             });
             fwSummaryBar.addEventListener('keydown', (e) => {
@@ -2177,7 +2438,7 @@ function initStudyWorkbench() {
             let isModelPlaying = false;
             let isUserPlaying = false;
 
-            const modelLabel = (playModelBtn && playModelBtn.dataset.label) || (isCompact ? '范读' : '官方范读');
+            const modelLabel = (playModelBtn && playModelBtn.dataset.label) || (isCompact ? T.modelReading : T.modelReadingFull);
 
             function resetModelBtn() {
                 isModelPlaying = false;
@@ -2192,7 +2453,7 @@ function initStudyWorkbench() {
                 isUserPlaying = false;
                 if (playUserBtn) {
                     playUserBtn.classList.remove('playing');
-                    playUserBtn.innerHTML = `<i data-lucide="play"></i><span>我的录音</span>`;
+                    playUserBtn.innerHTML = `<i data-lucide="play"></i><span>${T.myRecording}</span>`;
                     refreshIcons();
                 }
             }
@@ -2209,7 +2470,7 @@ function initStudyWorkbench() {
 
                     isModelPlaying = true;
                     playModelBtn.classList.add('playing');
-                    playModelBtn.innerHTML = `<i data-lucide="square"></i><span>停止</span>`;
+                    playModelBtn.innerHTML = `<i data-lucide="square"></i><span>${T.stop}</span>`;
                     refreshIcons();
 
                     playFrenchSpeech(sentenceText, () => {
@@ -2235,7 +2496,7 @@ function initStudyWorkbench() {
 
                     isUserPlaying = true;
                     playUserBtn.classList.add('playing');
-                    playUserBtn.innerHTML = `<i data-lucide="square"></i><span>停止</span>`;
+                    playUserBtn.innerHTML = `<i data-lucide="square"></i><span>${T.stop}</span>`;
                     refreshIcons();
 
                     let finished = false;
@@ -2348,10 +2609,10 @@ function initStudyWorkbench() {
                     currentGlobalRecordingStopper = stopRecording;
                     recordBtn.classList.add('recording');
                     if (recordBtnText) {
-                        recordBtnText.textContent = isCompact ? '⏹ 点击评测' : '⏹ 朗读完成，点击评测';
+                        recordBtnText.textContent = isCompact ? T.stopAndScoreShort : T.stopAndScore;
                     }
                 } catch (err) {
-                    alert('无法调用麦克风：' + err.message);
+                    alert(T.micUnavailable + err.message);
                 }
             }
 
@@ -2363,7 +2624,7 @@ function initStudyWorkbench() {
                 }
                 recordBtn.classList.remove('recording');
                 if (recordBtnText) {
-                    recordBtnText.textContent = '🎙 再次跟读';
+                    recordBtnText.textContent = T.shadowAgain;
                 }
 
                 if (mediaRecorder && mediaRecorder.state !== 'inactive') {
@@ -2400,12 +2661,12 @@ function initStudyWorkbench() {
                             wordSpan.className = `diff-word ${item.status}`;
                             wordSpan.textContent = item.word;
                             wordSpan.dataset.word = item.word;
-                            wordSpan.title = `相似度得分: ${item.score} / 100 · 点击查看释义与单读发音`;
+                            wordSpan.title = T.diffWordTitle(item.score);
                             diffBox.appendChild(wordSpan);
                             diffBox.appendChild(document.createTextNode(' '));
                         });
                     } else {
-                        diffBox.textContent = recognitionTranscript || '未检测到清晰发音，请重试。';
+                        diffBox.textContent = recognitionTranscript || T.noClearSpeech;
                     }
                 }
 
@@ -2451,7 +2712,7 @@ function initStudyWorkbench() {
                         if (tipBanner) tipBanner.hidden = false;
                         if (revealAllBtn) {
                             revealAllBtn.dataset.revealed = 'false';
-                            revealAllBtn.textContent = '一键揭晓';
+                            revealAllBtn.textContent = T.revealAll;
                         }
                     } else {
                         if (stepsList) stepsList.classList.remove('is-blind-mode');
@@ -2471,12 +2732,12 @@ function initStudyWorkbench() {
                         allTokens.forEach(t => t.classList.remove('revealed'));
                         allStepRows.forEach(r => r.classList.remove('step-revealed'));
                         revealAllBtn.dataset.revealed = 'false';
-                        revealAllBtn.textContent = '一键揭晓';
+                        revealAllBtn.textContent = T.revealAll;
                     } else {
                         allTokens.forEach(t => t.classList.add('revealed'));
                         allStepRows.forEach(r => r.classList.add('step-revealed'));
                         revealAllBtn.dataset.revealed = 'true';
-                        revealAllBtn.textContent = '重新遮挡';
+                        revealAllBtn.textContent = T.hideAgain;
                     }
                 });
             }
@@ -2541,7 +2802,7 @@ function initStudyWorkbench() {
     function switchAuthTab(tab) {
         currentAuthTab = tab;
         if (authErrorMsg) authErrorMsg.hidden = true;
-        if (authSubmitLabel) authSubmitLabel.textContent = '登录';
+        if (authSubmitLabel) authSubmitLabel.textContent = T.login;
         refreshIcons();
     }
 
@@ -2574,14 +2835,14 @@ function initStudyWorkbench() {
             const shortName = user.email.split('@')[0];
             if (userAuthStatusText) userAuthStatusText.textContent = shortName;
             if (userTrialBadge) {
-                userTrialBadge.textContent = `剩 ${user.days_left} 天`;
+                userTrialBadge.textContent = T.daysLeftShort(user.days_left);
                 userTrialBadge.hidden = user.plan === 'pro';
             }
             if (profileEmail) profileEmail.textContent = user.email;
-            if (profileBadge) profileBadge.textContent = user.plan === 'pro' ? '长期有效' : `有效期剩 ${user.days_left} 天`;
+            if (profileBadge) profileBadge.textContent = user.plan === 'pro' ? T.planPro : T.daysLeft(user.days_left);
         } else {
             currentAuthUser = null;
-            if (userAuthStatusText) userAuthStatusText.textContent = '登录';
+            if (userAuthStatusText) userAuthStatusText.textContent = T.login;
             if (userTrialBadge) userTrialBadge.hidden = true;
         }
         refreshIcons();
@@ -2606,7 +2867,7 @@ function initStudyWorkbench() {
             });
             const data = await readJsonSafely(res);
             if (!res.ok) {
-                throw new Error(data.detail?.message || data.detail || '操作失败');
+                throw new Error(data.detail?.message || data.detail || T.operationFailed);
             }
 
             localStorage.setItem(userTokenKey, data.token);
@@ -2617,7 +2878,7 @@ function initStudyWorkbench() {
                 .map(btn => ({ sentence: btn.dataset.sentence }));
             refreshSrsStates(renderedSentences);
             statusMessage.className = 'status-message status-success';
-            statusMessage.textContent = '登录成功！欢迎回来。';
+            statusMessage.textContent = T.loginSuccess;
         } catch (err) {
             if (authErrorMsg) {
                 authErrorMsg.textContent = err.message;
@@ -2636,7 +2897,7 @@ function initStudyWorkbench() {
         updateAuthUI(null);
         closeAuthModal();
         statusMessage.className = 'status-message status-info';
-        statusMessage.textContent = '已退出登录。';
+        statusMessage.textContent = T.loggedOut;
     }
 
     // -------------------------------------------------------------------------
@@ -2861,7 +3122,7 @@ function initStudyWorkbench() {
         return tokens.map(token => {
             if (/^[A-Za-zÀ-ÖØ-öø-ÿŒœ\d]/i.test(token)) {
                 const clean = token.replace(/['’]$/, '').trim() || token.trim();
-                return `<span class="interactive-word" role="button" tabindex="0" data-word="${escapeHtml(clean)}" data-token="${escapeHtml(token.trim())}" title="${escapeHtml(clean)} · 点击查看释义与单读发音">${escapeHtml(token)}</span>`;
+                return `<span class="interactive-word" role="button" tabindex="0" data-word="${escapeHtml(clean)}" data-token="${escapeHtml(token.trim())}" title="${escapeHtml(clean)}${T.wordTitleSuffix}">${escapeHtml(token)}</span>`;
             }
             return escapeHtml(token);
         }).join('');
@@ -2930,24 +3191,23 @@ function initStudyWorkbench() {
         let m;
         if ((m = t.match(/^1(er|re|ère)$/i))) {
             const fem = m[1].toLowerCase() !== 'er';
-            return { spoken: fem ? 'première' : 'premier', pos: '序数词', note: `第一${fem ? '（阴性）' : ''}。法语日期里只有 1 号用序数词：le 1er mai 读作 le premier mai，其他日子直接读数字。` };
+            return { spoken: fem ? 'première' : 'premier', pos: T.posOrdinal, note: T.firstNote(fem) };
         }
         if ((m = t.match(/^(\d{1,6})(e|ème|eme)$/i))) {
-            return { spoken: frenchOrdinal(parseInt(m[1], 10)), pos: '序数词', note: `第 ${m[1]}` };
+            return { spoken: frenchOrdinal(parseInt(m[1], 10)), pos: T.posOrdinal, note: T.ordinalNote(m[1]) };
         }
         if ((m = t.match(/^(\d{1,2})h(\d{2})?$/i))) {
             const h = parseInt(m[1], 10);
             const minutes = m[2] ? parseInt(m[2], 10) : 0;
             const spoken = `${h === 1 ? 'une' : frenchCardinal(h)} heure${h > 1 ? 's' : ''}${minutes ? ' ' + frenchCardinal(minutes) : ''}`;
-            return { spoken, pos: '时间', note: `${h} 点${minutes ? ' ' + minutes + ' 分' : ''}` };
+            return { spoken, pos: T.posTime, note: T.timeNote(h, minutes) };
         }
         if ((m = t.match(/^(\d{1,9}),(\d{1,3})$/))) {
-            return { spoken: `${frenchCardinal(parseInt(m[1], 10))} virgule ${frenchCardinal(parseInt(m[2], 10))}`, pos: '数字', note: '法语用逗号表示小数点' };
+            return { spoken: `${frenchCardinal(parseInt(m[1], 10))} virgule ${frenchCardinal(parseInt(m[2], 10))}`, pos: T.posNumber, note: T.decimalNote };
         }
         if ((m = t.match(/^\d{1,9}$/))) {
             const n = parseInt(t, 10);
-            const yearNote = n >= 1100 && n <= 2099 ? '（作年份时也这样读）' : '';
-            return { spoken: frenchCardinal(n), pos: '数字', note: `${n}${yearNote}` };
+            return { spoken: frenchCardinal(n), pos: T.posNumber, note: T.numberNote(n, n >= 1100 && n <= 2099) };
         }
         return null;
     }
@@ -3052,17 +3312,20 @@ function initStudyWorkbench() {
             popoverPos.hidden = true;
         }
         if (item.lemma && item.lemma.toLowerCase() !== item.token.toLowerCase()) {
-            popoverLemma.textContent = `原形: ${item.lemma}`;
+            popoverLemma.textContent = `${T.baseForm}${item.lemma}`;
             popoverLemma.hidden = false;
         } else {
             popoverLemma.hidden = true;
         }
 
-        if (item.explanation_cn) {
+        if (EN) {
+            popoverCn.textContent = pick(item.explanation_cn, item.explanation_en) || T.contextWord;
+            popoverEn.textContent = '';
+        } else if (item.explanation_cn) {
             popoverCn.textContent = item.explanation_cn;
             popoverEn.textContent = item.explanation_en || '';
         } else {
-            popoverCn.textContent = item.explanation_en || '语境词汇';
+            popoverCn.textContent = item.explanation_en || T.contextWord;
             popoverEn.textContent = '';
         }
         if (popoverLoading) {
@@ -3086,8 +3349,8 @@ function initStudyWorkbench() {
         if (!popoverStarBtn || !currentPopoverCard) return;
         const exists = Boolean(findTargetCard(currentPopoverCard.sentence, currentPopoverCard.token));
         popoverStarBtn.classList.toggle('active', exists);
-        popoverStarBtn.title = exists ? '已加入复习（点击移除）' : '加入复习 (快捷键 S)';
-        if (popoverStarText) popoverStarText.textContent = exists ? '已加入复习' : '加入复习';
+        popoverStarBtn.title = exists ? T.popoverSaved : T.popoverStarTitle;
+        if (popoverStarText) popoverStarText.textContent = exists ? T.inReview : T.addToReview;
     }
 
     async function showPopoverForElement(rawWord, element, context = {}) {
@@ -3128,8 +3391,8 @@ function initStudyWorkbench() {
                 lemma: cleanWord,
                 pos: numberReading.pos,
                 phonetic: '',
-                explanation_cn: `读作：${numberReading.spoken}`,
-                explanation_en: numberReading.note,
+                explanation_cn: EN ? '' : `${T.readAs}${numberReading.spoken}`,
+                explanation_en: EN ? `${T.readAs}${numberReading.spoken} · ${numberReading.note}` : numberReading.note,
                 sentence: context.sentence || '',
                 sentence_cn: context.sentence_cn || '',
             });
@@ -3147,7 +3410,7 @@ function initStudyWorkbench() {
         const phraseMatch = context.sentence ? phraseByWord.get(`${srsSentenceKey(context.sentence)}::${lower}`) : null;
         if (phraseMatch) {
             const item = Object.assign({}, phraseMatch, {
-                explanation_en: [phraseMatch.explanation_en, `「${cleanWord}」在这句里是固定搭配「${phraseMatch.token}」的一部分，要整体理解。`].filter(Boolean).join(' '),
+                explanation_en: [phraseMatch.explanation_en, T.partOfPhrase(cleanWord, phraseMatch.token)].filter(Boolean).join(' '),
             });
             if (context.sentence) item.sentence = context.sentence;
             if (context.sentence_cn) item.sentence_cn = context.sentence_cn;
@@ -3210,7 +3473,7 @@ function initStudyWorkbench() {
             lemma: cleanWord,
             pos: '',
             phonetic: '',
-            explanation_cn: '查询中...',
+            explanation_cn: T.lookingUp,
             explanation_en: '',
             sentence: context.sentence || '',
             sentence_cn: context.sentence_cn || ''
@@ -3225,7 +3488,7 @@ function initStudyWorkbench() {
             const res = await fetch(`/api/lookup?word=${encodeURIComponent(cleanWord)}`, { headers });
             if (!res.ok) {
                 const errData = await res.json().catch(() => ({}));
-                throw new Error(errData.detail?.message || '查词失败');
+                throw new Error(errData.detail?.message || T.lookupFailed);
             }
             const data = await res.json();
             const item = Object.assign({}, data, {
@@ -3247,7 +3510,7 @@ function initStudyWorkbench() {
                     popoverContent.hidden = false;
                     popoverContent.style.display = 'block';
                 }
-                popoverCn.textContent = '暂无法获取释义';
+                popoverCn.textContent = T.noDefinition;
                 popoverEn.textContent = err.message;
                 positionPopover(element);
             }
@@ -3282,7 +3545,7 @@ function initStudyWorkbench() {
     async function startAnalysis() {
         const text = frenchInput.value.trim();
         if (!text) {
-            statusMessage.textContent = '请先输入需要拆解或学习的法语文本。';
+            statusMessage.textContent = T.emptyInput;
             statusMessage.style.color = '#e11d48';
             frenchInput.focus();
             return;
@@ -3294,9 +3557,9 @@ function initStudyWorkbench() {
 
             analyzeButton.classList.add('is-loading');
             analyzeButton.disabled = true;
-            analyzeButtonLabel.textContent = '正在智能拆解与精析...';
+            analyzeButtonLabel.textContent = T.analyzing;
             statusMessage.className = 'status-message status-working';
-            statusMessage.textContent = '正在调用 LLM 进行全句切分与意群搭配深度三列解析，请稍候...';
+            statusMessage.textContent = T.analyzingStatus;
 
             const res = await fetch('/api/analyze', {
                 method: 'POST',
@@ -3309,7 +3572,7 @@ function initStudyWorkbench() {
 
             const data = await readJsonSafely(res);
             if (!res.ok) {
-                throw new Error(data.detail?.message || data.detail || '分析请求失败');
+                throw new Error(data.detail?.message || data.detail || T.analyzeFailed);
             }
 
             renderStudyDeck(data.sentences || []);
@@ -3317,14 +3580,14 @@ function initStudyWorkbench() {
             collapseInputPanel(text);
 
             statusMessage.className = 'status-message status-success';
-            statusMessage.textContent = '拆解完成！先试着自己讲讲这句话（费曼自测），再看讲解；想背的句子点「加入复习」，想背的词点 ⭐、点击 🔊 即时发音，或进行跟读打分。';
+            statusMessage.textContent = T.analyzeDone;
         } catch (err) {
             statusMessage.className = 'status-message status-error';
-            statusMessage.textContent = `拆解失败: ${err.message}`;
+            statusMessage.textContent = `${T.analyzeError}${err.message}`;
         } finally {
             analyzeButton.classList.remove('is-loading');
             analyzeButton.disabled = false;
-            analyzeButtonLabel.textContent = '开始拆解与精析';
+            analyzeButtonLabel.textContent = T.analyze;
         }
     }
 
@@ -3406,11 +3669,11 @@ function initStudyWorkbench() {
                 if (item.sentences && item.sentences.length > 0) {
                     renderStudyDeck(item.sentences);
                     statusMessage.className = 'status-message status-success';
-                    statusMessage.textContent = `已成功从历史记录恢复（共 ${item.sentenceCount || item.sentences.length} 句），无需重新消耗 Token。`;
+                    statusMessage.textContent = T.restored(item.sentenceCount || item.sentences.length);
                     window.scrollTo({ top: studyDeckSection.offsetTop - 80, behavior: 'smooth' });
                 } else if (item.text) {
                     statusMessage.className = 'status-message status-info';
-                    statusMessage.textContent = '已填入历史音频文本，点击“开始拆解与精析”即可生成语法词汇卡片。';
+                    statusMessage.textContent = T.restoredText;
                 }
             },
             onReanalyzeStudy: (item) => {
