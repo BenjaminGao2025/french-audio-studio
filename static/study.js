@@ -279,7 +279,7 @@ function initStudyWorkbench() {
                 body: JSON.stringify({ model }),
             });
 
-            const data = await res.json();
+            const data = await readJsonSafely(res);
             if (!res.ok) {
                 throw new Error(data.detail?.message || data.detail || '连接测试失败');
             }
@@ -422,6 +422,15 @@ function initStudyWorkbench() {
         return Number.isFinite(saved) ? saved : 10;
     }
 
+    // Cloudflare turns upstream 502/504 into an HTML page: never let that surface as a JSON parse error
+    async function readJsonSafely(res) {
+        try {
+            return await res.json();
+        } catch (_) {
+            return { detail: { message: `服务器暂时出错（HTTP ${res.status}），请再试一次。` } };
+        }
+    }
+
     async function srsApi(method, path, body) {
         const token = getUserToken();
         if (!token) {
@@ -433,7 +442,7 @@ function initStudyWorkbench() {
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: body ? JSON.stringify(body) : undefined,
         });
-        const data = await res.json().catch(() => ({}));
+        const data = await readJsonSafely(res);
         if (!res.ok) {
             throw new Error(data.detail?.message || `请求失败（HTTP ${res.status}）`);
         }
@@ -457,6 +466,42 @@ function initStudyWorkbench() {
         const clean = (token || '').trim().toLowerCase();
         if (!note || !clean) return null;
         return note.cards.find(c => (c.mode === 'cloze' || c.mode === 'recognize') && c.target.toLowerCase() === clean) || null;
+    }
+
+    function findGrammarCard(sentence, title) {
+        const note = srsNotesByKey.get(srsSentenceKey(sentence));
+        return note ? note.cards.find(c => c.mode === 'grammar' && c.target === title) || null : null;
+    }
+
+    async function toggleGrammarCard(btn) {
+        const { sentence, title } = btn.dataset;
+        const existing = findGrammarCard(sentence, title);
+        const label = btn.querySelector('.grammar-card-label');
+        btn.disabled = true;
+        btn.classList.add('is-busy');
+        try {
+            if (existing) {
+                await srsApi('DELETE', `/api/srs/cards/${encodeURIComponent(existing.id)}`);
+                forgetCard(sentence, existing.id);
+            } else {
+                if (label) label.textContent = '生成练习中…';
+                const payload = sentenceNotePayload(sentence);
+                rememberNote(await srsApi('POST', '/api/srs/grammar', {
+                    sentence,
+                    translation_zh: payload.translation_zh,
+                    translation_en: payload.translation_en,
+                    grammar: { title, explanation: btn.dataset.exp || '', hook: btn.dataset.hook || '' },
+                    model: modelSelect.value,
+                }));
+            }
+        } catch (err) {
+            showSrsError(err);
+        } finally {
+            btn.disabled = false;
+            btn.classList.remove('is-busy');
+        }
+        updateTableStarStates();
+        refreshDueBadge();
     }
 
     function sentenceCards(sentence) {
@@ -520,6 +565,14 @@ function initStudyWorkbench() {
             const saved = Boolean(findTargetCard(btn.dataset.sentence, btn.dataset.token));
             btn.classList.toggle('active', saved);
             btn.title = saved ? '已加入复习（点击移除这张挖空卡）' : '加入复习：在句子里挖空这个词';
+        });
+        document.querySelectorAll('.btn-grammar-card').forEach(btn => {
+            if (btn.classList.contains('is-busy')) return;
+            const saved = Boolean(findGrammarCard(btn.dataset.sentence, btn.dataset.title));
+            btn.classList.toggle('active', saved);
+            btn.title = saved ? '已加入复习（点击移除这张语法卡）' : '加入复习：AI 用这条规则造一个新例句让你填空';
+            const label = btn.querySelector('.grammar-card-label');
+            if (label) label.textContent = saved ? '已加入复习' : '加入复习';
         });
         document.querySelectorAll('.btn-sentence-save').forEach(btn => {
             const saved = sentenceCards(btn.dataset.sentence).length > 0;
@@ -1359,6 +1412,15 @@ function initStudyWorkbench() {
                                         <span class="grammar-bullet">📌</span>
                                         <h4 class="grammar-point-title">${escapeHtml(g.title)}</h4>
                                     </div>
+                                    <button class="btn-grammar-star btn-grammar-card" type="button"
+                                        title="加入复习：AI 用这条规则造一个新例句让你填空"
+                                        data-sentence="${escapeHtml(sentenceText)}"
+                                        data-title="${escapeHtml(g.title)}"
+                                        data-exp="${escapeHtml(g.explanation || '')}"
+                                        data-hook="${escapeHtml(g.hook || '')}">
+                                        <i data-lucide="star"></i>
+                                        <span class="grammar-card-label">加入复习</span>
+                                    </button>
                                 </div>
                                 <div class="grammar-point-body">
                                     <p class="grammar-point-exp">${escapeHtml(g.explanation)}</p>
@@ -1635,7 +1697,7 @@ function initStudyWorkbench() {
                     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': blob.type || 'application/octet-stream' },
                     body: blob,
                 });
-                const data = await res.json().catch(() => ({}));
+                const data = await readJsonSafely(res);
                 if (!res.ok) throw new Error(data.detail?.message || `识别失败（HTTP ${res.status}）`);
                 const heard = (data.text || '').trim();
                 if (!heard) {
@@ -1651,7 +1713,7 @@ function initStudyWorkbench() {
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${requireAuthToken()}` },
                     body: JSON.stringify({ sentence, context, text: heard, model: modelSelect.value }),
                 });
-                const fixed = fixRes.ok ? ((await fixRes.json()).text || '').trim() : '';
+                const fixed = fixRes.ok ? ((await readJsonSafely(fixRes)).text || '').trim() : '';
                 if (fixed && fixed !== heard && field.value.includes(heard)) {
                     field.value = field.value.replace(heard, fixed);
                     setStatus('已校正。不对的地方可以直接改。');
@@ -1765,7 +1827,7 @@ function initStudyWorkbench() {
             addBubble('learner', question);
             const pending = addBubble('tutor', '…');
             pending.classList.add('is-pending');
-            const askButton = askForm.querySelector('.btn-ask');
+            const askButton = askForm.querySelector('button[type="submit"]');
             askButton.disabled = true;
             try {
                 const res = await fetch('/api/ask', {
@@ -1773,7 +1835,7 @@ function initStudyWorkbench() {
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${requireAuthToken()}` },
                     body: JSON.stringify({ ...contextPayload(), history: askHistory.slice(-12), question }),
                 });
-                const data = await res.json();
+                const data = await readJsonSafely(res);
                 if (!res.ok) throw apiError(data);
                 pending.textContent = data.answer;
                 askHistory.push({ role: 'learner', content: question }, { role: 'tutor', content: data.answer });
@@ -1813,7 +1875,7 @@ function initStudyWorkbench() {
                         variation: variationInput.value.trim(),
                     }),
                 });
-                const data = await res.json();
+                const data = await readJsonSafely(res);
                 if (!res.ok) throw apiError(data);
                 feedback.innerHTML = renderFeynmanFeedback(data);
                 // Let the ask box know what the tutor asked, so the learner can answer it there.
@@ -2005,6 +2067,13 @@ function initStudyWorkbench() {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 toggleSentenceCards(btn.dataset.sentence);
+            });
+        });
+
+        card.querySelectorAll('.btn-grammar-card').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleGrammarCard(btn);
             });
         });
 
@@ -2535,7 +2604,7 @@ function initStudyWorkbench() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password }),
             });
-            const data = await res.json();
+            const data = await readJsonSafely(res);
             if (!res.ok) {
                 throw new Error(data.detail?.message || data.detail || '操作失败');
             }
@@ -3247,7 +3316,7 @@ function initStudyWorkbench() {
                 body: JSON.stringify({ text, model }),
             });
 
-            const data = await res.json();
+            const data = await readJsonSafely(res);
             if (!res.ok) {
                 throw new Error(data.detail?.message || data.detail || '分析请求失败');
             }

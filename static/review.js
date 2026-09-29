@@ -5,6 +5,7 @@
      speak     - see the Chinese meaning, say the French (speech recognition scores it)
      cloze     - type the missing chunk back into the sentence
      recognize - legacy word card: see the word, recall the meaning
+     grammar   - apply a grammar point: fill the blank in a new example sentence
    ========================================================================== */
 
 (function () {
@@ -23,6 +24,7 @@
         speak: { icon: 'mic', label: '说', task: '看着中文，用法语把整句说出来。说不全也没关系，先说再看答案。' },
         cloze: { icon: 'pencil-line', label: '填', task: '把空格里的法语写出来。' },
         recognize: { icon: 'eye', label: '认', task: '想一想这个词是什么意思，然后看答案。' },
+        grammar: { icon: 'puzzle', label: '语法', task: '用这条语法规则，把新句子里的空填出来。' },
     };
     const STATE_LABELS = { new: '新卡', learning: '学习中', relearning: '重新学习', review: '复习' };
     const RATING_NAMES = { 1: '重来', 2: '困难', 3: '良好', 4: '简单' };
@@ -179,6 +181,12 @@
         if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     }
 
+    function cardSpeech(card) {
+        if (card.mode === 'recognize') return card.target;
+        if (card.mode === 'grammar') return (card.target_meta && card.target_meta.full_fr) || card.note.sentence;
+        return card.note.sentence;
+    }
+
     function ttsUrl(text) {
         return `/tts?text=${encodeURIComponent(text.trim())}&voice=${VOICE}`;
     }
@@ -321,7 +329,8 @@
     function checkCloze(card) {
         const input = $('cloze-input');
         const typed = input ? input.value : '';
-        const expected = normalizeAnswer(card.target);
+        const answer = card.mode === 'grammar' ? ((card.target_meta && card.target_meta.answer) || '') : card.target;
+        const expected = normalizeAnswer(answer);
         const given = normalizeAnswer(typed);
         let verdict;
         let suggested;
@@ -346,7 +355,7 @@
                 <div class="attempt-result cloze-result ${verdict.cls}">
                     <strong>${verdict.text}</strong>
                     ${given ? `<span>你写的：<b>${escapeHtml(typed)}</b></span>` : ''}
-                    <span>答案：<b>${escapeHtml(card.target)}</b></span>
+                    <span>答案：<b>${escapeHtml(answer)}</b></span>
                 </div>`,
         };
         reveal();
@@ -393,6 +402,16 @@
                     ${clue ? `<p class="prompt-clue">空格的意思：${escapeHtml(clue)}</p>` : ''}
                     <details class="prompt-hint"><summary>看首字母提示</summary><p class="initials">${escapeHtml(initialsHint(card.target))}</p></details>
                 </div>`;
+        } else if (card.mode === 'grammar') {
+            const [before, after] = (meta.prompt_fr || '____').split('____');
+            const width = Math.max(4, (meta.answer || '').length);
+            html += `
+                <div class="cloze-prompt">
+                    <p class="grammar-rule-pill">规则：${escapeHtml(card.target)}</p>
+                    <p class="prompt-fr">${escapeHtml(before || '')}<span class="cloze-blank" style="min-width:${width}ch">?</span>${escapeHtml(after || '')}</p>
+                    ${meta.full_en ? `<p class="prompt-sub">${escapeHtml(meta.full_en)}</p>` : ''}
+                    ${meta.hint ? `<p class="prompt-clue">提示：${escapeHtml(meta.hint)}</p>` : ''}
+                </div>`;
         } else {
             html += `
                 <div class="recognize-prompt">
@@ -406,7 +425,7 @@
         els.attemptArea.innerHTML = '';
         if (card.mode === 'speak') {
             renderSpeakAttempt(card);
-        } else if (card.mode === 'cloze') {
+        } else if (card.mode === 'cloze' || card.mode === 'grammar') {
             els.attemptArea.innerHTML = `
                 <form id="cloze-form" class="cloze-form" autocomplete="off">
                     <input id="cloze-input" type="text" maxlength="200" placeholder="在这里输入缺的法语" autocapitalize="off" spellcheck="false">
@@ -420,7 +439,36 @@
         }
     }
 
+    function renderGrammarAnswer(card) {
+        const note = card.note;
+        const meta = card.target_meta || {};
+        const [before, after] = (meta.prompt_fr || '').split('____');
+        els.answerArea.innerHTML = `
+            ${session.attempt ? session.attempt.html : ''}
+            <div class="answer-sentence">
+                <p class="answer-fr">${escapeHtml(before || '')}<mark>${escapeHtml(meta.answer || '')}</mark>${escapeHtml(after || '')}</p>
+                ${audioButtons(meta.full_fr || '')}
+                ${meta.full_en ? `<p class="answer-en">${escapeHtml(meta.full_en)}</p>` : ''}
+            </div>
+            <div class="answer-target">
+                <strong>${escapeHtml(card.target)}</strong>
+                ${meta.rule ? `<p>${escapeHtml(meta.rule)}</p>` : ''}
+                ${meta.hook ? `<p class="target-hook">记忆钩子：${escapeHtml(meta.hook)}</p>` : ''}
+            </div>
+            <div class="answer-origin">
+                <span class="origin-label">你学过的原句</span>
+                <p class="answer-fr origin-fr">${escapeHtml(note.sentence)}
+                    <button class="icon-btn btn-play" type="button" data-speech="${escapeHtml(note.sentence)}" data-rate="1" title="播放原句"><i data-lucide="volume-2"></i></button>
+                </p>
+                ${note.translation_zh ? `<p class="answer-en">${escapeHtml(note.translation_zh)}</p>` : ''}
+            </div>`;
+    }
+
     function renderAnswer(card) {
+        if (card.mode === 'grammar') {
+            renderGrammarAnswer(card);
+            return;
+        }
         const note = card.note;
         const meta = card.target_meta || {};
         const parts = card.target ? splitAroundTarget(note.sentence, card.target) : null;
@@ -510,7 +558,7 @@
         els.gradeRow.hidden = false;
         refreshIcons();
 
-        if (card.mode === 'speak' || card.mode === 'cloze') playFrench(card.note.sentence);
+        if (card.mode === 'speak' || card.mode === 'cloze' || card.mode === 'grammar') playFrench(cardSpeech(card));
     }
 
     async function grade(rating) {
@@ -577,7 +625,7 @@
         renderCard(card);
         const upcoming = session.queue[0];
         if (upcoming) {
-            fetch(ttsUrl(upcoming.mode === 'recognize' ? upcoming.target : upcoming.note.sentence)).catch(() => {});
+            fetch(ttsUrl(cardSpeech(upcoming))).catch(() => {});
         }
     }
 
@@ -701,7 +749,7 @@
     });
 
     els.revealBtn.addEventListener('click', () => {
-        if (session.current && session.current.mode === 'cloze') {
+        if (session.current && (session.current.mode === 'cloze' || session.current.mode === 'grammar')) {
             checkCloze(session.current);
         } else {
             reveal();
@@ -724,7 +772,7 @@
         } else if (e.key === 'r' || e.key === 'R') {
             e.preventDefault();
             const card = session.current;
-            playFrench(card.mode === 'recognize' && !session.revealed ? card.target : card.note.sentence);
+            playFrench(card.mode === 'grammar' && !session.revealed ? '' : cardSpeech(card));
         }
     });
 

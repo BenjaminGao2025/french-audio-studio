@@ -717,3 +717,35 @@ kbd {
         max-width: none;
     }
 }
+
+/* Grammar cards */
+.mode-grammar { background: #7c3aed; }
+
+.grammar-rule-pill {
+    display: inline-block;
+    margin: 0 0 10px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: #f5f3ff;
+    color: #5b21b6;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.answer-origin {
+    padding-top: 10px;
+    border-top: 1px dashed var(--line);
+}
+
+.origin-label {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.origin-fr {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 16px;
+}

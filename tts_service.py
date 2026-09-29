@@ -1503,8 +1503,15 @@ async def feynman_check(
     api_key = _authorization_token(authorization)
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
-        _, raw_text = await _post_chat(client, _feynman_payload(request), headers)
-    result = _parse_feynman_json(raw_text)
+        for attempt in range(2):
+            _, raw_text = await _post_chat(client, _feynman_payload(request), headers)
+            try:
+                result = _parse_feynman_json(raw_text)
+                break
+            except HTTPException:
+                logger.warning("Feynman output not parseable (attempt %d): %r", attempt + 1, raw_text[:300])
+                if attempt == 1:
+                    raise
     if not request.variation.strip():
         result["variation"] = None
     return result
@@ -1516,6 +1523,35 @@ async def feynman_check(
 # ---------------------------------------------------------------------------
 _asr_model = None
 _asr_lock = threading.Lock()  # one transcription at a time; also guards lazy loading
+
+# Whisper (trained on video subtitles) sometimes "hears" subtitle credits in trailing
+# noise, e.g. "字幕由…提供", "请订阅", "谢谢观看".
+ASR_HALLUCINATION_RE = re.compile(
+    r"字幕|订阅|点赞|打赏|请不吝|谢谢(?:大家)?(?:收看|观看)|感谢(?:收看|观看)|明镜|amara", re.IGNORECASE
+)
+ASR_HALLUCINATION_MAX_CHARS = 30
+
+
+def _clean_asr_segments(segments: list[tuple[str, float, float, float]]) -> str:
+    """Join (text, no_speech_prob, avg_logprob, compression_ratio) segments, dropping likely noise."""
+    kept = []
+    for text, no_speech_prob, avg_logprob, compression_ratio in segments:
+        text = text.strip()
+        if not text:
+            continue
+        if no_speech_prob > 0.5 and avg_logprob < -0.8:
+            continue  # probably no speech at all
+        if compression_ratio > 2.4:
+            continue  # repetition loop
+        if len(text) <= ASR_HALLUCINATION_MAX_CHARS and ASR_HALLUCINATION_RE.search(text):
+            continue
+        kept.append(text)
+    joined = " ".join(kept).strip()
+    # A hallucinated clause glued to the end of the last real sentence
+    match = re.search(r"^(.*[。！？!?.，,])\s*([^。！？!?.，,]+)$", joined, re.DOTALL)
+    if match and len(match.group(2)) <= ASR_HALLUCINATION_MAX_CHARS and ASR_HALLUCINATION_RE.search(match.group(2)):
+        joined = match.group(1).strip()
+    return joined
 
 
 def _transcribe_sync(audio: bytes, sentence: str, context: str = "") -> dict:
@@ -1542,8 +1578,11 @@ def _transcribe_sync(audio: bytes, sentence: str, context: str = "") -> dict:
             beam_size=5,
             vad_filter=True,
             initial_prompt=prompt,
+            condition_on_previous_text=False,
         )
-        text = "".join(segment.text for segment in segments).strip()
+        text = _clean_asr_segments([
+            (seg.text, seg.no_speech_prob, seg.avg_logprob, seg.compression_ratio) for seg in segments
+        ])
     return {"text": text, "duration": round(info.duration, 1)}
 
 
@@ -1589,6 +1628,8 @@ def _transcript_fix_payload(request: TranscriptFixRequest) -> dict:
         "- Also fix Chinese homophone errors when the context makes the intended word obvious (e.g. 原因 vs 元音, 不在 vs 不再).\n"
         "- Never fix the learner's ideas, grammar claims or wrong explanations. "
         "If they said a real French word, keep it, even if it is wrong.\n"
+        "- Delete recognizer hallucinations that are not part of the explanation, such as video subtitle credits "
+        "('字幕由…提供', '请订阅', '谢谢观看') or a few random words stuck at the very end.\n"
         "- Keep everything else exactly. Use Chinese punctuation for Chinese text.\n"
         "Return only the corrected text."
     )
@@ -1882,7 +1923,7 @@ async def clear_all_history(
 # ---------------------------------------------------------------------------
 class SrsTarget(BaseModel):
     text: str = Field(min_length=1, max_length=200)
-    mode: Literal["cloze", "recognize"] = "cloze"
+    mode: Literal["cloze", "recognize", "grammar"] = "cloze"
     meta: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -1983,6 +2024,104 @@ def srs_review_card(
         )
     except KeyError:
         raise HTTPException(status_code=404, detail={"message": "卡片不存在。"})
+
+
+class GrammarPointIn(BaseModel):
+    title: str = Field(min_length=1, max_length=300)
+    explanation: str = Field(default="", max_length=1000)
+    hook: str = Field(default="", max_length=500)
+
+
+class GrammarCardRequest(BaseModel):
+    sentence: str = Field(min_length=1, max_length=1000)
+    translation_zh: str = Field(default="", max_length=2000)
+    translation_en: str = Field(default="", max_length=2000)
+    grammar: GrammarPointIn
+    model: TransformModel = PERPLEXITY_MODEL
+
+
+def _grammar_exercise_payload(request: GrammarCardRequest) -> dict:
+    point = request.grammar
+    system = (
+        "You write ONE fill-in-the-blank exercise so an A1–A2 French learner (native Chinese, basic English) "
+        "practises ONE grammar point by using it, not by re-reading it.\n"
+        f"Grammar point: {point.title}. {point.explanation}\n"
+        f"It was taught with this sentence: {request.sentence}\n"
+        "Rules:\n"
+        "- Write a NEW short French sentence (6–12 words) about everyday life, with A1–A2 words. "
+        "It must use the same grammar point but must not copy the original sentence.\n"
+        "- Blank only the 1–3 words that show the grammar point: write them as ____ in prompt_fr.\n"
+        "- answer: exactly the words that go in the blank.\n"
+        "- hint: a clue that does not give the answer away, e.g. 'avoir → ?', 'de + les', "
+        "or for word order the words in English order, e.g. 'différents / objectifs'.\n"
+        "- full_fr: the whole correct sentence. full_en: a simple English translation.\n"
+        "Output valid JSON only: "
+        '{"prompt_fr": "...", "answer": "...", "hint": "...", "full_fr": "...", "full_en": "..."}'
+    )
+    return {
+        "model": _map_upstream_model(request.model),
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": "Write the exercise."}],
+        "response_format": {"type": "json_object"},
+        "stream": False,
+        "temperature": 0.4,
+    }
+
+
+def _parse_grammar_exercise(raw_text: str) -> dict | None:
+    cleaned = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip()
+    start, end = cleaned.find("{"), cleaned.rfind("}")
+    try:
+        data = json.loads(cleaned[start : end + 1])
+    except Exception:
+        return None
+    if not isinstance(data, dict):
+        return None
+    item = {key: str(data.get(key) or "").strip() for key in ("prompt_fr", "answer", "hint", "full_fr", "full_en")}
+    blank = re.search(r"_{2,}", item["prompt_fr"])
+    if not blank or not item["answer"] or not item["full_fr"]:
+        return None
+    item["prompt_fr"] = re.sub(r"_{2,}", "____", item["prompt_fr"], count=1)
+    # The sentence with the blank filled must be the full sentence (ignoring case/spacing)
+    filled = item["prompt_fr"].replace("____", item["answer"])
+    squash = lambda text: re.sub(r"\s+", " ", text).strip().lower()
+    if squash(filled) != squash(item["full_fr"]):
+        return None
+    return item
+
+
+@app.post("/api/srs/grammar")
+async def srs_add_grammar_card(
+    request: GrammarCardRequest,
+    authorization: str | None = Header(default=None),
+):
+    user_id = _require_user_id(authorization)
+    api_key = _authorization_token(authorization)
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    exercise = None
+    async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
+        for attempt in range(2):
+            _, raw_text = await _post_chat(client, _grammar_exercise_payload(request), headers)
+            exercise = _parse_grammar_exercise(raw_text)
+            if exercise:
+                break
+            logger.warning("Grammar exercise not usable (attempt %d): %r", attempt + 1, raw_text[:300])
+    if not exercise:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "grammar_exercise_failed", "message": "AI 没能生成合适的练习，请再点一次。"},
+        )
+    point = request.grammar
+    meta = {"rule": point.explanation, "hook": point.hook, **exercise}
+    return await run_in_threadpool(
+        srs.add_note,
+        user_id,
+        request.sentence,
+        request.translation_zh,
+        request.translation_en,
+        None,
+        (),
+        [{"text": point.title, "mode": "grammar", "meta": meta}],
+    )
 
 
 @app.post("/api/srs/import")

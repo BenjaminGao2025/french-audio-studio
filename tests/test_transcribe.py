@@ -65,5 +65,24 @@ class TranscribeTests(unittest.TestCase):
         self.assertEqual(res.json()["text"], body["text"])
 
 
+class CleanSegmentsTests(unittest.TestCase):
+    def test_drops_subtitle_credit_hallucinations(self):
+        clean = tts_service._clean_asr_segments
+        speech = ("de la vie quotidienne, means in French we say ayant des objectifs différents。", 0.01, -0.3, 1.4)
+        # separate short hallucinated segment
+        self.assertEqual(clean([speech, ("数字幕 字幕引伦卢", 0.2, -0.9, 1.1)]), speech[0])
+        # hallucination glued to the last sentence
+        glued = (speech[0] + "数字幕 字幕引伦卢", 0.01, -0.3, 1.4)
+        self.assertEqual(clean([glued]), speech[0])
+        self.assertEqual(clean([speech, ("谢谢大家观看", 0.1, -0.5, 1.0)]), speech[0])
+
+    def test_drops_noise_and_repetition_but_keeps_speech(self):
+        clean = tts_service._clean_asr_segments
+        self.assertEqual(clean([("嗯嗯", 0.8, -1.2, 1.0), ("这句话是说学生要准时。", 0.02, -0.2, 1.3)]), "这句话是说学生要准时。")
+        self.assertEqual(clean([("好的好的好的好的好的好的好的", 0.1, -0.4, 3.1)]), "")
+        long_real = "字幕这个词在这里不相关，我想说的是 portant sur 的意思是关于，后面跟的是名词短语。"
+        self.assertEqual(clean([(long_real, 0.01, -0.3, 1.3)]), long_real)
+
+
 if __name__ == "__main__":
     unittest.main()

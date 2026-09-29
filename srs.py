@@ -6,6 +6,7 @@ A note is one French sentence. Each note owns cards, one per review mode:
   speak     - see the Chinese meaning, say the French sentence
   cloze     - fill a blanked chunk (target) back into the sentence
   recognize - legacy word card: see the French word, recall its meaning
+  grammar   - apply a grammar point: fill the blank in a NEW example sentence
 Scheduling uses FSRS (py-fsrs). Everything is stored per user in users.db.
 """
 
@@ -22,7 +23,7 @@ from fsrs import Card, Rating, Scheduler, State
 
 import auth_db
 
-MODES = ("listen", "cloze", "speak", "recognize")
+MODES = ("listen", "cloze", "grammar", "speak", "recognize")
 MODE_ORDER = {mode: index for index, mode in enumerate(MODES)}
 DEFAULT_NEW_LIMIT = 10
 DAY_ROLLOVER_HOUR = 4  # like Anki: a study day starts at 04:00 local time
@@ -171,7 +172,11 @@ def _card_payload(row: sqlite3.Row, now: datetime.datetime, with_preview: bool =
 
 
 def _clean_meta(meta: dict[str, Any] | None) -> dict[str, str]:
-    allowed = ("meaning_zh", "meaning_en", "lemma", "pos", "ipa", "hook")
+    allowed = (
+        "meaning_zh", "meaning_en", "lemma", "pos", "ipa", "hook",
+        # grammar cards
+        "rule", "prompt_fr", "answer", "hint", "full_fr", "full_en",
+    )
     return {key: str(meta[key]).strip() for key in allowed if meta and meta.get(key)}
 
 
@@ -241,7 +246,7 @@ def add_note(
             mode = target.get("mode") or "cloze"
             if mode == "cloze" and not target_in_sentence(clean_sentence, text):
                 mode = "recognize"  # a blank is impossible if the chunk is not in the sentence
-            if text and mode in ("cloze", "recognize"):
+            if text and mode in ("cloze", "recognize", "grammar"):
                 wanted.append((mode, text, _clean_meta(target.get("meta"))))
 
         for mode, text, meta in wanted:
