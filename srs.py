@@ -480,6 +480,52 @@ def list_cards(user_id: int, query: str = "", limit: int = 500) -> list[dict[str
     return [_card_payload(row, now) for row in rows]
 
 
+def missing_english(user_id: int) -> dict[str, list[dict[str, str]]]:
+    """Notes without an English translation and word cards without an English meaning."""
+    with _connect() as conn:
+        notes = conn.execute(
+            "SELECT id, sentence, translation_zh FROM srs_notes WHERE user_id = ? AND translation_en = ''",
+            (user_id,),
+        ).fetchall()
+        cards = conn.execute(
+            _CARD_WITH_NOTE_SQL + " AND c.mode IN ('cloze', 'recognize')", (user_id,)
+        ).fetchall()
+    return {
+        "notes": [{"id": r["id"], "fr": r["sentence"], "zh": r["translation_zh"]} for r in notes],
+        "cards": [
+            {"id": r["id"], "word": r["target"], "sentence": r["sentence"],
+             "zh": json.loads(r["target_json"] or "{}").get("meaning_zh", "")}
+            for r in cards if not json.loads(r["target_json"] or "{}").get("meaning_en")
+        ],
+    }
+
+
+def set_english(user_id: int, note_translations: dict[str, str], card_meanings: dict[str, str]) -> int:
+    updated = 0
+    with _connect() as conn:
+        for note_id, english in note_translations.items():
+            updated += conn.execute(
+                "UPDATE srs_notes SET translation_en = ? WHERE id = ? AND user_id = ? AND translation_en = ''",
+                (english.strip(), note_id, user_id),
+            ).rowcount
+        for card_id, english in card_meanings.items():
+            row = conn.execute(
+                "SELECT target_json FROM srs_cards WHERE id = ? AND user_id = ?", (card_id, user_id)
+            ).fetchone()
+            if not row:
+                continue
+            meta = json.loads(row["target_json"] or "{}")
+            if meta.get("meaning_en"):
+                continue
+            meta["meaning_en"] = english.strip()
+            updated += conn.execute(
+                "UPDATE srs_cards SET target_json = ? WHERE id = ?",
+                (json.dumps(meta, ensure_ascii=False), card_id),
+            ).rowcount
+        conn.commit()
+    return updated
+
+
 def import_legacy_cards(user_id: int, cards: Iterable[dict[str, Any]]) -> dict[str, int]:
     """Import cards from the old browser-only deck (localStorage frenchStudio.ankiDeck).
 

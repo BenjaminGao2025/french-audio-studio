@@ -2124,6 +2124,60 @@ async def srs_add_grammar_card(
     )
 
 
+async def backfill_english(user_id: int, api_key: str, model: str = PERPLEXITY_MODEL) -> dict:
+    """Fill in simple-English translations/meanings that older cards lack (English UI mode)."""
+    missing = await run_in_threadpool(srs.missing_english, user_id)
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    translations: dict[str, str] = {}
+    meanings: dict[str, str] = {}
+    jobs = [
+        ("notes", missing["notes"], translations,
+         "Translate each French text into short, natural, simple English (A2 level). "
+         "It may be a sentence, a heading or a single word. Use the Chinese only as a hint."),
+        ("cards", missing["cards"], meanings,
+         "For each item, give the short English meaning (1–6 words) of the French word or phrase "
+         "as it is used in the sentence. Use the Chinese only as a hint."),
+    ]
+    async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
+        for _, items, target, instruction in jobs:
+            for start in range(0, len(items), 20):
+                batch = items[start : start + 20]
+                payload = {
+                    "model": _map_upstream_model(model),
+                    "messages": [
+                        {"role": "system", "content": instruction
+                            + ' Output valid JSON only: {"items": [{"id": "...", "en": "..."}]}, one entry per input id.'},
+                        {"role": "user", "content": json.dumps(batch, ensure_ascii=False)},
+                    ],
+                    "response_format": {"type": "json_object"},
+                    "stream": False,
+                    "temperature": 0.2,
+                }
+                _, raw_text = await _post_chat(client, payload, headers)
+                cleaned = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip()
+                start_brace, end_brace = cleaned.find("{"), cleaned.rfind("}")
+                try:
+                    data = json.loads(cleaned[start_brace : end_brace + 1])
+                except Exception:
+                    logger.warning("English backfill output not parseable: %r", raw_text[:300])
+                    continue
+                valid_ids = {item["id"] for item in batch}
+                for entry in data.get("items", []) if isinstance(data, dict) else []:
+                    if isinstance(entry, dict) and entry.get("id") in valid_ids and str(entry.get("en") or "").strip():
+                        target[entry["id"]] = str(entry["en"])[:500]
+    updated = await run_in_threadpool(srs.set_english, user_id, translations, meanings)
+    return {
+        "missing_notes": len(missing["notes"]),
+        "missing_cards": len(missing["cards"]),
+        "updated": updated,
+    }
+
+
+@app.post("/api/srs/backfill-english")
+async def srs_backfill_english(authorization: str | None = Header(default=None)):
+    user_id = _require_user_id(authorization)
+    return await backfill_english(user_id, _authorization_token(authorization))
+
 @app.post("/api/srs/import")
 def srs_import_legacy(
     req: SrsImportRequest,

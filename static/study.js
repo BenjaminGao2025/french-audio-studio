@@ -2659,16 +2659,7 @@ function initStudyWorkbench() {
     // -------------------------------------------------------------------------
     // 8. Interactive Word Breakdown & Lexical Popover (A1 Beginner Optimized)
     // -------------------------------------------------------------------------
-    function formatFriendlyPhonetic(raw) {
-        if (!raw) return '';
-        let str = String(raw).trim();
-        str = str.replace(/^[/[\\(\s]+/, '').replace(/[/\]\\)\s]+$/, '').trim();
-        str = str.replace(/[.·•\-]/g, '');
-        str = str.replace(/[ʁʀ]/g, 'r');
-        str = str.replace(/ɡ/g, 'g');
-        if (!str) return '';
-        return `[${str}]`;
-    }
+    const formatFriendlyPhonetic = window.SpeechEval.formatFriendlyPhonetic;
 
     const BASIC_FRENCH_WORDS = {
         // Pronouns

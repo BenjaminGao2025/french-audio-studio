@@ -156,6 +156,35 @@ class SrsStoreTests(unittest.TestCase):
         self.assertEqual(pattern["target_meta"]["meaning_zh"], "aucune 已经表示否定")
 
 
+class EnglishBackfillTests(unittest.TestCase):
+    def test_backfill_fills_missing_english_only(self):
+        import asyncio
+        import json
+        from unittest.mock import AsyncMock, patch
+
+        user_id, _ = _new_user()
+        keep = srs.add_note(user_id, "Bonjour.", "你好。", "Hello.", modes=["listen"])
+        old = srs.add_note(user_id, "Délivrance des résultats", "成绩发放",
+                           targets=[{"text": "Délivrance", "meta": {"meaning_zh": "发放"}}])
+        card_id = old["cards"][0]["id"]
+        missing = srs.missing_english(user_id)
+        self.assertEqual([n["id"] for n in missing["notes"]], [old["id"]])
+        self.assertEqual([c["id"] for c in missing["cards"]], [card_id])
+
+        replies = [
+            ({}, json.dumps({"items": [{"id": old["id"], "en": "Release of results"}, {"id": "bogus", "en": "x"}]})),
+            ({}, json.dumps({"items": [{"id": card_id, "en": "release, issuing"}]})),
+        ]
+        with patch("tts_service._post_chat", new_callable=AsyncMock, side_effect=replies):
+            result = asyncio.run(tts_service.backfill_english(user_id, "k"))
+        self.assertEqual(result, {"missing_notes": 1, "missing_cards": 1, "updated": 2})
+        notes = {n["id"]: n for n in srs.lookup_notes(user_id, ["Bonjour.", "Délivrance des résultats"])}
+        self.assertEqual(notes[old["id"]]["translation_en"], "Release of results")
+        self.assertEqual(notes[keep["id"]]["translation_en"], "Hello.")
+        self.assertEqual(notes[old["id"]]["cards"][0]["target_meta"]["meaning_en"], "release, issuing")
+        self.assertEqual(srs.missing_english(user_id), {"notes": [], "cards": []})
+
+
 class SrsApiTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(tts_service.app)

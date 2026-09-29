@@ -19,15 +19,140 @@
     const VOICE = 'fr-FR-DeniseNeural';
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition || null;
 
-    const MODE_INFO = {
-        listen: { icon: 'headphones', label: '听', task: '只听，不看文字。心里（或小声）说出它的中文意思，然后看答案。' },
-        speak: { icon: 'mic', label: '说', task: '看着中文，用法语把整句说出来。说不全也没关系，先说再看答案。' },
-        cloze: { icon: 'pencil-line', label: '填', task: '把空格里的法语写出来。' },
-        recognize: { icon: 'eye', label: '认', task: '想一想这个词是什么意思，然后看答案。' },
-        grammar: { icon: 'puzzle', label: '语法', task: '用这条语法规则，把新句子里的空填出来。' },
+
+    const I18N = window.FrenchI18n;
+    const EN = I18N.lang() === 'en';
+    const pick = I18N.pick;
+
+    const TEXT = {
+        en: {
+            pageTitle: "Today's Review - 1000H French",
+            heading: "Today's Review",
+            navAria: 'Pages', navAudio: 'Audio Studio', navStudy: 'Study', navReview: 'Review',
+            newLimit: 'New / day', newLimitTitle: 'Maximum number of new cards introduced per day',
+            library: 'Card library',
+            loginTitle: 'Your cards are saved on the server. Please log in first.',
+            loginDesc: 'Once you log in, your phone and computer share the same cards and progress.',
+            loginBtn: 'Log in',
+            legacyBefore: 'This browser still has', legacyAfter: 'old word cards',
+            legacyDesc: 'Importing turns them into new review cards: a word that appears in its example sentence becomes a fill-in card, the rest become recall cards. The old data is not deleted.',
+            import: 'Import', notNow: 'Not now',
+            countLearning: 'learning', countReview: 'review', countNew: 'new',
+            countLearningTitle: 'Just learned: comes back in a few minutes',
+            countReviewTitle: 'Due for review', countNewTitle: 'New cards introduced today',
+            progressAria: "Today's progress",
+            reveal: 'Show answer', spaceKey: 'Space',
+            gradeHint: 'How hard was it to remember?',
+            rating1: 'Again', rating2: 'Hard', rating3: 'Good', rating4: 'Easy',
+            doneDefault: 'Done for today', doneDefaultDesc: 'Spaced repetition brings each card back just before you would forget it.',
+            studyNew: 'Study new sentences',
+            searchPlaceholder: 'Search sentences, words or meanings',
+            modeListen: 'Listen', taskListen: 'Listen without reading. Say the meaning to yourself, then show the answer.',
+            modeSpeak: 'Speak', taskSpeak: 'Say the whole sentence in French. It does not have to be perfect: try first, then check.',
+            modeCloze: 'Fill in', taskCloze: 'Type the missing French.',
+            modeRecognize: 'Recall', taskRecognize: 'Think of what this word means, then show the answer.',
+            modeGrammar: 'Grammar', taskGrammar: 'Use the grammar rule to fill in the blank in a new sentence.',
+            stateNew: 'New', stateLearning: 'Learning', stateRelearning: 'Relearning', stateReview: 'Review',
+            sessionExpired: 'Your login has expired. Please log in again.',
+            requestFailed: (status) => `Request failed (HTTP ${status})`,
+            play: 'Play', slow: 'Slow', pronounce: 'Pronounce',
+            noAsr: 'This browser has no speech recognition (Chrome, Edge and Safari do). Say it out loud, then show the answer to compare.',
+            speakFrench: 'Speak French', doneTapToScore: 'Done, tap to score', tryAgain: 'Try again', myRecording: 'My recording',
+            points: '/100', heard: 'Heard: ', nothingHeard: '(no voice detected)',
+            diffLegend: 'Green = right · red = wrong or extra · red underlined = missing · orange = accent only',
+            correct: 'Correct!', accentsOnly: 'Right, but check the accents', veryClose: 'Very close, check the spelling',
+            notQuite: 'Not quite', noAnswer: 'No answer', youWrote: 'You wrote: ', answer: 'Answer: ',
+            playSentence: 'Play the sentence', slowReplay: 'Slow replay',
+            noTranslation: '(No translation yet)', showEnglish: 'Show English', showInitials: 'Show first letters',
+            blankMeans: 'Blank means: ', rule: 'Rule: ', hint: 'Hint: ',
+            clozePlaceholder: 'Type the missing French here', check: 'Check',
+            memoryHook: 'Memory hook: ', originLabel: 'The sentence you studied', playOriginal: 'Play the original sentence',
+            baseForm: 'base form ', grammarNotes: (n) => `Grammar notes (${n})`,
+            suggestion: (name) => ` (based on your answer: "${name}")`,
+            saveFailed: 'Could not save the rating: ',
+            doneCount: (n) => `Done for today: ${n} reviews`, nothingDue: 'Nothing to review right now',
+            doneDesc: 'Spaced repetition brings each card back just before you would forget it. See you tomorrow.',
+            emptyDesc: 'Go to Study, learn a few new sentences and tap "Add to review". They will show up here.',
+            imported: (n) => `Imported ${n} cards. They will appear gradually, within your daily new-card limit.`,
+            importFailed: 'Import failed: ',
+            notStarted: 'not started', dueNow: 'due', dueIn: (t) => `in ${t}`,
+            deckStats: (notes, cards, searching) => `${notes} sentences · ${cards} cards${searching ? ' (search results)' : ''}`,
+            deleteCard: 'Delete this card',
+            deckEmpty: 'No cards yet. On the Study page, tap "Add to review" or the star next to a word.',
+            interval: (s) => s < 60 ? '<1 min' : s < 3600 ? `${Math.round(s / 60)} min` : s < 86400 ? `${Math.round(s / 3600)} h`
+                : s < 30 * 86400 ? `${Math.round(s / 86400)} d` : s < 365 * 86400 ? `${(s / 2592000).toFixed(1).replace(/\.0$/, '')} mo`
+                : `${(s / 31536000).toFixed(1).replace(/\.0$/, '')} y`,
+        },
+        zh: {
+            pageTitle: '今日复习 - 1000H French',
+            heading: '今日复习',
+            navAria: '页面切换', navAudio: '音频工作台', navStudy: '拆解与复述', navReview: '今日复习',
+            newLimit: '每天新卡', newLimitTitle: '每天最多引入多少张新卡',
+            library: '卡片库',
+            loginTitle: '复习卡片保存在服务器上，请先登录',
+            loginDesc: '登录后，手机和电脑看到的是同一套卡片和复习进度。',
+            loginBtn: '去登录',
+            legacyBefore: '这个浏览器里还有', legacyAfter: '张旧生词卡',
+            legacyDesc: '导入后会变成新的复习卡：词在例句里的，变成「填空」卡；其余变成「认词」卡。旧数据不会删除。',
+            import: '导入', notNow: '暂不',
+            countLearning: '学习中', countReview: '复习', countNew: '新卡',
+            countLearningTitle: '刚学、几分钟后要再见一次的卡',
+            countReviewTitle: '到期该复习的卡', countNewTitle: '今天新引入的卡',
+            progressAria: '今日进度',
+            reveal: '显示答案', spaceKey: '空格',
+            gradeHint: '刚才想起来有多难？',
+            rating1: '重来', rating2: '困难', rating3: '良好', rating4: '简单',
+            doneDefault: '今天的复习完成了', doneDefaultDesc: '间隔重复会在你快要忘记的时候再把卡片送回来。',
+            studyNew: '去学新句子',
+            searchPlaceholder: '搜索句子、词或中文意思',
+            modeListen: '听', taskListen: '只听，不看文字。心里（或小声）说出它的中文意思，然后看答案。',
+            modeSpeak: '说', taskSpeak: '看着中文，用法语把整句说出来。说不全也没关系，先说再看答案。',
+            modeCloze: '填', taskCloze: '把空格里的法语写出来。',
+            modeRecognize: '认', taskRecognize: '想一想这个词是什么意思，然后看答案。',
+            modeGrammar: '语法', taskGrammar: '用这条语法规则，把新句子里的空填出来。',
+            stateNew: '新卡', stateLearning: '学习中', stateRelearning: '重新学习', stateReview: '复习',
+            sessionExpired: '登录已失效，请重新登录。',
+            requestFailed: (status) => `请求失败（HTTP ${status}）`,
+            play: '播放', slow: '慢速', pronounce: '发音',
+            noAsr: '这个浏览器不支持语音识别（Chrome / Edge / Safari 支持）。请大声说出来，再点「显示答案」对照。',
+            speakFrench: '开口说法语', doneTapToScore: '说完了，点这里评分', tryAgain: '再说一次', myRecording: '我的录音',
+            points: '分', heard: '识别到：', nothingHeard: '（没有识别到声音）',
+            diffLegend: '绿色 = 对 · 红色 = 错或多写 · 红色下划线 = 漏写 · 橙色 = 只错了重音',
+            correct: '完全正确', accentsOnly: '对了，但注意重音符号', veryClose: '很接近，拼写有出入',
+            notQuite: '不对', noAnswer: '没有作答', youWrote: '你写的：', answer: '答案：',
+            playSentence: '播放句子', slowReplay: '慢速再听',
+            noTranslation: '（这句还没有中文翻译）', showEnglish: '看英文提示', showInitials: '看首字母提示',
+            blankMeans: '空格的意思：', rule: '规则：', hint: '提示：',
+            clozePlaceholder: '在这里输入缺的法语', check: '检查',
+            memoryHook: '记忆钩子：', originLabel: '你学过的原句', playOriginal: '播放原句',
+            baseForm: '原形 ', grammarNotes: (n) => `这句的语法要点（${n}）`,
+            suggestion: (name) => `（按你的作答，建议「${name}」）`,
+            saveFailed: '保存评分失败：',
+            doneCount: (n) => `今天的复习完成了，共 ${n} 次`, nothingDue: '现在没有要复习的卡片',
+            doneDesc: '间隔重复会在你快要忘记的时候再把卡片送回来。明天再来。',
+            emptyDesc: '去「拆解与复述」学几句新句子，点「加入复习」，它们就会出现在这里。',
+            imported: (n) => `已导入 ${n} 张卡片。它们会按每天新卡上限逐步出现。`,
+            importFailed: '导入失败：',
+            notStarted: '未开始', dueNow: '已到期', dueIn: (t) => `${t}后`,
+            deckStats: (notes, cards, searching) => `${notes} 个句子 · ${cards} 张卡片${searching ? '（搜索结果）' : ''}`,
+            deleteCard: '删除这张卡',
+            deckEmpty: '还没有卡片。在「拆解与复述」页点「加入复习」或单词旁的 ⭐。',
+            interval: (s) => s < 60 ? '<1分钟' : s < 3600 ? `${Math.round(s / 60)}分钟` : s < 86400 ? `${Math.round(s / 3600)}小时`
+                : s < 30 * 86400 ? `${Math.round(s / 86400)}天` : s < 365 * 86400 ? `${(s / 2592000).toFixed(1).replace(/\.0$/, '')}个月`
+                : `${(s / 31536000).toFixed(1).replace(/\.0$/, '')}年`,
+        },
     };
-    const STATE_LABELS = { new: '新卡', learning: '学习中', relearning: '重新学习', review: '复习' };
-    const RATING_NAMES = { 1: '重来', 2: '困难', 3: '良好', 4: '简单' };
+    const T = TEXT[EN ? 'en' : 'zh'];
+
+    const MODE_INFO = {
+        listen: { icon: 'headphones', label: T.modeListen, task: T.taskListen },
+        speak: { icon: 'mic', label: T.modeSpeak, task: T.taskSpeak },
+        cloze: { icon: 'pencil-line', label: T.modeCloze, task: T.taskCloze },
+        recognize: { icon: 'eye', label: T.modeRecognize, task: T.taskRecognize },
+        grammar: { icon: 'puzzle', label: T.modeGrammar, task: T.taskGrammar },
+    };
+    const STATE_LABELS = { new: T.stateNew, learning: T.stateLearning, relearning: T.stateRelearning, review: T.stateReview };
+    const RATING_NAMES = { 1: T.rating1, 2: T.rating2, 3: T.rating3, 4: T.rating4 };
 
     const $ = (id) => document.getElementById(id);
     const els = {
@@ -122,22 +247,16 @@
         if (res.status === 401) {
             try { localStorage.removeItem(TOKEN_KEY); } catch (_) {}
             showLoginRequired();
-            throw new Error('登录已失效，请重新登录。');
+            throw new Error(T.sessionExpired);
         }
         if (!res.ok) {
-            throw new Error(data.detail?.message || `请求失败（HTTP ${res.status}）`);
+            throw new Error(data.detail?.message || T.requestFailed(res.status));
         }
         return data;
     }
 
     function formatInterval(seconds) {
-        if (seconds < 60) return '<1分钟';
-        if (seconds < 3600) return `${Math.round(seconds / 60)}分钟`;
-        if (seconds < 86400) return `${Math.round(seconds / 3600)}小时`;
-        const days = seconds / 86400;
-        if (days < 30) return `${Math.round(days)}天`;
-        if (days < 365) return `${(days / 30).toFixed(1).replace(/\.0$/, '')}个月`;
-        return `${(days / 365).toFixed(1).replace(/\.0$/, '')}年`;
+        return T.interval(seconds);
     }
 
     function normalizeAnswer(str) {
@@ -154,6 +273,41 @@
     }
 
     // Whole-word, case-insensitive match (so "en" does not blank the inside of "prends")
+    // Align the typed answer with the correct one letter by letter (edit distance with backtrace).
+    // Returns HTML for both: ok = right, accent = only the accent differs, bad = wrong/extra, miss = left out.
+    function letterDiff(typed, answer) {
+        const a = Array.from(typed.trim());
+        const b = Array.from(answer.trim());
+        const norm = (ch) => ch.toLowerCase().replace(/[\u2019\u02bc]/g, "'");
+        const cost = (x, y) => (norm(x) === norm(y) ? 0 : stripAccents(norm(x)) === stripAccents(norm(y)) ? 0.5 : 1);
+        const dp = Array.from({ length: a.length + 1 }, (_, i) => Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)));
+        for (let i = 1; i <= a.length; i++) {
+            for (let j = 1; j <= b.length; j++) {
+                dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost(a[i - 1], b[j - 1]));
+            }
+        }
+        const typedParts = [];
+        const answerParts = [];
+        let i = a.length;
+        let j = b.length;
+        while (i > 0 || j > 0) {
+            if (i > 0 && j > 0 && dp[i][j] === dp[i - 1][j - 1] + cost(a[i - 1], b[j - 1])) {
+                const c = cost(a[i - 1], b[j - 1]);
+                typedParts.unshift([a[i - 1], c === 0 ? 'ok' : c === 0.5 ? 'accent' : 'bad']);
+                answerParts.unshift([b[j - 1], c === 0 ? 'ok' : c === 0.5 ? 'accent' : 'miss']);
+                i--; j--;
+            } else if (i > 0 && dp[i][j] === dp[i - 1][j] + 1) {
+                typedParts.unshift([a[i - 1], 'bad']);
+                i--;
+            } else {
+                answerParts.unshift([b[j - 1], 'miss']);
+                j--;
+            }
+        }
+        const render = (parts) => parts.map(([ch, cls]) => `<span class="ch-${cls}">${escapeHtml(ch === ' ' ? '\u00a0' : ch)}</span>`).join('');
+        return { typed: render(typedParts), answer: render(answerParts) };
+    }
+
     function splitAroundTarget(sentence, target) {
         const t = (target || '').trim();
         if (!t || !sentence) return null;
@@ -210,14 +364,14 @@
         });
     }
 
-    function audioButtons(text, label = '播放') {
+    function audioButtons(text, label = T.play) {
         return `
             <div class="audio-buttons">
                 <button class="btn btn-secondary btn-play" type="button" data-speech="${escapeHtml(text)}" data-rate="1">
                     <i data-lucide="volume-2"></i><span>${label}</span> <kbd>R</kbd>
                 </button>
                 <button class="btn btn-secondary btn-play" type="button" data-speech="${escapeHtml(text)}" data-rate="0.75">
-                    <i data-lucide="snail"></i><span>慢速</span>
+                    <i data-lucide="snail"></i><span>${T.slow}</span>
                 </button>
             </div>`;
     }
@@ -236,12 +390,12 @@
     function renderSpeakAttempt(card) {
         if (!SpeechRecognition) {
             els.attemptArea.innerHTML = `
-                <p class="attempt-note">这个浏览器不支持语音识别（Chrome / Edge / Safari 支持）。请大声说出来，再点「显示答案」对照。</p>`;
+                <p class="attempt-note">${T.noAsr}</p>`;
             return;
         }
         els.attemptArea.innerHTML = `
             <button id="record-btn" class="btn btn-record" type="button">
-                <i data-lucide="mic"></i><span class="record-label">开口说法语</span>
+                <i data-lucide="mic"></i><span class="record-label">${T.speakFrench}</span>
             </button>
             <p id="live-transcript" class="live-transcript" hidden></p>
             <div id="my-recording" hidden></div>`;
@@ -276,7 +430,7 @@
                     const holder = $('my-recording');
                     if (!holder || !state.chunks.length) return;
                     const url = URL.createObjectURL(new Blob(state.chunks, { type: state.mediaRecorder.mimeType || 'audio/webm' }));
-                    holder.innerHTML = `<span>我的录音</span><audio controls src="${url}"></audio>`;
+                    holder.innerHTML = `<span>${T.myRecording}</span><audio controls src="${url}"></audio>`;
                     holder.hidden = false;
                 };
                 state.mediaRecorder.start();
@@ -286,7 +440,7 @@
             recognition.start();
             recorder = state;
             recordBtn.classList.add('recording');
-            recordBtn.querySelector('.record-label').textContent = '说完了，点这里评分';
+            recordBtn.querySelector('.record-label').textContent = T.doneTapToScore;
         });
     }
 
@@ -297,7 +451,7 @@
         const recordBtn = $('record-btn');
         if (recordBtn) {
             recordBtn.classList.remove('recording');
-            recordBtn.querySelector('.record-label').textContent = '再说一次';
+            recordBtn.querySelector('.record-label').textContent = T.tryAgain;
         }
         // Give the recognizer a moment to deliver its final result.
         setTimeout(() => {
@@ -311,11 +465,11 @@
                 suggested: evaluation.overallScore >= 85 ? 3 : evaluation.overallScore >= 60 ? 2 : 1,
                 html: `
                     <div class="attempt-result">
-                        <div class="attempt-score score-${evaluation.ratingClass}">${evaluation.overallScore}<small>分</small></div>
+                        <div class="attempt-score score-${evaluation.ratingClass}">${evaluation.overallScore}<small>${T.points}</small></div>
                         <div>
                             <div class="diff-words">${evaluation.wordResults.map(w =>
                                 `<span class="diff-word ${w.status}">${escapeHtml(w.word)}</span>`).join(' ')}</div>
-                            <p class="attempt-heard">识别到：${escapeHtml(transcript || '（没有识别到声音）')}</p>
+                            <p class="attempt-heard">${T.heard}${escapeHtml(transcript || T.nothingHeard)}</p>
                         </div>
                     </div>`,
             };
@@ -335,18 +489,19 @@
         let verdict;
         let suggested;
         if (given && given === expected) {
-            verdict = { cls: 'correct', text: '完全正确' };
+            verdict = { cls: 'correct', text: T.correct };
             suggested = 3;
         } else if (given && stripAccents(given) === stripAccents(expected)) {
-            verdict = { cls: 'close', text: '对了，但注意重音符号' };
+            verdict = { cls: 'close', text: T.accentsOnly };
             suggested = 2;
         } else if (given && window.SpeechEval.calculateLevenshteinSimilarity(given, expected) >= 0.7) {
-            verdict = { cls: 'close', text: '很接近，拼写有出入' };
+            verdict = { cls: 'close', text: T.veryClose };
             suggested = 2;
         } else {
-            verdict = { cls: 'wrong', text: given ? '不对' : '没有作答' };
+            verdict = { cls: 'wrong', text: given ? T.notQuite : T.noAnswer };
             suggested = 1;
         }
+        const diff = given ? letterDiff(typed, answer) : null;
         session.attempt = {
             answer: typed,
             score: null,
@@ -354,8 +509,9 @@
             html: `
                 <div class="attempt-result cloze-result ${verdict.cls}">
                     <strong>${verdict.text}</strong>
-                    ${given ? `<span>你写的：<b>${escapeHtml(typed)}</b></span>` : ''}
-                    <span>答案：<b>${escapeHtml(answer)}</b></span>
+                    ${diff ? `<span>${T.youWrote}<b class="letter-diff">${diff.typed}</b></span>` : ''}
+                    <span>${T.answer}<b class="letter-diff">${diff ? diff.answer : escapeHtml(answer)}</b></span>
+                    ${diff && verdict.cls !== 'correct' ? `<small class="diff-legend-line">${T.diffLegend}</small>` : ''}
                 </div>`,
         };
         reveal();
@@ -373,20 +529,20 @@
         if (card.mode === 'listen') {
             html += `
                 <div class="listen-prompt">
-                    <button class="btn-listen-big btn-play" type="button" data-speech="${escapeHtml(note.sentence)}" data-rate="1" aria-label="播放句子">
+                    <button class="btn-listen-big btn-play" type="button" data-speech="${escapeHtml(note.sentence)}" data-rate="1" aria-label="${T.playSentence}">
                         <i data-lucide="volume-2"></i>
                     </button>
                     <button class="btn btn-secondary btn-play" type="button" data-speech="${escapeHtml(note.sentence)}" data-rate="0.75">
-                        <i data-lucide="snail"></i><span>慢速再听</span>
+                        <i data-lucide="snail"></i><span>${T.slowReplay}</span>
                     </button>
                 </div>`;
         } else if (card.mode === 'speak') {
             html += `
                 <div class="speak-prompt">
-                    <p class="prompt-zh">${escapeHtml(note.translation_zh || note.translation_en || '（这句还没有中文翻译）')}</p>
-                    ${note.translation_zh && note.translation_en ? `
-                        <details class="prompt-hint"><summary>看英文提示</summary><p>${escapeHtml(note.translation_en)}</p></details>` : ''}
-                    <details class="prompt-hint"><summary>看首字母提示</summary><p class="initials">${escapeHtml(initialsHint(note.sentence))}</p></details>
+                    <p class="prompt-zh">${escapeHtml(pick(note.translation_zh, note.translation_en) || T.noTranslation)}</p>
+                    ${!EN && note.translation_zh && note.translation_en ? `
+                        <details class="prompt-hint"><summary>${T.showEnglish}</summary><p>${escapeHtml(note.translation_en)}</p></details>` : ''}
+                    <details class="prompt-hint"><summary>${T.showInitials}</summary><p class="initials">${escapeHtml(initialsHint(note.sentence))}</p></details>
                 </div>`;
         } else if (card.mode === 'cloze') {
             const parts = splitAroundTarget(note.sentence, card.target);
@@ -394,30 +550,30 @@
             const sentenceHtml = parts
                 ? `${escapeHtml(parts[0])}<span class="cloze-blank" style="min-width:${width}ch">?</span>${escapeHtml(parts[2])}`
                 : `<span class="cloze-blank" style="min-width:${width}ch">?</span>`;
-            const clue = meta.meaning_zh || meta.meaning_en || '';
+            const clue = pick(meta.meaning_zh, meta.meaning_en);
             html += `
                 <div class="cloze-prompt">
                     <p class="prompt-fr">${sentenceHtml}</p>
-                    ${note.translation_zh ? `<p class="prompt-sub">${escapeHtml(note.translation_zh)}</p>` : ''}
-                    ${clue ? `<p class="prompt-clue">空格的意思：${escapeHtml(clue)}</p>` : ''}
-                    <details class="prompt-hint"><summary>看首字母提示</summary><p class="initials">${escapeHtml(initialsHint(card.target))}</p></details>
+                    ${pick(note.translation_zh, note.translation_en) ? `<p class="prompt-sub">${escapeHtml(pick(note.translation_zh, note.translation_en))}</p>` : ''}
+                    ${clue ? `<p class="prompt-clue">${T.blankMeans}${escapeHtml(clue)}</p>` : ''}
+                    <details class="prompt-hint"><summary>${T.showInitials}</summary><p class="initials">${escapeHtml(initialsHint(card.target))}</p></details>
                 </div>`;
         } else if (card.mode === 'grammar') {
             const [before, after] = (meta.prompt_fr || '____').split('____');
             const width = Math.max(4, (meta.answer || '').length);
             html += `
                 <div class="cloze-prompt">
-                    <p class="grammar-rule-pill">规则：${escapeHtml(card.target)}</p>
+                    <p class="grammar-rule-pill">${T.rule}${escapeHtml(card.target)}</p>
                     <p class="prompt-fr">${escapeHtml(before || '')}<span class="cloze-blank" style="min-width:${width}ch">?</span>${escapeHtml(after || '')}</p>
                     ${meta.full_en ? `<p class="prompt-sub">${escapeHtml(meta.full_en)}</p>` : ''}
-                    ${meta.hint ? `<p class="prompt-clue">提示：${escapeHtml(meta.hint)}</p>` : ''}
+                    ${meta.hint ? `<p class="prompt-clue">${T.hint}${escapeHtml(meta.hint)}</p>` : ''}
                 </div>`;
         } else {
             html += `
                 <div class="recognize-prompt">
                     <p class="prompt-word">${escapeHtml(card.target)}</p>
-                    ${meta.ipa ? `<p class="prompt-sub">${escapeHtml(meta.ipa)}</p>` : ''}
-                    ${audioButtons(card.target, '发音')}
+                    ${meta.ipa ? `<p class="prompt-sub">${escapeHtml(window.SpeechEval.formatFriendlyPhonetic(meta.ipa))}</p>` : ''}
+                    ${audioButtons(card.target, T.pronounce)}
                 </div>`;
         }
         els.promptArea.innerHTML = html;
@@ -428,8 +584,8 @@
         } else if (card.mode === 'cloze' || card.mode === 'grammar') {
             els.attemptArea.innerHTML = `
                 <form id="cloze-form" class="cloze-form" autocomplete="off">
-                    <input id="cloze-input" type="text" maxlength="200" placeholder="在这里输入缺的法语" autocapitalize="off" spellcheck="false">
-                    <button class="btn btn-primary" type="submit">检查 <kbd>Enter</kbd></button>
+                    <input id="cloze-input" type="text" maxlength="200" placeholder="${T.clozePlaceholder}" autocapitalize="off" spellcheck="false">
+                    <button class="btn btn-primary" type="submit">${T.check} <kbd>Enter</kbd></button>
                 </form>`;
             $('cloze-form').addEventListener('submit', (e) => {
                 e.preventDefault();
@@ -453,14 +609,14 @@
             <div class="answer-target">
                 <strong>${escapeHtml(card.target)}</strong>
                 ${meta.rule ? `<p>${escapeHtml(meta.rule)}</p>` : ''}
-                ${meta.hook ? `<p class="target-hook">记忆钩子：${escapeHtml(meta.hook)}</p>` : ''}
+                ${meta.hook ? `<p class="target-hook">${T.memoryHook}${escapeHtml(meta.hook)}</p>` : ''}
             </div>
             <div class="answer-origin">
-                <span class="origin-label">你学过的原句</span>
+                <span class="origin-label">${T.originLabel}</span>
                 <p class="answer-fr origin-fr">${escapeHtml(note.sentence)}
-                    <button class="icon-btn btn-play" type="button" data-speech="${escapeHtml(note.sentence)}" data-rate="1" title="播放原句"><i data-lucide="volume-2"></i></button>
+                    <button class="icon-btn btn-play" type="button" data-speech="${escapeHtml(note.sentence)}" data-rate="1" title="${T.playOriginal}"><i data-lucide="volume-2"></i></button>
                 </p>
-                ${note.translation_zh ? `<p class="answer-en">${escapeHtml(note.translation_zh)}</p>` : ''}
+                ${pick(note.translation_zh, note.translation_en) ? `<p class="answer-en">${escapeHtml(pick(note.translation_zh, note.translation_en))}</p>` : ''}
             </div>`;
     }
 
@@ -476,27 +632,31 @@
             ? `${escapeHtml(parts[0])}<mark>${escapeHtml(parts[1])}</mark>${escapeHtml(parts[2])}`
             : escapeHtml(note.sentence);
         const grammar = (note.extra && note.extra.grammar) || [];
-        const metaBits = [meta.pos, meta.lemma && meta.lemma !== card.target ? `原形 ${meta.lemma}` : '', meta.ipa].filter(Boolean);
+        const metaBits = [meta.pos, meta.lemma && meta.lemma !== card.target ? `${T.baseForm}${meta.lemma}` : '', window.SpeechEval.formatFriendlyPhonetic(meta.ipa)].filter(Boolean);
 
         els.answerArea.innerHTML = `
             ${session.attempt ? session.attempt.html : ''}
             <div class="answer-sentence">
                 <p class="answer-fr">${sentenceHtml}</p>
                 ${audioButtons(note.sentence)}
-                ${note.translation_zh ? `<p class="answer-zh">${escapeHtml(note.translation_zh)}</p>` : ''}
-                ${note.translation_en ? `<p class="answer-en">${escapeHtml(note.translation_en)}</p>` : ''}
+                ${EN
+                    ? (pick(note.translation_zh, note.translation_en) ? `<p class="answer-zh">${escapeHtml(pick(note.translation_zh, note.translation_en))}</p>` : '')
+                    : `${note.translation_zh ? `<p class="answer-zh">${escapeHtml(note.translation_zh)}</p>` : ''}
+                       ${note.translation_en ? `<p class="answer-en">${escapeHtml(note.translation_en)}</p>` : ''}`}
             </div>
             ${card.target ? `
                 <div class="answer-target">
                     <strong>${escapeHtml(card.target)}</strong>
                     ${metaBits.length ? `<span class="target-meta">${metaBits.map(escapeHtml).join(' · ')}</span>` : ''}
-                    ${meta.meaning_zh ? `<p>${escapeHtml(meta.meaning_zh)}</p>` : ''}
-                    ${meta.meaning_en ? `<p class="answer-en">${escapeHtml(meta.meaning_en)}</p>` : ''}
-                    ${meta.hook ? `<p class="target-hook">记忆钩子：${escapeHtml(meta.hook)}</p>` : ''}
+                    ${EN
+                        ? (pick(meta.meaning_zh, meta.meaning_en) ? `<p>${escapeHtml(pick(meta.meaning_zh, meta.meaning_en))}</p>` : '')
+                        : `${meta.meaning_zh ? `<p>${escapeHtml(meta.meaning_zh)}</p>` : ''}
+                           ${meta.meaning_en ? `<p class="answer-en">${escapeHtml(meta.meaning_en)}</p>` : ''}`}
+                    ${meta.hook ? `<p class="target-hook">${T.memoryHook}${escapeHtml(meta.hook)}</p>` : ''}
                 </div>` : ''}
             ${grammar.length ? `
                 <details class="answer-grammar">
-                    <summary>这句的语法要点（${grammar.length}）</summary>
+                    <summary>${T.grammarNotes(grammar.length)}</summary>
                     ${grammar.map(g => `
                         <div class="grammar-item">
                             <strong>${escapeHtml(g.title)}</strong>
@@ -553,7 +713,7 @@
             btn.disabled = false;
         });
         els.gradeSuggestion.textContent = session.attempt
-            ? `（按你的作答，建议「${RATING_NAMES[session.attempt.suggested]}」）`
+            ? T.suggestion(RATING_NAMES[session.attempt.suggested])
             : '';
         els.gradeRow.hidden = false;
         refreshIcons();
@@ -583,7 +743,7 @@
             showError('');
             showNext();
         } catch (err) {
-            showError(`保存评分失败：${err.message}`);
+            showError(T.saveFailed + err.message);
             els.gradeButtons.forEach(btn => { btn.disabled = false; });
         } finally {
             session.grading = false;
@@ -614,10 +774,10 @@
             session.current = null;
             els.stage.hidden = true;
             els.done.hidden = false;
-            els.doneTitle.textContent = session.reviewed ? `今天的复习完成了，共 ${session.reviewed} 次` : '现在没有要复习的卡片';
+            els.doneTitle.textContent = session.reviewed ? T.doneCount(session.reviewed) : T.nothingDue;
             els.doneDetail.textContent = session.reviewed
-                ? '间隔重复会在你快要忘记的时候再把卡片送回来。明天再来。'
-                : '去「拆解与复述」学几句新句子，点「加入复习」，它们就会出现在这里。';
+                ? T.doneDesc
+                : T.emptyDesc;
             refreshIcons();
             return;
         }
@@ -668,10 +828,10 @@
             try {
                 const result = await api('POST', '/api/srs/import', { cards });
                 localStorage.setItem(LEGACY_IMPORTED_KEY, new Date().toISOString());
-                els.legacyImport.innerHTML = `<p>已导入 ${result.imported} 张卡片。它们会按每天新卡上限逐步出现。</p>`;
+                els.legacyImport.innerHTML = `<p>${T.imported(result.imported)}</p>`;
                 await loadQueue();
             } catch (err) {
-                showError(`导入失败：${err.message}`);
+                showError(T.importFailed + err.message);
                 els.legacyImportBtn.disabled = false;
             }
         });
@@ -684,9 +844,9 @@
     let searchTimer = null;
 
     function dueLabel(card) {
-        if (card.state === 'new') return '未开始';
+        if (card.state === 'new') return T.notStarted;
         const seconds = (Date.parse(card.due) - Date.now()) / 1000;
-        return seconds <= 0 ? '已到期' : `${formatInterval(seconds)}后`;
+        return seconds <= 0 ? T.dueNow : T.dueIn(formatInterval(seconds));
     }
 
     async function renderBrowser() {
@@ -698,14 +858,14 @@
                 if (!notes.has(card.note_id)) notes.set(card.note_id, { note: card.note, cards: [] });
                 notes.get(card.note_id).cards.push(card);
             });
-            els.deckStats.textContent = `${notes.size} 个句子 · ${data.cards.length} 张卡片${q ? '（搜索结果）' : ''}`;
+            els.deckStats.textContent = T.deckStats(notes.size, data.cards.length, Boolean(q));
             els.deckList.innerHTML = notes.size ? Array.from(notes.values()).map(({ note, cards }) => `
                 <article class="deck-note">
                     <div class="deck-note-text">
                         <p class="deck-note-fr">${escapeHtml(note.sentence)}
-                            <button class="icon-btn btn-play" type="button" data-speech="${escapeHtml(note.sentence)}" data-rate="1" title="播放"><i data-lucide="volume-2"></i></button>
+                            <button class="icon-btn btn-play" type="button" data-speech="${escapeHtml(note.sentence)}" data-rate="1" title="${T.play}"><i data-lucide="volume-2"></i></button>
                         </p>
-                        ${note.translation_zh ? `<p class="deck-note-zh">${escapeHtml(note.translation_zh)}</p>` : ''}
+                        ${pick(note.translation_zh, note.translation_en) ? `<p class="deck-note-zh">${escapeHtml(pick(note.translation_zh, note.translation_en))}</p>` : ''}
                     </div>
                     <div class="deck-note-cards">
                         ${cards.map(card => `
@@ -713,10 +873,10 @@
                                 <i data-lucide="${(MODE_INFO[card.mode] || MODE_INFO.listen).icon}"></i>
                                 ${MODE_INFO[card.mode] ? MODE_INFO[card.mode].label : card.mode}${card.target ? `：${escapeHtml(card.target)}` : ''}
                                 <em>${STATE_LABELS[card.state] || ''} · ${dueLabel(card)}</em>
-                                <button class="chip-delete" type="button" data-card-id="${escapeHtml(card.id)}" title="删除这张卡">×</button>
+                                <button class="chip-delete" type="button" data-card-id="${escapeHtml(card.id)}" title="${T.deleteCard}">×</button>
                             </span>`).join('')}
                     </div>
-                </article>`).join('') : '<p class="deck-empty">还没有卡片。在「拆解与复述」页点「加入复习」或单词旁的 ⭐。</p>';
+                </article>`).join('') : `<p class="deck-empty">${T.deckEmpty}</p>`;
             refreshIcons();
         } catch (err) {
             showError(err.message);
@@ -799,6 +959,8 @@
     // ---------------------------------------------------------------------
     // Boot
     // ---------------------------------------------------------------------
+    I18N.apply(TEXT);
+    I18N.mountToggle($('lang-toggle'));
     refreshIcons();
     window.addEventListener('load', refreshIcons);
     if (!getToken()) {

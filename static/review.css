@@ -749,3 +749,24 @@ kbd {
     gap: 6px;
     font-size: 16px;
 }
+
+.lang-toggle {
+    min-width: 58px;
+    font-weight: 800;
+}
+
+/* Letter-by-letter answer comparison */
+.letter-diff {
+    font-size: 18px;
+    letter-spacing: 0.02em;
+}
+
+.ch-ok { color: var(--success); }
+.ch-accent { color: var(--accent); text-decoration: underline dotted; }
+.ch-bad { color: var(--danger); background: var(--danger-soft); border-radius: 2px; }
+.ch-miss { color: var(--danger); text-decoration: underline; text-decoration-thickness: 2px; font-weight: 800; }
+
+.diff-legend-line {
+    color: var(--muted);
+    font-size: 12px;
+}
