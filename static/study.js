@@ -1128,7 +1128,7 @@ function initStudyWorkbench() {
                     <div class="feynman-selftest">
                         <div class="feynman-selftest-head">
                             <span class="feynman-anchor-badge">🧠 费曼自测</span>
-                            <span class="feynman-selftest-sub">先别看下面的讲解。用中文讲给自己听：这句话在说什么？最关键的语法或搭配为什么这么用？</span>
+                            <span class="feynman-selftest-sub">先别看下面的讲解。用自己的话讲（中文或英语都行）：这句话在说什么？最关键的语法或搭配为什么这么用？</span>
                         </div>
                         <textarea class="feynman-input" rows="3" maxlength="2000" placeholder="例：这句是说……；aucune 本身就是否定，所以没有 pas……"></textarea>
                         <input class="feynman-variation" type="text" maxlength="500" autocomplete="off" spellcheck="false" placeholder="（可选）换一个词，自己造一个新的法语句子">
@@ -1143,6 +1143,13 @@ function initStudyWorkbench() {
                             </button>
                         </div>
                         <div class="feynman-feedback" hidden></div>
+                        <div class="feynman-ask">
+                            <div class="ask-thread" aria-live="polite"></div>
+                            <form class="ask-row" autocomplete="off">
+                                <input class="ask-input" type="text" maxlength="1000" placeholder="有问题随时问，或回答 AI 的追问（中文或英语都行）例：那 de + la 呢？">
+                                <button class="btn-ask" type="submit"><i data-lucide="send"></i><span>问</span></button>
+                            </form>
+                        </div>
                     </div>
                 `;
 
@@ -1600,7 +1607,7 @@ function initStudyWorkbench() {
             ${list(fb.got_right, 'fb-right', '✓')}
             ${list(fb.gaps, 'fb-gaps', '△')}
             ${variationHtml}
-            ${fb.follow_up ? `<p class="fb-followup"><strong>追问：</strong>${escapeHtml(fb.follow_up)}<span class="fb-followup-hint">（在上面补充你的回答，再找一次漏洞）</span></p>` : ''}
+            ${fb.follow_up ? `<p class="fb-followup"><strong>追问：</strong>${escapeHtml(fb.follow_up)}<span class="fb-followup-hint">（直接在下面的提问框里回答）</span></p>` : ''}
         `;
     }
 
@@ -1610,7 +1617,65 @@ function initStudyWorkbench() {
         const checkBtn = root.querySelector('.btn-feynman-check');
         const micBtn = root.querySelector('.btn-feynman-mic');
         const feedback = root.querySelector('.feynman-feedback');
-        [input, variationInput].forEach(el => el.addEventListener('click', e => e.stopPropagation()));
+        const askForm = root.querySelector('.ask-row');
+        const askInput = root.querySelector('.ask-input');
+        const askThread = root.querySelector('.ask-thread');
+        const askHistory = []; // [{role: 'learner' | 'tutor', content}]
+        [input, variationInput, askInput].forEach(el => el.addEventListener('click', e => e.stopPropagation()));
+
+        function contextPayload() {
+            const ctx = sentenceContextByKey.get(srsSentenceKey(sentence)) || {};
+            return {
+                sentence,
+                translation_zh: ctx.translation_zh || '',
+                grammar_points: (ctx.grammar || []).map(g => ({ title: g.title, explanation: g.explanation })),
+                model: modelSelect.value,
+            };
+        }
+
+        function apiError(data) {
+            const detail = Array.isArray(data.detail) ? data.detail.map(d => d.msg).join('；') : (data.detail?.message || data.detail);
+            return new Error(detail || '请求失败');
+        }
+
+        function addBubble(role, text) {
+            const bubble = document.createElement('div');
+            bubble.className = `ask-bubble ask-${role}`;
+            bubble.textContent = text;
+            askThread.appendChild(bubble);
+            return bubble;
+        }
+
+        askForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const question = askInput.value.trim();
+            if (!question) return;
+            askInput.value = '';
+            addBubble('learner', question);
+            const pending = addBubble('tutor', '…');
+            pending.classList.add('is-pending');
+            const askButton = askForm.querySelector('.btn-ask');
+            askButton.disabled = true;
+            try {
+                const res = await fetch('/api/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${requireAuthToken()}` },
+                    body: JSON.stringify({ ...contextPayload(), history: askHistory.slice(-12), question }),
+                });
+                const data = await res.json();
+                if (!res.ok) throw apiError(data);
+                pending.textContent = data.answer;
+                askHistory.push({ role: 'learner', content: question }, { role: 'tutor', content: data.answer });
+            } catch (err) {
+                pending.textContent = err.message;
+                pending.classList.add('is-error');
+            } finally {
+                pending.classList.remove('is-pending');
+                askButton.disabled = false;
+                askInput.focus();
+            }
+        });
 
         let micRecognition = null;
         if (micBtn) {
@@ -1652,7 +1717,6 @@ function initStudyWorkbench() {
                 input.placeholder = '先写（或说）几句你自己的理解，哪怕只有一句。';
                 return;
             }
-            const ctx = sentenceContextByKey.get(srsSentenceKey(sentence)) || {};
             checkBtn.disabled = true;
             feedback.hidden = false;
             feedback.innerHTML = '<p class="fb-loading">AI 正在对照你的讲解找漏洞…</p>';
@@ -1661,20 +1725,20 @@ function initStudyWorkbench() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${requireAuthToken()}` },
                     body: JSON.stringify({
-                        sentence,
-                        translation_zh: ctx.translation_zh || '',
-                        grammar_points: (ctx.grammar || []).map(g => ({ title: g.title, explanation: g.explanation })),
+                        ...contextPayload(),
                         explanation,
                         variation: variationInput.value.trim(),
-                        model: modelSelect.value,
                     }),
                 });
                 const data = await res.json();
-                if (!res.ok) {
-                    const detail = Array.isArray(data.detail) ? data.detail.map(d => d.msg).join('；') : (data.detail?.message || data.detail);
-                    throw new Error(detail || '请求失败');
-                }
+                if (!res.ok) throw apiError(data);
                 feedback.innerHTML = renderFeynmanFeedback(data);
+                // Let the ask box know what the tutor asked, so the learner can answer it there.
+                askHistory.push({ role: 'learner', content: `My explanation: ${explanation}` });
+                askHistory.push({ role: 'tutor', content: [
+                    ...(data.gaps || []).map(g => `Gap: ${g}`),
+                    data.follow_up ? `Question for you: ${data.follow_up}` : '',
+                ].filter(Boolean).join('\n') || 'Feedback given.' });
             } catch (err) {
                 feedback.innerHTML = `<p class="fb-error">${escapeHtml(err.message)}</p>`;
             } finally {

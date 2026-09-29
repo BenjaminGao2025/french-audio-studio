@@ -1393,6 +1393,16 @@ class FeynmanRequest(BaseModel):
 
 FEYNMAN_VERDICTS = {"solid", "partial", "missing"}
 
+TUTOR_ENGLISH_STYLE = (
+    "Write in simple English (A2 level). The learner is also practicing English.\n"
+    "- Short sentences, at most 15 words each. Everyday words only.\n"
+    "- No grammar jargon unless you explain it with an example.\n"
+    "- If an English word is hard, add the Chinese in brackets once, e.g. contraction (缩合).\n"
+    "- Quote French words exactly.\n"
+)
+
+
+
 
 def _feynman_payload(request: FeynmanRequest) -> dict:
     prompt = (
@@ -1411,7 +1421,9 @@ def _feynman_payload(request: FeynmanRequest) -> dict:
         "4. follow_up: ONE short question that makes them recall the most important gap by themselves "
         "(answerable in one line). Do not give the answer in the question.\n"
         "5. verdict: solid (main meaning and key grammar are right), partial, or missing (mostly wrong or empty).\n\n"
-        "Write all feedback in simple Chinese. Quote French words exactly. Each item under 40 Chinese characters.\n"
+        "The learner may write in Chinese, English or both. Your feedback is always in simple English.\n"
+        + TUTOR_ENGLISH_STYLE +
+        "Each item is one or two short sentences.\n"
         "Output valid JSON only:\n"
         '{"verdict": "partial", "got_right": ["..."], "gaps": ["..."], '
         '"variation": {"ok": false, "corrected": "...", "note": "..."}, "follow_up": "..."}'
@@ -1488,6 +1500,73 @@ async def feynman_check(
     if not request.variation.strip():
         result["variation"] = None
     return result
+
+
+class AskTurn(BaseModel):
+    role: Literal["learner", "tutor"]
+    content: str = Field(min_length=1, max_length=2000)
+
+
+class AskRequest(BaseModel):
+    sentence: str = Field(min_length=1, max_length=1000)
+    translation_zh: str = Field(default="", max_length=1000)
+    grammar_points: list[FeynmanGrammarPoint] = Field(default_factory=list, max_length=5)
+    history: list[AskTurn] = Field(default_factory=list, max_length=20)
+    question: str = Field(min_length=1, max_length=1000)
+    model: TransformModel = PERPLEXITY_MODEL
+
+
+def _ask_payload(request: AskRequest) -> dict:
+    reference = "\n".join(
+        f"- {g.title}: {g.explanation}".strip() for g in request.grammar_points if g.title or g.explanation
+    )
+    system = (
+        "You are a patient French tutor. The learner is A1–A2 in French, native language Chinese.\n"
+        f"They are studying this sentence: {request.sentence}\n"
+        f"Chinese translation: {request.translation_zh or '(none)'}\n"
+        f"Notes they have seen:\n{reference or '(none)'}\n\n"
+        "Answer their question about French. They may ask in Chinese or English.\n"
+        "- Answer the exact question first, in one or two sentences.\n"
+        "- Then show it with 1–3 short French examples, each with its English meaning. "
+        "Use words from their sentence when you can.\n"
+        "- If their message answers a question you asked earlier, say clearly if it is right, "
+        "and fix it if not.\n"
+        "- At most 90 words. Plain text only: no markdown, no headings, no tables. "
+        "You may use short lines like 'de + la = de la'.\n"
+        + TUTOR_ENGLISH_STYLE
+    )
+    messages = [{"role": "system", "content": system}]
+    for turn in request.history[-12:]:
+        messages.append({
+            "role": "user" if turn.role == "learner" else "assistant",
+            "content": turn.content,
+        })
+    messages.append({"role": "user", "content": request.question})
+    return {
+        "model": _map_upstream_model(request.model),
+        "messages": messages,
+        "stream": False,
+        "temperature": 0.3,
+    }
+
+
+@app.post("/api/ask")
+async def ask_tutor(
+    request: AskRequest,
+    authorization: str | None = Header(default=None),
+):
+    api_key = _authorization_token(authorization)
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
+        _, raw_text = await _post_chat(client, _ask_payload(request), headers)
+    answer = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip()
+    answer = re.sub(r"^#+\s*", "", answer, flags=re.MULTILINE).replace("**", "")
+    if not answer:
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "ask_empty", "message": "AI 没有给出回答，请再问一次。"},
+        )
+    return {"answer": answer[:3000]}
 
 
 LOOKUP_CACHE: dict[str, dict] = {}

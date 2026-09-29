@@ -4298,3 +4298,98 @@ a.nav-deck-btn {
     color: var(--ink);
     font-size: 13px;
 }
+
+/* Ask the tutor (follow-up questions under the Feynman self-test) */
+.feynman-ask {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ask-thread {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ask-thread:empty {
+    display: none;
+}
+
+.ask-bubble {
+    max-width: 88%;
+    padding: 8px 12px;
+    border-radius: 10px;
+    font-size: 14px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+}
+
+.ask-learner {
+    align-self: flex-end;
+    background: #7c3aed;
+    color: #ffffff;
+}
+
+.ask-tutor {
+    align-self: flex-start;
+    background: #ffffff;
+    border: 1px solid #e9d5ff;
+    color: var(--ink);
+}
+
+.ask-tutor.is-pending {
+    color: var(--muted);
+}
+
+.ask-tutor.is-error {
+    color: var(--danger);
+}
+
+.ask-row {
+    display: flex;
+    gap: 8px;
+}
+
+.ask-input {
+    flex: 1;
+    min-width: 0;
+    min-height: 38px;
+    border: 1px solid #c4b5fd;
+    border-radius: 6px;
+    background: #ffffff;
+    font: inherit;
+    font-size: 14px;
+    padding: 0 10px;
+}
+
+.ask-input:focus {
+    outline: none;
+    border-color: #7c3aed;
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12);
+}
+
+.btn-ask {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 14px;
+    border: 1px solid #7c3aed;
+    border-radius: 7px;
+    background: #ffffff;
+    color: #6d28d9;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.btn-ask:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.btn-ask svg {
+    width: 15px;
+    height: 15px;
+}

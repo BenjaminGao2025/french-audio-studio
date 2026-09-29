@@ -45,6 +45,7 @@ class FeynmanTests(unittest.TestCase):
         self.assertIn(REQUEST["explanation"], user_message)
         self.assertIn("aucune already means no", user_message)
         self.assertEqual(post_chat.call_args.args[2]["Authorization"], "Bearer user-key")
+        self.assertIn("simple English", payload["messages"][0]["content"])
 
     @patch("tts_service._post_chat", new_callable=AsyncMock)
     def test_variation_is_dropped_when_learner_wrote_none(self, post_chat):
@@ -65,6 +66,46 @@ class FeynmanTests(unittest.TestCase):
         res = self.client.post("/api/feynman", json=REQUEST, headers={"Authorization": "Bearer k"})
         self.assertEqual(res.status_code, 502)
         self.assertEqual(res.json()["detail"]["code"], "feynman_bad_output")
+
+
+ASK = {
+    "sentence": "Exemples d'épreuves du TCF",
+    "translation_zh": "TCF 考试样题",
+    "grammar_points": [{"title": "du = de + le", "explanation": "de and le join."}],
+    "history": [
+        {"role": "tutor", "content": "Question for you: du comes from which two words?"},
+        {"role": "learner", "content": "de + le"},
+        {"role": "tutor", "content": "Right!"},
+    ],
+    "question": "那 de + la 呢？",
+}
+
+
+class AskTests(unittest.TestCase):
+    def setUp(self):
+        self.client = TestClient(tts_service.app)
+
+    def test_requires_key_or_login(self):
+        self.assertEqual(self.client.post("/api/ask", json=ASK).status_code, 401)
+
+    @patch("tts_service._post_chat", new_callable=AsyncMock)
+    def test_answer_uses_sentence_and_history(self, post_chat):
+        post_chat.return_value = ({}, "## Answer\n**de + la** stays **de la**. No change.\nExample: de la ville = of the city.")
+        res = self.client.post("/api/ask", json=ASK, headers={"Authorization": "Bearer k"})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["answer"], "Answer\nde + la stays de la. No change.\nExample: de la ville = of the city.")
+
+        messages = post_chat.call_args.args[1]["messages"]
+        self.assertIn("Exemples d'épreuves du TCF", messages[0]["content"])
+        self.assertIn("simple English", messages[0]["content"])
+        self.assertEqual([m["role"] for m in messages[1:]], ["assistant", "user", "assistant", "user"])
+        self.assertEqual(messages[-1]["content"], "那 de + la 呢？")
+
+    @patch("tts_service._post_chat", new_callable=AsyncMock)
+    def test_empty_answer_returns_502(self, post_chat):
+        post_chat.return_value = ({}, "<think>hmm</think>   ")
+        res = self.client.post("/api/ask", json=ASK, headers={"Authorization": "Bearer k"})
+        self.assertEqual(res.status_code, 502)
 
 
 if __name__ == "__main__":
