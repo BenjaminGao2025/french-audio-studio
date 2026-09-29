@@ -17,7 +17,10 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-AUTH_SECRET = os.getenv("AUTH_SECRET", "french_audio_studio_secret_salt_2026")
+AUTH_SECRET = os.getenv("AUTH_SECRET", "")
+if len(AUTH_SECRET) < 32:
+    raise RuntimeError("AUTH_SECRET must be set to a random string of at least 32 characters.")
+ALLOW_REGISTRATION = os.getenv("ALLOW_REGISTRATION", "false").strip().lower() == "true"
 TRIAL_DAYS = 60  # New customers automatically receive 2 months (60 days) free
 
 
@@ -239,7 +242,7 @@ def save_history_record(
     record_type: str,
     text: str,
     payload: dict[str, Any],
-    user_id: int | None = None,
+    user_id: int,
 ) -> dict[str, Any]:
     """
     Save or update a unified history record (TTS audio or Study analysis).
@@ -255,16 +258,10 @@ def save_history_record(
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
         # Find existing duplicate record for user and delete old ones
-        if user_id is not None:
-            cursor.execute(
-                "SELECT id, text FROM history_records WHERE user_id = ? AND record_type = ?",
-                (user_id, clean_type),
-            )
-        else:
-            cursor.execute(
-                "SELECT id, text FROM history_records WHERE (user_id IS NULL OR user_id = 0) AND record_type = ?",
-                (clean_type,),
-            )
+        cursor.execute(
+            "SELECT id, text FROM history_records WHERE user_id = ? AND record_type = ?",
+            (user_id, clean_type),
+        )
         existing_rows = cursor.fetchall()
         for row_id, row_text in existing_rows:
             if row_id == record_id or _is_similar_history_text(row_text, clean_text):
@@ -278,7 +275,8 @@ def save_history_record(
                 record_type=excluded.record_type,
                 text=excluded.text,
                 payload_json=excluded.payload_json,
-                created_at=excluded.created_at;
+                created_at=excluded.created_at
+            WHERE history_records.user_id = excluded.user_id;
             """,
             (record_id, user_id, clean_type, clean_text, payload_str, now_iso),
         )
@@ -294,7 +292,7 @@ def save_history_record(
 
 
 def get_history_records(
-    user_id: int | None = None,
+    user_id: int,
     record_type: str | None = None,
     limit: int = 50,
 ) -> list[dict[str, Any]]:
@@ -303,12 +301,8 @@ def get_history_records(
     """
     init_db()
     db_path = _get_db_path()
-    query = "SELECT id, user_id, record_type, text, payload_json, created_at FROM history_records WHERE 1=1"
-    params: list[Any] = []
-
-    if user_id is not None:
-        query += " AND (user_id = ? OR user_id IS NULL)"
-        params.append(user_id)
+    query = "SELECT id, user_id, record_type, text, payload_json, created_at FROM history_records WHERE user_id = ?"
+    params: list[Any] = [user_id]
 
     if record_type:
         query += " AND record_type = ?"
@@ -353,17 +347,14 @@ def get_history_records(
     return results
 
 
-def delete_history_record(record_id: str, user_id: int | None = None) -> bool:
+def delete_history_record(record_id: str, user_id: int) -> bool:
     """
     Delete a single history record by ID.
     """
     init_db()
     db_path = _get_db_path()
-    query = "DELETE FROM history_records WHERE id = ?"
-    params: list[Any] = [record_id]
-    if user_id is not None:
-        query += " AND (user_id = ? OR user_id IS NULL)"
-        params.append(user_id)
+    query = "DELETE FROM history_records WHERE id = ? AND user_id = ?"
+    params: list[Any] = [record_id, user_id]
 
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
@@ -372,17 +363,14 @@ def delete_history_record(record_id: str, user_id: int | None = None) -> bool:
         return cursor.rowcount > 0
 
 
-def clear_history_records(user_id: int | None = None, record_type: str | None = None) -> int:
+def clear_history_records(user_id: int, record_type: str | None = None) -> int:
     """
     Clear history records.
     """
     init_db()
     db_path = _get_db_path()
-    query = "DELETE FROM history_records WHERE 1=1"
-    params: list[Any] = []
-    if user_id is not None:
-        query += " AND (user_id = ? OR user_id IS NULL)"
-        params.append(user_id)
+    query = "DELETE FROM history_records WHERE user_id = ?"
+    params: list[Any] = [user_id]
     if record_type:
         query += " AND record_type = ?"
         params.append(record_type.strip().lower())
@@ -392,3 +380,63 @@ def clear_history_records(user_id: int | None = None, record_type: str | None = 
         cursor.execute(query, params)
         conn.commit()
         return cursor.rowcount
+
+
+def _user_id_by_email(conn: sqlite3.Connection, email: str) -> int:
+    row = conn.execute(
+        "SELECT id FROM users WHERE email = ?", (email.strip().lower(),)
+    ).fetchone()
+    if not row:
+        raise SystemExit(f"No user with email {email!r}.")
+    return row[0]
+
+
+def _admin_cli(argv: list[str]) -> None:
+    """Owner maintenance commands, e.g. inside the container:
+    python auth_db.py set-password you@example.com
+    python auth_db.py set-plan you@example.com pro
+    python auth_db.py claim-anonymous-history you@example.com
+    """
+    import argparse
+    import getpass
+
+    parser = argparse.ArgumentParser(prog="auth_db.py")
+    sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("set-password").add_argument("email")
+    plan_parser = sub.add_parser("set-plan")
+    plan_parser.add_argument("email")
+    plan_parser.add_argument("plan", choices=["trial", "pro"])
+    sub.add_parser("claim-anonymous-history").add_argument("email")
+    args = parser.parse_args(argv)
+
+    init_db()
+    with sqlite3.connect(_get_db_path()) as conn:
+        user_id = _user_id_by_email(conn, args.email)
+        if args.command == "set-password":
+            password = getpass.getpass("New password: ")
+            if len(password) < 6:
+                raise SystemExit("Password must be at least 6 characters.")
+            if password != getpass.getpass("Repeat password: "):
+                raise SystemExit("Passwords do not match.")
+            salt = uuid.uuid4().hex
+            conn.execute(
+                "UPDATE users SET password_hash = ?, salt = ? WHERE id = ?",
+                (_hash_password(password, salt), salt, user_id),
+            )
+            print("Password updated.")
+        elif args.command == "set-plan":
+            conn.execute("UPDATE users SET plan = ? WHERE id = ?", (args.plan, user_id))
+            print(f"Plan set to {args.plan}.")
+        elif args.command == "claim-anonymous-history":
+            cursor = conn.execute(
+                "UPDATE history_records SET user_id = ? WHERE user_id IS NULL OR user_id = 0",
+                (user_id,),
+            )
+            print(f"Assigned {cursor.rowcount} anonymous history records.")
+        conn.commit()
+
+
+if __name__ == "__main__":
+    import sys
+
+    _admin_cli(sys.argv[1:])

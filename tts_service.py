@@ -15,9 +15,11 @@ import httpx
 
 logger = logging.getLogger("tts_service")
 from fastapi import FastAPI, Header, HTTPException, Query
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+
+import auth_db
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -34,6 +36,7 @@ PERPLEXITY_PROOFREAD_MODEL = os.getenv(
 )
 PERPLEXITY_TIMEOUT_SECONDS = float(os.getenv("PERPLEXITY_TIMEOUT_SECONDS", "120"))
 MAX_TEXT_CHARS = int(os.getenv("MAX_TEXT_CHARS", "15000"))
+TTS_SNIPPET_MAX_CHARS = 600
 
 TRANSFORM_MODELS = {
     "gemini-3.8-flash": {
@@ -202,7 +205,7 @@ def _normalized_text(value: str) -> str:
     return text
 
 
-SERVER_WEB2API_KEY = os.getenv("WEB2API_API_KEY", "0PK32TX5M-q3UA6bGALY_Sw_tL77bZKL")
+SERVER_WEB2API_KEY = os.getenv("WEB2API_API_KEY", "")
 
 
 def _authorization_token(authorization: str | None) -> str:
@@ -237,9 +240,36 @@ def _authorization_token(authorization: str | None) -> str:
                     "message": "您的 60 天免费试用期已结束。您可以填写自定义 API Key 继续使用，或联系站长续期。",
                 },
             )
+        if not SERVER_WEB2API_KEY:
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "server_key_missing",
+                    "message": "服务器尚未配置上游 API Key（WEB2API_API_KEY），请在设置中填写自己的 API Key。",
+                },
+            )
         return SERVER_WEB2API_KEY
 
     return token
+
+
+def _bearer_value(authorization: str | None) -> str:
+    if not authorization:
+        return ""
+    parts = authorization.split(" ", 1)
+    if len(parts) == 2 and parts[0].lower() == "bearer":
+        return parts[1].strip()
+    return authorization.strip()
+
+
+def _require_user_id(authorization: str | None) -> int:
+    payload = auth_db.verify_token(_bearer_value(authorization))
+    if not payload:
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "login_required", "message": "请先登录账号。"},
+        )
+    return int(payload["sub"])
 
 
 def _clean_model_text(value: str) -> str:
@@ -693,7 +723,6 @@ async def request_french_transform(
     raise RuntimeError("Unreachable transform retry state")
 
 
-import auth_db
 TRIVIAL_SINGLE_WORDS = {
     "je", "tu", "il", "elle", "on", "nous", "vous", "ils", "elles",
     "ce", "c'", "c’", "ça", "de", "d'", "d’", "à", "au", "aux",
@@ -1176,12 +1205,29 @@ async def security_headers(request, call_next):
     return response
 
 
-@app.get("/")
-async def root():
-    return FileResponse(
-        STATIC_DIR / "index.html",
+def _asset_version() -> str:
+    digest = hashlib.sha256()
+    for path in sorted(STATIC_DIR.iterdir()):
+        if path.suffix in {".js", ".css"}:
+            digest.update(path.name.encode("utf-8"))
+            digest.update(path.read_bytes())
+    return digest.hexdigest()[:12]
+
+
+ASSET_VERSION = _asset_version()
+
+
+def _html_page(name: str) -> HTMLResponse:
+    html = (STATIC_DIR / name).read_text(encoding="utf-8")
+    return HTMLResponse(
+        html.replace("__ASSET_VERSION__", ASSET_VERSION),
         headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
     )
+
+
+@app.get("/")
+async def root():
+    return _html_page("index.html")
 
 
 @app.get("/favicon.ico", include_in_schema=False)
@@ -1266,7 +1312,11 @@ async def transform_to_french(
 
 
 @app.post("/api/speech")
-async def generate_speech(request: SpeechRequest):
+async def generate_speech(
+    request: SpeechRequest,
+    authorization: str | None = Header(default=None),
+):
+    _require_user_id(authorization)
     audio_filename, srt_filename = await create_speech_files(
         request.text, request.voice
     )
@@ -1286,10 +1336,7 @@ async def get_output_file(filename: str, download: bool = Query(default=False)):
 
 @app.get("/study")
 async def study():
-    return FileResponse(
-        STATIC_DIR / "study.html",
-        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
-    )
+    return _html_page("study.html")
 
 
 @app.post("/api/analyze")
@@ -1396,6 +1443,8 @@ async def generate_tts(
     format: Literal["mp3", "srt"] = "mp3",
     download: bool = False,
 ):
+    if len(text) > TTS_SNIPPET_MAX_CHARS:
+        raise HTTPException(status_code=422, detail="文本过长，请使用音频工作台生成。")
     audio_filename, srt_filename = await create_speech_files(text, voice, t)
     filename = srt_filename if format == "srt" else audio_filename
     return _output_file(filename, download=download)
@@ -1408,6 +1457,8 @@ class AuthRequest(BaseModel):
 
 @app.post("/api/auth/register")
 async def register_account(req: AuthRequest):
+    if not auth_db.ALLOW_REGISTRATION:
+        raise HTTPException(status_code=403, detail={"message": "本站暂不开放注册。"})
     try:
         res = auth_db.register_user(req.email, req.password)
         return res
@@ -1426,14 +1477,7 @@ async def login_account(req: AuthRequest):
 
 @app.get("/api/auth/me")
 async def get_current_user(authorization: str | None = Header(default=None)):
-    if not authorization:
-        raise HTTPException(status_code=401, detail={"message": "请先登录"})
-    parts = authorization.split(" ", 1)
-    token = parts[1].strip() if len(parts) == 2 and parts[0].lower() == "bearer" else authorization.strip()
-    payload = auth_db.verify_token(token)
-    if not payload:
-        raise HTTPException(status_code=401, detail={"message": "登录凭据已失效，请重新登录"})
-    status = auth_db.get_user_status(payload["sub"])
+    status = auth_db.get_user_status(_require_user_id(authorization))
     if not status:
         raise HTTPException(status_code=404, detail={"message": "账号不存在"})
     return status
@@ -1449,16 +1493,10 @@ class SaveHistoryRequest(BaseModel):
 @app.get("/api/history")
 async def list_history(
     type: str | None = Query(default=None),
-    limit: int = Query(default=50),
+    limit: int = Query(default=50, ge=1, le=200),
     authorization: str | None = Header(default=None),
 ):
-    user_id = None
-    if authorization:
-        parts = authorization.split(" ", 1)
-        token = parts[1].strip() if len(parts) == 2 and parts[0].lower() == "bearer" else authorization.strip()
-        payload = auth_db.verify_token(token)
-        if payload:
-            user_id = payload.get("sub")
+    user_id = _require_user_id(authorization)
     records = auth_db.get_history_records(user_id=user_id, record_type=type, limit=limit)
     return {"records": records, "count": len(records)}
 
@@ -1468,13 +1506,7 @@ async def save_history(
     req: SaveHistoryRequest,
     authorization: str | None = Header(default=None),
 ):
-    user_id = None
-    if authorization:
-        parts = authorization.split(" ", 1)
-        token = parts[1].strip() if len(parts) == 2 and parts[0].lower() == "bearer" else authorization.strip()
-        payload = auth_db.verify_token(token)
-        if payload:
-            user_id = payload.get("sub")
+    user_id = _require_user_id(authorization)
     res = auth_db.save_history_record(
         record_id=req.id,
         record_type=req.type,
@@ -1490,13 +1522,7 @@ async def delete_history(
     record_id: str,
     authorization: str | None = Header(default=None),
 ):
-    user_id = None
-    if authorization:
-        parts = authorization.split(" ", 1)
-        token = parts[1].strip() if len(parts) == 2 and parts[0].lower() == "bearer" else authorization.strip()
-        payload = auth_db.verify_token(token)
-        if payload:
-            user_id = payload.get("sub")
+    user_id = _require_user_id(authorization)
     ok = auth_db.delete_history_record(record_id, user_id=user_id)
     return {"success": ok}
 
@@ -1506,13 +1532,7 @@ async def clear_all_history(
     type: str | None = Query(default=None),
     authorization: str | None = Header(default=None),
 ):
-    user_id = None
-    if authorization:
-        parts = authorization.split(" ", 1)
-        token = parts[1].strip() if len(parts) == 2 and parts[0].lower() == "bearer" else authorization.strip()
-        payload = auth_db.verify_token(token)
-        if payload:
-            user_id = payload.get("sub")
+    user_id = _require_user_id(authorization)
     count = auth_db.clear_history_records(user_id=user_id, record_type=type)
     return {"deleted": count}
 

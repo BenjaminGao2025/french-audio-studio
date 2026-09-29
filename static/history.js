@@ -9,7 +9,7 @@
 
     const UNIFIED_STORAGE_KEY = 'frenchStudio.unifiedHistory';
     const LEGACY_STUDY_STORAGE_KEY = 'frenchStudio.queryHistory';
-    const TOKEN_KEY = 'frenchStudio.authToken';
+    const TOKEN_KEY = 'frenchStudio.userToken';
 
     function getAuthToken() {
         return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY) || '';
@@ -212,10 +212,11 @@
 
     // Background sync to backend SQLite
     async function syncToBackend(record) {
+        const token = getAuthToken();
+        if (!token) return;
         try {
-            const token = getAuthToken();
             const headers = { 'Content-Type': 'application/json' };
-            if (token) headers['Authorization'] = `Bearer ${token}`;
+            headers['Authorization'] = `Bearer ${token}`;
             await fetch('/api/history', {
                 method: 'POST',
                 headers,
@@ -232,10 +233,11 @@
     }
 
     async function syncDeleteToBackend(recordId) {
+        const token = getAuthToken();
+        if (!token) return;
         try {
-            const token = getAuthToken();
             const headers = {};
-            if (token) headers['Authorization'] = `Bearer ${token}`;
+            headers['Authorization'] = `Bearer ${token}`;
             await fetch(`/api/history/${encodeURIComponent(recordId)}`, {
                 method: 'DELETE',
                 headers,
@@ -244,10 +246,11 @@
     }
 
     async function syncClearToBackend(recordType) {
+        const token = getAuthToken();
+        if (!token) return;
         try {
-            const token = getAuthToken();
             const headers = {};
-            if (token) headers['Authorization'] = `Bearer ${token}`;
+            headers['Authorization'] = `Bearer ${token}`;
             const url = recordType ? `/api/history?type=${encodeURIComponent(recordType)}` : '/api/history';
             await fetch(url, {
                 method: 'DELETE',

@@ -295,8 +295,6 @@ function initStudyWorkbench() {
     const closeAuthModalBtn = document.getElementById('close-auth-modal-btn');
     const authFormContainer = document.getElementById('auth-form-container');
     const authUserProfile = document.getElementById('auth-user-profile');
-    const tabRegisterBtn = document.getElementById('tab-register-btn');
-    const tabLoginBtn = document.getElementById('tab-login-btn');
     const authTabNotice = document.getElementById('auth-tab-notice');
     const authForm = document.getElementById('auth-form');
     const authEmailInput = document.getElementById('auth-email');
@@ -306,8 +304,6 @@ function initStudyWorkbench() {
     const authSubmitLabel = document.getElementById('auth-submit-label');
     const profileEmail = document.getElementById('profile-email');
     const profileBadge = document.getElementById('profile-badge');
-    const profileDaysLeft = document.getElementById('profile-days-left');
-    const profileExpiresAt = document.getElementById('profile-expires-at');
     const logoutBtn = document.getElementById('logout-btn');
 
     // DOM Elements - Query History
@@ -489,7 +485,7 @@ function initStudyWorkbench() {
         const token = getEffectiveAuthToken();
         if (!token) {
             openAuthModal();
-            throw new Error('请先登录账号（新用户免费赠送 60 天试用）或在【连接设置】中填写 API Key。');
+            throw new Error('请先登录账号，或在【连接设置】中填写 API Key。');
         }
         if (apiKeyInput.value.trim()) {
             saveApiKey();
@@ -2912,10 +2908,10 @@ function initStudyWorkbench() {
     }
 
     // -------------------------------------------------------------------------
-    // 6. User Account & 60-day Free Trial Manager
+    // 6. User Account (login only; sign-up is closed for this personal tool)
     // -------------------------------------------------------------------------
     const userTokenKey = 'frenchStudio.userToken';
-    let currentAuthTab = 'register';
+    let currentAuthTab = 'login';
     let currentAuthUser = null;
 
     function openAuthModal() {
@@ -2939,21 +2935,7 @@ function initStudyWorkbench() {
     function switchAuthTab(tab) {
         currentAuthTab = tab;
         if (authErrorMsg) authErrorMsg.hidden = true;
-        if (tab === 'register') {
-            if (tabRegisterBtn) tabRegisterBtn.classList.add('active');
-            if (tabLoginBtn) tabLoginBtn.classList.remove('active');
-            if (authTabNotice) {
-                authTabNotice.innerHTML = '🎉 <strong>新用户专属福利</strong>：注册即送 <strong>60 天（2个月）全功能免费试用</strong>，免配置 API Key 畅享高保真发音、Grok 4.6 深度语法精析与 Anki 记忆卡系统！';
-            }
-            if (authSubmitLabel) authSubmitLabel.textContent = '立即注册并领取 60 天免费试用';
-        } else {
-            if (tabRegisterBtn) tabRegisterBtn.classList.remove('active');
-            if (tabLoginBtn) tabLoginBtn.classList.add('active');
-            if (authTabNotice) {
-                authTabNotice.innerHTML = '✨ 欢迎回来！登录您的账号以同步使用免费试用额度与高级功能。';
-            }
-            if (authSubmitLabel) authSubmitLabel.textContent = '登录账号';
-        }
+        if (authSubmitLabel) authSubmitLabel.textContent = '登录';
         refreshIcons();
     }
 
@@ -2986,23 +2968,15 @@ function initStudyWorkbench() {
             const shortName = user.email.split('@')[0];
             if (userAuthStatusText) userAuthStatusText.textContent = shortName;
             if (userTrialBadge) {
-                userTrialBadge.textContent = user.plan === 'pro' ? 'VIP 会员' : `试用剩 ${user.days_left} 天`;
-                userTrialBadge.hidden = false;
+                userTrialBadge.textContent = `剩 ${user.days_left} 天`;
+                userTrialBadge.hidden = user.plan === 'pro';
             }
             if (profileEmail) profileEmail.textContent = user.email;
-            if (profileBadge) profileBadge.textContent = user.plan === 'pro' ? 'VIP 终身会员' : `60天试用期中`;
-            if (profileDaysLeft) profileDaysLeft.textContent = user.plan === 'pro' ? '永久有效' : `${user.days_left} 天`;
-            if (profileExpiresAt) {
-                const dateStr = user.trial_expires_at ? user.trial_expires_at.split('T')[0] : '--';
-                profileExpiresAt.textContent = dateStr;
-            }
+            if (profileBadge) profileBadge.textContent = user.plan === 'pro' ? '长期有效' : `有效期剩 ${user.days_left} 天`;
         } else {
             currentAuthUser = null;
-            if (userAuthStatusText) userAuthStatusText.textContent = '登录 / 注册';
-            if (userTrialBadge) {
-                userTrialBadge.textContent = '赠60天';
-                userTrialBadge.hidden = false;
-            }
+            if (userAuthStatusText) userAuthStatusText.textContent = '登录';
+            if (userTrialBadge) userTrialBadge.hidden = true;
         }
         refreshIcons();
     }
@@ -3016,7 +2990,7 @@ function initStudyWorkbench() {
         if (authErrorMsg) authErrorMsg.hidden = true;
         if (authSubmitBtn) authSubmitBtn.disabled = true;
 
-        const endpoint = currentAuthTab === 'register' ? '/api/auth/register' : '/api/auth/login';
+        const endpoint = '/api/auth/login';
 
         try {
             const res = await fetch(endpoint, {
@@ -3033,9 +3007,7 @@ function initStudyWorkbench() {
             updateAuthUI(data.user);
             closeAuthModal();
             statusMessage.className = 'status-message status-success';
-            statusMessage.textContent = currentAuthTab === 'register'
-                ? '恭喜注册成功！已为您开通 60 天全功能免费试用，无需配置 API Key 即可使用！'
-                : '登录成功！欢迎回来。';
+            statusMessage.textContent = '登录成功！欢迎回来。';
         } catch (err) {
             if (authErrorMsg) {
                 authErrorMsg.textContent = err.message;
@@ -3698,8 +3670,6 @@ function initStudyWorkbench() {
             if (e.target === authModal) closeAuthModal();
         });
     }
-    if (tabRegisterBtn) tabRegisterBtn.addEventListener('click', () => switchAuthTab('register'));
-    if (tabLoginBtn) tabLoginBtn.addEventListener('click', () => switchAuthTab('login'));
     if (authForm) authForm.addEventListener('submit', handleAuthSubmit);
     if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
 

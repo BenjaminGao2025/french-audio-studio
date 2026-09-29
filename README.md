@@ -135,6 +135,9 @@ flowchart LR
 | `PERPLEXITY_PROOFREAD_MODEL`| `gpt-5.6-terra` | 兜底纠错/校对模型 |
 | `PERPLEXITY_TIMEOUT_SECONDS`| `120` | LLM 请求超时时间（秒） |
 | `MAX_TEXT_CHARS` | `15000` | 单次输入最大字符限制 |
+| `AUTH_SECRET` | （必填） | 登录 token 签名密钥，至少 32 位随机字符，未设置时服务拒绝启动 |
+| `WEB2API_API_KEY` | （空） | 登录用户使用的上游 Key；为空时登录用户需在设置中自填 Key |
+| `ALLOW_REGISTRATION` | `false` | 是否开放注册（个人使用保持关闭，账号用 `python auth_db.py` 管理） |
 
 ---
 

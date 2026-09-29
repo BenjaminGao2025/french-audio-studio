@@ -5,6 +5,7 @@ services:
     container_name: tts-service
     network_mode: host
     restart: unless-stopped
+    env_file: .env
     environment:
       OUTPUT_DIR: /app/outputs
       PERPLEXITY_BASE_URL: http://127.0.0.1:8645/v1

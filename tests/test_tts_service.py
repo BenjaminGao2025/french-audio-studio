@@ -1,16 +1,34 @@
 import asyncio
 import json
+import os
+import tempfile
 import unittest
+import uuid
 from unittest.mock import AsyncMock, Mock, patch
+
+# Isolate all file/DB writes from the real ./outputs before the app is imported.
+os.environ["OUTPUT_DIR"] = tempfile.mkdtemp(prefix="tts-tests-")
+os.environ["AUTH_SECRET"] = "test-only-secret-" + "x" * 32
+os.environ["ALLOW_REGISTRATION"] = "true"
+os.environ["WEB2API_API_KEY"] = "server-test-key"
 
 from fastapi.testclient import TestClient
 
+import auth_db
 import tts_service
+
+
+def _unique_email(prefix: str = "user") -> str:
+    return f"{prefix}_{uuid.uuid4().hex[:10]}@example.com"
 
 
 class FrenchAudioStudioTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(tts_service.app)
+
+    def _login_headers(self) -> dict:
+        token = auth_db.register_user(_unique_email(), "password123")["token"]
+        return {"Authorization": f"Bearer {token}"}
 
     def test_health_endpoint(self):
         response = self.client.get("/healthz")
@@ -37,7 +55,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
         model_ids = {item["id"] for item in response.json()["models"]}
         self.assertEqual(
             model_ids,
-            {"grok-4.6", "grok-4.6-thinking", "sonar-2"},
+            {"gemini-3.8-flash", "grok-4.6", "grok-4.6-thinking", "sonar-2"},
         )
 
     @patch(
@@ -620,6 +638,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
         response = self.client.post(
             "/api/speech",
             json={"text": "Bonjour.", "voice": "unknown-voice"},
+            headers=self._login_headers(),
         )
         self.assertEqual(response.status_code, 422)
         self.assertEqual(response.json()["detail"], "不支持所选语音。")
@@ -628,6 +647,8 @@ class FrenchAudioStudioTests(unittest.TestCase):
         response = self.client.get("/study")
         self.assertEqual(response.status_code, 200)
         self.assertIn("法语拆解与跟读复述", response.text)
+        self.assertNotIn("__ASSET_VERSION__", response.text)
+        self.assertIn(f"/static/study.js?v={tts_service.ASSET_VERSION}", response.text)
 
     def test_analyze_requires_api_key(self):
         response = self.client.post(
@@ -730,7 +751,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
 
 
     def test_auth_register_and_login_flow(self):
-        test_email = f"test_user_{int(asyncio.get_event_loop().time() * 1000)}@example.com"
+        test_email = _unique_email("test_user")
         # 1. Register
         reg_res = self.client.post(
             "/api/auth/register",
@@ -771,8 +792,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertEqual(dup_res.status_code, 400)
 
     def test_authorization_token_resolves_user_session_token(self):
-        import auth_db
-        test_email = f"session_test_{int(asyncio.get_event_loop().time() * 1000)}@example.com"
+        test_email = _unique_email("session_test")
         reg = auth_db.register_user(test_email, "mypassword123")
         token = reg["token"]
 
@@ -804,8 +824,138 @@ class FrenchAudioStudioTests(unittest.TestCase):
         res = self.client.get("/api/lookup?word=bonjour")
         self.assertEqual(res.status_code, 401)
 
+    def test_history_crud_flow(self):
+        headers = self._login_headers()
+        # 1. Clear any prior test records
+        res_clear = self.client.delete("/api/history", headers=headers)
+        self.assertEqual(res_clear.status_code, 200)
+
+        # 2. Save a TTS record
+        tts_payload = {
+            "id": "hist_tts_test_001",
+            "type": "tts",
+            "text": "Bonjour tout le monde",
+            "payload": {
+                "voice": "fr-FR-DeniseNeural",
+                "audioUrl": "/files/test.mp3",
+                "srtUrl": "/files/test.srt",
+            },
+        }
+        res_post_tts = self.client.post("/api/history", json=tts_payload, headers=headers)
+        self.assertEqual(res_post_tts.status_code, 200)
+
+        # 3. Save a Study record
+        study_payload = {
+            "id": "hist_study_test_002",
+            "type": "study",
+            "text": "Je mange du pain",
+            "payload": {
+                "sentenceCount": 1,
+                "tokenCount": 4,
+                "sentences": [{"original": "Je mange du pain"}],
+            },
+        }
+        res_post_study = self.client.post("/api/history", json=study_payload, headers=headers)
+        self.assertEqual(res_post_study.status_code, 200)
+
+        # 4. List all records
+        res_all = self.client.get("/api/history", headers=headers)
+        self.assertEqual(res_all.status_code, 200)
+        data_all = res_all.json()
+        self.assertGreaterEqual(data_all["count"], 2)
+        ids = [r["id"] for r in data_all["records"]]
+        self.assertIn("hist_tts_test_001", ids)
+        self.assertIn("hist_study_test_002", ids)
+
+        # 5. Filter by type
+        res_tts_only = self.client.get("/api/history?type=tts", headers=headers)
+        self.assertEqual(res_tts_only.status_code, 200)
+        tts_records = res_tts_only.json()["records"]
+        self.assertTrue(all(r["type"] == "tts" for r in tts_records))
+        self.assertIn("hist_tts_test_001", [r["id"] for r in tts_records])
+
+        # 6. Delete single record
+        res_del = self.client.delete("/api/history/hist_tts_test_001", headers=headers)
+        self.assertEqual(res_del.status_code, 200)
+        self.assertTrue(res_del.json()["success"])
+
+        # 7. Verify deletion
+        res_after_del = self.client.get("/api/history", headers=headers)
+        ids_after = [r["id"] for r in res_after_del.json()["records"]]
+        self.assertNotIn("hist_tts_test_001", ids_after)
+        self.assertIn("hist_study_test_002", ids_after)
+
+        # 8. Clear all
+        res_clear_final = self.client.delete("/api/history", headers=headers)
+        self.assertEqual(res_clear_final.status_code, 200)
+        res_empty = self.client.get("/api/history", headers=headers)
+        self.assertEqual(res_empty.json()["count"], 0)
+
+
+
+    def test_history_requires_login(self):
+        self.assertEqual(self.client.get("/api/history").status_code, 401)
+        self.assertEqual(self.client.delete("/api/history").status_code, 401)
+        self.assertEqual(self.client.delete("/api/history/any-id").status_code, 401)
+        self.assertEqual(
+            self.client.post("/api/history", json={"id": "x", "text": "t"}).status_code,
+            401,
+        )
+
+    def test_history_is_isolated_between_users(self):
+        alice, bob = self._login_headers(), self._login_headers()
+        record = {"id": "hist_shared_id", "type": "study", "text": "Bonjour Alice", "payload": {}}
+        self.assertEqual(self.client.post("/api/history", json=record, headers=alice).status_code, 200)
+
+        # Bob neither sees, overwrites, deletes nor clears Alice's record.
+        self.assertEqual(self.client.get("/api/history", headers=bob).json()["count"], 0)
+        hijack = {**record, "text": "Hijacked by Bob"}
+        self.client.post("/api/history", json=hijack, headers=bob)
+        self.assertFalse(
+            self.client.delete("/api/history/hist_shared_id", headers=bob).json()["success"]
+        )
+        self.client.delete("/api/history", headers=bob)
+
+        alice_records = self.client.get("/api/history", headers=alice).json()["records"]
+        self.assertEqual([r["text"] for r in alice_records], ["Bonjour Alice"])
+
+    def test_forged_token_is_rejected(self):
+        import base64
+        import hashlib
+        import hmac
+
+        payload = base64.urlsafe_b64encode(b'{"sub":1,"email":"x","exp":9999999999}').decode().rstrip("=")
+        sig = hmac.new(b"french_audio_studio_secret_salt_2026", payload.encode(), hashlib.sha256).hexdigest()
+        response = self.client.get("/api/auth/me", headers={"Authorization": f"Bearer {payload}.{sig}"})
+        self.assertEqual(response.status_code, 401)
+
+    def test_registration_can_be_closed(self):
+        with patch.object(auth_db, "ALLOW_REGISTRATION", False):
+            response = self.client.post(
+                "/api/auth/register",
+                json={"email": _unique_email(), "password": "password123"},
+            )
+        self.assertEqual(response.status_code, 403)
+
+    def test_speech_requires_login(self):
+        response = self.client.post(
+            "/api/speech", json={"text": "Bonjour.", "voice": "fr-FR-DeniseNeural"}
+        )
+        self.assertEqual(response.status_code, 401)
+
+    def test_tts_snippet_rejects_long_text(self):
+        response = self.client.get("/tts", params={"text": "a" * 601})
+        self.assertEqual(response.status_code, 422)
+
+    def test_session_token_without_server_key_returns_503(self):
+        headers = self._login_headers()
+        with patch.object(tts_service, "SERVER_WEB2API_KEY", ""):
+            response = self.client.post(
+                "/api/analyze", json={"text": "Bonjour."}, headers=headers
+            )
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["detail"]["code"], "server_key_missing")
+
 
 if __name__ == "__main__":
     unittest.main()
-
-

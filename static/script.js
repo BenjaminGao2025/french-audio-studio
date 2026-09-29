@@ -364,10 +364,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
+            const userToken = localStorage.getItem('frenchStudio.userToken');
+            if (!userToken) {
+                throw new Error('生成整段音频需要先登录（在「拆解与复述」页右上角登录）。');
+            }
             const result = await postJson('/api/speech', {
                 text,
                 voice: voiceSelect.value,
-            });
+            }, { Authorization: `Bearer ${userToken}` });
             const cacheKey = Date.now();
             audioPlayer.src = `${result.audio_url}?v=${cacheKey}`;
             downloadMp3.href = `${result.audio_url}?download=true`;
