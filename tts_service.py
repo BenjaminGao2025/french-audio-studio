@@ -813,6 +813,8 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
         "- The word table must cover every word in the sentence, in order, including small words like par, les, de, à.\n"
         '- Never list a word that is not in the sentence. Example: if the sentence uses ne … aucune, do not list "ne … pas".\n'
         "- Every French sentence in the build-up must be correct French.\n\n"
+        "Chinese meaning:\n"
+        "- Every word also gets meaning_zh: its short Chinese meaning in THIS sentence (2–8 characters), e.g. 没有任何, 豁免, 被允许的.\n\n"
         "English bridge:\n"
         "- If a French word looks like an English word with the same meaning, show it (autorisée → authorized).\n"
         '- If it looks like an English word but means something different, warn clearly: "False friend! actuellement = currently, not actually."\n'
@@ -859,14 +861,14 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
         '        {"fr": "Aucune dispense n\'est autorisée par les autorités canadiennes.", "en": "No exemption is authorized by the Canadian authorities.", "new": "Passive, just like English: is authorized by = est autorisée par."}\n'
         "      ],\n"
         '      "words": [\n'
-        '        {"fr": "aucune", "ipa": "okyn", "lemma": "aucun", "type": "describing word", "meaning": "no, not any", "why": "Ends in -e because dispense is a feminine word. Used with ne, but without pas.", "english_link": "", "false_friend": false},\n'
-        '        {"fr": "dispense", "ipa": "dispɑ̃s", "lemma": "dispense", "type": "naming word", "meaning": "exemption", "why": "Feminine noun.", "english_link": "dispensation", "false_friend": false},\n'
-        '        {"fr": "n\'est", "ipa": "nɛ", "lemma": "être", "type": "action word form", "meaning": "is (negative)", "why": "ne becomes n\' before a vowel. Combined with aucune.", "english_link": "", "false_friend": false},\n'
-        '        {"fr": "autorisée", "ipa": "otɔʁize", "lemma": "autoriser", "type": "action word form", "meaning": "authorized", "why": "Ends in -e because dispense is a feminine word.", "english_link": "authorized", "false_friend": false},\n'
-        '        {"fr": "par", "ipa": "paʁ", "lemma": "par", "type": "small linking word", "meaning": "by", "why": "Shows who does the action.", "english_link": "", "false_friend": false},\n'
-        '        {"fr": "les", "ipa": "le", "lemma": "le", "type": "small pointer word", "meaning": "the (plural)", "why": "Points to more than one authority.", "english_link": "", "false_friend": false},\n'
-        '        {"fr": "autorités", "ipa": "otɔʁite", "lemma": "autorité", "type": "naming word", "meaning": "authorities", "why": "Ends in -s because it is plural.", "english_link": "authorities", "false_friend": false},\n'
-        '        {"fr": "canadiennes", "ipa": "kanadjɛn", "lemma": "canadien", "type": "describing word", "meaning": "Canadian (plural)", "why": "Ends in -nes because autorités is feminine plural.", "english_link": "Canadian", "false_friend": false}\n'
+        '        {"fr": "aucune", "ipa": "okyn", "lemma": "aucun", "type": "describing word", "meaning": "no, not any", "meaning_zh": "没有任何", "why": "Ends in -e because dispense is a feminine word. Used with ne, but without pas.", "english_link": "", "false_friend": false},\n'
+        '        {"fr": "dispense", "ipa": "dispɑ̃s", "lemma": "dispense", "type": "naming word", "meaning": "exemption", "meaning_zh": "豁免", "why": "Feminine noun.", "english_link": "dispensation", "false_friend": false},\n'
+        '        {"fr": "n\'est", "ipa": "nɛ", "lemma": "être", "type": "action word form", "meaning": "is (negative)", "meaning_zh": "不是", "why": "ne becomes n\' before a vowel. Combined with aucune.", "english_link": "", "false_friend": false},\n'
+        '        {"fr": "autorisée", "ipa": "otɔʁize", "lemma": "autoriser", "type": "action word form", "meaning": "authorized", "meaning_zh": "被允许的", "why": "Ends in -e because dispense is a feminine word.", "english_link": "authorized", "false_friend": false},\n'
+        '        {"fr": "par", "ipa": "paʁ", "lemma": "par", "type": "small linking word", "meaning": "by", "meaning_zh": "由；被", "why": "Shows who does the action.", "english_link": "", "false_friend": false},\n'
+        '        {"fr": "les", "ipa": "le", "lemma": "le", "type": "small pointer word", "meaning": "the (plural)", "meaning_zh": "这些（复数）", "why": "Points to more than one authority.", "english_link": "", "false_friend": false},\n'
+        '        {"fr": "autorités", "ipa": "otɔʁite", "lemma": "autorité", "type": "naming word", "meaning": "authorities", "meaning_zh": "当局", "why": "Ends in -s because it is plural.", "english_link": "authorities", "false_friend": false},\n'
+        '        {"fr": "canadiennes", "ipa": "kanadjɛn", "lemma": "canadien", "type": "describing word", "meaning": "Canadian (plural)", "meaning_zh": "加拿大的", "why": "Ends in -nes because autorités is feminine plural.", "english_link": "Canadian", "false_friend": false}\n'
         "      ],\n"
         '      "grammar_points": [\n'
         '        {"title": "aucune … ne = no / not any (no pas!)", "explanation": "aucune already means no. Adding pas would say no twice.", "hook": "Aucun problème! = No problem! Same aucun."},\n'
@@ -968,6 +970,7 @@ def _parse_analysis_json(raw_text: str, fallback_text: str) -> dict:
                                 "lemma": str(w.get("lemma") or fr),
                                 "type": str(w.get("type") or w.get("pos") or ""),
                                 "meaning": str(w.get("meaning") or w.get("explanation_en") or ""),
+                                "meaning_zh": str(w.get("meaning_zh") or w.get("explanation_cn") or ""),
                                 "why": str(w.get("why") or ""),
                                 "english_link": str(w.get("english_link") or ""),
                                 "false_friend": bool(w.get("false_friend", False)),
@@ -1016,7 +1019,7 @@ def _parse_analysis_json(raw_text: str, fallback_text: str) -> dict:
                         "pos": w["type"],
                         "phonetic": w["ipa"],
                         "explanation_en": f"{w['meaning']}. {w['why']}".strip(". "),
-                        "explanation_cn": "",
+                        "explanation_cn": w["meaning_zh"],
                     }
                     for w in clean_words
                 ]
@@ -1347,6 +1350,119 @@ async def analyze_french(
 ):
     api_key = _authorization_token(authorization)
     result = await request_french_analysis(request, api_key)
+    return result
+
+
+class FeynmanGrammarPoint(BaseModel):
+    title: str = Field(default="", max_length=300)
+    explanation: str = Field(default="", max_length=1000)
+
+
+class FeynmanRequest(BaseModel):
+    sentence: str = Field(min_length=1, max_length=1000)
+    translation_zh: str = Field(default="", max_length=1000)
+    grammar_points: list[FeynmanGrammarPoint] = Field(default_factory=list, max_length=5)
+    explanation: str = Field(min_length=1, max_length=2000)
+    variation: str = Field(default="", max_length=500)
+    model: TransformModel = PERPLEXITY_MODEL
+
+
+FEYNMAN_VERDICTS = {"solid", "partial", "missing"}
+
+
+def _feynman_payload(request: FeynmanRequest) -> dict:
+    prompt = (
+        "You are a patient French tutor. The learner is A1–A2, native language Chinese.\n"
+        "They just studied one French sentence and are using the Feynman technique: "
+        "explaining it in their own words, without looking at the notes.\n"
+        "Your job is NOT to re-teach everything. Your job is to find the gaps in THEIR explanation.\n\n"
+        "Steps:\n"
+        "1. got_right: what they explained correctly. Be specific, quote their idea. No generic praise.\n"
+        "2. gaps: important meaning or grammar of the sentence that they missed or got wrong. "
+        "Compare with the reference points. At most 3, most important first. "
+        "If something they said is wrong, say what is wrong and the correct idea.\n"
+        "3. variation: if they wrote their own new French sentence, check it. "
+        "ok=true if it is correct and natural French. Otherwise give the corrected sentence and one short reason. "
+        "If they wrote nothing, variation is null.\n"
+        "4. follow_up: ONE short question that makes them recall the most important gap by themselves "
+        "(answerable in one line). Do not give the answer in the question.\n"
+        "5. verdict: solid (main meaning and key grammar are right), partial, or missing (mostly wrong or empty).\n\n"
+        "Write all feedback in simple Chinese. Quote French words exactly. Each item under 40 Chinese characters.\n"
+        "Output valid JSON only:\n"
+        '{"verdict": "partial", "got_right": ["..."], "gaps": ["..."], '
+        '"variation": {"ok": false, "corrected": "...", "note": "..."}, "follow_up": "..."}'
+    )
+    reference = "\n".join(
+        f"- {g.title}: {g.explanation}".strip() for g in request.grammar_points if g.title or g.explanation
+    )
+    user = (
+        f"French sentence: {request.sentence}\n"
+        f"Chinese translation: {request.translation_zh or '(none)'}\n"
+        f"Reference points:\n{reference or '(none)'}\n\n"
+        f"Learner's explanation:\n{request.explanation}\n\n"
+        f"Learner's own new sentence: {request.variation or '(none)'}"
+    )
+    return {
+        "model": _map_upstream_model(request.model),
+        "messages": [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": user},
+        ],
+        "response_format": {"type": "json_object"},
+        "stream": False,
+        "temperature": 0.2,
+    }
+
+
+def _parse_feynman_json(raw_text: str) -> dict:
+    cleaned = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip()
+    fence = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned)
+    candidate = fence.group(1).strip() if fence else cleaned
+    start, end = candidate.find("{"), candidate.rfind("}")
+    try:
+        data = json.loads(candidate[start : end + 1] if start != -1 and end > start else candidate)
+    except Exception:
+        data = None
+    if not isinstance(data, dict):
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "feynman_bad_output", "message": "AI 反馈格式异常，请再试一次。"},
+        )
+
+    def str_list(value: Any) -> list[str]:
+        items = value if isinstance(value, list) else []
+        return [str(item).strip() for item in items if str(item).strip()][:5]
+
+    variation = data.get("variation")
+    clean_variation = None
+    if isinstance(variation, dict):
+        clean_variation = {
+            "ok": bool(variation.get("ok")),
+            "corrected": str(variation.get("corrected") or "").strip(),
+            "note": str(variation.get("note") or "").strip(),
+        }
+    verdict = str(data.get("verdict") or "").strip().lower()
+    return {
+        "verdict": verdict if verdict in FEYNMAN_VERDICTS else "partial",
+        "got_right": str_list(data.get("got_right")),
+        "gaps": str_list(data.get("gaps")),
+        "variation": clean_variation,
+        "follow_up": str(data.get("follow_up") or "").strip(),
+    }
+
+
+@app.post("/api/feynman")
+async def feynman_check(
+    request: FeynmanRequest,
+    authorization: str | None = Header(default=None),
+):
+    api_key = _authorization_token(authorization)
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
+        _, raw_text = await _post_chat(client, _feynman_payload(request), headers)
+    result = _parse_feynman_json(raw_text)
+    if not request.variation.strip():
+        result["variation"] = None
     return result
 
 

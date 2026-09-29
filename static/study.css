@@ -4124,3 +4124,177 @@ a.nav-deck-btn {
         justify-content: center;
     }
 }
+
+/* ==========================================================================
+   Feynman self-test: learner explains, AI points out gaps
+   ========================================================================== */
+.feynman-selftest {
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    border: 1px solid #ddd6fe;
+    border-left: 4px solid #7c3aed;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #fbfaff 0%, #f5f3ff 100%);
+}
+
+.feynman-selftest-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.feynman-selftest-sub {
+    flex: 1;
+    min-width: 200px;
+    color: #4c1d95;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.feynman-input,
+.feynman-variation {
+    width: 100%;
+    border: 1px solid #c4b5fd;
+    border-radius: 6px;
+    background: #ffffff;
+    color: var(--ink);
+    font: inherit;
+    font-size: 14px;
+    padding: 8px 10px;
+}
+
+.feynman-input {
+    resize: vertical;
+    line-height: 1.5;
+}
+
+.feynman-input:focus,
+.feynman-variation:focus {
+    outline: none;
+    border-color: #7c3aed;
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12);
+}
+
+.feynman-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.btn-feynman-mic,
+.btn-feynman-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 36px;
+    padding: 0 14px;
+    border-radius: 7px;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.btn-feynman-mic {
+    border: 1px solid #c4b5fd;
+    background: #ffffff;
+    color: #6d28d9;
+}
+
+.btn-feynman-mic.recording {
+    border-color: var(--danger);
+    background: var(--danger-soft);
+    color: var(--danger);
+}
+
+.btn-feynman-check {
+    border: 1px solid #7c3aed;
+    background: #7c3aed;
+    color: #ffffff;
+}
+
+.btn-feynman-check:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.btn-feynman-mic svg,
+.btn-feynman-check svg {
+    width: 15px;
+    height: 15px;
+}
+
+.feynman-feedback {
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: #ffffff;
+    border: 1px solid #e9d5ff;
+    font-size: 14px;
+    line-height: 1.55;
+}
+
+.feynman-feedback p {
+    margin: 0 0 6px;
+}
+
+.feynman-feedback ul {
+    margin: 0 0 6px;
+    padding: 0;
+    list-style: none;
+}
+
+.feynman-feedback li {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 3px;
+}
+
+.fb-mark {
+    flex-shrink: 0;
+    font-weight: 800;
+}
+
+.fb-right .fb-mark { color: var(--success); }
+.fb-gaps .fb-mark { color: var(--accent); }
+
+.fb-verdict {
+    font-weight: 800;
+}
+
+.verdict-solid { color: var(--success); }
+.verdict-partial { color: var(--accent); }
+.verdict-missing { color: var(--danger); }
+
+.fb-variation.ok { color: var(--success); }
+.fb-variation.fix { color: #92400e; }
+
+.fb-followup {
+    padding: 6px 8px;
+    border-radius: 5px;
+    background: #f5f3ff;
+    color: #4c1d95;
+}
+
+.fb-followup-hint {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.fb-loading {
+    color: var(--muted);
+}
+
+.fb-error {
+    color: var(--danger);
+}
+
+.word-meaning-zh {
+    margin-top: 2px;
+    color: var(--ink);
+    font-size: 13px;
+}

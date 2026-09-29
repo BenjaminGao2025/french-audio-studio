@@ -965,7 +965,7 @@ function initStudyWorkbench() {
                             data-pos="${escapeHtml(pos)}"
                             data-phonetic="${escapeHtml(ipa)}"
                             data-exp-en="${escapeHtml(fullExpEn)}"
-                            data-exp-cn="${escapeHtml(w.explanation_cn || '')}"
+                            data-exp-cn="${escapeHtml(w.meaning_zh || w.explanation_cn || '')}"
                             data-sentence="${escapeHtml(sentenceText)}"
                             data-sentence-cn="${escapeHtml(transZh)}">
                             <i data-lucide="star"></i>
@@ -979,6 +979,7 @@ function initStudyWorkbench() {
                 </div>
                 <div class="word-card-body">
                     <div class="word-meaning">${escapeHtml(meaning)}</div>
+                    ${w.meaning_zh ? `<div class="word-meaning-zh">${escapeHtml(w.meaning_zh)}</div>` : ''}
                     ${why ? `<div class="word-why"><span class="why-label">Why:</span> ${escapeHtml(why)}</div>` : ''}
                 </div>
                 ${linkCellHtml ? `
@@ -1037,7 +1038,7 @@ function initStudyWorkbench() {
                         lemma: lemma,
                         pos: pos,
                         phonetic: ipa,
-                        explanation_cn: w.explanation_cn || '',
+                        explanation_cn: w.meaning_zh || w.explanation_cn || '',
                         explanation_en: fullExpEn,
                         sentence: sentenceText,
                         sentence_cn: transZh,
@@ -1129,43 +1130,28 @@ function initStudyWorkbench() {
                     </div>
                 ` : '';
 
-                // 1b. Feynman Memory Anchors in Hero (费曼记忆锚 - 核心心智模型与避坑指南)
-                let feynmanHeroAnchorHtml = '';
-                if (s.grammar_points && s.grammar_points.length > 0) {
-                    const topAnchors = s.grammar_points.slice(0, 2);
-                    const anchorsHtml = topAnchors.map((g, pIdx) => {
-                        return `
-                            <div class="feynman-hero-anchor">
-                                <div class="feynman-anchor-top">
-                                    <div class="feynman-anchor-badge-group">
-                                        <span class="feynman-anchor-badge">🧠 费曼记忆锚${topAnchors.length > 1 ? ' #' + (pIdx + 1) : ''}</span>
-                                        <strong class="feynman-anchor-title">${escapeHtml(g.title)}</strong>
-                                    </div>
-                                </div>
-                                <div class="feynman-anchor-content">
-                                    ${g.hook ? `
-                                        <div class="feynman-anchor-row">
-                                            <span class="feynman-anchor-label">💡 大白话直觉：</span>
-                                            <span class="feynman-anchor-text">${escapeHtml(g.hook)}</span>
-                                        </div>
-                                    ` : ''}
-                                    ${g.explanation ? `
-                                        <div class="feynman-anchor-row">
-                                            <span class="feynman-anchor-label">⚡ 语法要点：</span>
-                                            <span class="feynman-anchor-text">${escapeHtml(g.explanation)}</span>
-                                        </div>
-                                    ` : ''}
-                                </div>
-                            </div>
-                        `;
-                    }).join('');
-
-                    feynmanHeroAnchorHtml = `
-                        <div class="feynman-hero-anchor-list">
-                            ${anchorsHtml}
+                // 1b. Feynman self-test: the learner explains first, the AI only points out gaps
+                const feynmanSelfTestHtml = `
+                    <div class="feynman-selftest">
+                        <div class="feynman-selftest-head">
+                            <span class="feynman-anchor-badge">🧠 费曼自测</span>
+                            <span class="feynman-selftest-sub">先别看下面的讲解。用中文讲给自己听：这句话在说什么？最关键的语法或搭配为什么这么用？</span>
                         </div>
-                    `;
-                }
+                        <textarea class="feynman-input" rows="3" maxlength="2000" placeholder="例：这句是说……；aucune 本身就是否定，所以没有 pas……"></textarea>
+                        <input class="feynman-variation" type="text" maxlength="500" autocomplete="off" spellcheck="false" placeholder="（可选）换一个词，自己造一个新的法语句子">
+                        <div class="feynman-actions">
+                            ${SpeechRecognition ? `
+                                <button class="btn-feynman-mic" type="button" title="用中文说出你的讲解（语音转文字）">
+                                    <i data-lucide="mic"></i><span class="feynman-mic-label">用说的</span>
+                                </button>
+                            ` : ''}
+                            <button class="btn-feynman-check" type="button">
+                                <i data-lucide="search-check"></i><span>让 AI 找漏洞</span>
+                            </button>
+                        </div>
+                        <div class="feynman-feedback" hidden></div>
+                    </div>
+                `;
 
                 const heroHtml = `
                     <div class="sentence-hero">
@@ -1199,7 +1185,7 @@ function initStudyWorkbench() {
                             <div class="translation-en translation-primary">${escapeHtml(transEn)}</div>
                             ${transZh ? `<div class="translation-zh translation-secondary">${escapeHtml(transZh)}</div>` : ''}
                         </div>
-                        ${feynmanHeroAnchorHtml}
+                        ${feynmanSelfTestHtml}
                     </div>
                 `;
 
@@ -1375,7 +1361,7 @@ function initStudyWorkbench() {
                                     ${g.hook ? `
                                         <div class="grammar-hook-inline feynman-hook-pill">
                                             <span class="hook-icon">🧠</span>
-                                            <span class="hook-text"><strong>费曼记忆锚：</strong> ${escapeHtml(g.hook)}</span>
+                                            <span class="hook-text"><strong>记忆钩子：</strong> ${escapeHtml(g.hook)}</span>
                                         </div>
                                     ` : ''}
                                 </div>
@@ -1387,7 +1373,7 @@ function initStudyWorkbench() {
                         <div class="study-card-section grammar-section">
                             <div class="section-title">
                                 <i data-lucide="sparkles"></i>
-                                <span>语法考点与费曼记忆锚 (Grammar & Feynman Anchors)</span>
+                                <span>语法考点与记忆钩子 (Grammar & Memory Hooks)</span>
                             </div>
                             <div class="grammar-points-list">
                                 ${pointsHtml}
@@ -1582,6 +1568,102 @@ function initStudyWorkbench() {
         refreshSrsStates(sentences);
     }
 
+    function renderFeynmanFeedback(fb) {
+        const verdictText = { solid: '讲清楚了', partial: '讲到了一部分', missing: '还没抓住要点' }[fb.verdict] || '';
+        const list = (items, cls, mark) => items && items.length
+            ? `<ul class="${cls}">${items.map(t => `<li><span class="fb-mark">${mark}</span>${escapeHtml(t)}</li>`).join('')}</ul>`
+            : '';
+        let variationHtml = '';
+        if (fb.variation) {
+            variationHtml = fb.variation.ok
+                ? `<p class="fb-variation ok">✓ 你造的句子没问题${fb.variation.note ? '：' + escapeHtml(fb.variation.note) : ''}</p>`
+                : `<p class="fb-variation fix">✗ 你造的句子可以改成：<strong>${escapeHtml(fb.variation.corrected)}</strong>${fb.variation.note ? '<br>' + escapeHtml(fb.variation.note) : ''}</p>`;
+        }
+        return `
+            <p class="fb-verdict verdict-${escapeHtml(fb.verdict)}">${verdictText}</p>
+            ${list(fb.got_right, 'fb-right', '✓')}
+            ${list(fb.gaps, 'fb-gaps', '△')}
+            ${variationHtml}
+            ${fb.follow_up ? `<p class="fb-followup"><strong>追问：</strong>${escapeHtml(fb.follow_up)}<span class="fb-followup-hint">（在上面补充你的回答，再找一次漏洞）</span></p>` : ''}
+        `;
+    }
+
+    function bindFeynmanSelfTest(root, sentence) {
+        const input = root.querySelector('.feynman-input');
+        const variationInput = root.querySelector('.feynman-variation');
+        const checkBtn = root.querySelector('.btn-feynman-check');
+        const micBtn = root.querySelector('.btn-feynman-mic');
+        const feedback = root.querySelector('.feynman-feedback');
+        [input, variationInput].forEach(el => el.addEventListener('click', e => e.stopPropagation()));
+
+        let micRecognition = null;
+        if (micBtn) {
+            micBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const label = micBtn.querySelector('.feynman-mic-label');
+                if (micRecognition) {
+                    micRecognition.stop();
+                    return;
+                }
+                stopAllAudio();
+                stopAnyOngoingRecording();
+                const base = input.value.trim();
+                micRecognition = new SpeechRecognition();
+                micRecognition.lang = 'zh-CN';
+                micRecognition.continuous = true;
+                micRecognition.interimResults = true;
+                micRecognition.onresult = (event) => {
+                    let text = '';
+                    for (let i = 0; i < event.results.length; i++) text += event.results[i][0].transcript;
+                    input.value = base ? `${base} ${text}` : text;
+                };
+                micRecognition.onend = () => {
+                    micRecognition = null;
+                    micBtn.classList.remove('recording');
+                    if (label) label.textContent = '用说的';
+                };
+                micRecognition.start();
+                micBtn.classList.add('recording');
+                if (label) label.textContent = '说完点这里';
+            });
+        }
+
+        checkBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const explanation = input.value.trim();
+            if (!explanation) {
+                input.focus();
+                input.placeholder = '先写（或说）几句你自己的理解，哪怕只有一句。';
+                return;
+            }
+            const ctx = sentenceContextByKey.get(srsSentenceKey(sentence)) || {};
+            checkBtn.disabled = true;
+            feedback.hidden = false;
+            feedback.innerHTML = '<p class="fb-loading">AI 正在对照你的讲解找漏洞…</p>';
+            try {
+                const res = await fetch('/api/feynman', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${requireAuthToken()}` },
+                    body: JSON.stringify({
+                        sentence,
+                        translation_zh: ctx.translation_zh || '',
+                        grammar_points: (ctx.grammar || []).map(g => ({ title: g.title, explanation: g.explanation })),
+                        explanation,
+                        variation: variationInput.value.trim(),
+                        model: modelSelect.value,
+                    }),
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail?.message || data.detail || '请求失败');
+                feedback.innerHTML = renderFeynmanFeedback(data);
+            } catch (err) {
+                feedback.innerHTML = `<p class="fb-error">${escapeHtml(err.message)}</p>`;
+            } finally {
+                checkBtn.disabled = false;
+            }
+        });
+    }
+
     function attachSentenceCardEvents(card, targetSentence, transCn = '', transEn = '') {
         // Tab switching
         const tabBtns = card.querySelectorAll('.card-tab-btn');
@@ -1730,6 +1812,10 @@ function initStudyWorkbench() {
                 });
             });
         });
+
+        // 2b. Feynman self-test
+        const selfTest = card.querySelector('.feynman-selftest');
+        if (selfTest) bindFeynmanSelfTest(selfTest, targetSentence);
 
         // 3. Review cards: word star = cloze card, hero button = listen + speak cards
         card.querySelectorAll('.btn-token-star').forEach(btn => {
@@ -3073,6 +3159,9 @@ function initStudyWorkbench() {
 
     // Global Keyboard listener for the word popover
     document.addEventListener('keydown', (e) => {
+        const typing = e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA');
+        if (typing && e.key !== 'Escape') return;
+
         // Close word popover on Escape
         if (e.key === 'Escape' && floatingWordPopover && !floatingWordPopover.hidden) {
             closeWordPopover();
