@@ -1,0 +1,1524 @@
+from __future__ import annotations
+
+import datetime
+import hashlib
+import json
+import logging
+import os
+import re
+import uuid
+from pathlib import Path
+from typing import Any, Literal
+
+import edge_tts
+import httpx
+
+logger = logging.getLogger("tts_service")
+from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi.responses import FileResponse, Response
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
+
+
+BASE_DIR = Path(__file__).resolve().parent
+STATIC_DIR = BASE_DIR / "static"
+OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", str(BASE_DIR / "outputs"))).resolve()
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+PERPLEXITY_BASE_URL = os.getenv(
+    "PERPLEXITY_BASE_URL", "http://127.0.0.1:8002/v1"
+).rstrip("/")
+PERPLEXITY_MODEL = os.getenv("PERPLEXITY_MODEL", "grok-4.6")
+PERPLEXITY_PROOFREAD_MODEL = os.getenv(
+    "PERPLEXITY_PROOFREAD_MODEL", "gpt-5.6-terra"
+)
+PERPLEXITY_TIMEOUT_SECONDS = float(os.getenv("PERPLEXITY_TIMEOUT_SECONDS", "120"))
+MAX_TEXT_CHARS = int(os.getenv("MAX_TEXT_CHARS", "15000"))
+
+TRANSFORM_MODELS = {
+    "gemini-3.8-flash": {
+        "label": "Gemini 3.8 Flash (AGY)",
+        "description": "7840 AGY 原生极速模型；词汇切分与语法精析极速响应。",
+        "recommended": True,
+    },
+    "grok-4.6": {
+        "label": "Grok 4.6",
+        "description": "Fast mode; recommended for clean French transformation.",
+        "recommended": False,
+    },
+    "grok-4.6-thinking": {
+        "label": "Grok 4.6 Thinking",
+        "description": "Reasoning mode; slower and more likely to add explanatory text.",
+        "recommended": False,
+    },
+    "sonar-2": {
+        "label": "Sonar 2",
+        "description": "Perplexity fallback model.",
+        "recommended": False,
+    },
+}
+MODEL_LABELS = {
+    **{model_id: details["label"] for model_id, details in TRANSFORM_MODELS.items()},
+    "gpt-5.6-terra": "GPT-5.6 Terra",
+}
+if PERPLEXITY_MODEL not in TRANSFORM_MODELS:
+    raise RuntimeError(f"Unsupported PERPLEXITY_MODEL: {PERPLEXITY_MODEL}")
+
+
+def _map_upstream_model(model_name: str) -> str:
+    if model_name == "gemini-3.8-flash":
+        return "gemini-3.8-flash-low"
+    return model_name
+
+SUPPORTED_VOICES = {
+    "en-US-AvaNeural",
+    "en-US-AndrewNeural",
+    "en-GB-SoniaNeural",
+    "en-US-AriaNeural",
+    "en-US-GuyNeural",
+    "fr-FR-DeniseNeural",
+    "fr-FR-HenriNeural",
+    "fr-FR-VivienneMultilingualNeural",
+    "fr-FR-RemyMultilingualNeural",
+    "fr-CA-SylvieNeural",
+    "fr-CA-JeanNeural",
+    "fr-CA-AntoineNeural",
+}
+
+STYLE_INSTRUCTIONS = {
+    "spoken": "spoken",
+    "neutral": "standard",
+    "formal": "formal writing",
+    "polished": "polished writing",
+}
+
+TASK_MODE_LABELS = {
+    "generate": "按要求生成",
+    "translate": "忠实翻译",
+    "express": "自然表达",
+    "polish": "润色法语",
+}
+
+LEVEL_INSTRUCTIONS = {
+    "A1-A2": "A1-A2",
+    "B1-B2": "B1-B2",
+    "C1-C2": "C1-C2",
+}
+
+LOCALE_INSTRUCTIONS = {
+    "fr-FR": "France French",
+    "fr-CA": "Canadian French",
+}
+
+NON_FRENCH_SCRIPT_RE = re.compile(
+    r"[\u3400-\u4dbf\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]"
+)
+UPSTREAM_META_RE = re.compile(
+    r"\b(cannot perform|tool actions?|i will provide|here is the translation|"
+    r"je traduis le texte|voici la traduction|texte traduit)\b",
+    re.IGNORECASE,
+)
+FRENCH_BLOCK_RE = re.compile(r"<FRENCH>\s*(.*?)\s*</FRENCH>", re.IGNORECASE | re.DOTALL)
+TRAILING_OFFER_RE = re.compile(
+    r"\s+(?:si\s+tu\s+veux|si\s+vous\s+voulez),?\s+je\s+peux\b"
+    r"[^.!?]*(?:[.!?]|$)\s*$",
+    re.IGNORECASE,
+)
+TASK_CLASSIFICATION_RE = re.compile(
+    r"\b(generate|translate|express|polish)\b", re.IGNORECASE
+)
+CHINESE_GENERATE_RE = re.compile(
+    r"(?:请|请你|帮我|给我|我要|我想|我需要|能否|可以).{0,48}"
+    r"(?:写|创作|生成|介绍|解释|说明|讲解|概述|总结|列出|编写|设计|制作|"
+    r"回答|告诉|了解)"
+    r"|^(?:写|创作|生成|介绍|解释|说明|讲解|概述|总结|列出|编写|设计|"
+    r"制作|回答|告诉)"
+    r"|\d+\s*(?:到|至|[-~—])\s*\d+\s*(?:个)?(?:词|单词|字)",
+    re.IGNORECASE,
+)
+LATIN_GENERATE_RE = re.compile(
+    r"^\s*(?:please\s+)?(?:write|create|generate|explain|describe|introduce|"
+    r"summarize|draft|compose|give me|tell me|ecris|redige|explique|decris)",
+    re.IGNORECASE,
+)
+ROUGH_SPEECH_RE = re.compile(
+    r"嗯|呃|额|就是|那个|怎么说|然后|顺便|反正|大概|可能吧|之类的|就算了|"
+    r"\b(?:um+|uh+|you know|i mean|kind of|sort of)\b",
+    re.IGNORECASE,
+)
+FRENCH_SIGNAL_RE = re.compile(
+    r"\b(?:je|tu|il|elle|nous|vous|ils|elles|le|la|les|un|une|des|du|de|"
+    r"et|est|suis|vais|avec|pour|dans|ce|cet|cette|mon|ma|mes)\b|[àâçéèêëîïôùûüÿœ]",
+    re.IGNORECASE,
+)
+REQUESTED_WORD_RANGE_RE = re.compile(
+    r"(?<!\d)(\d{1,4})\s*(?:到|至|[-~—])\s*(\d{1,4})\s*"
+    r"(?:个)?(?:单词|词|mots?|words?)",
+    re.IGNORECASE,
+)
+FRENCH_WORD_RE = re.compile(
+    r"[A-Za-zÀ-ÖØ-öø-ÿŒœ]+(?:[’'-][A-Za-zÀ-ÖØ-öø-ÿŒœ]+)*"
+)
+
+TransformModel = Literal[
+    "gemini-3.8-flash", "grok-4.6", "grok-4.6-thinking", "sonar-2"
+]
+TaskMode = Literal["auto", "generate", "translate", "express", "polish"]
+ResolvedTaskMode = Literal["generate", "translate", "express", "polish"]
+QualityCheck = Literal["passed", "proofread"]
+
+
+class TransformRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=MAX_TEXT_CHARS)
+    style: Literal["spoken", "neutral", "formal", "polished"] = "spoken"
+    level: Literal["A1-A2", "B1-B2", "C1-C2"] = "B1-B2"
+    locale: Literal["fr-FR", "fr-CA"] = "fr-FR"
+    model: TransformModel = PERPLEXITY_MODEL
+    task_mode: TaskMode = "auto"
+
+
+class ConnectionTestRequest(BaseModel):
+    model: TransformModel = PERPLEXITY_MODEL
+
+
+class SpeechRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=MAX_TEXT_CHARS)
+    voice: str = "fr-FR-DeniseNeural"
+
+
+class AnalyzeRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=MAX_TEXT_CHARS)
+    model: TransformModel = PERPLEXITY_MODEL
+
+
+app = FastAPI(title="French Audio Studio", version="2.0.0")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+def _normalized_text(value: str) -> str:
+    text = value.strip()
+    if not text:
+        raise HTTPException(status_code=422, detail="请输入需要处理的文本。")
+    return text
+
+
+SERVER_WEB2API_KEY = os.getenv("WEB2API_API_KEY", "0PK32TX5M-q3UA6bGALY_Sw_tL77bZKL")
+
+
+def _authorization_token(authorization: str | None) -> str:
+    if not authorization:
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "code": "missing_api_key",
+                "message": "请先登录账号（新注册享 60 天免费）或在设置中填写 API Key。",
+            },
+        )
+    parts = authorization.split(" ", 1)
+    token = parts[1].strip() if len(parts) == 2 and parts[0].lower() == "bearer" else authorization.strip()
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "code": "missing_api_key",
+                "message": "请先登录账号（新注册享 60 天免费）或在设置中填写 API Key。",
+            },
+        )
+
+    # Check if this token is an internal user session token
+    user_payload = auth_db.verify_token(token)
+    if user_payload:
+        user_info = auth_db.get_user_status(user_payload["sub"])
+        if not user_info or not user_info.get("is_valid"):
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "trial_expired",
+                    "message": "您的 60 天免费试用期已结束。您可以填写自定义 API Key 继续使用，或联系站长续期。",
+                },
+            )
+        return SERVER_WEB2API_KEY
+
+    return token
+
+
+def _clean_model_text(value: str) -> str:
+    text = value.strip()
+    if text.startswith("```") and text.endswith("```"):
+        lines = text.splitlines()
+        if len(lines) >= 3:
+            text = "\n".join(lines[1:-1]).strip()
+    french_block = FRENCH_BLOCK_RE.search(text)
+    if french_block:
+        text = french_block.group(1).strip()
+    text = TRAILING_OFFER_RE.sub("", text).strip()
+    return text
+
+
+def _contains_non_french_script(value: str) -> bool:
+    return NON_FRENCH_SCRIPT_RE.search(value) is not None
+
+
+def _parse_task_classification(value: str) -> ResolvedTaskMode:
+    matches = {match.lower() for match in TASK_CLASSIFICATION_RE.findall(value)}
+    if not matches:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "missing_task_classification",
+                "message": "Grok 未返回可验证的处理方式，请重试或手动选择一种处理方式。",
+            },
+        )
+    if len(matches) != 1:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "invalid_task_classification",
+                "message": "Grok 返回了无法识别的处理方式，请重试或手动选择一种处理方式。",
+            },
+        )
+    return matches.pop()
+
+
+def _infer_task_mode_locally(value: str) -> ResolvedTaskMode | None:
+    text = _normalized_text(value)
+    if CHINESE_GENERATE_RE.search(text) or LATIN_GENERATE_RE.search(text):
+        return "generate"
+
+    rough_markers = ROUGH_SPEECH_RE.findall(text)
+    starts_as_rough_speech = bool(
+        re.match(r"^\s*(?:嗯|呃|额|那个|就是|um+\b|uh+\b)", text, re.IGNORECASE)
+    )
+    if starts_as_rough_speech or len(rough_markers) >= 2:
+        return "express"
+
+    if len(FRENCH_SIGNAL_RE.findall(text)) >= 2:
+        return "polish"
+
+    return "translate"
+
+
+def _requested_word_range(value: str) -> tuple[int, int] | None:
+    match = REQUESTED_WORD_RANGE_RE.search(value)
+    if not match:
+        return None
+    minimum, maximum = (int(number) for number in match.groups())
+    if minimum < 1 or maximum < minimum or maximum > 5000:
+        return None
+    return minimum, maximum
+
+
+def _french_word_count(value: str) -> int:
+    return len(FRENCH_WORD_RE.findall(value))
+
+
+def _generation_length_instruction(value: str) -> str:
+    requested_range = _requested_word_range(value)
+    if not requested_range:
+        return ""
+    minimum, maximum = requested_range
+    target = (minimum + maximum) // 2
+    return (
+        f"length target {target} French words; final count must stay between "
+        f"{minimum} and {maximum} words"
+    )
+
+
+def _classification_payload(request: TransformRequest) -> dict:
+    return {
+        "model": request.model,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "Classify the user's intent for a French writing tool. Return exactly one "
+                    "lowercase word: generate, translate, express, or polish."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    "generate = an explicit request to write, create, introduce or explain new "
+                    "content; translate = a complete Chinese or English source sentence with no "
+                    "creation request; express = rough speech with fillers, fragments or repetition; "
+                    "polish = existing French needing correction. Never choose generate merely "
+                    "because the tool will produce French.\n\n"
+                    f"INPUT:\n{_normalized_text(request.text)}"
+                ),
+            },
+        ],
+        "stream": False,
+        "temperature": 0,
+    }
+
+
+def _proofread_payload(
+    request: TransformRequest,
+    task_mode: ResolvedTaskMode,
+    draft: str,
+) -> dict:
+    task_instruction = _build_messages(request, task_mode)[0]["content"]
+    candidate = draft.strip() or "No usable draft is available; produce the final French."
+    return {
+        "model": _map_upstream_model(PERPLEXITY_PROOFREAD_MODEL),
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are the final French editor. Use the original user input as the source "
+                    "of truth and revise the draft. Fix grammar, articles, agreement, accents, "
+                    "idiom and task compliance. Do not mention the source or draft. "
+                    "Do not add offers, follow-up questions or commentary. "
+                    f"Task requirement: {task_instruction}"
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Original user input:\n{_normalized_text(request.text)}\n\n"
+                    f"Draft to review:\n{candidate}"
+                ),
+            },
+        ],
+        "stream": False,
+        "temperature": 0.05,
+    }
+
+
+def _build_messages(
+    request: TransformRequest, task_mode: ResolvedTaskMode
+) -> list[dict[str, str]]:
+    source_text = _normalized_text(request.text)
+    if task_mode == "translate":
+        system_prompt = (
+            f"Translate the user text faithfully into natural "
+            f"{LOCALE_INSTRUCTIONS[request.locale]}. Preserve meaning, person, tense and tone. "
+            "Return only French."
+        )
+        return [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": source_text},
+        ]
+
+    locale = LOCALE_INSTRUCTIONS[request.locale]
+    level = LEVEL_INSTRUCTIONS[request.level]
+    style = STYLE_INSTRUCTIONS[request.style]
+    if task_mode == "generate":
+        length_instruction = _generation_length_instruction(source_text)
+        length_prompt = f" {length_instruction.capitalize()}." if length_instruction else ""
+        system_prompt = (
+            "Follow the user's request and write the requested content, not a translation of "
+            f"the request. Use {locale} at {level} level in a {style} register."
+            f"{length_prompt} Do not add offers or follow-up questions. Return only the finished "
+            "French."
+        )
+    elif task_mode == "express":
+        system_prompt = (
+            f"Express the intended meaning as idiomatic {locale} at {level} level in a {style} "
+            "register. Preserve uncertainty, person and facts; organize fragments without "
+            "inventing details. Return only clean French."
+        )
+    else:
+        system_prompt = (
+            f"Correct and polish the user's French as idiomatic {locale} at {level} level in a "
+            f"{style} register. Preserve meaning and voice. Return only the finished French."
+        )
+    return [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": source_text},
+    ]
+
+
+def _chat_payload(request: TransformRequest, task_mode: ResolvedTaskMode) -> dict:
+    temperatures = {
+        "generate": 0.5,
+        "translate": 0.15,
+        "express": 0.3,
+        "polish": 0.2,
+    }
+    return {
+        "model": _map_upstream_model(request.model),
+        "messages": _build_messages(request, task_mode),
+        "stream": False,
+        "temperature": temperatures[task_mode],
+    }
+
+
+def _upstream_error(response: httpx.Response) -> HTTPException:
+    code = "upstream_error"
+    message = f"Perplexity web2api 返回 HTTP {response.status_code}。"
+    try:
+        payload = response.json()
+        error = payload.get("error", {}) if isinstance(payload, dict) else {}
+        if isinstance(error, dict):
+            code = str(error.get("code") or code)
+            message = str(error.get("message") or message)
+    except ValueError:
+        pass
+
+    if response.status_code == 401 and code in {
+        "perplexity_auth_failed",
+        "upstream_auth_failed",
+    }:
+        return HTTPException(
+            status_code=503,
+            detail={
+                "code": code,
+                "message": (
+                    "Perplexity 登录态已失效或账号当前不可用。请在 7840 更新 "
+                    "PERPLEXITY_COOKIES 后重试。"
+                ),
+            },
+        )
+    if response.status_code == 401:
+        return HTTPException(
+            status_code=401,
+            detail={"code": code, "message": "web2api API Key 不正确。"},
+        )
+    if response.status_code == 429:
+        return HTTPException(
+            status_code=429,
+            detail={"code": code, "message": "Perplexity 请求过多，请稍后重试。"},
+        )
+    return HTTPException(
+        status_code=502,
+        detail={"code": code, "message": message},
+    )
+
+
+async def _post_chat(
+    client: httpx.AsyncClient, payload: dict, headers: dict[str, str]
+) -> tuple[dict, str]:
+    for upstream_attempt in range(2):
+        try:
+            response = await client.post(
+                f"{PERPLEXITY_BASE_URL}/chat/completions",
+                headers=headers,
+                json=payload,
+            )
+        except httpx.TimeoutException as exc:
+            raise HTTPException(
+                status_code=504,
+                detail={
+                    "code": "upstream_timeout",
+                    "message": "Perplexity 处理超时，请缩短文本或稍后重试。",
+                },
+            ) from exc
+        except httpx.RequestError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "code": "upstream_unreachable",
+                    "message": "无法连接 7840 上的 Perplexity web2api。",
+                },
+            ) from exc
+        if response.status_code >= 500 and upstream_attempt == 0:
+            continue
+        break
+
+    if response.status_code >= 400:
+        raise _upstream_error(response)
+
+    try:
+        body = response.json()
+        raw_text = str(body["choices"][0]["message"]["content"])
+    except (ValueError, KeyError, IndexError, TypeError) as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "invalid_upstream_response",
+                "message": "Perplexity 返回了无法识别的内容。",
+            },
+        ) from exc
+    return body, raw_text
+
+
+def _validate_model_result(
+    raw_text: str,
+    request: TransformRequest,
+    task_mode: ResolvedTaskMode | None = None,
+) -> str:
+    result = _clean_model_text(raw_text)
+    if not result:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "empty_upstream_response",
+                "message": "Perplexity 没有返回法语文本。",
+            },
+        )
+    if _contains_non_french_script(result):
+        model_label = TRANSFORM_MODELS[request.model]["label"]
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "non_french_upstream_response",
+                "message": f"{model_label} 返回了双语或非法语内容，纯法语检查未通过。",
+            },
+        )
+    if UPSTREAM_META_RE.search(result):
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "code": "upstream_meta_response",
+                "message": "Grok 返回了内部说明而不是法语正文，已拒绝该结果。",
+            },
+        )
+    requested_range = (
+        _requested_word_range(request.text) if task_mode == "generate" else None
+    )
+    if requested_range:
+        word_count = _french_word_count(result)
+        minimum, maximum = requested_range
+        if not minimum <= word_count <= maximum:
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "code": "word_count_out_of_range",
+                    "message": (
+                        f"生成结果为 {word_count} 词，没有满足 {minimum}–{maximum} 词的要求。"
+                    ),
+                },
+            )
+    return result
+
+
+def _contract_retry_payload(payload: dict, error_code: str) -> dict:
+    messages = [dict(message) for message in payload["messages"]]
+    if error_code == "word_count_out_of_range":
+        source_prompt = "\n".join(str(message.get("content", "")) for message in messages)
+        length_instruction = _generation_length_instruction(source_prompt)
+        messages[0]["content"] += (
+            f" Strict retry: {length_instruction}. Count the finished French words before "
+            "returning the answer."
+        )
+    else:
+        messages[0]["content"] += (
+            f" Strict retry after {error_code}: output clean French text only. Do not copy any "
+            "source-language words or add commentary."
+        )
+    return {**payload, "messages": messages, "temperature": 0.05}
+
+
+async def request_french_transform(
+    request: TransformRequest, api_key: str
+) -> tuple[str, str, ResolvedTaskMode, QualityCheck, str]:
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
+        if request.task_mode == "auto":
+            local_task_mode = _infer_task_mode_locally(request.text)
+            if local_task_mode:
+                resolved_task_mode = local_task_mode
+            else:
+                classification_payload = _classification_payload(request)
+                for classification_attempt in range(2):
+                    _, classification = await _post_chat(
+                        client, classification_payload, headers
+                    )
+                    try:
+                        resolved_task_mode = _parse_task_classification(classification)
+                        break
+                    except HTTPException:
+                        if classification_attempt == 0:
+                            classification_payload = {
+                                **classification_payload,
+                                "messages": [
+                                    *classification_payload["messages"],
+                                    {
+                                        "role": "user",
+                                        "content": (
+                                            "Return one lowercase word only: generate, translate, "
+                                            "express, or polish."
+                                        ),
+                                    },
+                                ],
+                            }
+                            continue
+                        raise
+        else:
+            resolved_task_mode = request.task_mode
+
+        payload = _chat_payload(request, resolved_task_mode)
+        result = ""
+        model = request.model
+        for attempt in range(2):
+            body, raw_text = await _post_chat(client, payload, headers)
+            model = str(body.get("model") or request.model)
+            try:
+                result = _validate_model_result(raw_text, request, resolved_task_mode)
+            except HTTPException as exc:
+                detail = exc.detail if isinstance(exc.detail, dict) else {}
+                error_code = str(detail.get("code") or "invalid_output_contract")
+                if attempt == 0:
+                    payload = _contract_retry_payload(payload, error_code)
+                    continue
+                break
+            break
+
+        quality_check: QualityCheck = "passed"
+        proofread_model = PERPLEXITY_PROOFREAD_MODEL
+        proofread_payload = _proofread_payload(
+            request, resolved_task_mode, result
+        )
+        for proofread_attempt in range(2):
+            proofread_body, raw_proofread = await _post_chat(
+                client, proofread_payload, headers
+            )
+            try:
+                result = _validate_model_result(
+                    raw_proofread, request, resolved_task_mode
+                )
+            except HTTPException as exc:
+                detail = exc.detail if isinstance(exc.detail, dict) else {}
+                error_code = str(detail.get("code") or "invalid_proofread_output")
+                if proofread_attempt == 0:
+                    proofread_payload = _contract_retry_payload(
+                        proofread_payload, error_code
+                    )
+                    continue
+                if result:
+                    break
+                raise
+            proofread_model = str(
+                proofread_body.get("model") or PERPLEXITY_PROOFREAD_MODEL
+            )
+            quality_check = "proofread"
+            break
+
+        return result, model, resolved_task_mode, quality_check, proofread_model
+
+    raise RuntimeError("Unreachable transform retry state")
+
+
+import auth_db
+TRIVIAL_SINGLE_WORDS = {
+    "je", "tu", "il", "elle", "on", "nous", "vous", "ils", "elles",
+    "ce", "c'", "c’", "ça", "de", "d'", "d’", "à", "au", "aux",
+    "dans", "en", "par", "pour", "avec", "sans", "sous",
+    "un", "une", "des", "du", "le", "la", "les", "l'", "l’",
+    "et", "ou", "mais", "donc", "or", "ni", "car",
+    "ne", "pas", "y", "se", "s'", "s’", "me", "te",
+}
+
+
+def _is_unwanted_token(token_text: str) -> bool:
+    clean = token_text.strip()
+    if not clean:
+        return True
+    # 1. Punctuation: e.g. '.', ',', '!', '?', ';', ':', '«', '»', '...', '-', '(', ')'
+    if not re.search(r"[a-zA-ZÀ-ÿ]", clean):
+        return True
+    # 2. Pure digits or numbers: e.g. '40', '10', '3.5'
+    if re.fullmatch(r"[\d\s.,]+", clean):
+        return True
+    # 3. Collocations / multi-word expressions (contain spaces) are ALWAYS KEPT!
+    if " " in clean:
+        return False
+    # 4. Filter single elementary words based on user's ~200 baseline
+    if clean.lower() in TRIVIAL_SINGLE_WORDS:
+        return True
+    return False
+
+
+def _filter_sentence_tokens(tokens: list[dict]) -> list[dict]:
+    filtered = [tok for tok in tokens if not _is_unwanted_token(tok.get("token", ""))]
+    if filtered:
+        return filtered
+    # Fallback if every single token was filtered out: keep content words with letters
+    fallback = [
+        tok for tok in tokens
+        if re.search(r"[a-zA-ZÀ-ÿ]", tok.get("token", "")) and not re.fullmatch(r"[\d\s.,]+", tok.get("token", ""))
+    ]
+    return fallback or tokens
+
+
+def format_friendly_phonetic(raw: str) -> str:
+    if not raw:
+        return ""
+    s = str(raw).strip()
+    s = re.sub(r"^[/[\\(\s]+", "", s)
+    s = re.sub(r"[/\]\\)\s]+$", "", s).strip()
+    s = re.sub(r"[.·•\-]", "", s)
+    s = re.sub(r"[ʁʀ]", "r", s)
+    s = re.sub(r"ɡ", "g", s)
+    if not s:
+        return ""
+    return f"[{s}]"
+
+
+def _analyze_payload(request: AnalyzeRequest) -> dict:
+    prompt = (
+        "You are explaining a French sentence to an A1–A2 learner. Their native language is Chinese and their English is basic.\n\n"
+        "Language rules:\n"
+        "- The English must be easier than the French being taught. The reader is learning French, not English.\n"
+        "- Short sentences: at most 12 words each. One idea per sentence.\n"
+        "- Use everyday words only. Do not use words like: elided, auxiliary, particle, indefinite, omit, agree with (grammar sense), construction.\n"
+        "- No brackets or long explanations inside brackets.\n"
+        "- Show, don't describe. Every explanation must include a real example from the sentence. Do not describe a rule without showing it.\n"
+        "- Pattern to follow: one short rule sentence + one example.\n"
+        "- Before you output, reread each explanation. If a learner with basic English would need to read it twice, rewrite it shorter.\n\n"
+        "Missing words:\n"
+        '- Forms, signs, certificates and titles often leave out words like "this" and "is".\n'
+        "- When a sentence leaves out words, show the short version and the full sentence one after the other.\n"
+        "- Put the missing words in [brackets] in the full sentence, in both French and English.\n"
+        '- Then add one short sentence, for example: "Forms often leave out \'this\' and \'is\'. Like a label."\n'
+        "- Include this in grammar_points when a phrase leaves out words.\n\n"
+        "Good and bad explanation examples:\n"
+        "BAD (too abstract, too long):\n"
+        "\"On forms and certificates, French often drops 'C'est une...' (It is a...) and 'est' (is) to keep the text short, writing 'Attestation valable' instead of 'Cette attestation est valable'.\"\n\n"
+        "GOOD:\n"
+        "Short version: Attestation valable\n"
+        "Full sentence: [Cette] attestation [est] valable.\n"
+        "English: [This] certificate [is] valid.\n"
+        "Forms often leave out \"this\" and \"is\". Like a label.\n\n"
+        "BAD:\n"
+        "\"negative particle (elided to n' before a vowel; pairs with 'aucune' for negation)\"\n\n"
+        "GOOD:\n"
+        "ne becomes n' before a vowel: ne + est → n'est.\n"
+        "Here it works with aucune to mean \"no\".\n\n"
+        "Accuracy rules:\n"
+        "- The word table must cover every word in the sentence, in order, including small words like par, les, de, à.\n"
+        '- Never list a word that is not in the sentence. Example: if the sentence uses ne … aucune, do not list "ne … pas".\n'
+        "- Every French sentence in the build-up must be correct French.\n\n"
+        "English bridge:\n"
+        "- If a French word looks like an English word with the same meaning, show it (autorisée → authorized).\n"
+        '- If it looks like an English word but means something different, warn clearly: "False friend! actuellement = currently, not actually."\n'
+        "- If there is no English look-alike, leave it empty. Do not force one.\n\n"
+        "Word-by-word alignment:\n"
+        "- Top row French, bottom row English, word by word, keeping the French order.\n"
+        "- Then one short sentence on where French and English order differ. If they are the same, say so.\n"
+        "- For very short phrases of 4 words or fewer where word order is identical to English, you may leave \"alignment\": [] and \"order_note\": \"\".\n\n"
+        "Build-up (layers):\n"
+        "- CRITICAL RULE FOR SHORT SENTENCES: If the sentence or phrase has 5 words or fewer (e.g. 'Délivrance des résultats', 'Bonjour tout le monde', 'Merci beaucoup', short titles/headings), DO NOT create a build-up! Return empty array: \"build_up\": []. Do NOT artificially split short phrases.\n"
+        "- For longer sentences (more than 5 words): start from the shortest correct core sentence (usually subject + verb), add ONE new element per step, ending with the exact original sentence (3–5 steps).\n"
+        '- Each step has: French, English, and "New:" (what was added, in simple English).\n\n'
+        "Grammar points:\n"
+        "- 1–3 points, the most useful ones for this sentence.\n"
+        "- Each has: a short title, a simple explanation, and a memory hook (word history, a comparison with English or Chinese, or a simple picture).\n\n"
+        "Pronunciation tips:\n"
+        "- Only the tricky parts: silent letters (e.g. silent -ent in verbs), liaison between words, tricky vowels or nasals.\n"
+        "- Format each tip starting with the clean French word or liaison phrase being taught, followed by a colon: 'French word: simple explanation'. Example: \"'informations': the starting 'in-' is the nasal vowel [ɛ̃] (like 'vin' or 'matin'), not English 'in'\".\n"
+        "- Do NOT write phrases like \"'in-' in 'informations':\" before the colon; always put the clean French word before the colon.\n"
+        "- Always enclose the French words or phonetic representations in single quotes, e.g. \"'leurs diplômes': The 's' in 'leurs' is silent before consonant 'diplômes'\".\n\n"
+        "Output JSON format strictly matching this schema:\n"
+        "{\n"
+        '  "sentences": [\n'
+        "    {\n"
+        '      "schemaVersion": 2,\n'
+        '      "sentence": "Aucune dispense n\'est autorisée par les autorités canadiennes.",\n'
+        '      "translation_en": "No exemption is authorized by the Canadian authorities.",\n'
+        '      "translation_zh": "加拿大当局不允许任何豁免。",\n'
+        '      "alignment": [\n'
+        '        {"fr": "Aucune", "en": "No"},\n'
+        '        {"fr": "dispense", "en": "exemption"},\n'
+        '        {"fr": "n\'est", "en": "is"},\n'
+        '        {"fr": "autorisée", "en": "authorized"},\n'
+        '        {"fr": "par", "en": "by"},\n'
+        '        {"fr": "les autorités", "en": "the authorities"},\n'
+        '        {"fr": "canadiennes", "en": "Canadian"}\n'
+        "      ],\n"
+        '      "order_note": "Almost the same order as English. Only difference: French puts canadiennes after the noun. English says Canadian authorities.",\n'
+        '      "build_up": [\n'
+        '        {"fr": "Les autorités autorisent.", "en": "The authorities authorize.", "new": "Basic sentence: who + does what."},\n'
+        '        {"fr": "Les autorités canadiennes autorisent.", "en": "The Canadian authorities authorize.", "new": "canadiennes = Canadian. In French it goes after the noun."},\n'
+        '        {"fr": "Les autorités canadiennes n\'autorisent pas la dispense.", "en": "The Canadian authorities do not authorize the exemption.", "new": "ne … pas = not. It wraps around the verb."},\n'
+        '        {"fr": "Les autorités canadiennes n\'autorisent aucune dispense.", "en": "The Canadian authorities authorize no exemption.", "new": "pas changes to aucune = no / not any."},\n'
+        '        {"fr": "Aucune dispense n\'est autorisée par les autorités canadiennes.", "en": "No exemption is authorized by the Canadian authorities.", "new": "Passive, just like English: is authorized by = est autorisée par."}\n'
+        "      ],\n"
+        '      "words": [\n'
+        '        {"fr": "aucune", "ipa": "okyn", "lemma": "aucun", "type": "describing word", "meaning": "no, not any", "why": "Ends in -e because dispense is a feminine word. Used with ne, but without pas.", "english_link": "", "false_friend": false},\n'
+        '        {"fr": "dispense", "ipa": "dispɑ̃s", "lemma": "dispense", "type": "naming word", "meaning": "exemption", "why": "Feminine noun.", "english_link": "dispensation", "false_friend": false},\n'
+        '        {"fr": "n\'est", "ipa": "nɛ", "lemma": "être", "type": "action word form", "meaning": "is (negative)", "why": "ne becomes n\' before a vowel. Combined with aucune.", "english_link": "", "false_friend": false},\n'
+        '        {"fr": "autorisée", "ipa": "otɔʁize", "lemma": "autoriser", "type": "action word form", "meaning": "authorized", "why": "Ends in -e because dispense is a feminine word.", "english_link": "authorized", "false_friend": false},\n'
+        '        {"fr": "par", "ipa": "paʁ", "lemma": "par", "type": "small linking word", "meaning": "by", "why": "Shows who does the action.", "english_link": "", "false_friend": false},\n'
+        '        {"fr": "les", "ipa": "le", "lemma": "le", "type": "small pointer word", "meaning": "the (plural)", "why": "Points to more than one authority.", "english_link": "", "false_friend": false},\n'
+        '        {"fr": "autorités", "ipa": "otɔʁite", "lemma": "autorité", "type": "naming word", "meaning": "authorities", "why": "Ends in -s because it is plural.", "english_link": "authorities", "false_friend": false},\n'
+        '        {"fr": "canadiennes", "ipa": "kanadjɛn", "lemma": "canadien", "type": "describing word", "meaning": "Canadian (plural)", "why": "Ends in -nes because autorités is feminine plural.", "english_link": "Canadian", "false_friend": false}\n'
+        "      ],\n"
+        '      "grammar_points": [\n'
+        '        {"title": "aucune … ne = no / not any (no pas!)", "explanation": "aucune already means no. Adding pas would say no twice.", "hook": "Aucun problème! = No problem! Same aucun."},\n'
+        '        {"title": "Passive: est autorisée par = is authorized by", "explanation": "est autorisée par works like English is authorized by.", "hook": "Same word order as English."},\n'
+        '        {"title": "Describing words go after the noun", "explanation": "French names the thing first, then says what kind: les autorités canadiennes.", "hook": "Exceptions are short common words: beau, jeune, bon, grand, petit…"}\n'
+        "      ],\n"
+        '      "pronunciation_tips": [\n'
+        '        "\'les autorités\': link the \'s\' to make a /z/ sound → \'lé-zo-to-ri-té\'",\n'
+        '        "\'autorisée\': \'s\' between two vowels sounds like /z/",\n'
+        '        "\'canadiennes\': the ending \'-nes\' sounds like /n/"\n'
+        '      ]\n'
+        "    }\n"
+        "  ]\n"
+        "}\n"
+        "NOTE: The words array must cover every single word in the sentence in sequential order, including small words (articles, prepositions, etc.)."
+    )
+    return {
+        "model": _map_upstream_model(request.model),
+        "messages": [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": f"Explain this French text for an A1–A2 learner in valid JSON strictly following the schema:\n\n{request.text}"},
+        ],
+        "response_format": {"type": "json_object"},
+        "stream": False,
+        "temperature": 0.1,
+    }
+
+
+def _parse_analysis_json(raw_text: str, fallback_text: str) -> dict:
+    cleaned = raw_text.strip()
+
+    # Strip thinking blocks from reasoning models (<think>...</think>)
+    cleaned = re.sub(r"<think>[\s\S]*?</think>", "", cleaned).strip()
+
+    # If wrapped in markdown code fence
+    fence_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned)
+    candidate = fence_match.group(1).strip() if fence_match else cleaned
+
+    parsed_data = None
+    try:
+        parsed_data = json.loads(candidate)
+    except Exception:
+        first_brace = candidate.find("{")
+        last_brace = candidate.rfind("}")
+        first_bracket = candidate.find("[")
+        last_bracket = candidate.rfind("]")
+
+        is_object = (first_brace != -1 and last_brace > first_brace)
+        is_array = (first_bracket != -1 and last_bracket > first_bracket)
+
+        if is_object and (not is_array or first_brace < first_bracket):
+            json_substr = candidate[first_brace : last_brace + 1]
+        elif is_array:
+            json_substr = candidate[first_bracket : last_bracket + 1]
+        else:
+            json_substr = candidate
+
+        # Remove trailing commas before } or ]
+        cleaned_json = re.sub(r",\s*([\]}])", r"\1", json_substr)
+        try:
+            parsed_data = json.loads(cleaned_json)
+        except Exception as exc:
+            logger.warning("Failed to parse JSON from upstream LLM: %s. Snippet: %r", exc, raw_text[:300])
+
+    sentences_raw = None
+    if isinstance(parsed_data, list):
+        sentences_raw = parsed_data
+    elif isinstance(parsed_data, dict):
+        if "sentences" in parsed_data and isinstance(parsed_data["sentences"], list):
+            sentences_raw = parsed_data["sentences"]
+        elif "sentence" in parsed_data or "original" in parsed_data or "alignment" in parsed_data or "words" in parsed_data:
+            sentences_raw = [parsed_data]
+
+    if sentences_raw:
+        valid_sentences = []
+        for s in sentences_raw:
+            if not isinstance(s, dict):
+                continue
+            is_v2 = (
+                s.get("schemaVersion") == 2
+                or "words" in s
+                or "build_up" in s
+                or "alignment" in s
+            )
+            sentence_text = str(s.get("sentence") or s.get("original") or "").strip()
+            if not sentence_text:
+                continue
+
+            if is_v2:
+                raw_words = s.get("words", [])
+                clean_words = []
+                for w in raw_words:
+                    if isinstance(w, dict):
+                        fr = str(w.get("fr") or w.get("token") or "").strip()
+                        if fr:
+                            clean_words.append({
+                                "fr": fr,
+                                "ipa": format_friendly_phonetic(str(w.get("ipa") or w.get("phonetic") or "")),
+                                "lemma": str(w.get("lemma") or fr),
+                                "type": str(w.get("type") or w.get("pos") or ""),
+                                "meaning": str(w.get("meaning") or w.get("explanation_en") or ""),
+                                "why": str(w.get("why") or ""),
+                                "english_link": str(w.get("english_link") or ""),
+                                "false_friend": bool(w.get("false_friend", False)),
+                            })
+
+                raw_alignment = s.get("alignment", [])
+                clean_alignment = []
+                for a in raw_alignment:
+                    if isinstance(a, dict):
+                        fr = str(a.get("fr", "")).strip()
+                        en = str(a.get("en", "")).strip()
+                        if fr or en:
+                            clean_alignment.append({"fr": fr, "en": en})
+
+                raw_buildup = s.get("build_up", [])
+                clean_buildup = []
+                for b in raw_buildup:
+                    if isinstance(b, dict):
+                        fr = str(b.get("fr", "")).strip()
+                        en = str(b.get("en", "")).strip()
+                        new_note = str(b.get("new", "")).strip()
+                        if fr:
+                            clean_buildup.append({"fr": fr, "en": en, "new": new_note})
+
+                raw_grammar = s.get("grammar_points", [])
+                clean_grammar = []
+                for g in raw_grammar:
+                    if isinstance(g, dict):
+                        title = str(g.get("title", "")).strip()
+                        exp = str(g.get("explanation", "")).strip()
+                        hook = str(g.get("hook", "")).strip()
+                        if title or exp:
+                            clean_grammar.append({"title": title, "explanation": exp, "hook": hook})
+
+                raw_tips = s.get("pronunciation_tips", [])
+                clean_tips = [str(tip).strip() for tip in raw_tips if str(tip).strip()]
+
+                trans_en = str(s.get("translation_en") or "")
+                trans_zh = str(s.get("translation_zh") or s.get("translation_cn") or "")
+
+                # Tokens fallback for popover & legacy export
+                legacy_tokens = [
+                    {
+                        "token": w["fr"],
+                        "lemma": w["lemma"],
+                        "pos": w["type"],
+                        "phonetic": w["ipa"],
+                        "explanation_en": f"{w['meaning']}. {w['why']}".strip(". "),
+                        "explanation_cn": "",
+                    }
+                    for w in clean_words
+                ]
+
+                valid_sentences.append({
+                    "schemaVersion": 2,
+                    "sentence": sentence_text,
+                    "original": sentence_text,
+                    "translation_en": trans_en,
+                    "translation_zh": trans_zh,
+                    "translation_cn": trans_zh,
+                    "alignment": clean_alignment,
+                    "order_note": str(s.get("order_note", "")),
+                    "build_up": clean_buildup,
+                    "words": clean_words,
+                    "tokens": legacy_tokens,
+                    "grammar_points": clean_grammar,
+                    "pronunciation_tips": clean_tips,
+                })
+            else:
+                # Legacy V1
+                raw_tokens = s.get("tokens", [])
+                clean_tokens = []
+                for tok in raw_tokens:
+                    if isinstance(tok, dict) and "token" in tok:
+                        t_str = str(tok.get("token", "")).strip()
+                        if t_str:
+                            clean_tokens.append({
+                                "token": t_str,
+                                "lemma": str(tok.get("lemma", t_str)),
+                                "pos": str(tok.get("pos", "")),
+                                "phonetic": format_friendly_phonetic(str(tok.get("phonetic", ""))),
+                                "explanation_en": str(tok.get("explanation_en", "")),
+                                "explanation_cn": str(tok.get("explanation_cn", "")),
+                            })
+                filtered_tokens = _filter_sentence_tokens(clean_tokens)
+                valid_sentences.append({
+                    "schemaVersion": 1,
+                    "original": sentence_text,
+                    "sentence": sentence_text,
+                    "translation_en": str(s.get("translation_en", "")),
+                    "translation_cn": str(s.get("translation_cn", "")),
+                    "translation_zh": str(s.get("translation_cn", "")),
+                    "tokens": filtered_tokens,
+                })
+        if valid_sentences:
+            return {"sentences": valid_sentences}
+
+    # Fallback heuristic segmenter (only if upstream LLM completely failed)
+    raw_sentences = [
+        sent.strip()
+        for sent in re.split(r"(?<=[.!?。！？])\s+", fallback_text)
+        if sent.strip()
+    ]
+    if not raw_sentences:
+        raw_sentences = [fallback_text.strip()]
+
+    fallback_sentences = []
+    for sent in raw_sentences:
+        raw_words = re.findall(r"[\w'’\-]+", sent)
+        fallback_words = [
+            {
+                "fr": word,
+                "ipa": "",
+                "lemma": word.lower(),
+                "type": "word",
+                "meaning": "Vocabulary item in sentence context",
+                "why": "Word from original sentence.",
+                "english_link": "",
+                "false_friend": False,
+            }
+            for word in raw_words
+        ]
+        fallback_sentences.append({
+            "schemaVersion": 2,
+            "sentence": sent,
+            "original": sent,
+            "translation_en": "",
+            "translation_zh": "",
+            "translation_cn": "",
+            "alignment": [{"fr": w["fr"], "en": ""} for w in fallback_words],
+            "order_note": "",
+            "build_up": [{"fr": sent, "en": "", "new": "Original sentence"}],
+            "words": fallback_words,
+            "tokens": [
+                {
+                    "token": w["fr"],
+                    "lemma": w["lemma"],
+                    "pos": w["type"],
+                    "phonetic": "",
+                    "explanation_en": w["meaning"],
+                    "explanation_cn": "",
+                }
+                for w in fallback_words
+            ],
+            "grammar_points": [],
+            "pronunciation_tips": [],
+        })
+    return {"sentences": fallback_sentences}
+
+
+async def request_french_analysis(request: AnalyzeRequest, api_key: str) -> dict:
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = _analyze_payload(request)
+    async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
+        _, raw_text = await _post_chat(client, payload, headers)
+        return _parse_analysis_json(raw_text, request.text)
+
+
+def _timestamp() -> str:
+    now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    return f"{now}_{uuid.uuid4().hex[:6]}"
+
+
+def _safe_timestamp(
+    value: str | None, text: str | None = None, voice: str | None = None
+) -> str:
+    if value and re.fullmatch(r"[0-9A-Za-z_-]{1,48}", value):
+        return value
+    if text and voice and len(text) <= 150:
+        h = hashlib.sha256(f"{voice}:{text.strip()}".encode("utf-8")).hexdigest()[:16]
+        return f"snip_{h}"
+    return _timestamp()
+
+
+def _validate_voice(voice: str) -> str:
+    if voice not in SUPPORTED_VOICES:
+        raise HTTPException(status_code=422, detail="不支持所选语音。")
+    return voice
+
+
+async def create_speech_files(
+    text: str, voice: str, timestamp: str | None = None
+) -> tuple[str, str]:
+    content = _normalized_text(text)
+    selected_voice = _validate_voice(voice)
+    job_timestamp = _safe_timestamp(timestamp, text=content, voice=selected_voice)
+    safe_voice = selected_voice.replace("/", "_").replace("\\", "_")
+    base_filename = f"TTS_{safe_voice}_{job_timestamp}"
+    audio_filename = f"{base_filename}.mp3"
+    srt_filename = f"{base_filename}.srt"
+    audio_path = OUTPUT_DIR / audio_filename
+    srt_path = OUTPUT_DIR / srt_filename
+
+    if not audio_path.exists() or not srt_path.exists():
+        communicate = edge_tts.Communicate(content, selected_voice)
+        submaker = edge_tts.SubMaker()
+        with audio_path.open("wb") as audio_file:
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    audio_file.write(chunk["data"])
+                elif chunk["type"] == "SentenceBoundary":
+                    submaker.feed(chunk)
+        srt_path.write_text(submaker.get_srt(), encoding="utf-8")
+
+    return audio_filename, srt_filename
+
+
+def _output_file(filename: str, download: bool = False) -> FileResponse:
+    if Path(filename).name != filename or Path(filename).suffix not in {".mp3", ".srt"}:
+        raise HTTPException(status_code=404, detail="文件不存在。")
+    path = OUTPUT_DIR / filename
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="文件不存在。")
+    media_type = "audio/mpeg" if path.suffix == ".mp3" else "application/x-subrip"
+    return FileResponse(
+        path,
+        media_type=media_type,
+        filename=filename if download else None,
+        headers={"Access-Control-Expose-Headers": "Content-Disposition"},
+    )
+
+
+@app.middleware("http")
+async def security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "same-origin"
+    response.headers["X-Frame-Options"] = "DENY"
+    if request.url.path in {"/", "/study"}:
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
+
+@app.get("/")
+async def root():
+    return FileResponse(
+        STATIC_DIR / "index.html",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return Response(status_code=204)
+
+
+@app.get("/healthz")
+async def healthz():
+    return {
+        "status": "ok",
+        "model": PERPLEXITY_MODEL,
+        "proofread_model": PERPLEXITY_PROOFREAD_MODEL,
+        "output_directory_ready": OUTPUT_DIR.is_dir(),
+    }
+
+
+@app.get("/api/models")
+async def available_models():
+    return {
+        "default": PERPLEXITY_MODEL,
+        "proofreader": {
+            "id": PERPLEXITY_PROOFREAD_MODEL,
+            "label": MODEL_LABELS.get(
+                PERPLEXITY_PROOFREAD_MODEL, PERPLEXITY_PROOFREAD_MODEL
+            ),
+        },
+        "models": [
+            {"id": model_id, **details}
+            for model_id, details in TRANSFORM_MODELS.items()
+        ],
+    }
+
+
+@app.post("/api/connection/test")
+async def test_connection(
+    request: ConnectionTestRequest,
+    authorization: str | None = Header(default=None),
+):
+    api_key = _authorization_token(authorization)
+    sample_request = TransformRequest(
+        text="\u6211\u6b63\u5728\u5b66\u4e60\u6cd5\u8bed\u3002",
+        style="spoken",
+        level="A1-A2",
+        locale="fr-FR",
+        model=request.model,
+        task_mode="translate",
+    )
+    text, model, _, quality_check, proofread_model = await request_french_transform(
+        sample_request, api_key
+    )
+    return {
+        "connected": True,
+        "requested_model": request.model,
+        "model": model,
+        "label": TRANSFORM_MODELS[request.model]["label"],
+        "proofread_model": proofread_model,
+        "proofread_label": MODEL_LABELS.get(proofread_model, proofread_model),
+        "sample": text,
+        "quality_check": quality_check,
+    }
+
+
+@app.post("/api/transform")
+async def transform_to_french(
+    request: TransformRequest,
+    authorization: str | None = Header(default=None),
+):
+    api_key = _authorization_token(authorization)
+    text, model, task_mode, quality_check, proofread_model = (
+        await request_french_transform(request, api_key)
+    )
+    return {
+        "text": text,
+        "model": model,
+        "task_mode": task_mode,
+        "task_label": TASK_MODE_LABELS[task_mode],
+        "proofread_model": proofread_model,
+        "proofread_label": MODEL_LABELS.get(proofread_model, proofread_model),
+        "quality_check": quality_check,
+    }
+
+
+@app.post("/api/speech")
+async def generate_speech(request: SpeechRequest):
+    audio_filename, srt_filename = await create_speech_files(
+        request.text, request.voice
+    )
+    return {
+        "audio_url": f"/files/{audio_filename}",
+        "srt_url": f"/files/{srt_filename}",
+        "audio_filename": audio_filename,
+        "srt_filename": srt_filename,
+        "voice": request.voice,
+    }
+
+
+@app.get("/files/{filename}")
+async def get_output_file(filename: str, download: bool = Query(default=False)):
+    return _output_file(filename, download=download)
+
+
+@app.get("/study")
+async def study():
+    return FileResponse(
+        STATIC_DIR / "study.html",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
+
+
+@app.post("/api/analyze")
+async def analyze_french(
+    request: AnalyzeRequest,
+    authorization: str | None = Header(default=None),
+):
+    api_key = _authorization_token(authorization)
+    result = await request_french_analysis(request, api_key)
+    return result
+
+
+LOOKUP_CACHE: dict[str, dict] = {}
+
+
+async def request_word_lookup(word: str, api_key: str, model: str = "grok-4.6") -> dict:
+    clean_word = word.strip()
+    cache_key = clean_word.lower()
+    if cache_key in LOOKUP_CACHE:
+        return LOOKUP_CACHE[cache_key]
+
+    prompt = (
+        "You are an expert French pedagogical lexicographer for learners.\n"
+        "Provide accurate linguistic details for the given French word in valid JSON format ONLY.\n"
+        "Schema:\n"
+        "{\n"
+        '  "token": "...",\n'
+        '  "lemma": "dictionary canonical base form (infinitive for verbs, masc sing for nouns/adjectives)",\n'
+        '  "pos": "part of speech (e.g. v., n.m., n.f., adj., adv., prep., conj.)",\n'
+        '  "phonetic": "IPA phonetic transcription (e.g. /bɔ̃.ʒuʁ/)",\n'
+        '  "explanation_cn": "concise, accurate Chinese definition and grammatical nuance",\n'
+        '  "explanation_en": "concise, accurate English definition"\n'
+        "}"
+    )
+
+    payload = {
+        "model": _map_upstream_model(model),
+        "messages": [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": f"Define this French word: {clean_word}"},
+        ],
+        "response_format": {"type": "json_object"},
+        "stream": False,
+        "temperature": 0.0,
+    }
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        _, raw_text = await _post_chat(client, payload, headers)
+
+    cleaned = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip()
+    fence_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned)
+    candidate = fence_match.group(1).strip() if fence_match else cleaned
+
+    try:
+        data = json.loads(candidate)
+    except Exception:
+        first_brace = candidate.find("{")
+        last_brace = candidate.rfind("}")
+        if first_brace != -1 and last_brace > first_brace:
+            try:
+                data = json.loads(candidate[first_brace : last_brace + 1])
+            except Exception:
+                data = {}
+        else:
+            data = {}
+
+    result = {
+        "token": str(data.get("token", clean_word)),
+        "lemma": str(data.get("lemma", clean_word)),
+        "pos": str(data.get("pos", "")),
+        "phonetic": format_friendly_phonetic(str(data.get("phonetic", ""))),
+        "explanation_cn": str(data.get("explanation_cn", "语境词汇")),
+        "explanation_en": str(data.get("explanation_en", "")),
+    }
+
+    LOOKUP_CACHE[cache_key] = result
+    return result
+
+
+@app.get("/api/lookup")
+async def lookup_word(
+    word: str,
+    model: str = "grok-4.6",
+    authorization: str | None = Header(default=None),
+):
+    clean = word.strip()
+    if not clean:
+        raise HTTPException(status_code=400, detail={"message": "请提供待查询单词"})
+    api_key = _authorization_token(authorization)
+    result = await request_word_lookup(clean, api_key, model=model)
+    return result
+
+
+@app.get("/tts")
+async def generate_tts(
+    text: str,
+    voice: str = "fr-FR-DeniseNeural",
+    t: str | None = None,
+    format: Literal["mp3", "srt"] = "mp3",
+    download: bool = False,
+):
+    audio_filename, srt_filename = await create_speech_files(text, voice, t)
+    filename = srt_filename if format == "srt" else audio_filename
+    return _output_file(filename, download=download)
+
+
+class AuthRequest(BaseModel):
+    email: str
+    password: str
+
+
+@app.post("/api/auth/register")
+async def register_account(req: AuthRequest):
+    try:
+        res = auth_db.register_user(req.email, req.password)
+        return res
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail={"message": str(e)})
+
+
+@app.post("/api/auth/login")
+async def login_account(req: AuthRequest):
+    try:
+        res = auth_db.login_user(req.email, req.password)
+        return res
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail={"message": str(e)})
+
+
+@app.get("/api/auth/me")
+async def get_current_user(authorization: str | None = Header(default=None)):
+    if not authorization:
+        raise HTTPException(status_code=401, detail={"message": "请先登录"})
+    parts = authorization.split(" ", 1)
+    token = parts[1].strip() if len(parts) == 2 and parts[0].lower() == "bearer" else authorization.strip()
+    payload = auth_db.verify_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail={"message": "登录凭据已失效，请重新登录"})
+    status = auth_db.get_user_status(payload["sub"])
+    if not status:
+        raise HTTPException(status_code=404, detail={"message": "账号不存在"})
+    return status
+
+
+class SaveHistoryRequest(BaseModel):
+    id: str
+    type: str = "tts"
+    text: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+@app.get("/api/history")
+async def list_history(
+    type: str | None = Query(default=None),
+    limit: int = Query(default=50),
+    authorization: str | None = Header(default=None),
+):
+    user_id = None
+    if authorization:
+        parts = authorization.split(" ", 1)
+        token = parts[1].strip() if len(parts) == 2 and parts[0].lower() == "bearer" else authorization.strip()
+        payload = auth_db.verify_token(token)
+        if payload:
+            user_id = payload.get("sub")
+    records = auth_db.get_history_records(user_id=user_id, record_type=type, limit=limit)
+    return {"records": records, "count": len(records)}
+
+
+@app.post("/api/history")
+async def save_history(
+    req: SaveHistoryRequest,
+    authorization: str | None = Header(default=None),
+):
+    user_id = None
+    if authorization:
+        parts = authorization.split(" ", 1)
+        token = parts[1].strip() if len(parts) == 2 and parts[0].lower() == "bearer" else authorization.strip()
+        payload = auth_db.verify_token(token)
+        if payload:
+            user_id = payload.get("sub")
+    res = auth_db.save_history_record(
+        record_id=req.id,
+        record_type=req.type,
+        text=req.text,
+        payload=req.payload,
+        user_id=user_id,
+    )
+    return res
+
+
+@app.delete("/api/history/{record_id}")
+async def delete_history(
+    record_id: str,
+    authorization: str | None = Header(default=None),
+):
+    user_id = None
+    if authorization:
+        parts = authorization.split(" ", 1)
+        token = parts[1].strip() if len(parts) == 2 and parts[0].lower() == "bearer" else authorization.strip()
+        payload = auth_db.verify_token(token)
+        if payload:
+            user_id = payload.get("sub")
+    ok = auth_db.delete_history_record(record_id, user_id=user_id)
+    return {"success": ok}
+
+
+@app.delete("/api/history")
+async def clear_all_history(
+    type: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+):
+    user_id = None
+    if authorization:
+        parts = authorization.split(" ", 1)
+        token = parts[1].strip() if len(parts) == 2 and parts[0].lower() == "bearer" else authorization.strip()
+        payload = auth_db.verify_token(token)
+        if payload:
+            user_id = payload.get("sub")
+    count = auth_db.clear_history_records(user_id=user_id, record_type=type)
+    return {"deleted": count}
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+

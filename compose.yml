@@ -1,0 +1,16 @@
+services:
+  tts-service:
+    build: .
+    image: deploygrow-tts:latest
+    container_name: tts-service
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      OUTPUT_DIR: /app/outputs
+      PERPLEXITY_BASE_URL: http://127.0.0.1:8645/v1
+      PERPLEXITY_MODEL: gemini-3.8-flash
+      PERPLEXITY_PROOFREAD_MODEL: gemini-3.8-flash
+      PERPLEXITY_TIMEOUT_SECONDS: "120"
+      MAX_TEXT_CHARS: "15000"
+    volumes:
+      - ./outputs:/app/outputs

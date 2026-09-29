@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light">
+    <title>法语拆解与跟读复述 - 1000H French</title>
+    <link rel="icon" href="/favicon.ico?v=2" sizes="any">
+    <link rel="stylesheet" href="/static/style.css?v=9.0">
+    <link rel="stylesheet" href="/static/study-v33.css?v=33.0">
+    <script>window.activeTokensMap = new Map(); var activeTokensMap = window.activeTokensMap;</script>
+    <script src="https://unpkg.com/lucide@1.34.0/dist/umd/lucide.min.js" defer></script>
+    <script src="/static/anki.js?v=11.0" defer></script>
+    <script src="/static/history-v12.js?v=12.0" defer></script>
+    <script src="/static/study-v33.js?v=33.0" defer></script>
+</head>
+<body>
+    <div class="app-shell">
+        <header class="topbar">
+            <div class="brand-block">
+                <div class="brand-mark" aria-hidden="true">
+                    <i data-lucide="book-open"></i>
+                </div>
+                <div>
+                    <p class="product-label">1000H French</p>
+                    <h1>法语拆解与跟读复述</h1>
+                </div>
+            </div>
+
+            <nav class="nav-tabs" aria-label="页面切换">
+                <a href="/" class="nav-tab">
+                    <i data-lucide="headphones" aria-hidden="true"></i>
+                    <span>音频工作台</span>
+                </a>
+                <a href="/study" class="nav-tab active" aria-current="page">
+                    <i data-lucide="sparkles" aria-hidden="true"></i>
+                    <span>拆解与复述</span>
+                </a>
+            </nav>
+
+            <div class="topbar-actions">
+                <button id="user-auth-btn" class="btn btn-secondary user-auth-btn" type="button" title="账号与免费试用状态">
+                    <i data-lucide="user" aria-hidden="true"></i>
+                    <span id="user-auth-status-text">登录 / 注册</span>
+                    <span id="user-trial-badge" class="badge trial-badge" title="免费试用天数" hidden>赠60天</span>
+                </button>
+
+                <button id="open-deck-btn" class="btn btn-secondary nav-deck-btn" type="button" title="打开生词卡 (Anki 间隔复习)">
+                    <i data-lucide="layers" aria-hidden="true"></i>
+                    <span>生词卡</span>
+                    <span id="due-card-badge" class="deck-badge" title="待复习卡片数">0</span>
+                </button>
+
+                <details class="connection-settings">
+                    <summary>
+                        <i data-lucide="key-round" aria-hidden="true"></i>
+                        <span class="summary-label">连接设置</span>
+                        <span id="connection-summary-state" class="connection-summary-state" data-state="idle" title="连接尚未验证">
+                            <span class="connection-dot" aria-hidden="true"></span>
+                            <span class="connection-summary-text">未验证</span>
+                        </span>
+                        <i data-lucide="chevron-down" class="summary-chevron" aria-hidden="true"></i>
+                    </summary>
+                    <form class="connection-popover" autocomplete="off">
+                        <div class="connection-field">
+                            <label for="api-key">Perplexity web2api API Key</label>
+                            <div class="password-row">
+                                <input id="api-key" type="password" autocomplete="off" spellcheck="false">
+                                <button id="toggle-key" class="icon-btn" type="button" title="显示或隐藏 API Key" aria-label="显示或隐藏 API Key">
+                                    <i data-lucide="eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="connection-field">
+                            <label for="model-select">分析模型</label>
+                            <select id="model-select">
+                                <option value="gemini-3.8-flash" selected>Gemini 3.8 Flash (AGY) · 极速推荐</option>
+                                <option value="grok-4.6">Grok 4.6</option>
+                                <option value="grok-4.6-thinking">Grok 4.6 Thinking</option>
+                                <option value="sonar-2">Sonar 2 · 备用</option>
+                            </select>
+                        </div>
+                        <label class="check-row" for="remember-key">
+                            <input id="remember-key" type="checkbox">
+                            <span>记住在此设备</span>
+                        </label>
+                        <div class="connection-test-row">
+                            <div id="connection-result" class="connection-result" data-state="idle" role="status" aria-live="polite">
+                                <span class="connection-dot" aria-hidden="true"></span>
+                                <div>
+                                    <strong id="connection-result-title">尚未测试</strong>
+                                    <span id="connection-result-detail">填写 Key 后测试实际连接</span>
+                                </div>
+                            </div>
+                            <button id="test-connection" class="btn btn-test" type="button">
+                                <i data-lucide="plug-zap" aria-hidden="true"></i>
+                                <span>测试连接</span>
+                            </button>
+                        </div>
+                    </form>
+                </details>
+            </div>
+        </header>
+
+        <main>
+            <!-- 输入卡片：与工作台卡片规范 100% 同构 -->
+            <article class="editor-panel study-input-panel" aria-label="输入法语文本">
+                <div class="panel-heading">
+                    <div>
+                        <span class="step-number">01</span>
+                        <h2>输入待拆解与复述的法语文本</h2>
+                    </div>
+                    <div class="panel-tools">
+                        <button id="history-toggle-btn" class="btn btn-secondary" type="button" title="查看并恢复过往查询历史">
+                            <i data-lucide="history" aria-hidden="true"></i>
+                            <span>查询历史</span>
+                            <span id="history-count-badge" class="badge count-badge" hidden>0</span>
+                        </button>
+                        <button id="fill-example-btn" class="btn btn-secondary" type="button" title="填入经典法语示例">
+                            <i data-lucide="lightbulb" aria-hidden="true"></i>
+                            <span>填入示例</span>
+                        </button>
+                        <button id="clear-input-btn" class="btn btn-secondary" type="button" title="清空输入框" aria-label="清空输入框">
+                            <i data-lucide="trash-2" aria-hidden="true"></i>
+                            <span>清空</span>
+                        </button>
+                    </div>
+                </div>
+                <textarea id="french-input" maxlength="15000" placeholder="粘贴或输入一段法语文本（可包含单句或多句），系统将基于 B1 核心词汇标准切分词组/搭配并支持发音与跟读评测..." spellcheck="true"></textarea>
+                <div class="editor-footer">
+                    <span id="char-counter">0 / 15000</span>
+                </div>
+            </article>
+
+            <!-- 操作与状态横条 -->
+            <section class="action-row" aria-label="拆解操作">
+                <div id="study-status-message" class="status-message" role="status" aria-live="polite"></div>
+                <div class="action-buttons">
+                    <button id="analyze-btn" class="btn btn-primary" type="button">
+                        <i data-lucide="sparkles" aria-hidden="true"></i>
+                        <span id="analyze-btn-label">开始拆解与精析</span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- 折叠后的输入摘要栏 (分析完成后显示，释放首屏空间) -->
+            <div id="input-collapsed-bar" class="input-collapsed-bar" hidden>
+                <div class="collapsed-bar-content">
+                    <span class="collapsed-bar-badge"><i data-lucide="check-circle-2"></i> 已解析</span>
+                    <p id="collapsed-bar-text" class="collapsed-bar-text"></p>
+                </div>
+                <div class="collapsed-bar-actions">
+                    <button id="btn-expand-input" class="btn btn-secondary btn-sm" type="button" title="展开输入框以修改或输入新内容">
+                        <i data-lucide="edit-3"></i>
+                        <span>重新编辑 / 输入新文本</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 结果与跟读区域 -->
+            <section id="study-deck-section" class="study-deck-section" aria-label="解析与跟读卡片" hidden>
+                <div class="deck-header">
+                    <div class="deck-title-row">
+                        <span class="step-number">02</span>
+                        <h2>句子精析与发音复述</h2>
+                    </div>
+                    <span id="sentence-count-badge" class="badge">共 0 句</span>
+                </div>
+
+                <div id="sentences-container" class="sentences-container">
+                    <!-- 动态注入句子解析与跟读卡片 -->
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Flashcard Review Modal Dialog (Anki SM-2) -->
+    <div id="flashcard-modal" class="modal-backdrop" hidden>
+        <div class="modal-dialog" role="dialog" aria-labelledby="modal-card-title" aria-modal="true">
+            <header class="modal-header">
+                <div class="modal-title-group">
+                    <i data-lucide="layers" class="modal-icon" aria-hidden="true"></i>
+                    <h3 id="modal-card-title">Anki 记忆卡片复习</h3>
+                    <span id="review-progress-badge" class="badge">0 / 0</span>
+                </div>
+                <div class="modal-header-actions">
+                    <button id="export-deck-btn" class="btn btn-secondary btn-sm" type="button" title="导出当前分组为 Anki .tsv 文件">
+                        <i data-lucide="download" aria-hidden="true"></i>
+                        <span>导出 Anki</span>
+                    </button>
+                    <button id="close-modal-btn" class="icon-btn modal-close-btn" type="button" title="关闭 (Esc)">
+                        <i data-lucide="x" aria-hidden="true"></i>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Group Selector Tabs & Mode Switcher -->
+            <div class="deck-toolbar">
+                <div class="deck-group-tabs" role="tablist">
+                    <button class="deck-group-tab active" data-group="all" type="button" role="tab" title="查看与复习全部卡片">
+                        <span>全部</span>
+                        <span class="tab-count-pill" id="tab-count-all">0</span>
+                    </button>
+                    <button class="deck-group-tab" data-group="word" type="button" role="tab" title="仅查看与复习独立单词">
+                        <span>📖 单词组</span>
+                        <span class="tab-count-pill" id="tab-count-word">0</span>
+                    </button>
+                    <button class="deck-group-tab" data-group="phrase" type="button" role="tab" title="仅查看与复习词组句式及固定搭配">
+                        <span>🧩 词组组</span>
+                        <span class="tab-count-pill" id="tab-count-phrase">0</span>
+                    </button>
+                </div>
+                <div class="deck-view-switcher">
+                    <button class="deck-view-btn active" id="btn-view-card" type="button" title="翻卡记忆模式">
+                        <i data-lucide="layers"></i>
+                        <span>翻卡复习</span>
+                    </button>
+                    <button class="deck-view-btn" id="btn-view-list" type="button" title="查看并检索卡片列表">
+                        <i data-lucide="list"></i>
+                        <span>卡片清单</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="modal-body">
+                <!-- Active Card Stage -->
+                <div id="card-stage" class="card-stage" tabindex="0" role="button" title="点击或按空格键翻转卡片">
+                    <!-- Front Side -->
+                    <div class="card-face card-front" id="card-front-face">
+                        <div class="card-context-pill">
+                            <span id="card-front-group-badge" class="badge-card-group">📖 单词</span>
+                            <span>正面 · 识记与发音</span>
+                        </div>
+                        <div class="card-main-word-row">
+                            <h2 id="card-front-word" class="card-front-word">--</h2>
+                            <button id="card-speak-btn" class="btn-token-speak btn-card-speak" type="button" title="点击发音">
+                                <i data-lucide="volume-2" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <div id="card-front-phonetic" class="card-phonetic"></div>
+                        <div class="card-sentence-quote" id="card-quote-box">
+                            <span class="quote-label">语境例句：</span>
+                            <p id="card-front-sentence" class="quote-text"></p>
+                        </div>
+                        <div class="card-flip-prompt">
+                            <i data-lucide="rotate-3d" aria-hidden="true"></i>
+                            <span>点击卡片或按【空格键】翻看背面释义</span>
+                        </div>
+                    </div>
+
+                    <!-- Back Side -->
+                    <div class="card-face card-back" id="card-back-face" hidden>
+                        <div class="card-context-pill">
+                            <span id="card-back-group-badge" class="badge-card-group">📖 单词</span>
+                            <span>背面 · 详解与语法</span>
+                        </div>
+                        <div class="card-back-header">
+                            <div class="tags-group">
+                                <span id="card-back-pos" class="pos-tag"></span>
+                                <span id="card-back-lemma" class="lemma-tag"></span>
+                            </div>
+                            <button id="card-back-speak-btn" class="btn-token-speak btn-card-speak" type="button" title="重播发音 (快捷键 R)">
+                                <i data-lucide="volume-2" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <div class="card-explanations">
+                            <div class="card-exp-row" id="card-exp-cn-row">
+                                <span class="exp-lang-tag">中文释义</span>
+                                <p id="card-back-cn" class="card-exp-cn"></p>
+                            </div>
+                            <div class="card-exp-row" id="card-exp-en-row">
+                                <span class="exp-lang-tag">英文解释</span>
+                                <p id="card-back-en" class="card-exp-en"></p>
+                            </div>
+                        </div>
+                        <div id="card-back-hook-box" class="card-back-hook-box" hidden>
+                            <span class="hook-icon">🧠</span>
+                            <span><strong>费曼记忆锚:</strong> <span id="card-back-hook-text"></span></span>
+                        </div>
+                        <div id="card-sentence-trans-box" class="card-sentence-trans-box">
+                            <div class="quote-label-row">
+                                <span class="quote-label">例句译文：</span>
+                                <button id="card-sentence-speak-btn" class="btn btn-secondary btn-xs" type="button" title="播放此例句发音">
+                                    <i data-lucide="volume-2" aria-hidden="true"></i>
+                                    <span>例句发音</span>
+                                </button>
+                            </div>
+                            <div id="card-sentence-cn" class="sentence-cn-text"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card List View (Searchable list of saved cards) -->
+                <div id="deck-list-view" class="deck-list-view" hidden>
+                    <div class="deck-list-header">
+                        <div class="deck-search-box">
+                            <i data-lucide="search" class="search-icon"></i>
+                            <input type="text" id="deck-search-input" placeholder="搜索卡片（法语、英文或释义）..." />
+                            <button id="deck-search-clear-btn" class="icon-btn-sm" type="button" title="清除" hidden>
+                                <i data-lucide="x"></i>
+                            </button>
+                        </div>
+                        <div class="deck-list-stats" id="deck-list-stats">共 0 张卡片</div>
+                    </div>
+                    <div class="deck-cards-scrollable" id="deck-cards-list">
+                        <!-- Card Items rendered dynamically -->
+                    </div>
+                </div>
+
+                <!-- Empty / Completion Screen -->
+                <div id="deck-empty-screen" class="deck-empty-screen" hidden>
+                    <div class="empty-icon-box">🎉</div>
+                    <h3 id="empty-screen-title">今日待复习生词已全部完成！</h3>
+                    <p id="empty-screen-desc">遵循 Anki SM-2 间隔记忆算法，已复习的卡片将在未来最佳艾宾浩斯复习节点再次出现。</p>
+                    <div class="empty-screen-actions">
+                        <button id="study-all-cards-btn" class="btn btn-secondary" type="button">
+                            <i data-lucide="refresh-cw" aria-hidden="true"></i>
+                            <span>复习全部生词卡 (<span id="total-card-count">0</span>)</span>
+                        </button>
+                        <button id="export-deck-btn-2" class="btn btn-primary" type="button">
+                            <i data-lucide="download" aria-hidden="true"></i>
+                            <span>导出到 Anki 格式 (.tsv)</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer with SM-2 Grading Buttons (shown when card is flipped to back) -->
+            <footer id="modal-rating-footer" class="modal-footer" hidden>
+                <div class="footer-hint-row">
+                    <span class="footer-hint">根据回忆难度评分（键盘快捷键 1 - 4）：</span>
+                </div>
+                <div class="rating-buttons-grid">
+                    <button class="btn-grade grade-1" data-grade="1" type="button">
+                        <span class="grade-key">1</span>
+                        <span class="grade-name">重来 (Again)</span>
+                        <span class="grade-interval">&lt;1天</span>
+                    </button>
+                    <button class="btn-grade grade-2" data-grade="2" type="button">
+                        <span class="grade-key">2</span>
+                        <span class="grade-name">困难 (Hard)</span>
+                        <span class="grade-interval">1~2天</span>
+                    </button>
+                    <button class="btn-grade grade-3" data-grade="3" type="button">
+                        <span class="grade-key">3</span>
+                        <span class="grade-name">良好 (Good)</span>
+                        <span class="grade-interval">3~6天</span>
+                    </button>
+                    <button class="btn-grade grade-4" data-grade="4" type="button">
+                        <span class="grade-key">4</span>
+                        <span class="grade-name">简单 (Easy)</span>
+                        <span class="grade-interval">7+天</span>
+                    </button>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <!-- Query History Modal Dialog -->
+    <div id="history-modal" class="modal-backdrop" hidden>
+        <div class="modal-dialog modal-history-dialog" role="dialog" aria-labelledby="history-modal-title" aria-modal="true">
+            <header class="modal-header">
+                <div class="modal-title-group">
+                    <i data-lucide="history" class="modal-icon" aria-hidden="true"></i>
+                    <h3 id="history-modal-title">历史记录</h3>
+                    <span id="history-total-badge" class="badge">共 0 条</span>
+                </div>
+                <div class="modal-header-actions">
+                    <button id="clear-history-btn" class="btn btn-secondary btn-sm" type="button" title="清空当前分类历史">
+                        <i data-lucide="trash-2" aria-hidden="true"></i>
+                        <span>清空历史</span>
+                    </button>
+                    <button id="close-history-modal-btn" class="icon-btn modal-close-btn" type="button" title="关闭 (Esc)">
+                        <i data-lucide="x" aria-hidden="true"></i>
+                    </button>
+                </div>
+            </header>
+            <div class="history-tabs-container">
+                <div class="history-tabs" role="tablist">
+                    <button id="hist-tab-all" class="history-tab active" data-tab="all" type="button" role="tab" aria-selected="true">
+                        <span>全部</span>
+                        <span id="hist-tab-count-all" class="history-tab-badge">0</span>
+                    </button>
+                    <button id="hist-tab-study" class="history-tab" data-tab="study" type="button" role="tab" aria-selected="false">
+                        <span>📖 拆解精析</span>
+                        <span id="hist-tab-count-study" class="history-tab-badge">0</span>
+                    </button>
+                    <button id="hist-tab-tts" class="history-tab" data-tab="tts" type="button" role="tab" aria-selected="false">
+                        <span>🎧 音频制作</span>
+                        <span id="hist-tab-count-tts" class="history-tab-badge">0</span>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-body history-modal-body">
+                <div id="history-list" class="history-list"></div>
+                <div id="history-empty" class="history-empty" hidden>
+                    <div class="empty-icon-box">⏳</div>
+                    <h4>暂无查询历史</h4>
+                    <p>您每次拆解分析的法语文本和精析卡片都会自动保存在这里，随时可以一键恢复，无需重复耗费 API 资源。</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Account & 60-day Free Trial Auth Modal -->
+    <div id="auth-modal" class="modal-backdrop" hidden>
+        <div class="modal-dialog modal-auth-dialog" role="dialog" aria-labelledby="auth-modal-title" aria-modal="true">
+            <header class="modal-header">
+                <div class="modal-title-group">
+                    <i data-lucide="user-check" class="modal-icon" aria-hidden="true"></i>
+                    <h3 id="auth-modal-title">用户账号与专属权益</h3>
+                </div>
+                <button id="close-auth-modal-btn" class="icon-btn modal-close-btn" type="button" title="关闭 (Esc)">
+                    <i data-lucide="x" aria-hidden="true"></i>
+                </button>
+            </header>
+            <div class="modal-body auth-modal-body">
+                <!-- Unauthenticated State: Register & Login Tabs -->
+                <div id="auth-form-container">
+                    <div class="auth-tabs" role="tablist">
+                        <button id="tab-register-btn" class="auth-tab active" type="button" role="tab" aria-selected="true">
+                            注册新账号 (赠60天免费)
+                        </button>
+                        <button id="tab-login-btn" class="auth-tab" type="button" role="tab" aria-selected="false">
+                            登录已有账号
+                        </button>
+                    </div>
+                    <form id="auth-form" class="auth-form" autocomplete="off">
+                        <div class="auth-notice" id="auth-tab-notice">
+                            🎉 <strong>新用户专属福利</strong>：注册即送 <strong>60 天（2个月）全功能免费试用</strong>，免配置 API Key 畅享高保真发音、Grok 4.6 深度语法精析与 Anki 记忆卡系统！
+                        </div>
+                        <div class="connection-field">
+                            <label for="auth-email">电子邮箱</label>
+                            <input id="auth-email" type="email" placeholder="name@example.com" required autocomplete="email">
+                        </div>
+                        <div class="connection-field">
+                            <label for="auth-password">密码</label>
+                            <input id="auth-password" type="password" placeholder="请输入密码（至少 6 位）" required autocomplete="current-password">
+                        </div>
+                        <div id="auth-error-msg" class="auth-error-msg" hidden role="alert"></div>
+                        <div class="auth-actions">
+                            <button id="auth-submit-btn" class="btn btn-primary btn-full" type="submit">
+                                <i data-lucide="sparkles" aria-hidden="true"></i>
+                                <span id="auth-submit-label">立即注册并领取 60 天免费试用</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Authenticated State: User Status Profile -->
+                <div id="auth-user-profile" hidden>
+                    <div class="profile-card">
+                        <div class="profile-header">
+                            <div class="profile-avatar">
+                                <i data-lucide="user" aria-hidden="true"></i>
+                            </div>
+                            <div class="profile-info">
+                                <h4 id="profile-email">user@example.com</h4>
+                                <span id="profile-badge" class="badge trial-badge">60天试用期中</span>
+                            </div>
+                        </div>
+                        <div class="profile-meta-grid">
+                            <div class="profile-meta-item">
+                                <span class="meta-label">剩余权益天数</span>
+                                <strong id="profile-days-left" class="meta-value highlight">60 天</strong>
+                            </div>
+                            <div class="profile-meta-item">
+                                <span class="meta-label">试用有效期至</span>
+                                <strong id="profile-expires-at" class="meta-value">2026-11-07</strong>
+                            </div>
+                        </div>
+                        <div class="profile-perks">
+                            <p><i data-lucide="check-circle" class="perk-icon"></i> <strong>免配置 API Key</strong>：自动调用服务器大模型精析与跟读评测</p>
+                            <p><i data-lucide="check-circle" class="perk-icon"></i> <strong>Anki 生词包自动发音</strong>：导出即用，带真实在线发音与词根原型</p>
+                            <p><i data-lucide="check-circle" class="perk-icon"></i> <strong>查询历史无限保存</strong>：随时翻阅复述过往句子与词汇库</p>
+                        </div>
+                        <div class="profile-actions">
+                            <button id="logout-btn" class="btn btn-secondary btn-full" type="button">
+                                <i data-lucide="log-out" aria-hidden="true"></i>
+                                <span>退出当前账号</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Word Popover -->
+    <div id="floating-word-popover" class="floating-word-popover" hidden aria-live="polite">
+        <div class="popover-arrow" aria-hidden="true"></div>
+        <div class="popover-header">
+            <div class="popover-main-info">
+                <div class="popover-word-row">
+                    <strong id="popover-word" class="popover-word">--</strong>
+                    <button id="popover-star-btn" class="btn-popover-star-icon" type="button" title="存入 Anki 生词卡 (快捷键 S)">
+                        <i data-lucide="star" aria-hidden="true"></i>
+                    </button>
+                </div>
+                <div class="popover-phonetic-row">
+                    <button id="popover-speak-btn" class="btn-popover-speak-inline" type="button" title="重播发音 (快捷键 R)">
+                        <i data-lucide="volume-2" aria-hidden="true"></i>
+                    </button>
+                    <span id="popover-phonetic" class="popover-phonetic" title="点击重播发音"></span>
+                    <span id="popover-pos" class="pos-tag" hidden></span>
+                    <span id="popover-lemma" class="lemma-tag" hidden></span>
+                </div>
+            </div>
+            <button id="popover-close-btn" class="icon-btn popover-close-btn" type="button" title="关闭 (Esc)">
+                <i data-lucide="x" aria-hidden="true"></i>
+            </button>
+        </div>
+        <div class="popover-body">
+            <div id="popover-loading" class="popover-loading" hidden style="display: none;">
+                <i data-lucide="loader" class="spin-icon"></i>
+                <span>正在查询字义...</span>
+            </div>
+            <div id="popover-content">
+                <div class="popover-cn-text" id="popover-cn"></div>
+                <div class="popover-en-text" id="popover-en"></div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
