@@ -59,7 +59,7 @@
             noAsr: 'This browser has no speech recognition (Chrome, Edge and Safari do). Say it out loud, then show the answer to compare.',
             speakFrench: 'Speak French', doneTapToScore: 'Done, tap to score', tryAgain: 'Try again', myRecording: 'My recording',
             points: '/100', heard: 'Heard: ', nothingHeard: '(no voice detected)',
-            diffLegend: 'Your answer: green = right, red = wrong or extra, orange = accent only. Highlighted letters in the answer = the ones you left out.',
+            diffLegend: 'In your answer: red = wrong or extra letter, red _ = a letter is missing, orange = wrong accent. The answer highlights what to change.',
             correct: 'Correct!', accentsOnly: 'Right, but check the accents', veryClose: 'Very close, check the spelling',
             notQuite: 'Not quite', noAnswer: 'No answer', youWrote: 'You wrote: ', answer: 'Answer: ',
             playSentence: 'Play the sentence', slowReplay: 'Slow replay',
@@ -117,7 +117,7 @@
             noAsr: '这个浏览器不支持语音识别（Chrome / Edge / Safari 支持）。请大声说出来，再点「显示答案」对照。',
             speakFrench: '开口说法语', doneTapToScore: '说完了，点这里评分', tryAgain: '再说一次', myRecording: '我的录音',
             points: '分', heard: '识别到：', nothingHeard: '（没有识别到声音）',
-            diffLegend: '你写的：绿色 = 对，红色 = 错或多写，橙色 = 只错了重音。答案里高亮的字母 = 你漏写的。',
+            diffLegend: '你写的：红色 = 写错或多写的字母，红色 _ = 这里漏了字母，橙色 = 重音错了。答案里高亮的是要改成的字母。',
             correct: '完全正确', accentsOnly: '对了，但注意重音符号', veryClose: '很接近，拼写有出入',
             notQuite: '不对', noAnswer: '没有作答', youWrote: '你写的：', answer: '答案：',
             playSentence: '播放句子', slowReplay: '慢速再听',
@@ -274,7 +274,9 @@
 
     // Whole-word, case-insensitive match (so "en" does not blank the inside of "prends")
     // Align the typed answer with the correct one letter by letter (edit distance with backtrace).
-    // Returns HTML for both: ok = right, accent = only the accent differs, bad = wrong/extra, miss = left out.
+    // Every mistake is marked on the learner's line: bad = wrong/extra letter, gap = a letter is
+    // missing here, accent = only the accent differs. The answer line stays neutral and only
+    // highlights (fix) the letters the learner has to change or add.
     function letterDiff(typed, answer) {
         const a = Array.from(typed.trim());
         const b = Array.from(answer.trim());
@@ -294,13 +296,14 @@
             if (i > 0 && j > 0 && dp[i][j] === dp[i - 1][j - 1] + cost(a[i - 1], b[j - 1])) {
                 const c = cost(a[i - 1], b[j - 1]);
                 typedParts.unshift([a[i - 1], c === 0 ? 'ok' : c === 0.5 ? 'accent' : 'bad']);
-                answerParts.unshift([b[j - 1], c === 0 ? 'ok' : c === 0.5 ? 'accent' : 'miss']);
+                answerParts.unshift([b[j - 1], c === 0 ? 'ok' : 'fix']);
                 i--; j--;
             } else if (i > 0 && dp[i][j] === dp[i - 1][j] + 1) {
                 typedParts.unshift([a[i - 1], 'bad']);
                 i--;
             } else {
-                answerParts.unshift([b[j - 1], 'miss']);
+                typedParts.unshift(['_', 'gap']);
+                answerParts.unshift([b[j - 1], 'fix']);
                 j--;
             }
         }
