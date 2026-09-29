@@ -70,6 +70,7 @@
         grading: false,
         startedAt: 0,
         attempt: null,
+        scoring: false,
         reviewed: 0,
         total: 0,
     };
@@ -117,6 +118,7 @@
         });
         const data = await res.json().catch(() => ({}));
         if (res.status === 401) {
+            try { localStorage.removeItem(TOKEN_KEY); } catch (_) {}
             showLoginRequired();
             throw new Error('登录已失效，请重新登录。');
         }
@@ -149,10 +151,16 @@
         return str.normalize('NFD').replace(/[̀-ͯ]/g, '');
     }
 
+    // Whole-word, case-insensitive match (so "en" does not blank the inside of "prends")
     function splitAroundTarget(sentence, target) {
-        const index = (sentence || '').toLowerCase().indexOf((target || '').toLowerCase());
-        if (!target || index < 0) return null;
-        return [sentence.slice(0, index), sentence.slice(index, index + target.length), sentence.slice(index + target.length)];
+        const t = (target || '').trim();
+        if (!t || !sentence) return null;
+        const escaped = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const start = /^[\p{L}\d]/u.test(t) ? '(?<![\\p{L}\\d])' : '';
+        const end = /[\p{L}\d]$/u.test(t) ? '(?![\\p{L}\\d])' : '';
+        const match = new RegExp(start + escaped + end, 'iu').exec(sentence);
+        if (!match) return null;
+        return [sentence.slice(0, match.index), match[0], sentence.slice(match.index + match[0].length)];
     }
 
     function initialsHint(sentence) {
@@ -168,15 +176,22 @@
             currentAudio.pause();
             currentAudio = null;
         }
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    }
+
+    function ttsUrl(text) {
+        return `/tts?text=${encodeURIComponent(text.trim())}&voice=${VOICE}`;
     }
 
     function playFrench(text, rate = 1) {
         if (!text) return;
         stopAudio();
-        const audio = new Audio(`/tts?text=${encodeURIComponent(text.trim())}&voice=${VOICE}`);
+        const audio = new Audio(ttsUrl(text));
         audio.playbackRate = rate;
         currentAudio = audio;
-        audio.play().catch(() => {
+        audio.play().catch((err) => {
+            // Interrupted by another play/stop: do not fall back to reading the old text.
+            if (currentAudio !== audio || (err && err.name === 'AbortError')) return;
             if ('speechSynthesis' in window) {
                 const utterance = new SpeechSynthesisUtterance(text);
                 utterance.lang = 'fr-FR';
@@ -270,6 +285,7 @@
     function finishSpeaking(card) {
         const state = recorder;
         stopRecorder();
+        session.scoring = true;
         const recordBtn = $('record-btn');
         if (recordBtn) {
             recordBtn.classList.remove('recording');
@@ -277,6 +293,8 @@
         }
         // Give the recognizer a moment to deliver its final result.
         setTimeout(() => {
+            session.scoring = false;
+            if (session.current !== card || session.revealed) return;
             const transcript = state ? state.transcript : '';
             const evaluation = window.SpeechEval.evaluateFrenchPronunciation(card.note.sentence, transcript);
             session.attempt = {
@@ -366,7 +384,7 @@
             const width = Math.max(4, card.target.length);
             const sentenceHtml = parts
                 ? `${escapeHtml(parts[0])}<span class="cloze-blank" style="min-width:${width}ch">?</span>${escapeHtml(parts[2])}`
-                : escapeHtml(note.sentence);
+                : `<span class="cloze-blank" style="min-width:${width}ch">?</span>`;
             const clue = meta.meaning_zh || meta.meaning_en || '';
             html += `
                 <div class="cloze-prompt">
@@ -391,7 +409,7 @@
         } else if (card.mode === 'cloze') {
             els.attemptArea.innerHTML = `
                 <form id="cloze-form" class="cloze-form" autocomplete="off">
-                    <input id="cloze-input" type="text" placeholder="在这里输入缺的法语" autocapitalize="off" spellcheck="false">
+                    <input id="cloze-input" type="text" maxlength="200" placeholder="在这里输入缺的法语" autocapitalize="off" spellcheck="false">
                     <button class="btn btn-primary" type="submit">检查 <kbd>Enter</kbd></button>
                 </form>`;
             $('cloze-form').addEventListener('submit', (e) => {
@@ -444,6 +462,7 @@
         session.current = card;
         session.revealed = false;
         session.attempt = null;
+        session.scoring = false;
         session.startedAt = Date.now();
 
         const info = MODE_INFO[card.mode] || MODE_INFO.listen;
@@ -465,7 +484,7 @@
 
     function reveal() {
         const card = session.current;
-        if (!card || session.revealed) return;
+        if (!card || session.revealed || session.scoring) return;
         if (recorder) {
             finishSpeaking(card);
             return;
@@ -505,7 +524,7 @@
                 rating,
                 duration_ms: Math.min(Date.now() - session.startedAt, 3600000),
                 score: session.attempt ? session.attempt.score : null,
-                answer: session.attempt ? (session.attempt.answer || null) : null,
+                answer: session.attempt ? ((session.attempt.answer || '').slice(0, 500) || null) : null,
             });
             session.reviewed += 1;
             if ((updated.state === 'learning' || updated.state === 'relearning')
@@ -556,6 +575,10 @@
         }
         els.done.hidden = true;
         renderCard(card);
+        const upcoming = session.queue[0];
+        if (upcoming) {
+            fetch(ttsUrl(upcoming.mode === 'recognize' ? upcoming.target : upcoming.note.sentence)).catch(() => {});
+        }
     }
 
     async function loadQueue() {

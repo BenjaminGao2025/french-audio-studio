@@ -31,6 +31,14 @@ class StudyDayTests(unittest.TestCase):
         )
 
 
+class TargetMatchTests(unittest.TestCase):
+    def test_whole_word_matching(self):
+        self.assertFalse(srs.target_in_sentence("Je prends le train.", "en"))
+        self.assertTrue(srs.target_in_sentence("Je prends le train.", "le train"))
+        self.assertTrue(srs.target_in_sentence("L'homme arrive.", "l'"))
+        self.assertTrue(srs.target_in_sentence("Aucune dispense n'est autorisée.", "N'EST"))
+
+
 class SrsStoreTests(unittest.TestCase):
     def setUp(self):
         self.user_id, _ = _new_user()
@@ -89,6 +97,29 @@ class SrsStoreTests(unittest.TestCase):
             card = srs.review_card(self.user_id, card_id, 3, now=now + datetime.timedelta(minutes=minutes))
         self.assertEqual(card["state"], "review")
         self.assertGreater(card["due"], (now + datetime.timedelta(hours=12)).isoformat())
+
+    def test_review_card_due_later_today_is_in_todays_queue(self):
+        note = srs.add_note(self.user_id, "On se voit demain.", modes=["listen"])
+        card_id = note["cards"][0]["id"]
+        # Graduate at 09:00 local (UTC-7) so the next due time is ~09:00 on a later day.
+        first = datetime.datetime(2026, 9, 1, 16, 0, tzinfo=UTC)
+        card = srs.review_card(self.user_id, card_id, 4, now=first)
+        due = datetime.datetime.fromisoformat(card["due"])
+        self.assertEqual(card["state"], "review")
+        # On the due day at 08:30 local the card is not yet past its exact due time,
+        # but it belongs to that study day and must be offered.
+        morning = due.replace(hour=15, minute=30)
+        queue = srs.build_queue(self.user_id, tz_offset_minutes=420, now=morning)
+        self.assertEqual([c["id"] for c in queue["cards"]], [card_id])
+        # The evening before (previous study day) it is not due yet.
+        evening_before = morning - datetime.timedelta(hours=14)
+        queue = srs.build_queue(self.user_id, tz_offset_minutes=420, now=evening_before)
+        self.assertEqual(queue["cards"], [])
+
+    def test_cloze_target_missing_from_sentence_becomes_recognize(self):
+        note = srs.add_note(self.user_id, "Je prends le train.", targets=[{"text": "en"}, {"text": "train"}])
+        modes = sorted((c["mode"], c["target"]) for c in note["cards"])
+        self.assertEqual(modes, [("cloze", "train"), ("recognize", "en")])
 
     def test_cards_are_private_per_user(self):
         other_id, _ = _new_user()

@@ -20,26 +20,11 @@ function escapeHtml(str) {
 
 const { cleanFrenchToken, frenchPhoneticNormalize, calculateLevenshteinSimilarity, evaluateFrenchPronunciation } = window.SpeechEval;
 
-function renderInteractiveWordsHtml(text) {
-    if (!text) return '';
-    // Match French words including internal apostrophes (e.g. n'autorisent, d'accord, l'homme, c'est)
-    const regex = /(aujourd['’]hui|[A-Za-zÀ-ÖØ-öø-ÿŒœ]+(?:['’][A-Za-zÀ-ÖØ-öø-ÿŒœ]+)?['’]?|[^\sA-Za-zÀ-ÖØ-öø-ÿŒœ]+|\s+)/gi;
-    const tokens = text.match(regex) || [text];
-    return tokens.map(token => {
-        if (/^[A-Za-zÀ-ÖØ-öø-ÿŒœ]/i.test(token)) {
-            const clean = token.replace(/['’]$/, '').trim() || token.trim();
-            return `<span class="interactive-word" role="button" tabindex="0" data-word="${escapeHtml(clean)}" data-token="${escapeHtml(token.trim())}" title="${escapeHtml(clean)} · 点击查看释义与单读发音">${escapeHtml(token)}</span>`;
-        }
-        return escapeHtml(token);
-    }).join('');
-}
-
 window.escapeHtml = escapeHtml;
 window.cleanFrenchToken = cleanFrenchToken;
 window.frenchPhoneticNormalize = frenchPhoneticNormalize;
 window.calculateLevenshteinSimilarity = calculateLevenshteinSimilarity;
 window.evaluateFrenchPronunciation = evaluateFrenchPronunciation;
-window.renderInteractiveWordsHtml = renderInteractiveWordsHtml;
 
 function initStudyWorkbench() {
     // Shared localStorage keys with main workbench
@@ -421,6 +406,7 @@ function initStudyWorkbench() {
     // 4. Spaced Repetition — server-side FSRS deck (reviewed on /review)
     // -------------------------------------------------------------------------
     const srsNotesByKey = new Map();       // sentence key -> saved note with its cards
+    const phraseByWord = new Map();        // "sentence key::word" -> multi-word expression entry
     const sentenceContextByKey = new Map(); // sentence key -> translations + grammar from analysis
 
     function srsSentenceKey(sentence) {
@@ -998,6 +984,7 @@ function initStudyWorkbench() {
             window.activeTokensMap = new Map();
         }
         window.activeTokensMap.clear();
+        phraseByWord.clear();
 
         if (!sentences || sentences.length === 0) {
             studyDeckSection.hidden = true;
@@ -1046,6 +1033,12 @@ function initStudyWorkbench() {
                     };
                     window.activeTokensMap.set(tokenText.toLowerCase(), entry);
                     if (lemma) window.activeTokensMap.set(lemma.toLowerCase(), entry);
+                    if (/\s/.test(tokenText.trim())) {
+                        tokenText.toLowerCase().split(/[\s'’]+/).forEach(part => {
+                            const word = part.replace(/^[^\p{L}\d]+|[^\p{L}\d]+$/gu, '');
+                            if (word) phraseByWord.set(`${srsSentenceKey(sentenceText)}::${word}`, entry);
+                        });
+                    }
                 }
             });
 
@@ -1566,6 +1559,29 @@ function initStudyWorkbench() {
 
         refreshIcons();
         refreshSrsStates(sentences);
+        prefetchSentenceAudio(sentences);
+    }
+
+    // Pre-generate sentence and build-up audio so the first click plays immediately
+    let audioPrefetchRun = 0;
+    async function prefetchSentenceAudio(sentences) {
+        const run = ++audioPrefetchRun;
+        const texts = [];
+        sentences.forEach(s => {
+            [s.sentence || s.original, ...((s.build_up || []).map(step => step.fr))].forEach(t => {
+                const clean = (t || '').trim();
+                if (clean && clean.length <= 600 && !texts.includes(clean)) texts.push(clean);
+            });
+        });
+        const worker = async () => {
+            while (texts.length && run === audioPrefetchRun) {
+                const text = texts.shift();
+                try {
+                    await fetch(`/tts?text=${encodeURIComponent(text)}&voice=fr-FR-DeniseNeural`);
+                } catch (_) { /* best effort */ }
+            }
+        };
+        await Promise.all([worker(), worker()]);
     }
 
     function renderFeynmanFeedback(fb) {
@@ -1654,7 +1670,10 @@ function initStudyWorkbench() {
                     }),
                 });
                 const data = await res.json();
-                if (!res.ok) throw new Error(data.detail?.message || data.detail || '请求失败');
+                if (!res.ok) {
+                    const detail = Array.isArray(data.detail) ? data.detail.map(d => d.msg).join('；') : (data.detail?.message || data.detail);
+                    throw new Error(detail || '请求失败');
+                }
                 feedback.innerHTML = renderFeynmanFeedback(data);
             } catch (err) {
                 feedback.innerHTML = `<p class="fb-error">${escapeHtml(err.message)}</p>`;
@@ -2629,10 +2648,11 @@ function initStudyWorkbench() {
     function renderInteractiveWordsHtml(text) {
         if (!text) return '';
         // Match French words including internal apostrophes (e.g. n'autorisent, d'accord, l'homme, c'est)
-        const regex = /(aujourd['’]hui|[A-Za-zÀ-ÖØ-öø-ÿŒœ]+(?:['’][A-Za-zÀ-ÖØ-öø-ÿŒœ]+)?['’]?|[^\sA-Za-zÀ-ÖØ-öø-ÿŒœ]+|\s+)/gi;
+        // Numbers, ordinals and times (2026, 1er, 3e, 15h30, 3,5) are clickable too
+        const regex = /(aujourd['’]hui|[A-Za-zÀ-ÖØ-öø-ÿŒœ]+(?:['’][A-Za-zÀ-ÖØ-öø-ÿŒœ]+)?['’]?|\d+(?:[.,:]\d+)*(?:h\d{0,2})?(?:ère|ere|er|re|ème|eme|e)?|[^\sA-Za-zÀ-ÖØ-öø-ÿŒœ\d]+|\s+)/gi;
         const tokens = text.match(regex) || [text];
         return tokens.map(token => {
-            if (/^[A-Za-zÀ-ÖØ-öø-ÿŒœ]/i.test(token)) {
+            if (/^[A-Za-zÀ-ÖØ-öø-ÿŒœ\d]/i.test(token)) {
                 const clean = token.replace(/['’]$/, '').trim() || token.trim();
                 return `<span class="interactive-word" role="button" tabindex="0" data-word="${escapeHtml(clean)}" data-token="${escapeHtml(token.trim())}" title="${escapeHtml(clean)} · 点击查看释义与单读发音">${escapeHtml(token)}</span>`;
             }
@@ -2640,6 +2660,91 @@ function initStudyWorkbench() {
         }).join('');
     }
     window.renderInteractiveWordsHtml = renderInteractiveWordsHtml;
+
+    // French number reading (traditional spelling), e.g. 2026 -> deux mille vingt-six
+    const FR_UNITS = ['zéro', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix',
+        'onze', 'douze', 'treize', 'quatorze', 'quinze', 'seize'];
+    const FR_TENS = { 2: 'vingt', 3: 'trente', 4: 'quarante', 5: 'cinquante', 6: 'soixante' };
+
+    function frenchBelow100(n) {
+        if (n <= 16) return FR_UNITS[n];
+        if (n < 20) return 'dix-' + FR_UNITS[n - 10];
+        if (n < 70) {
+            const tens = FR_TENS[Math.floor(n / 10)];
+            const unit = n % 10;
+            if (unit === 0) return tens;
+            return unit === 1 ? `${tens} et un` : `${tens}-${FR_UNITS[unit]}`;
+        }
+        if (n < 80) return n === 71 ? 'soixante et onze' : 'soixante-' + frenchBelow100(n - 60);
+        if (n === 80) return 'quatre-vingts';
+        return 'quatre-vingt-' + frenchBelow100(n - 80);
+    }
+
+    function frenchBelow1000(n, isFinal = true) {
+        const hundreds = Math.floor(n / 100);
+        const rest = n % 100;
+        let words = '';
+        if (hundreds > 0) {
+            words = hundreds === 1 ? 'cent' : `${FR_UNITS[hundreds]} cent${rest === 0 && isFinal ? 's' : ''}`;
+        }
+        if (rest > 0) {
+            let restWords = frenchBelow100(rest);
+            if (!isFinal && rest === 80) restWords = 'quatre-vingt';
+            words = words ? `${words} ${restWords}` : restWords;
+        }
+        return words || 'zéro';
+    }
+
+    function frenchCardinal(n) {
+        if (n === 0) return 'zéro';
+        if (n >= 1e9) return String(n);
+        const millions = Math.floor(n / 1e6);
+        const thousands = Math.floor((n % 1e6) / 1000);
+        const rest = n % 1000;
+        const parts = [];
+        if (millions) parts.push(millions === 1 ? 'un million' : `${frenchBelow1000(millions)} millions`);
+        if (thousands) parts.push(thousands === 1 ? 'mille' : `${frenchBelow1000(thousands, false)} mille`);
+        if (rest) parts.push(frenchBelow1000(rest));
+        return parts.join(' ');
+    }
+
+    function frenchOrdinal(n) {
+        if (n === 1) return 'premier';
+        let words = frenchCardinal(n);
+        if (words.endsWith('cinq')) return words + 'uième';
+        if (words.endsWith('neuf')) return words.slice(0, -1) + 'vième';
+        words = words.replace(/s$/, '');
+        if (words.endsWith('e')) words = words.slice(0, -1);
+        return words + 'ième';
+    }
+
+    function frenchNumberReading(token) {
+        const t = (token || '').trim();
+        let m;
+        if ((m = t.match(/^1(er|re|ère)$/i))) {
+            const fem = m[1].toLowerCase() !== 'er';
+            return { spoken: fem ? 'première' : 'premier', pos: '序数词', note: `第一${fem ? '（阴性）' : ''}。法语日期里只有 1 号用序数词：le 1er mai 读作 le premier mai，其他日子直接读数字。` };
+        }
+        if ((m = t.match(/^(\d{1,6})(e|ème|eme)$/i))) {
+            return { spoken: frenchOrdinal(parseInt(m[1], 10)), pos: '序数词', note: `第 ${m[1]}` };
+        }
+        if ((m = t.match(/^(\d{1,2})h(\d{2})?$/i))) {
+            const h = parseInt(m[1], 10);
+            const minutes = m[2] ? parseInt(m[2], 10) : 0;
+            const spoken = `${h === 1 ? 'une' : frenchCardinal(h)} heure${h > 1 ? 's' : ''}${minutes ? ' ' + frenchCardinal(minutes) : ''}`;
+            return { spoken, pos: '时间', note: `${h} 点${minutes ? ' ' + minutes + ' 分' : ''}` };
+        }
+        if ((m = t.match(/^(\d{1,9}),(\d{1,3})$/))) {
+            return { spoken: `${frenchCardinal(parseInt(m[1], 10))} virgule ${frenchCardinal(parseInt(m[2], 10))}`, pos: '数字', note: '法语用逗号表示小数点' };
+        }
+        if ((m = t.match(/^\d{1,9}$/))) {
+            const n = parseInt(t, 10);
+            const yearNote = n >= 1100 && n <= 2099 ? '（作年份时也这样读）' : '';
+            return { spoken: frenchCardinal(n), pos: '数字', note: `${n}${yearNote}` };
+        }
+        return null;
+    }
+    window.frenchNumberReading = frenchNumberReading;
 
     let currentPopoverCard = null;
     let currentActiveWordEl = null;
@@ -2783,7 +2888,7 @@ function initStudyWorkbench() {
 
         // Clean punctuation, apostrophes, quotes, commas, dots
         const cleanWord = (rawWord || '').replace(/^[^\wÀ-ÿ]+|[^\wÀ-ÿ]+$/g, '').trim();
-        if (!cleanWord || cleanWord.length > 40 || !/[a-zA-ZÀ-ÿ]/.test(cleanWord)) return;
+        if (!cleanWord || cleanWord.length > 40 || (!/[a-zA-ZÀ-ÿ]/.test(cleanWord) && !frenchNumberReading(cleanWord))) return;
 
         const rect = element.getBoundingClientRect();
         if (!rect || (rect.width === 0 && rect.height === 0)) return;
@@ -2807,6 +2912,23 @@ function initStudyWorkbench() {
             currentActiveWordEl.classList.add('is-active-word');
         }
 
+        const numberReading = frenchNumberReading(cleanWord);
+        if (numberReading) {
+            playFrenchSpeech(numberReading.spoken);
+            renderPopoverData({
+                token: cleanWord,
+                speech: numberReading.spoken,
+                lemma: cleanWord,
+                pos: numberReading.pos,
+                phonetic: '',
+                explanation_cn: `读作：${numberReading.spoken}`,
+                explanation_en: numberReading.note,
+                sentence: context.sentence || '',
+                sentence_cn: context.sentence_cn || '',
+            });
+            return;
+        }
+
         // Pronounce single word immediately (handling elisions like c', d', l')
         const lower = cleanWord.toLowerCase();
         const speechWord = (cleanWord.endsWith("'") || cleanWord.endsWith("’"))
@@ -2814,7 +2936,19 @@ function initStudyWorkbench() {
             : cleanWord;
         playFrenchSpeech(speechWord);
 
-        // 1. Check local cache from active tokens in analyzed sentence (0ms instant)
+        // 1. Word that belongs to a fixed expression of this sentence -> show the expression
+        const phraseMatch = context.sentence ? phraseByWord.get(`${srsSentenceKey(context.sentence)}::${lower}`) : null;
+        if (phraseMatch) {
+            const item = Object.assign({}, phraseMatch, {
+                explanation_en: [phraseMatch.explanation_en, `「${cleanWord}」在这句里是固定搭配「${phraseMatch.token}」的一部分，要整体理解。`].filter(Boolean).join(' '),
+            });
+            if (context.sentence) item.sentence = context.sentence;
+            if (context.sentence_cn) item.sentence_cn = context.sentence_cn;
+            renderPopoverData(item);
+            return;
+        }
+
+        // 1b. Check local cache from active tokens in analyzed sentence (0ms instant)
         let localMatch = (window.activeTokensMap || new Map()).get(lower);
         if (!localMatch) {
             // Also check elision base word (e.g. n'autorisent -> autorisent, l'homme -> homme)
@@ -2926,7 +3060,7 @@ function initStudyWorkbench() {
         if (!rawSelected) return;
 
         const cleanWord = rawSelected.replace(/^[^\wÀ-ÿ]+|[^\wÀ-ÿ]+$/g, '').trim();
-        if (!cleanWord || cleanWord.length > 40 || !/[a-zA-ZÀ-ÿ]/.test(cleanWord)) return;
+        if (!cleanWord || cleanWord.length > 40 || (!/[a-zA-ZÀ-ÿ]/.test(cleanWord) && !frenchNumberReading(cleanWord))) return;
 
         const range = selection.getRangeAt(0);
         const rect = range.getBoundingClientRect();
@@ -3089,7 +3223,7 @@ function initStudyWorkbench() {
         popoverSpeakBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             if (currentPopoverCard && currentPopoverCard.token) {
-                playFrenchSpeech(currentPopoverCard.token);
+                playFrenchSpeech(currentPopoverCard.speech || currentPopoverCard.token);
             }
         });
     }
@@ -3097,7 +3231,7 @@ function initStudyWorkbench() {
         popoverPhonetic.addEventListener('click', (e) => {
             e.stopPropagation();
             if (currentPopoverCard && currentPopoverCard.token) {
-                playFrenchSpeech(currentPopoverCard.token);
+                playFrenchSpeech(currentPopoverCard.speech || currentPopoverCard.token);
             }
         });
     }
@@ -3172,7 +3306,7 @@ function initStudyWorkbench() {
         if ((e.key === 'r' || e.key === 'R') && floatingWordPopover && !floatingWordPopover.hidden) {
             if (currentPopoverCard && currentPopoverCard.token) {
                 e.preventDefault();
-                playFrenchSpeech(currentPopoverCard.token);
+                playFrenchSpeech(currentPopoverCard.speech || currentPopoverCard.token);
                 return;
             }
         }
@@ -3191,8 +3325,10 @@ function initStudyWorkbench() {
     window.renderStudyDeck = renderStudyDeck;
     const urlParams = new URLSearchParams(window.location.search);
     const prefillText = urlParams.get('text');
-    if (urlParams.get('login') === '1' && !localStorage.getItem(userTokenKey)) {
-        openAuthModal();
+    if (urlParams.get('login') === '1') {
+        checkCurrentUser().then(() => {
+            if (!localStorage.getItem(userTokenKey)) openAuthModal();
+        });
     }
     if (prefillText) {
         frenchInput.value = decodeURIComponent(prefillText);

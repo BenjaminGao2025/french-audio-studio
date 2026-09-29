@@ -936,6 +936,24 @@ class FrenchAudioStudioTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 401)
 
+    @patch("tts_service.create_speech_files", new_callable=AsyncMock)
+    def test_tts_snippet_is_content_cached(self, create_mock):
+        path = tts_service.OUTPUT_DIR / "TTS_fr-FR-DeniseNeural_snip_test.mp3"
+        path.write_bytes(b"ID3")
+        create_mock.return_value = (path.name, "unused.srt")
+        response = self.client.get("/tts", params={"text": "Bonjour", "t": "attacker_chosen"})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("max-age=", response.headers["cache-control"])
+        # The client can no longer choose the cache file name.
+        create_mock.assert_awaited_once_with("Bonjour", "fr-FR-DeniseNeural")
+
+    def test_snippets_up_to_limit_use_stable_hash_names(self):
+        long_text = "Phrase assez longue. " * 12  # ~250 chars, above the old 150 limit
+        a = tts_service._safe_timestamp(None, text=long_text, voice="fr-FR-DeniseNeural")
+        b = tts_service._safe_timestamp(None, text=long_text, voice="fr-FR-DeniseNeural")
+        self.assertEqual(a, b)
+        self.assertTrue(a.startswith("snip_"))
+
     def test_tts_snippet_rejects_long_text(self):
         response = self.client.get("/tts", params={"text": "a" * 601})
         self.assertEqual(response.status_code, 422)

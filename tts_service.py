@@ -811,6 +811,14 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
         "Here it works with aucune to mean \"no\".\n\n"
         "Accuracy rules:\n"
         "- The word table must cover every word in the sentence, in order, including small words like par, les, de, à.\n"
+        "- Fixed expressions stay together as ONE entry when their meaning is not the sum of the words "
+        "(à partir de, il y a, grâce à, au lieu de, par rapport à, à cause de, en fonction de). "
+        "Put the dictionary form in lemma and the whole expression's meaning in meaning / meaning_zh. "
+        "Example: 'À partir des' → fr: 'À partir des', lemma: 'à partir de', meaning: 'starting from', meaning_zh: '从……起', "
+        "why: 'des = de + les.'\n"
+        "- Numbers, dates, ordinals and abbreviations are words too: 1er, 2026, 15h30, TCF. "
+        "In meaning say how to read them aloud, e.g. '1er' → meaning: 'first (say: premier)', '2026' → meaning: 'say: deux mille vingt-six'. "
+        "The ipa is for the spoken form.\n"
         '- Never list a word that is not in the sentence. Example: if the sentence uses ne … aucune, do not list "ne … pas".\n'
         "- Every French sentence in the build-up must be correct French.\n\n"
         "Chinese meaning:\n"
@@ -1142,7 +1150,7 @@ def _safe_timestamp(
 ) -> str:
     if value and re.fullmatch(r"[0-9A-Za-z_-]{1,48}", value):
         return value
-    if text and voice and len(text) <= 150:
+    if text and voice and len(text) <= TTS_SNIPPET_MAX_CHARS:
         h = hashlib.sha256(f"{voice}:{text.strip()}".encode("utf-8")).hexdigest()[:16]
         return f"snip_{h}"
     return _timestamp()
@@ -1168,20 +1176,33 @@ async def create_speech_files(
     srt_path = OUTPUT_DIR / srt_filename
 
     if not audio_path.exists() or not srt_path.exists():
+        # Write to unique temp files and rename, so concurrent requests for the
+        # same cached snippet can never leave a truncated file behind.
+        tmp_suffix = f".{uuid.uuid4().hex[:8]}.part"
+        tmp_audio = audio_path.with_name(audio_filename + tmp_suffix)
+        tmp_srt = srt_path.with_name(srt_filename + tmp_suffix)
         communicate = edge_tts.Communicate(content, selected_voice)
         submaker = edge_tts.SubMaker()
-        with audio_path.open("wb") as audio_file:
-            async for chunk in communicate.stream():
-                if chunk["type"] == "audio":
-                    audio_file.write(chunk["data"])
-                elif chunk["type"] == "SentenceBoundary":
-                    submaker.feed(chunk)
-        srt_path.write_text(submaker.get_srt(), encoding="utf-8")
+        try:
+            with tmp_audio.open("wb") as audio_file:
+                async for chunk in communicate.stream():
+                    if chunk["type"] == "audio":
+                        audio_file.write(chunk["data"])
+                    elif chunk["type"] == "SentenceBoundary":
+                        submaker.feed(chunk)
+            tmp_srt.write_text(submaker.get_srt(), encoding="utf-8")
+            os.replace(tmp_audio, audio_path)
+            os.replace(tmp_srt, srt_path)
+        finally:
+            tmp_audio.unlink(missing_ok=True)
+            tmp_srt.unlink(missing_ok=True)
 
     return audio_filename, srt_filename
 
 
-def _output_file(filename: str, download: bool = False) -> FileResponse:
+def _output_file(
+    filename: str, download: bool = False, cache_seconds: int = 0
+) -> FileResponse:
     if Path(filename).name != filename or Path(filename).suffix not in {".mp3", ".srt"}:
         raise HTTPException(status_code=404, detail="文件不存在。")
     path = OUTPUT_DIR / filename
@@ -1192,7 +1213,10 @@ def _output_file(filename: str, download: bool = False) -> FileResponse:
         path,
         media_type=media_type,
         filename=filename if download else None,
-        headers={"Access-Control-Expose-Headers": "Content-Disposition"},
+        headers={
+            "Access-Control-Expose-Headers": "Content-Disposition",
+            **({"Cache-Control": f"public, max-age={cache_seconds}"} if cache_seconds else {}),
+        },
     )
 
 
@@ -1486,7 +1510,9 @@ async def request_word_lookup(word: str, api_key: str, model: str = "grok-4.6") 
         '  "phonetic": "IPA phonetic transcription (e.g. /bɔ̃.ʒuʁ/)",\n'
         '  "explanation_cn": "concise, accurate Chinese definition and grammatical nuance",\n'
         '  "explanation_en": "concise, accurate English definition"\n'
-        "}"
+        "}\n"
+        "If the token is a number, ordinal, date part or abbreviation (1er, 2026, 15h30, TCF), "
+        "explanation_cn must say how to read it aloud in French words, e.g. '读作 premier（第一）'."
     )
 
     payload = {
@@ -1556,15 +1582,15 @@ async def lookup_word(
 async def generate_tts(
     text: str,
     voice: str = "fr-FR-DeniseNeural",
-    t: str | None = None,
     format: Literal["mp3", "srt"] = "mp3",
     download: bool = False,
 ):
     if len(text) > TTS_SNIPPET_MAX_CHARS:
         raise HTTPException(status_code=422, detail="文本过长，请使用音频工作台生成。")
-    audio_filename, srt_filename = await create_speech_files(text, voice, t)
+    # Snippets are cached by (voice, text) hash, so the same URL always returns the same audio.
+    audio_filename, srt_filename = await create_speech_files(text, voice)
     filename = srt_filename if format == "srt" else audio_filename
-    return _output_file(filename, download=download)
+    return _output_file(filename, download=download, cache_seconds=30 * 86400)
 
 
 class AuthRequest(BaseModel):
@@ -1674,14 +1700,14 @@ class SrsNoteRequest(BaseModel):
 
 
 class SrsLookupRequest(BaseModel):
-    sentences: list[str] = Field(default_factory=list, max_length=200)
+    sentences: list[str] = Field(default_factory=list, max_length=1000)
 
 
 class SrsReviewRequest(BaseModel):
     rating: int = Field(ge=1, le=4)
     duration_ms: int | None = Field(default=None, ge=0, le=3_600_000)
     score: int | None = Field(default=None, ge=0, le=100)
-    answer: str | None = Field(default=None, max_length=500)
+    answer: str | None = Field(default=None, max_length=5000)  # srs stores the first 500 chars
 
 
 class SrsImportRequest(BaseModel):
@@ -1694,7 +1720,7 @@ async def review_page():
 
 
 @app.get("/api/srs/queue")
-async def srs_queue(
+def srs_queue(
     tz_offset: int = Query(default=0, ge=-840, le=840),
     new_limit: int = Query(default=srs.DEFAULT_NEW_LIMIT, ge=0, le=100),
     authorization: str | None = Header(default=None),
@@ -1703,7 +1729,7 @@ async def srs_queue(
 
 
 @app.post("/api/srs/notes")
-async def srs_add_note(
+def srs_add_note(
     req: SrsNoteRequest,
     authorization: str | None = Header(default=None),
 ):
@@ -1723,7 +1749,7 @@ async def srs_add_note(
 
 
 @app.post("/api/srs/notes/lookup")
-async def srs_lookup_notes(
+def srs_lookup_notes(
     req: SrsLookupRequest,
     authorization: str | None = Header(default=None),
 ):
@@ -1731,12 +1757,12 @@ async def srs_lookup_notes(
 
 
 @app.delete("/api/srs/notes/{note_id}")
-async def srs_delete_note(note_id: str, authorization: str | None = Header(default=None)):
+def srs_delete_note(note_id: str, authorization: str | None = Header(default=None)):
     return {"success": srs.delete_note(_require_user_id(authorization), note_id)}
 
 
 @app.get("/api/srs/cards")
-async def srs_list_cards(
+def srs_list_cards(
     q: str = Query(default="", max_length=100),
     authorization: str | None = Header(default=None),
 ):
@@ -1744,12 +1770,12 @@ async def srs_list_cards(
 
 
 @app.delete("/api/srs/cards/{card_id}")
-async def srs_delete_card(card_id: str, authorization: str | None = Header(default=None)):
+def srs_delete_card(card_id: str, authorization: str | None = Header(default=None)):
     return {"success": srs.delete_card(_require_user_id(authorization), card_id)}
 
 
 @app.post("/api/srs/cards/{card_id}/review")
-async def srs_review_card(
+def srs_review_card(
     card_id: str,
     req: SrsReviewRequest,
     authorization: str | None = Header(default=None),
@@ -1764,7 +1790,7 @@ async def srs_review_card(
 
 
 @app.post("/api/srs/import")
-async def srs_import_legacy(
+def srs_import_legacy(
     req: SrsImportRequest,
     authorization: str | None = Header(default=None),
 ):

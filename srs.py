@@ -32,9 +32,15 @@ SCHEDULER = Scheduler(desired_retention=0.9)
 PREVIEW_SCHEDULER = Scheduler(desired_retention=0.9, enable_fuzzing=False)
 
 
+_initialized_db_paths: set[str] = set()
+
+
 def init_db() -> None:
+    db_path = str(auth_db._get_db_path())
+    if db_path in _initialized_db_paths:
+        return
     auth_db.init_db()
-    with sqlite3.connect(auth_db._get_db_path()) as conn:
+    with sqlite3.connect(db_path) as conn:
         conn.executescript(
             """
             CREATE TABLE IF NOT EXISTS srs_notes (
@@ -78,6 +84,7 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_srs_reviews_user_time ON srs_reviews(user_id, reviewed_at);
             """
         )
+    _initialized_db_paths.add(db_path)
 
 
 def _connect() -> sqlite3.Connection:
@@ -99,6 +106,16 @@ def _iso(value: datetime.datetime) -> str:
 def sentence_key(sentence: str) -> str:
     text = sentence.replace("’", "'").replace(" ", " ")
     return re.sub(r"\s+", " ", text).strip().lower()
+
+
+def target_in_sentence(sentence: str, target: str) -> bool:
+    """Whole-word, case-insensitive match (so "en" does not match inside "prends")."""
+    target = target.strip()
+    if not target:
+        return False
+    start = r"(?<!\w)" if target[0].isalnum() else ""
+    end = r"(?!\w)" if target[-1].isalnum() else ""
+    return re.search(start + re.escape(target) + end, sentence, re.IGNORECASE) is not None
 
 
 def study_day_start(now: datetime.datetime, tz_offset_minutes: int) -> datetime.datetime:
@@ -222,6 +239,8 @@ def add_note(
         for target in targets:
             text = re.sub(r"\s+", " ", str(target.get("text") or "")).strip()
             mode = target.get("mode") or "cloze"
+            if mode == "cloze" and not target_in_sentence(clean_sentence, text):
+                mode = "recognize"  # a blank is impossible if the chunk is not in the sentence
             if text and mode in ("cloze", "recognize"):
                 wanted.append((mode, text, _clean_meta(target.get("meta"))))
 
@@ -336,13 +355,16 @@ def build_queue(
     """
     now = now or _now()
     day_start = study_day_start(now, tz_offset_minutes)
+    # FSRS due times carry the time of day of the last review; like Anki, a
+    # review card counts as due for the whole study day it falls on.
+    day_end = _iso(day_start + datetime.timedelta(days=1))
     horizon = _iso(now + LEARN_AHEAD)
 
     with _connect() as conn:
         touched_notes, new_done, reviews_done = _today_activity(conn, user_id, day_start)
         rows = conn.execute(
             _CARD_WITH_NOTE_SQL + " AND (c.is_new = 1 OR c.due <= ?)",
-            (user_id, horizon),
+            (user_id, max(horizon, day_end)),
         ).fetchall()
 
     learning, reviews, new_cards = [], [], []
@@ -350,8 +372,9 @@ def build_queue(
         card = Card.from_dict(json.loads(row["fsrs_json"]))
         state = _state_name(card)
         if state in ("learning", "relearning"):
-            learning.append(row)
-        elif state == "review" and row["due"] <= _iso(now):
+            if row["due"] <= horizon:
+                learning.append(row)
+        elif state == "review" and row["due"] <= day_end:
             reviews.append(row)
         elif state == "new":
             new_cards.append(row)
@@ -476,7 +499,7 @@ def import_legacy_cards(user_id: int, cards: Iterable[dict[str, Any]]) -> dict[s
             "ipa": legacy.get("phonetic") or "",
             "hook": legacy.get("hook") or "",
         }
-        in_sentence = bool(sentence) and token.lower() in sentence.lower()
+        in_sentence = bool(sentence) and target_in_sentence(sentence, token)
         add_note(
             user_id,
             sentence if sentence else token,
