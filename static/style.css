@@ -1454,3 +1454,16 @@ audio {
     min-width: 58px;
     font-weight: 800;
 }
+
+/* Four nav tabs on a phone: text only */
+@media (max-width: 480px) {
+    .nav-tab i,
+    .nav-tab svg {
+        display: none;
+    }
+
+    .nav-tab {
+        padding: 7px 4px;
+        font-size: 12.5px;
+    }
+}

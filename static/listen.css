@@ -1,0 +1,195 @@
+/* ==========================================================================
+   French Audio Studio - Listen while driving (/listen)
+   Builds on style.css tokens
+   ========================================================================== */
+
+.listen-main {
+    width: min(760px, 100%);
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.listen-panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    padding: 22px;
+}
+
+.listen-message {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    text-align: center;
+}
+
+.listen-message h2,
+.intro-text h2 {
+    margin: 0;
+    font-size: 19px;
+}
+
+.listen-message p,
+.intro-text p {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.6;
+}
+
+.listen-intro {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.intro-text {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.intro-tips {
+    margin: 4px 0 0;
+    padding-left: 18px;
+    color: var(--ink);
+    font-size: 14px;
+    line-height: 1.7;
+}
+
+.intro-action {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.make-episode-btn {
+    min-height: 48px;
+    font-size: 15px;
+}
+
+.make-episode-btn:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.make-hint {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.episode-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.episode-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.episode-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.episode-head h3 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.episode-meta {
+    margin: 2px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.episode-audio {
+    width: 100%;
+}
+
+.episode-downloads {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    font-size: 14px;
+    color: var(--muted);
+}
+
+.episode-downloads a {
+    color: var(--primary);
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.episode-status {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.episode-status.is-working {
+    color: var(--muted);
+}
+
+.episode-status.is-failed {
+    color: var(--danger);
+}
+
+.spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--line-strong);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.episode-delete.confirming {
+    color: var(--danger);
+    border-color: var(--danger);
+    background: var(--danger-soft);
+}
+
+.episode-empty {
+    color: var(--muted);
+    text-align: center;
+}
+
+.listen-error {
+    margin: 0;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: var(--danger-soft);
+    color: var(--danger);
+    font-weight: 600;
+}
+
+@media (max-width: 760px) {
+    .listen-panel {
+        padding: 16px;
+    }
+
+    .make-episode-btn {
+        width: 100%;
+    }
+}

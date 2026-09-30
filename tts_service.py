@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import datetime
 import hashlib
 import io
@@ -23,6 +24,7 @@ from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
 import auth_db
+import episodes
 import srs
 
 
@@ -2177,6 +2179,161 @@ async def backfill_english(user_id: int, api_key: str, model: str = PERPLEXITY_M
 async def srs_backfill_english(authorization: str | None = Header(default=None)):
     user_id = _require_user_id(authorization)
     return await backfill_english(user_id, _authorization_token(authorization))
+
+# ---------------------------------------------------------------------------
+# "Listen while driving" episodes (MP3 + LRC/SRT from the learner's material)
+# ---------------------------------------------------------------------------
+_episode_lock = asyncio.Lock()           # render one episode at a time
+_background_tasks: set[asyncio.Task] = set()
+STORY_SPEAKERS = {"A", "B", "N"}
+
+
+def _story_payload(vocabulary: list[str], examples: list[str], kind: str, model: str) -> dict:
+    who = (
+        "a dialogue between two people, speakers A and B"
+        if kind == "dialogue"
+        else "a short story told by a narrator, speaker N"
+    )
+    system = (
+        "You write French listening practice for an A1–A2 learner (native Chinese, basic English) "
+        "who is moving to Canada and preparing the TCF Canada test.\n"
+        f"Write {who}, 10–14 lines.\n"
+        "Rules:\n"
+        f"- Reuse as many of these known words as is natural: {', '.join(vocabulary) or '(none)'}.\n"
+        "- Everyday situations: a test centre, an office, school, work, shopping, a new city, a phone call.\n"
+        "- Short sentences, at most 12 words. Mostly present tense. At most 3 words the learner may not know.\n"
+        "- Do not copy these sentences the learner already studied: "
+        f"{' | '.join(examples) or '(none)'}.\n"
+        "- Each line has an English translation in very simple English (A2, everyday words).\n"
+        'Output valid JSON only: {"title_en": "...", "lines": [{"speaker": "A", "fr": "...", "en": "..."}]}'
+    )
+    return {
+        "model": _map_upstream_model(model),
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": "Write it."}],
+        "response_format": {"type": "json_object"},
+        "stream": False,
+        "temperature": 0.7,
+    }
+
+
+def _parse_story(raw_text: str) -> dict | None:
+    cleaned = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip()
+    start, end = cleaned.find("{"), cleaned.rfind("}")
+    try:
+        data = json.loads(cleaned[start : end + 1])
+    except Exception:
+        return None
+    lines = []
+    for line in data.get("lines") or [] if isinstance(data, dict) else []:
+        if not isinstance(line, dict):
+            continue
+        fr = re.sub(r"\s+", " ", str(line.get("fr") or "")).strip()
+        speaker = str(line.get("speaker") or "N").strip().upper()[:1]
+        if fr and len(fr) <= 300:
+            lines.append({
+                "speaker": speaker if speaker in STORY_SPEAKERS else "N",
+                "fr": fr,
+                "en": re.sub(r"\s+", " ", str(line.get("en") or "")).strip()[:300],
+            })
+    if len(lines) < 4:
+        return None
+    return {"title_en": str(data.get("title_en") or "").strip()[:80], "lines": lines[:16]}
+
+
+async def _write_stories(api_key: str, vocabulary: list[str], examples: list[str], model: str) -> list[dict]:
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    stories = []
+    async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
+        for kind in ("dialogue", "story"):
+            for attempt in range(2):
+                try:
+                    _, raw_text = await _post_chat(client, _story_payload(vocabulary, examples, kind, model), headers)
+                except HTTPException as exc:
+                    logger.warning("Story generation failed: %s", exc.detail)
+                    break
+                story = _parse_story(raw_text)
+                if story:
+                    stories.append(story)
+                    break
+                logger.warning("Story output not usable (attempt %d): %r", attempt + 1, raw_text[:200])
+    return stories
+
+
+async def _generate_episode(user_id: int, episode_id: str, api_key: str | None, model: str) -> None:
+    try:
+        async with _episode_lock:
+            material = await run_in_threadpool(episodes.learning_material, user_id)
+            if not material:
+                raise ValueError("No studied sentences with an English translation yet.")
+            review, buildups = await run_in_threadpool(episodes.pick_material, user_id, material)
+            stories = []
+            if api_key:
+                stories = await _write_stories(
+                    api_key, episodes.story_vocabulary(review), [m["sentence"] for m in review[:8]], model
+                )
+            number = await run_in_threadpool(episodes.episode_number, user_id)
+            title = episodes.clean_title(
+                f"Episode {number}" + (f" · {stories[0]['title_en']}" if stories and stories[0]["title_en"] else "")
+            )
+            segments = episodes.build_script(number, review, buildups, stories)
+            duration = await episodes.render(segments, episodes.episodes_dir() / episode_id, title)
+            await run_in_threadpool(
+                episodes.update_episode, episode_id,
+                status="ready", title=title, duration=duration,
+                sentences_json=json.dumps(list(dict.fromkeys(m["key"] for m in review + buildups))),
+            )
+    except Exception as exc:
+        logger.exception("Episode %s failed", episode_id)
+        await run_in_threadpool(episodes.update_episode, episode_id, status="failed", error=str(exc)[:300])
+
+
+@app.get("/listen")
+async def listen_page():
+    return _html_page("listen.html")
+
+
+@app.get("/api/episodes")
+def list_episodes_api(authorization: str | None = Header(default=None)):
+    return {"episodes": episodes.list_episodes(_require_user_id(authorization))}
+
+
+@app.post("/api/episodes")
+async def create_episode_api(
+    model: TransformModel = Query(default=PERPLEXITY_MODEL),
+    authorization: str | None = Header(default=None),
+):
+    user_id = _require_user_id(authorization)
+    try:
+        api_key = _authorization_token(authorization)
+    except HTTPException:
+        api_key = None  # no upstream key: build the episode without new stories
+    episode = await run_in_threadpool(episodes.create_episode, user_id)
+    task = asyncio.create_task(_generate_episode(user_id, episode["id"], api_key, model))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return episode
+
+
+@app.delete("/api/episodes/{episode_id}")
+def delete_episode_api(episode_id: str, authorization: str | None = Header(default=None)):
+    return {"success": episodes.delete_episode(_require_user_id(authorization), episode_id)}
+
+
+@app.get("/episodes/{episode_id}.{ext}")
+async def episode_file(episode_id: str, ext: str, download: bool = Query(default=False)):
+    # The 128-bit random id is the capability (players and downloads cannot send auth headers)
+    if not re.fullmatch(r"[0-9a-f]{32}", episode_id) or ext not in {"mp3", "srt", "lrc"}:
+        raise HTTPException(status_code=404, detail="文件不存在。")
+    path = episodes.episodes_dir() / f"{episode_id}.{ext}"
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="文件不存在。")
+    media_type = {"mp3": "audio/mpeg", "srt": "application/x-subrip", "lrc": "text/plain; charset=utf-8"}[ext]
+    return FileResponse(
+        path,
+        media_type=media_type,
+        filename=f"french-listening-{episode_id[:8]}.{ext}" if download else None,
+        headers={"Cache-Control": "private, max-age=86400"},
+    )
 
 @app.post("/api/srs/import")
 def srs_import_legacy(

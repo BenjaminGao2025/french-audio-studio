@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light">
+    <title>开车听 - 1000H French</title>
+    <link rel="icon" href="/favicon.ico?v=2" sizes="any">
+    <link rel="stylesheet" href="/static/style.css?v=__ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/listen.css?v=__ASSET_VERSION__">
+    <script src="https://unpkg.com/lucide@1.34.0/dist/umd/lucide.min.js" defer></script>
+    <script src="/static/i18n.js?v=__ASSET_VERSION__" defer></script>
+    <script src="/static/listen.js?v=__ASSET_VERSION__" defer></script>
+</head>
+<body>
+    <div class="app-shell">
+        <header class="topbar">
+            <div class="brand-block">
+                <div class="brand-mark" aria-hidden="true">
+                    <i data-lucide="car"></i>
+                </div>
+                <div>
+                    <p class="product-label">1000H French</p>
+                    <h1 data-i18n="heading">开车听</h1>
+                </div>
+            </div>
+
+            <nav class="nav-tabs" aria-label="页面切换" data-i18n-aria="navAria">
+                <a href="/" class="nav-tab">
+                    <i data-lucide="headphones" aria-hidden="true"></i>
+                    <span data-i18n="navAudio">音频工作台</span>
+                </a>
+                <a href="/study" class="nav-tab">
+                    <i data-lucide="sparkles" aria-hidden="true"></i>
+                    <span data-i18n="navStudy">拆解与复述</span>
+                </a>
+                <a href="/review" class="nav-tab">
+                    <i data-lucide="brain" aria-hidden="true"></i>
+                    <span data-i18n="navReview">今日复习</span>
+                </a>
+                <a href="/listen" class="nav-tab active" aria-current="page">
+                    <i data-lucide="car" aria-hidden="true"></i>
+                    <span data-i18n="navListen">开车听</span>
+                </a>
+            </nav>
+
+            <div class="topbar-actions">
+                <button id="lang-toggle" class="btn btn-secondary lang-toggle" type="button"></button>
+            </div>
+        </header>
+
+        <main class="listen-main">
+            <section id="login-required" class="listen-panel listen-message" hidden>
+                <h2 data-i18n="loginTitle">请先登录</h2>
+                <p data-i18n="loginDesc">节目是用你学过的内容生成的，需要先登录。</p>
+                <a class="btn btn-primary" href="/study?login=1" data-i18n="loginBtn">去登录</a>
+            </section>
+
+            <section id="listen-intro" class="listen-panel listen-intro" hidden>
+                <div class="intro-text">
+                    <h2 data-i18n="introTitle">用你学过的内容，做成开车时听的节目</h2>
+                    <p data-i18n="introDesc">每集约 15–20 分钟：先复习你拆解过的句子（法语 → 英文 → 慢速法语 → 停顿跟读），再一层层搭长句，然后是用你学过的词新编的小对话和小故事（先带英文、再纯法语），最后纯法语再听一遍。法国和加拿大口音交替。</p>
+                    <ul class="intro-tips">
+                        <li data-i18n="tipPhone">在手机上直接播放，或下载 MP3 和字幕（LRC / SRT）导入「每日法语听力」等 App。</li>
+                        <li data-i18n="tipRepeat">停顿的地方大声跟读，开车时正好可以开口练。</li>
+                        <li data-i18n="tipSafety">出发前准备好，开车时不要操作手机。</li>
+                    </ul>
+                </div>
+                <div class="intro-action">
+                    <button id="make-episode-btn" class="btn btn-primary make-episode-btn" type="button">
+                        <i data-lucide="wand-sparkles" aria-hidden="true"></i>
+                        <span data-i18n="makeEpisode">生成新的一集</span>
+                    </button>
+                    <p class="make-hint" data-i18n="makeHint">大约需要 1–2 分钟。每集内容都不一样。</p>
+                </div>
+            </section>
+
+            <section id="episode-list" class="episode-list" aria-live="polite"></section>
+
+            <p id="listen-error" class="listen-error" hidden role="alert"></p>
+        </main>
+    </div>
+</body>
+</html>

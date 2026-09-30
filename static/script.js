@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
         en: {
             pageTitle: 'French Audio Studio',
             heading: 'French Audio Studio',
-            navAria: 'Pages', navAudio: 'Audio Studio', navStudy: 'Study', navReview: 'Review',
+            navAria: 'Pages', navAudio: 'Audio Studio', navStudy: 'Study', navReview: 'Review', navListen: 'Listen',
             history: 'History', historyBtnTitle: 'View and restore past history',
             connectionSettings: 'Connection', connectionSummaryTitle: 'Connection not verified yet',
             notVerified: 'Not verified', toggleKey: 'Show or hide the API key',
@@ -135,7 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
         zh: {
             pageTitle: '法语音频工作台',
             heading: '法语音频工作台',
-            navAria: '页面切换', navAudio: '音频工作台', navStudy: '拆解与复述', navReview: '今日复习',
+            navAria: '页面切换', navAudio: '音频工作台', navStudy: '拆解与复述', navReview: '今日复习', navListen: '开车听',
             history: '历史记录', historyBtnTitle: '查看并恢复过往历史记录',
             connectionSettings: '连接设置', connectionSummaryTitle: '连接尚未验证',
             notVerified: '未验证', toggleKey: '显示或隐藏 API Key',

@@ -28,7 +28,7 @@
         en: {
             pageTitle: "Today's Review - 1000H French",
             heading: "Today's Review",
-            navAria: 'Pages', navAudio: 'Audio Studio', navStudy: 'Study', navReview: 'Review',
+            navAria: 'Pages', navAudio: 'Audio Studio', navStudy: 'Study', navReview: 'Review', navListen: 'Listen',
             newLimit: 'New / day', newLimitTitle: 'Maximum number of new cards introduced per day',
             library: 'Card library',
             loginTitle: 'Your cards are saved on the server. Please log in first.',
@@ -86,7 +86,7 @@
         zh: {
             pageTitle: '今日复习 - 1000H French',
             heading: '今日复习',
-            navAria: '页面切换', navAudio: '音频工作台', navStudy: '拆解与复述', navReview: '今日复习',
+            navAria: '页面切换', navAudio: '音频工作台', navStudy: '拆解与复述', navReview: '今日复习', navListen: '开车听',
             newLimit: '每天新卡', newLimitTitle: '每天最多引入多少张新卡',
             library: '卡片库',
             loginTitle: '复习卡片保存在服务器上，请先登录',

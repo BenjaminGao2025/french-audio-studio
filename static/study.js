@@ -35,7 +35,7 @@ function initStudyWorkbench() {
         en: {
             pageTitle: 'French Breakdown & Shadowing - 1000H French',
             heading: 'French Breakdown & Shadowing',
-            navAria: 'Pages', navAudio: 'Audio Studio', navStudy: 'Study', navReview: 'Review',
+            navAria: 'Pages', navAudio: 'Audio Studio', navStudy: 'Study', navReview: 'Review', navListen: 'Listen',
             account: 'Account', login: 'Log in', trialBadgeTitle: 'Account validity',
             reviewBtn: 'Review', reviewBtnTitle: "Today's review (listen · speak · fill in)", dueBadgeTitle: 'Cards due today',
             connectionSettings: 'Connection', connectionNotVerified: 'Connection not verified yet', notVerified: 'Not verified',
@@ -160,7 +160,7 @@ function initStudyWorkbench() {
         zh: {
             pageTitle: '法语拆解与跟读复述 - 1000H French',
             heading: '法语拆解与跟读复述',
-            navAria: '页面切换', navAudio: '音频工作台', navStudy: '拆解与复述', navReview: '今日复习',
+            navAria: '页面切换', navAudio: '音频工作台', navStudy: '拆解与复述', navReview: '今日复习', navListen: '开车听',
             account: '账号', login: '登录', trialBadgeTitle: '账号有效期',
             reviewBtn: '复习', reviewBtnTitle: '今日复习（听 · 说 · 填）', dueBadgeTitle: '今天待复习卡片数',
             connectionSettings: '连接设置', connectionNotVerified: '连接尚未验证', notVerified: '未验证',
