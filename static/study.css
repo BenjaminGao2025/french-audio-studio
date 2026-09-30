@@ -2405,15 +2405,18 @@
     position: relative !important;
     transition: all 0.2s ease !important;
     display: inline-block;
+    min-width: 2.2em;
+    text-align: center;
 }
 
+/* A plain "?" never overflows onto neighbouring words and needs no translation */
 .is-blind-mode .buildup-new-token::after {
-    content: "❓ 盲测 (点击看)";
+    content: "?";
     position: absolute;
     left: 50%;
     top: 50%;
     transform: translate(-50%, -50%);
-    font-size: 11px;
+    font-size: 15px;
     font-weight: 700;
     color: #7c3aed;
     text-shadow: none;
@@ -2447,7 +2450,7 @@
 }
 
 .is-blind-mode .buildup-step-row:first-child:not(.step-revealed) .buildup-fr-text::after {
-    content: "❓ 核心句 (点击看)";
+    content: "?";
     position: absolute;
     left: 50%;
     top: 50%;
