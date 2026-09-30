@@ -33,13 +33,15 @@ STATIC_DIR = BASE_DIR / "static"
 OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", str(BASE_DIR / "outputs"))).resolve()
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
+# Two OpenAI-compatible upstreams: the Perplexity bridge and the AGY (Antigravity) adapter
 PERPLEXITY_BASE_URL = os.getenv(
-    "PERPLEXITY_BASE_URL", "http://127.0.0.1:8002/v1"
+    "PERPLEXITY_BASE_URL", "http://127.0.0.1:8004/v1"
 ).rstrip("/")
-PERPLEXITY_MODEL = os.getenv("PERPLEXITY_MODEL", "grok-4.6")
-PERPLEXITY_PROOFREAD_MODEL = os.getenv(
-    "PERPLEXITY_PROOFREAD_MODEL", "gpt-5.6-terra"
-)
+AGY_BASE_URL = os.getenv("AGY_BASE_URL", "http://127.0.0.1:8645/v1").rstrip("/")
+PERPLEXITY_MODEL = os.getenv("PERPLEXITY_MODEL", "gpt-6-1-sol-thinking")
+PERPLEXITY_PROOFREAD_MODEL = os.getenv("PERPLEXITY_PROOFREAD_MODEL", "gemini-3.8-flash")
+# Quick helper tasks (e.g. fixing dictation) always use a fast model
+FAST_MODEL = os.getenv("FAST_MODEL", "gemini-3.8-flash")
 PERPLEXITY_TIMEOUT_SECONDS = float(os.getenv("PERPLEXITY_TIMEOUT_SECONDS", "120"))
 MAX_TEXT_CHARS = int(os.getenv("MAX_TEXT_CHARS", "15000"))
 TTS_SNIPPET_MAX_CHARS = 600
@@ -50,39 +52,51 @@ ASR_CPU_THREADS = int(os.getenv("ASR_CPU_THREADS", "8"))
 ASR_MAX_BYTES = 15 * 1024 * 1024
 
 TRANSFORM_MODELS = {
-    "gemini-3.8-flash": {
-        "label": "Gemini 3.8 Flash (AGY)",
-        "description": "7840 AGY 原生极速模型；词汇切分与语法精析极速响应。",
+    "gpt-6-1-sol-thinking": {
+        "label": "GPT-6.1 Sol Thinking",
+        "description": "Perplexity; strongest reasoning, slower.",
         "recommended": True,
     },
-    "grok-4.6": {
-        "label": "Grok 4.6",
-        "description": "Fast mode; recommended for clean French transformation.",
+    "gpt-6-1-sol": {
+        "label": "GPT-6.1 Sol",
+        "description": "Perplexity; strong and faster than Thinking.",
         "recommended": False,
     },
-    "grok-4.6-thinking": {
-        "label": "Grok 4.6 Thinking",
-        "description": "Reasoning mode; slower and more likely to add explanatory text.",
+    "claude-5-5-sonnet-thinking": {
+        "label": "Claude Sonnet 5.5 Thinking",
+        "description": "Perplexity; careful explanations.",
         "recommended": False,
     },
-    "sonar-2": {
-        "label": "Sonar 2",
-        "description": "Perplexity fallback model.",
+    "claude-5-5-sonnet": {
+        "label": "Claude Sonnet 5.5",
+        "description": "Perplexity.",
+        "recommended": False,
+    },
+    "grok-4-7": {
+        "label": "Grok 4.7",
+        "description": "Perplexity.",
+        "recommended": False,
+    },
+    "gemini-3.8-flash": {
+        "label": "Gemini 3.8 Flash (AGY)",
+        "description": "7840 AGY; fastest.",
         "recommended": False,
     },
 }
-MODEL_LABELS = {
-    **{model_id: details["label"] for model_id, details in TRANSFORM_MODELS.items()},
-    "gpt-5.6-terra": "GPT-5.6 Terra",
-}
+MODEL_LABELS = {model_id: details["label"] for model_id, details in TRANSFORM_MODELS.items()}
 if PERPLEXITY_MODEL not in TRANSFORM_MODELS:
     raise RuntimeError(f"Unsupported PERPLEXITY_MODEL: {PERPLEXITY_MODEL}")
 
 
+AGY_UPSTREAM_MODELS = {"gemini-3.8-flash": "gemini-3.8-flash-low"}
+
+
 def _map_upstream_model(model_name: str) -> str:
-    if model_name == "gemini-3.8-flash":
-        return "gemini-3.8-flash-low"
-    return model_name
+    return AGY_UPSTREAM_MODELS.get(model_name, model_name)
+
+
+def _upstream_base_url(upstream_model: str) -> str:
+    return AGY_BASE_URL if upstream_model in AGY_UPSTREAM_MODELS.values() else PERPLEXITY_BASE_URL
 
 SUPPORTED_VOICES = {
     "en-US-AvaNeural",
@@ -132,6 +146,8 @@ UPSTREAM_META_RE = re.compile(
     r"je traduis le texte|voici la traduction|texte traduit)\b",
     re.IGNORECASE,
 )
+# What Perplexity answers when the bridge's session is no longer logged in
+UPSTREAM_LOGIN_RE = re.compile(r"^\s*sign (?:up|in) and repeat your request", re.IGNORECASE)
 FRENCH_BLOCK_RE = re.compile(r"<FRENCH>\s*(.*?)\s*</FRENCH>", re.IGNORECASE | re.DOTALL)
 TRAILING_OFFER_RE = re.compile(
     r"\s+(?:si\s+tu\s+veux|si\s+vous\s+voulez),?\s+je\s+peux\b"
@@ -175,7 +191,8 @@ FRENCH_WORD_RE = re.compile(
 )
 
 TransformModel = Literal[
-    "gemini-3.8-flash", "grok-4.6", "grok-4.6-thinking", "sonar-2"
+    "gpt-6-1-sol-thinking", "gpt-6-1-sol", "claude-5-5-sonnet-thinking",
+    "claude-5-5-sonnet", "grok-4-7", "gemini-3.8-flash",
 ]
 TaskMode = Literal["auto", "generate", "translate", "express", "polish"]
 ResolvedTaskMode = Literal["generate", "translate", "express", "polish"]
@@ -533,7 +550,7 @@ async def _post_chat(
     for upstream_attempt in range(2):
         try:
             response = await client.post(
-                f"{PERPLEXITY_BASE_URL}/chat/completions",
+                f"{_upstream_base_url(str(payload.get('model')))}/chat/completions",
                 headers=headers,
                 json=payload,
             )
@@ -571,6 +588,19 @@ async def _post_chat(
                 "message": "Perplexity 返回了无法识别的内容。",
             },
         ) from exc
+    if UPSTREAM_LOGIN_RE.search(raw_text[:200]):
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "perplexity_login_expired",
+                "message": "Perplexity 的登录已失效，请先在桥接服务里更新登录，或在连接设置里换用 Gemini。",
+            },
+        )
+    if not raw_text.strip():
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "empty_upstream_response", "message": "模型没有返回内容，请再试一次。"},
+        )
     return body, raw_text
 
 
@@ -1654,7 +1684,9 @@ async def fix_transcript(
     api_key = _authorization_token(authorization)
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
-        _, raw_text = await _post_chat(client, _transcript_fix_payload(request), headers)
+        _, raw_text = await _post_chat(
+            client, _transcript_fix_payload(request.model_copy(update={"model": FAST_MODEL})), headers
+        )
     fixed = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip().strip("`").strip()
     # A correction must stay close to the original; otherwise keep what was heard.
     if not fixed or len(fixed) > len(request.text) * 1.6 + 40:
@@ -1732,7 +1764,7 @@ async def ask_tutor(
 LOOKUP_CACHE: dict[str, dict] = {}
 
 
-async def request_word_lookup(word: str, api_key: str, model: str = "grok-4.6") -> dict:
+async def request_word_lookup(word: str, api_key: str, model: str = FAST_MODEL) -> dict:
     clean_word = word.strip()
     cache_key = clean_word.lower()
     if cache_key in LOOKUP_CACHE:
@@ -1806,7 +1838,7 @@ async def request_word_lookup(word: str, api_key: str, model: str = "grok-4.6") 
 @app.get("/api/lookup")
 async def lookup_word(
     word: str,
-    model: str = "grok-4.6",
+    model: str = FAST_MODEL,
     authorization: str | None = Header(default=None),
 ):
     clean = word.strip()
@@ -2145,7 +2177,7 @@ async def srs_add_grammar_card(
     )
 
 
-async def backfill_english(user_id: int, api_key: str, model: str = PERPLEXITY_MODEL) -> dict:
+async def backfill_english(user_id: int, api_key: str, model: str = FAST_MODEL) -> dict:
     """Fill in simple-English translations/meanings that older cards lack (English UI mode)."""
     missing = await run_in_threadpool(srs.missing_english, user_id)
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
