@@ -616,6 +616,17 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertEqual(ctx.exception.detail["code"], "perplexity_login_expired")
         self.assertIn("8002", client.post.await_args.args[0])
 
+    def test_citation_markers_are_removed_from_model_replies(self):
+        # Perplexity sometimes puts "[1]" between JSON tokens, which broke parsing
+        reply = '{"sentences": [{"why": "You see. ",[1]\n "note": "ok [2][3]"}]}'
+        client = AsyncMock()
+        client.post.return_value = Mock(
+            status_code=200,
+            json=Mock(return_value={"choices": [{"message": {"content": reply}}]}),
+        )
+        _, raw_text = asyncio.run(tts_service._post_chat(client, {"model": "gpt-6.1-sol-thinking"}, {}))
+        self.assertEqual(json.loads(raw_text), {"sentences": [{"why": "You see. ", "note": "ok"}]})
+
     def test_non_french_script_detection(self):
         self.assertTrue(tts_service._contains_non_french_script("Bonjour, \u4f60\u597d"))
         self.assertTrue(tts_service._contains_non_french_script("\uc548\ub155, bonjour"))

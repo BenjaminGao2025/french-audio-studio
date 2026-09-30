@@ -148,6 +148,8 @@ UPSTREAM_META_RE = re.compile(
 )
 # What Perplexity answers when the web session is no longer logged in
 UPSTREAM_LOGIN_RE = re.compile(r"^\s*sign (?:up|in) and repeat your request", re.IGNORECASE)
+# Perplexity adds source markers like "[1]" to answers, even between JSON tokens
+CITATION_MARKER_RE = re.compile(r" ?\[\d{1,2}\](?:\[\d{1,2}\])*")
 FRENCH_BLOCK_RE = re.compile(r"<FRENCH>\s*(.*?)\s*</FRENCH>", re.IGNORECASE | re.DOTALL)
 TRAILING_OFFER_RE = re.compile(
     r"\s+(?:si\s+tu\s+veux|si\s+vous\s+voulez),?\s+je\s+peux\b"
@@ -579,7 +581,7 @@ async def _post_chat(
 
     try:
         body = response.json()
-        raw_text = str(body["choices"][0]["message"]["content"])
+        raw_text = CITATION_MARKER_RE.sub("", str(body["choices"][0]["message"]["content"]))
     except (ValueError, KeyError, IndexError, TypeError) as exc:
         raise HTTPException(
             status_code=502,

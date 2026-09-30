@@ -153,6 +153,7 @@ function initStudyWorkbench() {
             analyzing: 'Analysing...',
             analyzingStatus: 'The AI is splitting the text into sentences, chunks and collocations and analysing them. Please wait...',
             analyzeFailed: 'Analysis request failed',
+            analyzingProgress: (done, total) => `The AI is analysing your text: ${done} of ${total} parts done…`,
             analyzeDone: 'Done! First try explaining the sentence yourself (Feynman self-test), then read the explanation. Tap “Add to review” for sentences you want to learn and ⭐ for words; tap 🔊 to hear them, or try shadowing with scores.',
             analyzeError: 'Breakdown failed: ',
             restored: (n) => `Restored from history (${n} sentences), no tokens used.`,
@@ -279,6 +280,7 @@ function initStudyWorkbench() {
             analyzing: '正在智能拆解与精析...',
             analyzingStatus: '正在调用 LLM 进行全句切分与意群搭配深度三列解析，请稍候...',
             analyzeFailed: '分析请求失败',
+            analyzingProgress: (done, total) => `AI 正在逐段解析：已完成 ${done} / ${total} 段…`,
             analyzeDone: '拆解完成！先试着自己讲讲这句话（费曼自测），再看讲解；想背的句子点「加入复习」，想背的词点 ⭐、点击 🔊 即时发音，或进行跟读打分。',
             analyzeError: '拆解失败: ',
             restored: (n) => `已成功从历史记录恢复（共 ${n} 句），无需重新消耗 Token。`,
@@ -3608,6 +3610,36 @@ function initStudyWorkbench() {
     // -------------------------------------------------------------------------
     // 9. Text Analysis Request
     // -------------------------------------------------------------------------
+    // Sentences (or lines), with very short ones kept together, up to ~90 characters a part
+    function splitForAnalysis(text) {
+        // Never split inside « … » (French puts a space before the closing mark)
+        const sentences = text.split(/(?<=[.!?…]["»”)]?)\s+(?![»”])|\n+/).map(s => s.trim()).filter(Boolean);
+        const parts = [];
+        sentences.forEach(sentence => {
+            const last = parts[parts.length - 1];
+            // A line break keeps a title from running into the next sentence
+            if (last && last.length + sentence.length < 90) parts[parts.length - 1] = `${last}\n${sentence}`;
+            else parts.push(sentence);
+        });
+        return parts.length ? parts : [text];
+    }
+
+    async function analyzePart(text, token, model) {
+        const res = await fetch('/api/analyze', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({ text, model }),
+        });
+        const data = await readJsonSafely(res);
+        if (!res.ok) {
+            throw new Error(data.detail?.message || data.detail || T.analyzeFailed);
+        }
+        return data.sentences || [];
+    }
+
     async function startAnalysis() {
         const text = frenchInput.value.trim();
         if (!text) {
@@ -3627,22 +3659,26 @@ function initStudyWorkbench() {
             statusMessage.className = 'status-message status-working';
             statusMessage.textContent = T.analyzingStatus;
 
-            const res = await fetch('/api/analyze', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                },
-                body: JSON.stringify({ text, model }),
-            });
+            // Short parts, two at a time: thinking models need ~30 s per sentence, and a
+            // single request for a long text would hit the 100 s limit of the tunnel.
+            const parts = splitForAnalysis(text);
+            const results = new Array(parts.length);
+            let next = 0;
+            let done = 0;
+            if (parts.length > 1) statusMessage.textContent = T.analyzingProgress(0, parts.length);
+            const worker = async () => {
+                while (next < parts.length) {
+                    const index = next++;
+                    results[index] = await analyzePart(parts[index], token, model);
+                    done += 1;
+                    if (parts.length > 1) statusMessage.textContent = T.analyzingProgress(done, parts.length);
+                }
+            };
+            await Promise.all([worker(), worker()]);
+            const sentences = results.flat();
 
-            const data = await readJsonSafely(res);
-            if (!res.ok) {
-                throw new Error(data.detail?.message || data.detail || T.analyzeFailed);
-            }
-
-            renderStudyDeck(data.sentences || []);
-            saveHistoryItem(text, data.sentences || []);
+            renderStudyDeck(sentences);
+            saveHistoryItem(text, sentences);
             collapseInputPanel(text);
 
             statusMessage.className = 'status-message status-success';
