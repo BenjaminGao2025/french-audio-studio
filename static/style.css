@@ -1467,3 +1467,23 @@ audio {
         font-size: 12.5px;
     }
 }
+
+/* "A new version is live" bar (static/i18n.js) */
+.new-version-bar {
+    position: fixed;
+    left: 50%;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+    z-index: 10000;
+    max-width: calc(100% - 32px);
+    padding: 12px 20px;
+    border: none;
+    border-radius: 999px;
+    background: var(--ink);
+    color: #ffffff;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    cursor: pointer;
+}

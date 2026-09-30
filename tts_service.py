@@ -1293,6 +1293,12 @@ def _html_page(name: str) -> HTMLResponse:
     )
 
 
+@app.get("/api/version")
+async def asset_version():
+    # Open pages compare this with the version they were loaded with
+    return {"version": ASSET_VERSION}
+
+
 @app.get("/")
 async def root():
     return _html_page("index.html")

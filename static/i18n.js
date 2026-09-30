@@ -53,5 +53,40 @@
         button.addEventListener('click', () => setLang(current === 'en' ? 'zh' : 'en'));
     }
 
+    // Long-open tabs keep running old code after a deploy: offer a reload when the version changes
+    function watchForNewVersion() {
+        const meta = document.querySelector('meta[name="asset-version"]');
+        const loaded = meta && meta.content;
+        if (!loaded || loaded.startsWith('__')) return;
+        let shown = false;
+        async function check() {
+            if (shown || document.hidden) return;
+            try {
+                const res = await fetch('/api/version', { cache: 'no-store' });
+                const data = await res.json();
+                if (data.version && data.version !== loaded) show();
+            } catch (_) { /* offline or restarting: try again later */ }
+        }
+        function show() {
+            shown = true;
+            const bar = document.createElement('button');
+            bar.type = 'button';
+            bar.className = 'new-version-bar';
+            bar.textContent = lang() === 'en'
+                ? 'A new version of the site is live. Tap here to reload.'
+                : '网站已更新，点这里刷新页面。';
+            bar.addEventListener('click', () => root.location.reload());
+            document.body.appendChild(bar);
+        }
+        document.addEventListener('visibilitychange', check);
+        setInterval(check, 10 * 60 * 1000);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', watchForNewVersion);
+    } else {
+        watchForNewVersion();
+    }
+
     root.FrenchI18n = { lang, setLang, pick, apply, mountToggle };
 })(window);

@@ -656,6 +656,12 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
         self.assertEqual(response.json()["detail"], "不支持所选语音。")
 
+    def test_version_endpoint_matches_pages(self):
+        version = self.client.get("/api/version").json()["version"]
+        self.assertEqual(version, tts_service.ASSET_VERSION)
+        for path in ("/", "/study", "/review", "/listen"):
+            self.assertIn(f'<meta name="asset-version" content="{version}">', self.client.get(path).text)
+
     def test_study_endpoint_serves_html(self):
         response = self.client.get("/study")
         self.assertEqual(response.status_code, 200)
