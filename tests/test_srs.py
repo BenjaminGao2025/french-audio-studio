@@ -185,6 +185,67 @@ class EnglishBackfillTests(unittest.TestCase):
         self.assertEqual(srs.missing_english(user_id), {"notes": [], "cards": []})
 
 
+class ImportanceAndWordsTests(unittest.TestCase):
+    def setUp(self):
+        self.user_id, self.headers = _new_user()
+
+    def test_default_importance_filter_and_order(self):
+        low = srs.add_note(self.user_id, "Phrase peu importante.", targets=[{"text": "peu", "importance": 1}])
+        high = srs.add_note(self.user_id, "Phrase très importante.", targets=[{"text": "très", "importance": 5}])
+        mid = srs.add_note(self.user_id, "Phrase normale.", modes=["listen"])
+        self.assertEqual(mid["cards"][0]["importance"], 3)
+
+        queue = srs.build_queue(self.user_id)
+        self.assertEqual([c["importance"] for c in queue["cards"]], [5, 3, 1])  # important first
+        only_top = srs.build_queue(self.user_id, min_importance=4)
+        self.assertEqual([c["target"] for c in only_top["cards"]], ["très"])
+
+        other_id, _ = _new_user()
+        self.assertEqual(srs.set_importance(other_id, [low["cards"][0]["id"]], 5), 0)
+        self.assertEqual(srs.set_importance(self.user_id, [low["cards"][0]["id"]], 9), 1)  # clamped to 5
+        self.assertEqual(srs.build_queue(self.user_id, min_importance=5)["counts"]["total"], 2)
+        self.assertEqual(high["cards"][0]["importance"], 5)
+
+    def test_saved_words_span_all_sentences(self):
+        srs.add_note(self.user_id, "Voici l'examen.", targets=[{"text": "Voici"}])
+        srs.add_note(self.user_id, "Bonjour.", modes=["listen"])
+        words = srs.saved_words(self.user_id)
+        self.assertEqual([(w["text"], w["sentence"]) for w in words], [("Voici", "Voici l'examen.")])
+
+    def test_api_importance_and_words(self):
+        note = self.client_post({"sentence": "Voici le test.", "targets": [{"text": "Voici", "importance": 4}]})
+        card_id = note["cards"][0]["id"]
+        self.assertEqual(note["cards"][0]["importance"], 4)
+        from fastapi.testclient import TestClient
+        client = TestClient(tts_service.app)
+        res = client.post("/api/srs/importance", headers=self.headers, json={"card_ids": [card_id], "importance": 2})
+        self.assertEqual(res.json(), {"updated": 1})
+        words = client.get("/api/srs/words", headers=self.headers).json()["words"]
+        self.assertEqual([(w["text"], w["importance"]) for w in words], [("Voici", 2)])
+        self.assertEqual(client.get("/api/srs/queue?min_importance=3", headers=self.headers).json()["counts"]["total"], 0)
+
+    def client_post(self, body):
+        from fastapi.testclient import TestClient
+        return TestClient(tts_service.app).post("/api/srs/notes", headers=self.headers, json=body).json()
+
+    def test_old_database_gets_importance_column(self):
+        import sqlite3
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+
+        path = Path(tempfile.mkdtemp()) / "users.db"
+        with sqlite3.connect(path) as conn:
+            conn.execute("CREATE TABLE srs_cards (id TEXT PRIMARY KEY, note_id TEXT NOT NULL, user_id INTEGER NOT NULL, "
+                         "mode TEXT NOT NULL, target TEXT NOT NULL DEFAULT '', target_json TEXT NOT NULL DEFAULT '{}', "
+                         "fsrs_json TEXT NOT NULL, due TEXT NOT NULL, is_new INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL)")
+            conn.execute("INSERT INTO srs_cards VALUES ('c1', 'n1', 1, 'listen', '', '{}', '{}', 'x', 1, 'x')")
+        with patch("auth_db._get_db_path", return_value=path):
+            srs.init_db()
+        with sqlite3.connect(path) as conn:
+            self.assertEqual(conn.execute("SELECT importance FROM srs_cards WHERE id = 'c1'").fetchone()[0], 3)
+
+
 class SrsApiTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(tts_service.app)

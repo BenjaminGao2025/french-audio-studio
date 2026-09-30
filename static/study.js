@@ -50,7 +50,8 @@ function initStudyWorkbench() {
             historyBtn: 'History', historyBtnTitle: 'View and restore past queries',
             exampleBtn: 'Example', exampleBtnTitle: 'Fill in a classic French example',
             clear: 'Clear', clearTitle: 'Clear the input',
-            inputPlaceholder: 'Paste or type a French text (one sentence or several). It is split into B1 core words, chunks and collocations, with audio and shadowing scores...',
+            inputPlaceholder: 'Paste or type a French text (one sentence or several). It is split into B1 core words, chunks and collocations, with audio and shadowing scores. Enter to analyze, Shift+Enter for a new line.',
+            importanceLabel: 'Importance', importanceTitle: (n) => `Importance ${n} of 5 (review the most important first)`,
             actionAria: 'Breakdown actions', analyze: 'Break down & analyse',
             parsed: 'Analysed', expandInput: 'Edit / enter a new text', expandInputTitle: 'Open the input to edit it or enter a new text',
             deckAria: 'Analysis and shadowing cards', deckHeading: 'Sentence analysis & pronunciation practice',
@@ -95,7 +96,7 @@ function initStudyWorkbench() {
             myRecording: 'My recording', retryShadowing: 'Try again',
             feynmanBadge: '🧠 Feynman self-test',
             feynmanSub: "Don't read the explanation below yet. In your own words (Chinese or English): what does this sentence say? Why is its key grammar or collocation used this way?",
-            feynmanPlaceholder: 'e.g. This sentence says…; aucune is already negative, so there is no pas…',
+            feynmanPlaceholder: 'e.g. This sentence says…; aucune is already negative, so there is no pas… (Enter to check, Shift+Enter for a new line)',
             variationPlaceholder: '(Optional) Change a word and make a new French sentence of your own',
             dictateTitle: 'Say it instead (Chinese mixed with French, or English). The server transcribes it into the box above, and you can still edit it.',
             dictate: 'Say it', feynmanCheck: 'Let the AI find gaps',
@@ -175,7 +176,8 @@ function initStudyWorkbench() {
             historyBtn: '查询历史', historyBtnTitle: '查看并恢复过往查询历史',
             exampleBtn: '填入示例', exampleBtnTitle: '填入经典法语示例',
             clear: '清空', clearTitle: '清空输入框',
-            inputPlaceholder: '粘贴或输入一段法语文本（可包含单句或多句），系统将基于 B1 核心词汇标准切分词组/搭配并支持发音与跟读评测...',
+            inputPlaceholder: '粘贴或输入一段法语文本（可包含单句或多句），系统将基于 B1 核心词汇标准切分词组/搭配并支持发音与跟读评测。回车开始拆解，Shift+回车换行。',
+            importanceLabel: '重要度', importanceTitle: (n) => `重要度 ${n} / 5（复习时可以只挑重要的）`,
             actionAria: '拆解操作', analyze: '开始拆解与精析',
             parsed: '已解析', expandInput: '重新编辑 / 输入新文本', expandInputTitle: '展开输入框以修改或输入新内容',
             deckAria: '解析与跟读卡片', deckHeading: '句子精析与发音复述',
@@ -220,7 +222,7 @@ function initStudyWorkbench() {
             myRecording: '我的录音', retryShadowing: '重新跟读',
             feynmanBadge: '🧠 费曼自测',
             feynmanSub: '先别看下面的讲解。用自己的话讲（中文或英语都行）：这句话在说什么？最关键的语法或搭配为什么这么用？',
-            feynmanPlaceholder: '例：这句是说……；aucune 本身就是否定，所以没有 pas……',
+            feynmanPlaceholder: '例：这句是说……；aucune 本身就是否定，所以没有 pas……（回车让 AI 找漏洞，Shift+回车换行）',
             variationPlaceholder: '（可选）换一个词，自己造一个新的法语句子',
             dictateTitle: '用说的（中文夹法语、英语都可以），服务器识别后填进上面的框，可以再改',
             dictate: '用说的', feynmanCheck: '让 AI 找漏洞',
@@ -396,6 +398,7 @@ function initStudyWorkbench() {
     const popoverEn = document.getElementById('popover-en');
     const popoverStarBtn = document.getElementById('popover-star-btn');
     const popoverStarText = document.getElementById('popover-star-text');
+    const popoverImportance = document.getElementById('popover-importance');
 
     // Speech Recognition API Detection
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition || null;
@@ -438,6 +441,7 @@ function initStudyWorkbench() {
         updateHistoryBadges();
         checkCurrentUser();
         refreshDueBadge();
+        loadSavedWords();
     }
 
     async function syncModelsFromBackend() {
@@ -729,6 +733,34 @@ function initStudyWorkbench() {
         return note.cards.find(c => (c.mode === 'cloze' || c.mode === 'recognize') && c.target.toLowerCase() === clean) || null;
     }
 
+    // Every word in the deck, whichever sentence it was saved from (like a word book)
+    const savedWordsByText = new Map(); // lower-cased word -> [{card_id, sentence, importance}]
+
+    function savedWordEntries(token) {
+        return savedWordsByText.get((token || '').trim().toLowerCase()) || [];
+    }
+
+    function isWordSaved(sentence, token) {
+        return Boolean(findTargetCard(sentence, token)) || savedWordEntries(token).length > 0;
+    }
+
+    async function loadSavedWords() {
+        savedWordsByText.clear();
+        if (getUserToken()) {
+            try {
+                const data = await srsApi('GET', '/api/srs/words');
+                (data.words || []).forEach(w => {
+                    const key = w.text.trim().toLowerCase();
+                    if (!savedWordsByText.has(key)) savedWordsByText.set(key, []);
+                    savedWordsByText.get(key).push(w);
+                });
+            } catch (err) {
+                console.warn('Failed to load saved words:', err);
+            }
+        }
+        updateTableStarStates();
+    }
+
     function findGrammarCard(sentence, title) {
         const note = srsNotesByKey.get(srsSentenceKey(sentence));
         return note ? note.cards.find(c => c.mode === 'grammar' && c.target === title) || null : null;
@@ -823,7 +855,7 @@ function initStudyWorkbench() {
 
     function updateTableStarStates() {
         document.querySelectorAll('.btn-token-star').forEach(btn => {
-            const saved = Boolean(findTargetCard(btn.dataset.sentence, btn.dataset.token));
+            const saved = isWordSaved(btn.dataset.sentence, btn.dataset.token);
             btn.classList.toggle('active', saved);
             btn.title = saved ? T.starSaved : T.starAdd;
         });
@@ -858,21 +890,29 @@ function initStudyWorkbench() {
     async function toggleTargetCard({ token, sentence, meta }) {
         const cleanToken = (token || '').trim();
         if (!cleanToken) return;
-        const existing = findTargetCard(sentence, cleanToken);
+        const local = findTargetCard(sentence, cleanToken);
+        const elsewhere = savedWordEntries(cleanToken);
         try {
-            if (existing) {
-                await srsApi('DELETE', `/api/srs/cards/${encodeURIComponent(existing.id)}`);
-                forgetCard(sentence || cleanToken, existing.id);
+            if (local || elsewhere.length) {
+                // The word is in the book (from this or another sentence): the star removes it
+                const ids = new Set(elsewhere.map(w => w.card_id));
+                if (local) ids.add(local.id);
+                for (const id of ids) {
+                    await srsApi('DELETE', `/api/srs/cards/${encodeURIComponent(id)}`);
+                }
+                if (local) forgetCard(sentence || cleanToken, local.id);
+                elsewhere.forEach(w => forgetCard(w.sentence, w.card_id));
             } else {
                 const inSentence = Boolean(sentence) && sentence.toLowerCase().includes(cleanToken.toLowerCase());
-                const payload = sentence ? sentenceNotePayload(sentence) : { sentence: cleanToken };
+                // A word that is not in this sentence (e.g. from an AI answer) is saved on its own
+                const payload = inSentence ? sentenceNotePayload(sentence) : { sentence: cleanToken };
                 payload.targets = [{ text: cleanToken, mode: inSentence ? 'cloze' : 'recognize', meta: meta || {} }];
                 rememberNote(await srsApi('POST', '/api/srs/notes', payload));
             }
         } catch (err) {
             showSrsError(err);
         }
-        updateTableStarStates();
+        await loadSavedWords();
         refreshDueBadge();
     }
 
@@ -1226,7 +1266,7 @@ function initStudyWorkbench() {
         const why = w.why || '';
         const engLink = w.english_link || '';
         const falseFriend = Boolean(w.false_friend);
-        const isSaved = Boolean(findTargetCard(sentenceText, tokenText));
+        const isSaved = isWordSaved(sentenceText, tokenText);
         const posCat = getPosCategory(pos);
         const posClass = getPosTagClass(pos);
         const isFunc = isFunctionWordPos(pos);
@@ -1828,7 +1868,7 @@ function initStudyWorkbench() {
                     const phonetic = tok.phonetic || tok.ipa || '';
                     const expEn = tok.explanation_en || tok.meaning || '';
                     const expCn = tok.explanation_cn || '';
-                    const isSaved = Boolean(findTargetCard(sentenceText, tokenText));
+                    const isSaved = isWordSaved(sentenceText, tokenText);
 
                     rowsHtml += `
                         <tr>
@@ -2044,6 +2084,10 @@ function initStudyWorkbench() {
         `;
     }
 
+    function isPlainEnter(e) {
+        return e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229;
+    }
+
     function bindFeynmanSelfTest(root, sentence) {
         const input = root.querySelector('.feynman-input');
         const variationInput = root.querySelector('.feynman-variation');
@@ -2055,6 +2099,12 @@ function initStudyWorkbench() {
         const askThread = root.querySelector('.ask-thread');
         const askHistory = []; // [{role: 'learner' | 'tutor', content}]
         [input, variationInput, askInput].forEach(el => el.addEventListener('click', e => e.stopPropagation()));
+        [input, variationInput].forEach(el => el.addEventListener('keydown', (e) => {
+            if (isPlainEnter(e)) {
+                e.preventDefault();
+                if (!checkBtn.disabled) checkBtn.click();
+            }
+        }));
 
         function contextPayload() {
             const ctx = sentenceContextByKey.get(srsSentenceKey(sentence)) || {};
@@ -2874,6 +2924,7 @@ function initStudyWorkbench() {
             updateAuthUI(data.user);
             closeAuthModal();
             refreshDueBadge();
+            loadSavedWords();
             const renderedSentences = Array.from(document.querySelectorAll('.btn-sentence-save'))
                 .map(btn => ({ sentence: btn.dataset.sentence }));
             refreshSrsStates(renderedSentences);
@@ -2892,6 +2943,7 @@ function initStudyWorkbench() {
     function handleLogout() {
         localStorage.removeItem(userTokenKey);
         srsNotesByKey.clear();
+        savedWordsByText.clear();
         updateTableStarStates();
         refreshDueBadge();
         updateAuthUI(null);
@@ -3345,9 +3397,23 @@ function initStudyWorkbench() {
         requestAnimationFrame(() => positionPopover(currentPopoverTarget));
     }
 
+    function renderPopoverImportance() {
+        if (!popoverImportance || !currentPopoverCard) return;
+        const entries = savedWordEntries(currentPopoverCard.token);
+        popoverImportance.hidden = entries.length === 0;
+        if (!entries.length) return;
+        const level = Math.max(...entries.map(w => w.importance || 3));
+        popoverImportance.querySelectorAll('button[data-level]').forEach(btn => {
+            const n = Number(btn.dataset.level);
+            btn.classList.toggle('filled', n <= level);
+            btn.title = T.importanceTitle(n);
+        });
+    }
+
     function updatePopoverStarState() {
+        renderPopoverImportance();
         if (!popoverStarBtn || !currentPopoverCard) return;
-        const exists = Boolean(findTargetCard(currentPopoverCard.sentence, currentPopoverCard.token));
+        const exists = isWordSaved(currentPopoverCard.sentence, currentPopoverCard.token);
         popoverStarBtn.classList.toggle('active', exists);
         popoverStarBtn.title = exists ? T.popoverSaved : T.popoverStarTitle;
         if (popoverStarText) popoverStarText.textContent = exists ? T.inReview : T.addToReview;
@@ -3596,6 +3662,14 @@ function initStudyWorkbench() {
     // -------------------------------------------------------------------------
     initSettings();
 
+    // Enter starts the analysis; Shift+Enter adds a new line
+    frenchInput.addEventListener('keydown', (e) => {
+        if (isPlainEnter(e)) {
+            e.preventDefault();
+            if (!analyzeButton.disabled) startAnalysis();
+        }
+    });
+
     // Textarea counter
     frenchInput.addEventListener('input', () => {
         charCounter.textContent = `${frenchInput.value.length} / 15000`;
@@ -3705,6 +3779,24 @@ function initStudyWorkbench() {
             }
         });
     }
+    if (popoverImportance) {
+        popoverImportance.addEventListener('click', async (e) => {
+            const btn = e.target.closest('button[data-level]');
+            if (!btn || !currentPopoverCard) return;
+            e.stopPropagation();
+            const entries = savedWordEntries(currentPopoverCard.token);
+            if (!entries.length) return;
+            const level = Number(btn.dataset.level);
+            try {
+                await srsApi('POST', '/api/srs/importance', { card_ids: entries.map(w => w.card_id), importance: level });
+                entries.forEach(w => { w.importance = level; });
+                renderPopoverImportance();
+            } catch (err) {
+                showSrsError(err);
+            }
+        });
+    }
+
     if (popoverStarBtn) {
         popoverStarBtn.addEventListener('click', async (e) => {
             e.stopPropagation();

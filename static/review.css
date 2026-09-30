@@ -768,3 +768,24 @@ kbd {
     color: var(--muted);
     font-size: 12px;
 }
+
+/* Card importance (1-5 stars) */
+.card-meta-right {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.card-importance button {
+    border: none;
+    background: none;
+    padding: 0 1px;
+    font-size: 18px;
+    line-height: 1;
+    color: var(--line-strong);
+    cursor: pointer;
+}
+
+.card-importance button.filled {
+    color: #f59e0b;
+}

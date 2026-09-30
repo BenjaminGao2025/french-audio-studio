@@ -13,6 +13,7 @@
 
     const TOKEN_KEY = 'frenchStudio.userToken';
     const NEW_LIMIT_KEY = 'frenchStudio.srs.newLimit';
+    const MIN_IMPORTANCE_KEY = 'frenchStudio.srs.minImportance';
     const LEGACY_DECK_KEY = 'frenchStudio.ankiDeck';
     const LEGACY_IMPORTED_KEY = 'frenchStudio.ankiDeck.importedAt';
     const LEARN_AHEAD_MS = 20 * 60 * 1000;
@@ -30,6 +31,8 @@
             heading: "Today's Review",
             navAria: 'Pages', navAudio: 'Audio Studio', navStudy: 'Study', navReview: 'Review', navListen: 'Listen',
             newLimit: 'New / day', newLimitTitle: 'Maximum number of new cards introduced per day',
+            priority: 'Priority', priorityTitle: 'Only review cards at least this important',
+            priorityAll: 'All', importanceTitle: (n) => `Importance ${n} of 5`,
             library: 'Card library',
             loginTitle: 'Your cards are saved on the server. Please log in first.',
             loginDesc: 'Once you log in, your phone and computer share the same cards and progress.',
@@ -88,6 +91,8 @@
             heading: '今日复习',
             navAria: '页面切换', navAudio: '音频工作台', navStudy: '拆解与复述', navReview: '今日复习', navListen: '开车听',
             newLimit: '每天新卡', newLimitTitle: '每天最多引入多少张新卡',
+            priority: '重点', priorityTitle: '只复习重要度不低于所选星级的卡片',
+            priorityAll: '全部', importanceTitle: (n) => `重要度 ${n} / 5`,
             library: '卡片库',
             loginTitle: '复习卡片保存在服务器上，请先登录',
             loginDesc: '登录后，手机和电脑看到的是同一套卡片和复习进度。',
@@ -186,6 +191,8 @@
         deckStats: $('deck-stats'),
         deckList: $('deck-list'),
         newLimitSelect: $('new-limit-select'),
+        minImportanceSelect: $('min-importance-select'),
+        cardImportance: $('card-importance'),
         error: $('review-error'),
     };
 
@@ -225,6 +232,19 @@
 
     function getToken() {
         try { return localStorage.getItem(TOKEN_KEY) || ''; } catch (_) { return ''; }
+    }
+
+    function getMinImportance() {
+        const saved = parseInt(localStorage.getItem(MIN_IMPORTANCE_KEY) || '', 10);
+        return saved >= 1 && saved <= 5 ? saved : 1;
+    }
+
+    function renderImportance(card) {
+        els.cardImportance.querySelectorAll('button[data-level]').forEach(btn => {
+            const n = Number(btn.dataset.level);
+            btn.classList.toggle('filled', n <= (card.importance || 3));
+            btn.title = T.importanceTitle(n);
+        });
     }
 
     function getNewLimit() {
@@ -680,6 +700,7 @@
         els.modeBadge.className = `mode-badge mode-${card.mode}`;
         els.modeBadge.innerHTML = `<i data-lucide="${info.icon}"></i><span>${info.label}</span>`;
         els.cardState.textContent = STATE_LABELS[card.state] || '';
+        renderImportance(card);
 
         renderPrompt(card);
         els.answerArea.hidden = true;
@@ -794,7 +815,7 @@
 
     async function loadQueue() {
         showError('');
-        const data = await api('GET', `/api/srs/queue?tz_offset=${new Date().getTimezoneOffset()}&new_limit=${getNewLimit()}`);
+        const data = await api('GET', `/api/srs/queue?tz_offset=${new Date().getTimezoneOffset()}&new_limit=${getNewLimit()}&min_importance=${getMinImportance()}`);
         const now = Date.now();
         const notYetDue = c => (c.state === 'learning' || c.state === 'relearning') && Date.parse(c.due) > now;
         session.queue = (data.cards || []).filter(c => !notYetDue(c));
@@ -874,7 +895,7 @@
                         ${cards.map(card => `
                             <span class="deck-card-chip mode-${card.mode}">
                                 <i data-lucide="${(MODE_INFO[card.mode] || MODE_INFO.listen).icon}"></i>
-                                ${MODE_INFO[card.mode] ? MODE_INFO[card.mode].label : card.mode}${card.target ? `：${escapeHtml(card.target)}` : ''}
+                                ${MODE_INFO[card.mode] ? MODE_INFO[card.mode].label : card.mode}${card.target ? `：${escapeHtml(card.target)}` : ''} ${'★'.repeat(card.importance || 3)}
                                 <em>${STATE_LABELS[card.state] || ''} · ${dueLabel(card)}</em>
                                 <button class="chip-delete" type="button" data-card-id="${escapeHtml(card.id)}" title="${T.deleteCard}">×</button>
                             </span>`).join('')}
@@ -951,6 +972,26 @@
     els.deckSearch.addEventListener('input', () => {
         clearTimeout(searchTimer);
         searchTimer = setTimeout(renderBrowser, 250);
+    });
+
+    els.cardImportance.addEventListener('click', async (e) => {
+        const btn = e.target.closest('button[data-level]');
+        const card = session.current;
+        if (!btn || !card) return;
+        const level = Number(btn.dataset.level);
+        try {
+            await api('POST', '/api/srs/importance', { card_ids: [card.id], importance: level });
+            card.importance = level;
+            renderImportance(card);
+        } catch (err) {
+            showError(err.message);
+        }
+    });
+
+    els.minImportanceSelect.value = String(getMinImportance());
+    els.minImportanceSelect.addEventListener('change', () => {
+        localStorage.setItem(MIN_IMPORTANCE_KEY, els.minImportanceSelect.value);
+        if (getToken()) loadQueue().catch(err => showError(err.message));
     });
 
     els.newLimitSelect.value = String(getNewLimit());

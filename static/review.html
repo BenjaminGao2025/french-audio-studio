@@ -56,6 +56,15 @@
                         <option value="20">20</option>
                     </select>
                 </label>
+                <label class="new-limit-control" title="只复习重要度不低于所选星级的卡片" data-i18n-title="priorityTitle">
+                    <span data-i18n="priority">重点</span>
+                    <select id="min-importance-select">
+                        <option value="1" data-i18n="priorityAll">全部</option>
+                        <option value="3">★3+</option>
+                        <option value="4">★4+</option>
+                        <option value="5">★5</option>
+                    </select>
+                </label>
                 <button id="toggle-browser-btn" class="btn btn-secondary" type="button">
                     <i data-lucide="library" aria-hidden="true"></i>
                     <span data-i18n="library">卡片库</span>
@@ -98,7 +107,12 @@
             <section id="review-stage" class="review-panel review-card" hidden aria-live="polite">
                 <div class="card-meta-row">
                     <span id="mode-badge" class="mode-badge"></span>
-                    <span id="card-state" class="card-state"></span>
+                    <span class="card-meta-right">
+                        <span id="card-importance" class="card-importance">
+                            <button type="button" data-level="1">★</button><button type="button" data-level="2">★</button><button type="button" data-level="3">★</button><button type="button" data-level="4">★</button><button type="button" data-level="5">★</button>
+                        </span>
+                        <span id="card-state" class="card-state"></span>
+                    </span>
                 </div>
 
                 <div id="prompt-area" class="prompt-area"></div>

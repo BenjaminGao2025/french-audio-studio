@@ -26,6 +26,7 @@ import auth_db
 MODES = ("listen", "cloze", "grammar", "speak", "recognize")
 MODE_ORDER = {mode: index for index, mode in enumerate(MODES)}
 DEFAULT_NEW_LIMIT = 10
+DEFAULT_IMPORTANCE = 3  # 1-5 stars, like Eudic's word book
 DAY_ROLLOVER_HOUR = 4  # like Anki: a study day starts at 04:00 local time
 LEARN_AHEAD = datetime.timedelta(minutes=20)
 
@@ -85,6 +86,9 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_srs_reviews_user_time ON srs_reviews(user_id, reviewed_at);
             """
         )
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(srs_cards)")}
+        if "importance" not in columns:
+            conn.execute("ALTER TABLE srs_cards ADD COLUMN importance INTEGER NOT NULL DEFAULT 3")
     _initialized_db_paths.add(db_path)
 
 
@@ -155,6 +159,7 @@ def _card_payload(row: sqlite3.Row, now: datetime.datetime, with_preview: bool =
         "target": row["target"],
         "target_meta": json.loads(row["target_json"] or "{}"),
         "due": row["due"],
+        "importance": row["importance"],
         "state": _state_name(fsrs_card),
         "created_at": row["created_at"],
     }
@@ -178,6 +183,41 @@ def _clean_meta(meta: dict[str, Any] | None) -> dict[str, str]:
         "rule", "prompt_fr", "answer", "hint", "full_fr", "full_en",
     )
     return {key: str(meta[key]).strip() for key in allowed if meta and meta.get(key)}
+
+
+def _clamp_importance(value: Any) -> int:
+    try:
+        return min(5, max(1, int(value)))
+    except (TypeError, ValueError):
+        return DEFAULT_IMPORTANCE
+
+
+def set_importance(user_id: int, card_ids: Iterable[str], importance: int) -> int:
+    ids = list(card_ids)
+    if not ids:
+        return 0
+    with _connect() as conn:
+        placeholders = ",".join("?" for _ in ids)
+        updated = conn.execute(
+            f"UPDATE srs_cards SET importance = ? WHERE user_id = ? AND id IN ({placeholders})",
+            (_clamp_importance(importance), user_id, *ids),
+        ).rowcount
+        conn.commit()
+    return updated
+
+
+def saved_words(user_id: int) -> list[dict[str, Any]]:
+    """Every word/chunk in the learner's deck (cloze + recognize cards), for "already saved?" checks."""
+    with _connect() as conn:
+        rows = conn.execute(
+            _CARD_WITH_NOTE_SQL + " AND c.mode IN ('cloze', 'recognize') ORDER BY c.created_at",
+            (user_id,),
+        ).fetchall()
+    return [
+        {"text": r["target"], "card_id": r["id"], "note_id": r["note_id"],
+         "sentence": r["sentence"], "mode": r["mode"], "importance": r["importance"]}
+        for r in rows
+    ]
 
 
 def add_note(
@@ -237,30 +277,31 @@ def add_note(
                 ),
             )
 
-        wanted: list[tuple[str, str, dict[str, str]]] = []
+        wanted: list[tuple[str, str, dict[str, str], int]] = []
         for mode in modes:
             if mode in ("listen", "speak"):
-                wanted.append((mode, "", {}))
+                wanted.append((mode, "", {}, DEFAULT_IMPORTANCE))
         for target in targets:
             text = re.sub(r"\s+", " ", str(target.get("text") or "")).strip()
             mode = target.get("mode") or "cloze"
             if mode == "cloze" and not target_in_sentence(clean_sentence, text):
                 mode = "recognize"  # a blank is impossible if the chunk is not in the sentence
             if text and mode in ("cloze", "recognize", "grammar"):
-                wanted.append((mode, text, _clean_meta(target.get("meta"))))
+                importance = _clamp_importance(target.get("importance", DEFAULT_IMPORTANCE))
+                wanted.append((mode, text, _clean_meta(target.get("meta")), importance))
 
-        for mode, text, meta in wanted:
+        for mode, text, meta, importance in wanted:
             fsrs_card = Card(due=now)
             conn.execute(
                 """
                 INSERT OR IGNORE INTO srs_cards (id, note_id, user_id, mode, target, target_json,
-                                                 fsrs_json, due, is_new, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+                                                 fsrs_json, due, is_new, created_at, importance)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
                 """,
                 (
                     "card_" + uuid.uuid4().hex, note_id, user_id, mode, text,
                     json.dumps(meta, ensure_ascii=False), json.dumps(fsrs_card.to_dict()),
-                    _iso(fsrs_card.due), _iso(now),
+                    _iso(fsrs_card.due), _iso(now), importance,
                 ),
             )
         conn.commit()
@@ -351,6 +392,7 @@ def build_queue(
     tz_offset_minutes: int = 0,
     new_limit: int = DEFAULT_NEW_LIMIT,
     now: datetime.datetime | None = None,
+    min_importance: int = 1,
 ) -> dict[str, Any]:
     """Today's review queue: learning cards, then due reviews, then new cards.
 
@@ -368,8 +410,8 @@ def build_queue(
     with _connect() as conn:
         touched_notes, new_done, reviews_done = _today_activity(conn, user_id, day_start)
         rows = conn.execute(
-            _CARD_WITH_NOTE_SQL + " AND (c.is_new = 1 OR c.due <= ?)",
-            (user_id, max(horizon, day_end)),
+            _CARD_WITH_NOTE_SQL + " AND (c.is_new = 1 OR c.due <= ?) AND c.importance >= ?",
+            (user_id, max(horizon, day_end), _clamp_importance(min_importance)),
         ).fetchall()
 
     learning, reviews, new_cards = [], [], []
@@ -385,8 +427,8 @@ def build_queue(
             new_cards.append(row)
 
     learning.sort(key=lambda r: r["due"])
-    reviews.sort(key=lambda r: r["due"])
-    new_cards.sort(key=lambda r: (r["note_created_at"], MODE_ORDER.get(r["mode"], 9), r["created_at"]))
+    reviews.sort(key=lambda r: (-r["importance"], r["due"]))
+    new_cards.sort(key=lambda r: (-r["importance"], r["note_created_at"], MODE_ORDER.get(r["mode"], 9), r["created_at"]))
 
     queue = list(learning)
     seen_notes = set(touched_notes) | {row["note_id"] for row in learning}
@@ -416,6 +458,7 @@ def build_queue(
             "reviewed_today": reviews_done,
             "new_today": new_done,
             "new_limit": new_limit,
+            "min_importance": _clamp_importance(min_importance),
         },
         "day_start": _iso(day_start),
     }

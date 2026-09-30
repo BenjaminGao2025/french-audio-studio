@@ -1926,6 +1926,7 @@ async def clear_all_history(
 class SrsTarget(BaseModel):
     text: str = Field(min_length=1, max_length=200)
     mode: Literal["cloze", "recognize", "grammar"] = "cloze"
+    importance: int = Field(default=3, ge=1, le=5)
     meta: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -1962,9 +1963,27 @@ async def review_page():
 def srs_queue(
     tz_offset: int = Query(default=0, ge=-840, le=840),
     new_limit: int = Query(default=srs.DEFAULT_NEW_LIMIT, ge=0, le=100),
+    min_importance: int = Query(default=1, ge=1, le=5),
     authorization: str | None = Header(default=None),
 ):
-    return srs.build_queue(_require_user_id(authorization), tz_offset, new_limit)
+    return srs.build_queue(
+        _require_user_id(authorization), tz_offset, new_limit, min_importance=min_importance
+    )
+
+
+class SrsImportanceRequest(BaseModel):
+    card_ids: list[str] = Field(min_length=1, max_length=50)
+    importance: int = Field(ge=1, le=5)
+
+
+@app.post("/api/srs/importance")
+def srs_set_importance(req: SrsImportanceRequest, authorization: str | None = Header(default=None)):
+    return {"updated": srs.set_importance(_require_user_id(authorization), req.card_ids, req.importance)}
+
+
+@app.get("/api/srs/words")
+def srs_saved_words(authorization: str | None = Header(default=None)):
+    return {"words": srs.saved_words(_require_user_id(authorization))}
 
 
 @app.post("/api/srs/notes")
