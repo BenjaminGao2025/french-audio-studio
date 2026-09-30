@@ -8,13 +8,7 @@
     display: none !important;
 }
 
-/* Topbar & Deck Launcher */
-.topbar-actions {
-    display: inline-flex;
-    align-items: center;
-    gap: 12px;
-}
-
+/* Deck Launcher */
 .nav-deck-btn {
     display: inline-flex;
     align-items: center;
@@ -1477,10 +1471,6 @@
     }
     .rating-buttons-grid {
         grid-template-columns: repeat(2, 1fr);
-    }
-    .topbar-actions {
-        flex-direction: column-reverse;
-        align-items: flex-end;
     }
 }
 

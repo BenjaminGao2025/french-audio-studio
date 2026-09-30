@@ -1487,3 +1487,83 @@ audio {
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
     cursor: pointer;
 }
+
+/* Compact header: one-line brand, and the active tab already names the page */
+.brand-block {
+    flex-shrink: 0;
+}
+
+.topbar-actions {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+.brand-block .product-label {
+    margin: 0;
+    color: var(--ink);
+    font-size: 18px;
+    font-weight: 760;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.brand-block h1 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+/* Connection: a key icon with a status dot; the details live in the popover */
+.connection-settings .summary-label,
+.connection-settings .connection-summary-text,
+.connection-settings .summary-chevron {
+    display: none;
+}
+
+.connection-settings summary {
+    width: 40px;
+    padding: 0;
+    justify-content: center;
+}
+
+.connection-settings .connection-summary-state {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+}
+
+/* The Review tab carries the label; the launcher only needs the due count */
+.nav-deck-btn [data-i18n="reviewBtn"] {
+    display: none;
+}
+
+/* Mid widths: text-only tabs keep everything on one row */
+@media (max-width: 1100px) {
+    .nav-tab i,
+    .nav-tab svg {
+        display: none;
+    }
+}
+
+@media (max-width: 960px) {
+    .topbar {
+        flex-wrap: wrap;
+        gap: 10px 12px;
+        padding-block: 10px;
+    }
+
+    .nav-tabs {
+        order: 3;
+        width: 100%;
+    }
+
+    .nav-tab {
+        flex: 1;
+        justify-content: center;
+    }
+}
