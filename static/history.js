@@ -241,7 +241,7 @@
                             sentences: item.sentences || [],
                             sentenceCount: item.sentenceCount || (item.sentences ? item.sentences.length : 1),
                             tokenCount: item.tokenCount || 0,
-                            model: item.model || 'grok-4.6',
+                            model: item.model || '',
                         }));
                     }
                 }
@@ -359,7 +359,7 @@
                 audioFilename: data.audioFilename || '',
                 srtUrl: data.srtUrl || '',
                 srtFilename: data.srtFilename || '',
-                model: data.model || 'grok-4.6',
+                model: data.model || '',
             };
 
             // Deduplicate same text + voice
@@ -388,7 +388,7 @@
                 sentences,
                 sentenceCount: sentences.length,
                 tokenCount: totalTokens,
-                model: model || 'grok-4.6',
+                model: model || '',
             };
 
             // Deduplicate same or near-identical text / sentence breakdown

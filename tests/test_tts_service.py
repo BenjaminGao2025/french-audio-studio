@@ -44,12 +44,12 @@ class FrenchAudioStudioTests(unittest.TestCase):
         response = self.client.get("/api/models")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["default"], "gpt-6-1-sol-thinking")
+        self.assertEqual(response.json()["default"], "gpt-6.1-sol-thinking")
         self.assertEqual(response.json()["proofreader"]["id"], "gemini-3.8-flash")
         model_ids = {item["id"] for item in response.json()["models"]}
         self.assertEqual(
             model_ids,
-            {"gpt-6-1-sol-thinking", "gpt-6-1-sol", "claude-5-5-sonnet-thinking", "claude-5-5-sonnet", "grok-4-7", "gemini-3.8-flash"},
+            {"gpt-6.1-sol-thinking", "gpt-6.1-sol", "claude-sonnet-5.5-thinking", "claude-sonnet-5.5", "grok-4.7", "gemini-3.8-flash"},
         )
 
     @patch(
@@ -57,7 +57,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
         new_callable=AsyncMock,
         return_value=(
             "A : Bonjour !",
-            "gpt-6-1-sol-thinking",
+            "gpt-6.1-sol-thinking",
             "translate",
             "proofread",
             "gemini-3.8-flash",
@@ -72,7 +72,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
                 "style": "spoken",
                 "level": "A1-A2",
                 "locale": "fr-FR",
-                "model": "gpt-6-1-sol-thinking",
+                "model": "gpt-6.1-sol-thinking",
                 "task_mode": "translate",
             },
         )
@@ -82,7 +82,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
             response.json(),
             {
                 "text": "A : Bonjour !",
-                "model": "gpt-6-1-sol-thinking",
+                "model": "gpt-6.1-sol-thinking",
                 "task_mode": "translate",
                 "task_label": "忠实翻译",
                 "proofread_model": "gemini-3.8-flash",
@@ -91,7 +91,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
             },
         )
         self.assertEqual(transform_mock.await_args.args[1], "test-key")
-        self.assertEqual(transform_mock.await_args.args[0].model, "gpt-6-1-sol-thinking")
+        self.assertEqual(transform_mock.await_args.args[0].model, "gpt-6.1-sol-thinking")
         self.assertEqual(transform_mock.await_args.args[0].task_mode, "translate")
 
     @patch(
@@ -99,7 +99,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
         new_callable=AsyncMock,
         return_value=(
             "J'apprends le fran\u00e7ais.",
-            "gpt-6-1-sol-thinking",
+            "gpt-6.1-sol-thinking",
             "translate",
             "proofread",
             "gemini-3.8-flash",
@@ -109,15 +109,15 @@ class FrenchAudioStudioTests(unittest.TestCase):
         response = self.client.post(
             "/api/connection/test",
             headers={"Authorization": "Bearer test-key"},
-            json={"model": "gpt-6-1-sol-thinking"},
+            json={"model": "gpt-6.1-sol-thinking"},
         )
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["connected"], True)
         self.assertEqual(response.json()["quality_check"], "proofread")
         self.assertEqual(response.json()["proofread_model"], "gemini-3.8-flash")
-        self.assertEqual(response.json()["model"], "gpt-6-1-sol-thinking")
-        self.assertEqual(transform_mock.await_args.args[0].model, "gpt-6-1-sol-thinking")
+        self.assertEqual(response.json()["model"], "gpt-6.1-sol-thinking")
+        self.assertEqual(transform_mock.await_args.args[0].model, "gpt-6.1-sol-thinking")
         self.assertEqual(transform_mock.await_args.args[0].task_mode, "translate")
 
     def test_prompt_contains_selected_style_level_and_locale(self):
@@ -311,7 +311,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
         failed_response = Mock(status_code=500)
         successful_response = Mock(status_code=200)
         successful_response.json.return_value = {
-            "model": "gpt-6-1-sol-thinking",
+            "model": "gpt-6.1-sol-thinking",
             "choices": [{"message": {"content": "Bonjour."}}],
         }
         client = AsyncMock()
@@ -322,14 +322,14 @@ class FrenchAudioStudioTests(unittest.TestCase):
         )
 
         self.assertEqual(text, "Bonjour.")
-        self.assertEqual(body["model"], "gpt-6-1-sol-thinking")
+        self.assertEqual(body["model"], "gpt-6.1-sol-thinking")
         self.assertEqual(client.post.await_count, 2)
 
     @patch("tts_service.httpx.AsyncClient")
     def test_contract_failure_retries_once(self, async_client_class):
         bad_response = Mock(status_code=200)
         bad_response.json.return_value = {
-            "model": "gpt-6-1-sol-thinking",
+            "model": "gpt-6.1-sol-thinking",
             "choices": [
                 {
                     "message": {
@@ -340,7 +340,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
         }
         good_response = Mock(status_code=200)
         good_response.json.return_value = {
-            "model": "gpt-6-1-sol-thinking",
+            "model": "gpt-6.1-sol-thinking",
             "choices": [
                 {
                     "message": {
@@ -371,7 +371,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
             result,
             (
                 "Le conservatisme est une idée.",
-                "gpt-6-1-sol-thinking",
+                "gpt-6.1-sol-thinking",
                 "generate",
                 "proofread",
                 "gemini-3.8-flash",
@@ -389,7 +389,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
     ):
         bad_response = Mock(status_code=200)
         bad_response.json.return_value = {
-            "model": "gpt-6-1-sol-thinking",
+            "model": "gpt-6.1-sol-thinking",
             "choices": [{"message": {"content": "我明天去银行。"}}],
         }
         final_response = Mock(status_code=200)
@@ -412,7 +412,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
             result,
             (
                 "Demain, j’irai à la banque.",
-                "gpt-6-1-sol-thinking",
+                "gpt-6.1-sol-thinking",
                 "express",
                 "proofread",
                 "gemini-3.8-flash",
@@ -426,7 +426,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
     ):
         grok_response = Mock(status_code=200)
         grok_response.json.return_value = {
-            "model": "gpt-6-1-sol-thinking",
+            "model": "gpt-6.1-sol-thinking",
             "choices": [{"message": {"content": "Demain, je passerai à la banque."}}],
         }
         invalid_proofread = Mock(status_code=200)
@@ -453,7 +453,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
             result,
             (
                 "Demain, je passerai à la banque.",
-                "gpt-6-1-sol-thinking",
+                "gpt-6.1-sol-thinking",
                 "express",
                 "passed",
                 "gemini-3.8-flash",
@@ -465,7 +465,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
     def test_auto_mode_uses_local_intent_before_generating(self, async_client_class):
         transform_response = Mock(status_code=200)
         transform_response.json.return_value = {
-            "model": "gpt-6-1-sol-thinking",
+            "model": "gpt-6.1-sol-thinking",
             "choices": [
                 {
                     "message": {
@@ -499,7 +499,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
             result,
             (
                 "Le conservatisme est une idée.",
-                "gpt-6-1-sol-thinking",
+                "gpt-6.1-sol-thinking",
                 "generate",
                 "proofread",
                 "gemini-3.8-flash",
@@ -521,12 +521,12 @@ class FrenchAudioStudioTests(unittest.TestCase):
     ):
         classification_response = Mock(status_code=200)
         classification_response.json.return_value = {
-            "model": "gpt-6-1-sol-thinking",
+            "model": "gpt-6.1-sol-thinking",
             "choices": [{"message": {"content": "translate"}}],
         }
         transform_response = Mock(status_code=200)
         transform_response.json.return_value = {
-            "model": "gpt-6-1-sol-thinking",
+            "model": "gpt-6.1-sol-thinking",
             "choices": [{"message": {"content": "Je vais à la bibliothèque."}}],
         }
         proofread_response = Mock(status_code=200)
@@ -556,7 +556,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
     def test_polish_mode_is_also_reviewed(self, async_client_class):
         transform_response = Mock(status_code=200)
         transform_response.json.return_value = {
-            "model": "gpt-6-1-sol-thinking",
+            "model": "gpt-6.1-sol-thinking",
             "choices": [{"message": {"content": "Je vais à la bibliothèque."}}],
         }
         proofread_response = Mock(status_code=200)
@@ -579,7 +579,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
             result,
             (
                 "Je vais à la bibliothèque.",
-                "gpt-6-1-sol-thinking",
+                "gpt-6.1-sol-thinking",
                 "polish",
                 "proofread",
                 "gemini-3.8-flash",
@@ -590,18 +590,18 @@ class FrenchAudioStudioTests(unittest.TestCase):
     def test_chat_payload_uses_selected_model(self):
         request = tts_service.TransformRequest(
             text="Bonjour",
-            model="claude-5-5-sonnet-thinking",
+            model="claude-sonnet-5.5-thinking",
         )
 
         payload = tts_service._chat_payload(request, "polish")
 
-        self.assertEqual(payload["model"], "claude-5-5-sonnet-thinking")
+        self.assertEqual(payload["model"], "claude-sonnet-5.5-thinking")
 
     def test_models_are_routed_to_their_upstream(self):
         gemini = tts_service._map_upstream_model("gemini-3.8-flash")
         self.assertEqual(tts_service._upstream_base_url(gemini), tts_service.AGY_BASE_URL)
-        sol = tts_service._map_upstream_model("gpt-6-1-sol-thinking")
-        self.assertEqual(sol, "gpt-6-1-sol-thinking")
+        sol = tts_service._map_upstream_model("gpt-6.1-sol-thinking")
+        self.assertEqual(sol, "gpt-6.1-sol-thinking")
         self.assertEqual(tts_service._upstream_base_url(sol), tts_service.PERPLEXITY_BASE_URL)
 
     def test_expired_perplexity_login_is_a_clear_error(self):
@@ -611,10 +611,10 @@ class FrenchAudioStudioTests(unittest.TestCase):
             json=Mock(return_value={"choices": [{"message": {"content": "Sign up and repeat your request."}}]}),
         )
         with self.assertRaises(tts_service.HTTPException) as ctx:
-            asyncio.run(tts_service._post_chat(client, {"model": "gpt-6-1-sol-thinking"}, {}))
+            asyncio.run(tts_service._post_chat(client, {"model": "gpt-6.1-sol-thinking"}, {}))
         self.assertEqual(ctx.exception.status_code, 503)
         self.assertEqual(ctx.exception.detail["code"], "perplexity_login_expired")
-        self.assertIn("8004", client.post.await_args.args[0])
+        self.assertIn("8002", client.post.await_args.args[0])
 
     def test_non_french_script_detection(self):
         self.assertTrue(tts_service._contains_non_french_script("Bonjour, \u4f60\u597d"))
@@ -672,7 +672,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
     def test_analyze_requires_api_key(self):
         response = self.client.post(
             "/api/analyze",
-            json={"text": "Je vais au marché.", "model": "gpt-6-1-sol-thinking"},
+            json={"text": "Je vais au marché.", "model": "gpt-6.1-sol-thinking"},
         )
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json()["detail"]["code"], "missing_api_key")
@@ -704,7 +704,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
         response = self.client.post(
             "/api/analyze",
             headers={"Authorization": "Bearer test-key"},
-            json={"text": "Je vais au marché.", "model": "gpt-6-1-sol-thinking"},
+            json={"text": "Je vais au marché.", "model": "gpt-6.1-sol-thinking"},
         )
         self.assertEqual(response.status_code, 200)
         data = response.json()

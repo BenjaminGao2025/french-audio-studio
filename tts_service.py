@@ -33,12 +33,12 @@ STATIC_DIR = BASE_DIR / "static"
 OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", str(BASE_DIR / "outputs"))).resolve()
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# Two OpenAI-compatible upstreams: the Perplexity bridge and the AGY (Antigravity) adapter
+# Two OpenAI-compatible upstreams: the Perplexity web2api (perplexity-web-api) and the AGY (Antigravity) adapter
 PERPLEXITY_BASE_URL = os.getenv(
-    "PERPLEXITY_BASE_URL", "http://127.0.0.1:8004/v1"
+    "PERPLEXITY_BASE_URL", "http://127.0.0.1:8002/v1"
 ).rstrip("/")
 AGY_BASE_URL = os.getenv("AGY_BASE_URL", "http://127.0.0.1:8645/v1").rstrip("/")
-PERPLEXITY_MODEL = os.getenv("PERPLEXITY_MODEL", "gpt-6-1-sol-thinking")
+PERPLEXITY_MODEL = os.getenv("PERPLEXITY_MODEL", "gpt-6.1-sol-thinking")
 PERPLEXITY_PROOFREAD_MODEL = os.getenv("PERPLEXITY_PROOFREAD_MODEL", "gemini-3.8-flash")
 # Quick helper tasks (e.g. fixing dictation) always use a fast model
 FAST_MODEL = os.getenv("FAST_MODEL", "gemini-3.8-flash")
@@ -52,27 +52,27 @@ ASR_CPU_THREADS = int(os.getenv("ASR_CPU_THREADS", "8"))
 ASR_MAX_BYTES = 15 * 1024 * 1024
 
 TRANSFORM_MODELS = {
-    "gpt-6-1-sol-thinking": {
+    "gpt-6.1-sol-thinking": {
         "label": "GPT-6.1 Sol Thinking",
         "description": "Perplexity; strongest reasoning, slower.",
         "recommended": True,
     },
-    "gpt-6-1-sol": {
+    "gpt-6.1-sol": {
         "label": "GPT-6.1 Sol",
         "description": "Perplexity; strong and faster than Thinking.",
         "recommended": False,
     },
-    "claude-5-5-sonnet-thinking": {
+    "claude-sonnet-5.5-thinking": {
         "label": "Claude Sonnet 5.5 Thinking",
         "description": "Perplexity; careful explanations.",
         "recommended": False,
     },
-    "claude-5-5-sonnet": {
+    "claude-sonnet-5.5": {
         "label": "Claude Sonnet 5.5",
         "description": "Perplexity.",
         "recommended": False,
     },
-    "grok-4-7": {
+    "grok-4.7": {
         "label": "Grok 4.7",
         "description": "Perplexity.",
         "recommended": False,
@@ -146,7 +146,7 @@ UPSTREAM_META_RE = re.compile(
     r"je traduis le texte|voici la traduction|texte traduit)\b",
     re.IGNORECASE,
 )
-# What Perplexity answers when the bridge's session is no longer logged in
+# What Perplexity answers when the web session is no longer logged in
 UPSTREAM_LOGIN_RE = re.compile(r"^\s*sign (?:up|in) and repeat your request", re.IGNORECASE)
 FRENCH_BLOCK_RE = re.compile(r"<FRENCH>\s*(.*?)\s*</FRENCH>", re.IGNORECASE | re.DOTALL)
 TRAILING_OFFER_RE = re.compile(
@@ -191,8 +191,8 @@ FRENCH_WORD_RE = re.compile(
 )
 
 TransformModel = Literal[
-    "gpt-6-1-sol-thinking", "gpt-6-1-sol", "claude-5-5-sonnet-thinking",
-    "claude-5-5-sonnet", "grok-4-7", "gemini-3.8-flash",
+    "gpt-6.1-sol-thinking", "gpt-6.1-sol", "claude-sonnet-5.5-thinking",
+    "claude-sonnet-5.5", "grok-4.7", "gemini-3.8-flash",
 ]
 TaskMode = Literal["auto", "generate", "translate", "express", "polish"]
 ResolvedTaskMode = Literal["generate", "translate", "express", "polish"]
@@ -593,7 +593,7 @@ async def _post_chat(
             status_code=503,
             detail={
                 "code": "perplexity_login_expired",
-                "message": "Perplexity 的登录已失效，请先在桥接服务里更新登录，或在连接设置里换用 Gemini。",
+                "message": "Perplexity 的登录已失效，请先在 7840 更新登录，或在连接设置里换用 Gemini。",
             },
         )
     if not raw_text.strip():

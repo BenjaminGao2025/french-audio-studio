@@ -40,7 +40,7 @@ function initStudyWorkbench() {
             reviewBtn: 'Review', reviewBtnTitle: "Today's review (listen · speak · fill in)", dueBadgeTitle: 'Cards due today',
             connectionSettings: 'Connection', connectionNotVerified: 'Connection not verified yet', notVerified: 'Not verified',
             toggleKey: 'Show or hide the API key', analysisModel: 'Analysis model',
-            modelGemini: 'Gemini 3.8 Flash (AGY) · fastest, recommended', modelSonar: 'Sonar 2 · backup',
+            modelGemini: 'Gemini 3.8 Flash (AGY) · fastest, recommended',
             recommendedSuffix: ' · fastest, recommended',
             rememberDevice: 'Remember on this device',
             notTested: 'Not tested yet', notTestedDetail: 'Enter a key, then test the real connection',
@@ -166,7 +166,7 @@ function initStudyWorkbench() {
             reviewBtn: '复习', reviewBtnTitle: '今日复习（听 · 说 · 填）', dueBadgeTitle: '今天待复习卡片数',
             connectionSettings: '连接设置', connectionNotVerified: '连接尚未验证', notVerified: '未验证',
             toggleKey: '显示或隐藏 API Key', analysisModel: '分析模型',
-            modelGemini: 'Gemini 3.8 Flash (AGY) · 极速推荐', modelSonar: 'Sonar 2 · 备用',
+            modelGemini: 'Gemini 3.8 Flash (AGY) · 极速推荐',
             recommendedSuffix: ' · 极速推荐',
             rememberDevice: '记住在此设备',
             notTested: '尚未测试', notTestedDetail: '填写 Key 后测试实际连接',
@@ -2958,7 +2958,7 @@ function initStudyWorkbench() {
     function saveHistoryItem(text, sentences) {
         if (!text || !sentences || sentences.length === 0) return;
         if (window.FrenchHistory) {
-            window.FrenchHistory.saveStudyRecord(text, sentences, modelSelect ? modelSelect.value : 'grok-4.6');
+            window.FrenchHistory.saveStudyRecord(text, sentences, modelSelect ? modelSelect.value : '');
         }
     }
 
