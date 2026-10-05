@@ -781,7 +781,9 @@
                 duration_ms: Math.min(Date.now() - session.startedAt, 3600000),
                 score: session.attempt ? session.attempt.score : null,
                 answer: session.attempt ? ((session.attempt.answer || '').slice(0, 500) || null) : null,
+                tz_offset: new Date().getTimezoneOffset(),
             });
+            if (window.FrenchGame) window.FrenchGame.onReview(updated.game);
             session.reviewed += 1;
             if ((updated.state === 'learning' || updated.state === 'relearning')
                 && Date.parse(updated.due) - Date.now() <= LEARN_AHEAD_MS) {
@@ -826,6 +828,8 @@
             els.doneDetail.textContent = session.reviewed
                 ? T.doneDesc
                 : T.emptyDesc;
+            // Today's queue is gone: that is a cleared wave (once a day), plus the match summary
+            if (session.reviewed && window.FrenchGame) window.FrenchGame.onWaveCleared(els.done);
             refreshIcons();
             return;
         }

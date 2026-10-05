@@ -1,0 +1,382 @@
+/* ==========================================================================
+   French Audio Studio - game layer: HUD, progress panel, callouts (game.js)
+   ========================================================================== */
+
+.game-hud {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 16px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.hud-hero {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    padding: 4px 12px 4px 4px;
+    color: var(--ink);
+    cursor: pointer;
+    font: inherit;
+}
+
+.hud-hero:hover,
+.hud-hero[aria-expanded="true"] {
+    border-color: var(--primary);
+}
+
+.hud-level {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 3px;
+    border-radius: 999px;
+    background: var(--primary);
+    color: #ffffff;
+    padding: 3px 10px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.hud-level b {
+    font-size: 15px;
+}
+
+.hud-xp {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.hud-xp-bar {
+    width: 120px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--surface-muted);
+    overflow: hidden;
+}
+
+.hud-xp-fill {
+    display: block;
+    height: 100%;
+    width: 0;
+    border-radius: 999px;
+    background: var(--accent);
+    transition: width 0.6s ease;
+}
+
+.hud-xp-text {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+.hud-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-variant-numeric: tabular-nums;
+}
+
+.hud-stat svg {
+    width: 15px;
+    height: 15px;
+}
+
+.hud-stat.is-done {
+    color: var(--success);
+    font-weight: 700;
+}
+
+.hud-streak svg {
+    color: var(--accent);
+}
+
+.hud-spacer {
+    flex: 1;
+}
+
+.hud-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    padding: 4px 10px;
+    color: var(--ink);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.hud-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.hud-btn svg {
+    width: 15px;
+    height: 15px;
+}
+
+.game-hud.is-leveling .hud-hero {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+/* Progress panel */
+.game-panel {
+    margin: 12px 0 4px;
+    padding: 16px 18px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    font-size: 14px;
+}
+
+.game-panel-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px 32px;
+}
+
+.game-panel h3 {
+    margin: 0 0 10px;
+    font-size: 14px;
+}
+
+.game-panel h3 + .game-logs,
+.game-panel .game-custom + h3 {
+    margin-top: 14px;
+}
+
+.lane-row {
+    display: grid;
+    grid-template-columns: 80px minmax(0, 1fr) 96px;
+    align-items: center;
+    gap: 10px;
+    margin: 6px 0;
+}
+
+.lane-bar {
+    height: 8px;
+    border-radius: 999px;
+    background: var(--surface-muted);
+    overflow: hidden;
+}
+
+.lane-bar span {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--primary);
+}
+
+.lane-row.is-done .lane-bar span {
+    background: var(--success);
+}
+
+.lane-num {
+    color: var(--muted);
+    font-size: 13px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.game-totals,
+.game-hint {
+    margin: 10px 0 0;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.game-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.game-presets .btn {
+    min-height: 34px;
+    padding: 0 12px;
+    font-size: 13px;
+}
+
+.game-custom {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    color: var(--muted);
+}
+
+.game-custom select,
+.game-custom input {
+    min-height: 34px;
+    border: 1px solid var(--line-strong);
+    border-radius: 7px;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    padding: 0 8px;
+}
+
+.game-custom select {
+    width: auto;
+    flex: 0 0 auto;
+}
+
+.game-custom input {
+    width: 72px;
+    flex: 0 0 auto;
+}
+
+.game-custom .btn {
+    min-height: 34px;
+    padding: 0 12px;
+}
+
+.game-logs {
+    margin: 0;
+    padding-left: 18px;
+}
+
+.game-logs li {
+    margin: 4px 0;
+}
+
+.game-logs .muted {
+    list-style: none;
+    margin-left: -18px;
+    color: var(--muted);
+}
+
+.link-btn {
+    border: none;
+    background: none;
+    padding: 0 0 0 6px;
+    color: var(--primary);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.game-family {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 14px;
+    font-weight: 600;
+}
+
+/* Callouts */
+.game-banner {
+    position: fixed;
+    top: 22%;
+    left: 50%;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 12px 28px;
+    border-radius: 14px;
+    background: rgba(27, 33, 30, 0.92);
+    color: #ffffff;
+    pointer-events: none;
+    transform: translateX(-50%);
+    animation: game-banner-in 1.3s ease forwards;
+}
+
+.game-banner strong {
+    font-size: 28px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.game-banner span {
+    color: #f6d58b;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.game-banner.is-first strong { color: #ff8a7a; }
+.game-banner.is-big strong { color: #f6c453; font-size: 34px; }
+.game-banner.is-level { animation-duration: 2.2s; background: var(--primary); }
+.game-banner.is-level strong { font-size: 36px; }
+.game-banner.is-level span { color: #ffffff; font-size: 18px; }
+.game-banner.is-error { background: var(--danger); }
+.game-banner.is-error strong { font-size: 15px; text-transform: none; }
+
+@keyframes game-banner-in {
+    0% { opacity: 0; transform: translateX(-50%) scale(0.6); }
+    12% { opacity: 1; transform: translateX(-50%) scale(1.08); }
+    22% { transform: translateX(-50%) scale(1); }
+    80% { opacity: 1; }
+    100% { opacity: 0; transform: translateX(-50%) translateY(-12px); }
+}
+
+.game-xp-float {
+    position: fixed;
+    z-index: 10000;
+    color: var(--accent);
+    font-size: 15px;
+    font-weight: 800;
+    pointer-events: none;
+    transform: translateX(-50%);
+    animation: game-xp-float 1.2s ease-out forwards;
+}
+
+@keyframes game-xp-float {
+    0% { opacity: 0; transform: translate(-50%, 10px); }
+    20% { opacity: 1; }
+    100% { opacity: 0; transform: translate(-50%, -18px); }
+}
+
+/* Match summary on the review "done" screen */
+.game-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 4px 0 8px;
+    padding: 12px 18px;
+    border-radius: 10px;
+    background: var(--accent-soft);
+    font-size: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .game-banner,
+    .game-xp-float {
+        animation: none;
+    }
+}
+
+@media (max-width: 760px) {
+    .game-hud {
+        gap: 6px 12px;
+    }
+
+    .hud-xp-bar {
+        width: 72px;
+    }
+
+    .hud-btn span {
+        display: none;
+    }
+
+    .game-banner strong {
+        font-size: 22px;
+    }
+
+    .lane-row {
+        grid-template-columns: 70px minmax(0, 1fr) 84px;
+    }
+}

@@ -2057,6 +2057,7 @@ function initStudyWorkbench() {
             let stream;
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                if (window.FrenchGame) window.FrenchGame.setLane('speaking');
             } catch (err) {
                 setStatus(`${T.micError}${err.message}`, true);
                 return;
@@ -2636,6 +2637,7 @@ function initStudyWorkbench() {
                     recognitionTranscript = '';
 
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    if (window.FrenchGame) window.FrenchGame.setLane('speaking');
                     mediaRecorder = new MediaRecorder(stream);
                     mediaRecorder.ondataavailable = (e) => {
                         if (e.data.size > 0) audioChunks.push(e.data);

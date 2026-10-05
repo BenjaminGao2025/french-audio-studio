@@ -8,7 +8,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY auth_db.py episodes.py srs.py ./
+COPY auth_db.py episodes.py game.py srs.py ./
 COPY tts_service.py .
 COPY static /app/static
 

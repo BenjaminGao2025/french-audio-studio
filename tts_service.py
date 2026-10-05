@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 
 import auth_db
 import episodes
+import game
 import srs
 
 
@@ -1988,6 +1989,7 @@ class SrsReviewRequest(BaseModel):
     duration_ms: int | None = Field(default=None, ge=0, le=3_600_000)
     score: int | None = Field(default=None, ge=0, le=100)
     answer: str | None = Field(default=None, max_length=5000)  # srs stores the first 500 chars
+    tz_offset: int = Field(default=0, ge=-840, le=840)
 
 
 class SrsImportRequest(BaseModel):
@@ -2080,11 +2082,85 @@ def srs_review_card(
 ):
     user_id = _require_user_id(authorization)
     try:
-        return srs.review_card(
+        card = srs.review_card(
             user_id, card_id, req.rating, req.duration_ms, req.score, req.answer
         )
     except KeyError:
         raise HTTPException(status_code=404, detail={"message": "卡片不存在。"})
+    # Kill feed for the review page: XP, combo, first blood and the new totals
+    card["game"] = game.review_feedback(user_id, req.tz_offset)
+    return card
+
+
+# ---------------------------------------------------------------------------
+# Game: study time, XP and hero level (see game.py)
+# ---------------------------------------------------------------------------
+GameLane = Literal["course", "listening", "reading", "speaking", "writing", "review"]
+
+
+class GameHeartbeat(BaseModel):
+    lane: GameLane
+    seconds: int = Field(ge=0, le=600)
+    tz_offset: int = Field(default=0, ge=-840, le=840)
+
+
+class GameLog(BaseModel):
+    lane: GameLane
+    minutes: int = Field(ge=1, le=300)
+    note: str = Field(default="", max_length=200)
+    tz_offset: int = Field(default=0, ge=-840, le=840)
+
+
+class GameDayRequest(BaseModel):
+    tz_offset: int = Field(default=0, ge=-840, le=840)
+    on: bool = True
+
+
+@app.get("/api/game/state")
+def game_state(
+    tz_offset: int = Query(default=0, ge=-840, le=840),
+    authorization: str | None = Header(default=None),
+):
+    return game.state(_require_user_id(authorization), tz_offset)
+
+
+@app.post("/api/game/heartbeat")
+def game_heartbeat(req: GameHeartbeat, authorization: str | None = Header(default=None)):
+    stored = game.record_time(_require_user_id(authorization), req.lane, req.seconds, req.tz_offset)
+    return {"stored_seconds": stored}
+
+
+@app.post("/api/game/log")
+def game_log(req: GameLog, authorization: str | None = Header(default=None)):
+    user_id = _require_user_id(authorization)
+    game.log_time(user_id, req.lane, req.minutes, req.note, req.tz_offset)
+    return game.state(user_id, req.tz_offset)
+
+
+@app.delete("/api/game/log/{log_id}")
+def game_delete_log(
+    log_id: int,
+    tz_offset: int = Query(default=0, ge=-840, le=840),
+    authorization: str | None = Header(default=None),
+):
+    user_id = _require_user_id(authorization)
+    if not game.delete_log(user_id, log_id):
+        raise HTTPException(status_code=404, detail={"message": "记录不存在。"})
+    return game.state(user_id, tz_offset)
+
+
+@app.post("/api/game/family-day")
+def game_family_day(req: GameDayRequest, authorization: str | None = Header(default=None)):
+    user_id = _require_user_id(authorization)
+    game.set_family_day(user_id, req.on, req.tz_offset)
+    return game.state(user_id, req.tz_offset)
+
+
+@app.post("/api/game/wave-cleared")
+def game_wave_cleared(req: GameDayRequest, authorization: str | None = Header(default=None)):
+    user_id = _require_user_id(authorization)
+    xp = game.wave_cleared(user_id, req.tz_offset)
+    return {"xp": xp, "state": game.state(user_id, req.tz_offset)}
 
 
 class GrammarPointIn(BaseModel):
