@@ -876,8 +876,19 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
         "- For very short phrases of 4 words or fewer where word order is identical to English, you may leave \"alignment\": [] and \"order_note\": \"\".\n\n"
         "Build-up (layers):\n"
         "- CRITICAL RULE FOR SHORT SENTENCES: If the sentence or phrase has 5 words or fewer (e.g. 'Délivrance des résultats', 'Bonjour tout le monde', 'Merci beaucoup', short titles/headings), DO NOT create a build-up! Return empty array: \"build_up\": []. Do NOT artificially split short phrases.\n"
-        "- For longer sentences (more than 5 words): start from the shortest correct core sentence (usually subject + verb), add ONE new element per step, ending with the exact original sentence (3–5 steps).\n"
-        '- Each step has: French, English, and "New:" (what was added, in simple English).\n\n'
+        "- For longer sentences (more than 5 words), build it like a tree: trunk first, then branches.\n"
+        "  1. Step 1 is the bare trunk: the FIRST main clause reduced to its core (subject + verb + object; for an imperative, verb + object), "
+        "even if it feels very short, with nothing of a relative clause in it (e.g. 'Choisissez celle.', not 'Choisissez celle qui correspond.'). "
+        "Never start from a later clause, a clause after et/mais, or a subordinate clause.\n"
+        "  2. Each next step adds ONE branch, in the sentence's own order: what hangs on the trunk first (a relative clause qui/que/dont, an object, a complement), "
+        "then a coordinated main clause (et/mais/ou + verb), then place/time phrases.\n"
+        "  3. Keep the original word order in every step, and end with the exact original sentence (3–5 steps).\n"
+        "  Example: 'Choisissez celle qui correspond à l'image et cochez une case sur la feuille de réponses.' → "
+        "1 'Choisissez celle.' (trunk) → 2 'Choisissez celle qui correspond à l'image.' (relative clause describing celle) → "
+        "3 '… et cochez une case.' (second main verb, joined by et) → 4 the full sentence (place: sur la feuille de réponses). "
+        "Wrong: starting with 'Cochez une case.'\n"
+        '- Each step has: French, English, and "new": what was added and its role, in simple English, without a "New:" prefix '
+        '(e.g. "Trunk: choose the one." / "Branch: qui correspond à l\'image describes celle.").\n\n'
         "Grammar points:\n"
         "- 1–3 points, the most useful ones for this sentence.\n"
         "- Each has: a short title, a simple explanation, and a memory hook (word history, a comparison with English or Chinese, or a simple picture).\n\n"
@@ -1042,7 +1053,7 @@ def _parse_analysis_json(raw_text: str, fallback_text: str) -> dict:
                     if isinstance(b, dict):
                         fr = str(b.get("fr", "")).strip()
                         en = str(b.get("en", "")).strip()
-                        new_note = str(b.get("new", "")).strip()
+                        new_note = re.sub(r"^(new\s*:\s*)+", "", str(b.get("new", "")).strip(), flags=re.IGNORECASE)
                         if fr:
                             clean_buildup.append({"fr": fr, "en": en, "new": new_note})
 
