@@ -9,11 +9,13 @@
     <link rel="icon" href="/favicon.ico?v=2" sizes="any">
     <link rel="stylesheet" href="/static/style.css?v=__ASSET_VERSION__">
     <link rel="stylesheet" href="/static/study.css?v=__ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/word-popover.css?v=__ASSET_VERSION__">
     <script>window.activeTokensMap = new Map(); var activeTokensMap = window.activeTokensMap;</script>
     <script src="https://unpkg.com/lucide@1.34.0/dist/umd/lucide.min.js" defer></script>
     <script src="/static/i18n.js?v=__ASSET_VERSION__" defer></script>
     <script src="/static/speech-eval.js?v=__ASSET_VERSION__" defer></script>
     <script src="/static/history.js?v=__ASSET_VERSION__" defer></script>
+    <script src="/static/word-popover.js?v=__ASSET_VERSION__" defer></script>
     <script src="/static/study.js?v=__ASSET_VERSION__" defer></script>
 </head>
 <body>
@@ -300,46 +302,5 @@
         </div>
     </div>
 
-    <!-- Floating Word Popover -->
-    <div id="floating-word-popover" class="floating-word-popover" hidden aria-live="polite">
-        <div class="popover-arrow" aria-hidden="true"></div>
-        <div class="popover-header">
-            <div class="popover-main-info">
-                <div class="popover-word-row">
-                    <strong id="popover-word" class="popover-word">--</strong>
-                    <button id="popover-star-btn" class="btn-popover-star-icon" type="button" title="加入复习 (快捷键 S)" data-i18n-title="popoverStarTitle">
-                        <i data-lucide="star" aria-hidden="true"></i>
-                    </button>
-                </div>
-                <div class="popover-phonetic-row">
-                    <button id="popover-speak-btn" class="btn-popover-speak-inline" type="button" title="重播发音 (快捷键 R)" data-i18n-title="popoverReplayTitle">
-                        <i data-lucide="volume-2" aria-hidden="true"></i>
-                    </button>
-                    <span id="popover-phonetic" class="popover-phonetic" title="点击重播发音" data-i18n-title="replayTitle"></span>
-                    <span id="popover-pos" class="pos-tag" hidden></span>
-                    <span id="popover-lemma" class="lemma-tag" hidden></span>
-                </div>
-            </div>
-            <button id="popover-close-btn" class="icon-btn popover-close-btn" type="button" title="关闭 (Esc)" data-i18n-title="closeEsc">
-                <i data-lucide="x" aria-hidden="true"></i>
-            </button>
-        </div>
-        <div class="popover-body">
-            <div id="popover-loading" class="popover-loading" hidden style="display: none;">
-                <i data-lucide="loader" class="spin-icon"></i>
-                <span data-i18n="lookingUpMeaning">正在查询字义...</span>
-            </div>
-            <div id="popover-content">
-                <div class="popover-cn-text" id="popover-cn"></div>
-                <div class="popover-en-text" id="popover-en"></div>
-            </div>
-            <div id="popover-importance" class="popover-importance" hidden>
-                <span class="importance-label" data-i18n="importanceLabel">重要度</span>
-                <span class="importance-stars">
-                    <button type="button" data-level="1">★</button><button type="button" data-level="2">★</button><button type="button" data-level="3">★</button><button type="button" data-level="4">★</button><button type="button" data-level="5">★</button>
-                </span>
-            </div>
-        </div>
-    </div>
 </body>
 </html>
