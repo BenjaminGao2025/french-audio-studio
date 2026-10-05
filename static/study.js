@@ -376,7 +376,7 @@ function initStudyWorkbench() {
     });
 
     const wordPopover = window.FrenchWordPopover.create({
-        speak: (text) => playFrenchSpeech(text),
+        speak: (text) => playFrenchSpeech(text, null, { once: true }),
         getAuthToken: () => getEffectiveAuthToken(),
         wordSelector: '.interactive-word, .diff-word, .token-word',
         localLookup(lower, word, context) {
@@ -610,71 +610,86 @@ function initStudyWorkbench() {
         }
     }
 
-    function playFrenchSpeech(text, onEndCallback = null) {
-        if (!text || !text.trim()) return;
-        const cleanText = text.trim();
-
-        // 1. Stop any previously active playback
-        stopAllAudio();
-
-        const audioUrl = `/tts?text=${encodeURIComponent(cleanText)}&voice=fr-FR-DeniseNeural`;
-        const audio = new Audio(audioUrl);
+    // One clip, Edge TTS with Web Speech as the fallback; onDone runs when it finishes by itself
+    function playClip(cleanText, onDone) {
+        const audio = new Audio(`/tts?text=${encodeURIComponent(cleanText)}&voice=fr-FR-DeniseNeural`);
         currentActiveAudio = audio;
-
-        let isFinished = false;
+        let done = false;
         const finish = () => {
-            if (isFinished) return;
-            isFinished = true;
-            if (currentActiveAudio === audio) {
-                currentActiveAudio = null;
-            }
-            if (currentAudioCleanup === cleanup) {
-                currentAudioCleanup = null;
-            }
+            if (done) return;
+            done = true;
+            if (currentActiveAudio === audio) currentActiveAudio = null;
+            onDone();
+        };
+        const speakFallback = () => {
+            if (done || currentActiveAudio !== audio) return;
+            if (!('speechSynthesis' in window)) { finish(); return; }
+            try { window.speechSynthesis.cancel(); } catch (e) {}
+            const utterance = new SpeechSynthesisUtterance(cleanText);
+            utterance.lang = 'fr-FR';
+            utterance.rate = 0.95;
+            utterance.onend = finish;
+            utterance.onerror = finish;
+            window.speechSynthesis.speak(utterance);
+        };
+        audio.addEventListener('ended', finish);
+        audio.addEventListener('error', () => {
+            console.warn('Audio error, falling back to Web Speech');
+            speakFallback();
+        });
+        audio.play().catch(e => {
+            console.warn('Audio play interrupted, falling back to Web Speech:', e);
+            speakFallback();
+        });
+    }
+
+    let playbackLoopTimer = null;
+
+    // Plays French once, or keeps going in a repeat mode (FrenchPlayback, see playback.js):
+    // "loop" repeats this text, "all" goes on through the sentences on the page and starts over.
+    // Word lookups pass { once: true }. onEndCallback runs when playback really ends or is stopped.
+    function playFrenchSpeech(text, onEndCallback = null, options = {}) {
+        if (!text || !text.trim()) return;
+        stopAllAudio();
+        const mode = options.once || !window.FrenchPlayback ? 'once' : window.FrenchPlayback.mode();
+        const sentences = mode === 'all'
+            ? Array.from(document.querySelectorAll('.sentence-french-text')).map(el => el.textContent.trim()).filter(Boolean)
+            : [];
+        const keys = sentences.map(srsSentenceKey);
+        let current = text.trim();
+        let ended = false;
+        const markReading = (index) => {
+            document.querySelectorAll('.sentence-french-text.is-reading').forEach(el => el.classList.remove('is-reading'));
+            const el = index >= 0 ? document.querySelectorAll('.sentence-french-text')[index] : null;
+            if (el) el.classList.add('is-reading');
+        };
+        const endAll = () => {
+            if (ended) return;
+            ended = true;
+            markReading(-1);
+            clearTimeout(playbackLoopTimer);
+            playbackLoopTimer = null;
+            if (mode !== 'once' && window.FrenchPlayback) window.FrenchPlayback.setActive(false);
             if (onEndCallback) onEndCallback();
         };
+        currentAudioCleanup = endAll;  // stopAllAudio ends the whole loop
+        if (mode !== 'once') window.FrenchPlayback.setActive(true, stopAllAudio);
 
-        const cleanup = () => {
-            if (!isFinished) {
-                isFinished = true;
-                if (onEndCallback) onEndCallback();
-            }
+        const step = () => {
+            if (mode === 'all') markReading(keys.indexOf(srsSentenceKey(current)));
+            playClip(current, () => {
+                if (ended) return;
+                if (mode === 'once') {
+                    if (currentAudioCleanup === endAll) currentAudioCleanup = null;
+                    endAll();
+                    return;
+                }
+                const index = keys.indexOf(srsSentenceKey(current));
+                if (index !== -1) current = sentences[(index + 1) % sentences.length];
+                playbackLoopTimer = setTimeout(() => { if (!ended) step(); }, 800);
+            });
         };
-        currentAudioCleanup = cleanup;
-
-        audio.addEventListener('ended', finish);
-
-        audio.addEventListener('error', () => {
-            if (isFinished) return;
-            console.warn('Audio error, falling back to Web Speech');
-            if ('speechSynthesis' in window) {
-                try { window.speechSynthesis.cancel(); } catch (e) {}
-                const utterance = new SpeechSynthesisUtterance(cleanText);
-                utterance.lang = 'fr-FR';
-                utterance.rate = 0.95;
-                utterance.onend = finish;
-                utterance.onerror = finish;
-                window.speechSynthesis.speak(utterance);
-            } else {
-                finish();
-            }
-        });
-
-        audio.play().catch(e => {
-            if (isFinished) return;
-            console.warn('Audio play interrupted, falling back to Web Speech:', e);
-            if ('speechSynthesis' in window) {
-                try { window.speechSynthesis.cancel(); } catch (e) {}
-                const utterance = new SpeechSynthesisUtterance(cleanText);
-                utterance.lang = 'fr-FR';
-                utterance.rate = 0.95;
-                utterance.onend = finish;
-                utterance.onerror = finish;
-                window.speechSynthesis.speak(utterance);
-            } else {
-                finish();
-            }
-        });
+        step();
     }
 
     // -------------------------------------------------------------------------

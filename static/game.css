@@ -419,3 +419,20 @@
         grid-template-columns: 70px minmax(0, 1fr) 84px;
     }
 }
+
+/* Playback mode (playback.js): once / repeat / repeat all, and Stop while a loop runs */
+.playback-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.playback-mode.is-on {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+    color: var(--primary);
+}
+
+.playback-stop {
+    color: var(--danger);
+}

@@ -354,6 +354,7 @@
             currentAudio.pause();
             currentAudio = null;
         }
+        if (window.FrenchPlayback) window.FrenchPlayback.setActive(false);
         if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     }
 
@@ -388,7 +389,7 @@
 
     // The card's own target word already carries its meaning, so it shows instantly.
     const wordPopover = window.FrenchWordPopover.create({
-        speak: (text) => playFrench(text),
+        speak: (text) => playFrench(text, 1, { once: true }),
         getAuthToken: () => getToken(),
         wordSelector: '.fr-word',
         localLookup(lower) {
@@ -405,12 +406,24 @@
         return `/tts?text=${encodeURIComponent(text.trim())}&voice=${VOICE}`;
     }
 
-    function playFrench(text, rate = 1) {
+    // In a repeat mode (playback.js) the same text plays again until stopped; word lookups play once
+    function playFrench(text, rate = 1, options = {}) {
         if (!text) return;
         stopAudio();
+        const repeat = !options.once && window.FrenchPlayback && window.FrenchPlayback.mode() !== 'once';
         const audio = new Audio(ttsUrl(text));
         audio.playbackRate = rate;
         currentAudio = audio;
+        if (repeat) {
+            window.FrenchPlayback.setActive(true, stopAudio);
+            audio.addEventListener('ended', () => {
+                setTimeout(() => {
+                    if (currentAudio !== audio) return;
+                    audio.currentTime = 0;
+                    audio.play().catch(() => {});
+                }, 800);
+            });
+        }
         audio.play().catch((err) => {
             // Interrupted by another play/stop: do not fall back to reading the old text.
             if (currentAudio !== audio || (err && err.name === 'AbortError')) return;
