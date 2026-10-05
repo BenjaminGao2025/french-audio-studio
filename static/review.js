@@ -62,7 +62,6 @@
             noAsr: 'This browser has no speech recognition (Chrome, Edge and Safari do). Say it out loud, then show the answer to compare.',
             speakFrench: 'Speak French', doneTapToScore: 'Done, tap to score', tryAgain: 'Try again', myRecording: 'My recording',
             points: '/100', heard: 'Heard: ', nothingHeard: '(no voice detected)',
-            diffLegend: 'In your answer: red = wrong or extra letter, red _ = a letter is missing, orange = wrong accent. The answer highlights what to change.',
             correct: 'Correct!', accentsOnly: 'Right, but check the accents', veryClose: 'Very close, check the spelling',
             notQuite: 'Not quite', noAnswer: 'No answer', youWrote: 'You wrote: ', answer: 'Answer: ',
             playSentence: 'Play the sentence', slowReplay: 'Slow replay',
@@ -123,7 +122,6 @@
             noAsr: '这个浏览器不支持语音识别（Chrome / Edge / Safari 支持）。请大声说出来，再点「显示答案」对照。',
             speakFrench: '开口说法语', doneTapToScore: '说完了，点这里评分', tryAgain: '再说一次', myRecording: '我的录音',
             points: '分', heard: '识别到：', nothingHeard: '（没有识别到声音）',
-            diffLegend: '你写的：红色 = 写错或多写的字母，红色 _ = 这里漏了字母，橙色 = 重音错了。答案里高亮的是要改成的字母。',
             correct: '完全正确', accentsOnly: '对了，但注意重音符号', veryClose: '很接近，拼写有出入',
             notQuite: '不对', noAnswer: '没有作答', youWrote: '你写的：', answer: '答案：',
             playSentence: '播放句子', slowReplay: '慢速再听',
@@ -560,7 +558,6 @@
                     <strong>${verdict.text}</strong>
                     ${diff ? `<span>${T.youWrote}<b class="letter-diff">${diff.typed}</b></span>` : ''}
                     <span>${T.answer}<b class="letter-diff is-answer fr-word" data-speech="${escapeHtml(answer)}">${diff ? diff.answer : escapeHtml(answer)}</b></span>
-                    ${diff && verdict.cls !== 'correct' ? `<small class="diff-legend-line">${T.diffLegend}</small>` : ''}
                 </div>`,
         };
         reveal();

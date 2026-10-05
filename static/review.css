@@ -794,10 +794,6 @@ kbd {
 .letter-diff.is-answer .ch-ok { color: var(--ink); }
 .ch-fix { color: var(--ink); background: var(--success-soft); border-radius: 3px; padding: 0 1px; box-shadow: inset 0 -2px 0 var(--success); }
 
-.diff-legend-line {
-    color: var(--muted);
-    font-size: 12px;
-}
 
 /* Card importance (1-5 stars) */
 .card-meta-right {
