@@ -2095,7 +2095,7 @@ def srs_review_card(
 # ---------------------------------------------------------------------------
 # Game: study time, XP and hero level (see game.py)
 # ---------------------------------------------------------------------------
-GameLane = Literal["course", "listening", "reading", "speaking", "writing", "review"]
+GameLane = Literal["course", "listening", "reading", "speaking", "writing", "review", "car"]
 
 
 class GameHeartbeat(BaseModel):

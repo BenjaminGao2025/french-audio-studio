@@ -364,6 +364,17 @@ function initStudyWorkbench() {
 
     // Word popover: shared with the review page (static/word-popover.js). This page adds
     // its sentence analysis, fixed expressions and the word book (add to review, importance).
+    // The word book (saved words, importance) is shared with the review page too
+    const wordBook = window.FrenchWordPopover.createWordBook({
+        getToken: () => getUserToken(),
+        notePayload: (sentence) => sentenceNotePayload(sentence),
+        findLocal: (sentence, token) => findTargetCard(sentence, token),
+        onSaved: (note) => rememberNote(note),
+        onRemoved: (sentence, cardId) => forgetCard(sentence, cardId),
+        onChange: () => updateTableStarStates(),
+        onError: (err) => showSrsError(err),
+    });
+
     const wordPopover = window.FrenchWordPopover.create({
         speak: (text) => playFrenchSpeech(text),
         getAuthToken: () => getEffectiveAuthToken(),
@@ -386,27 +397,10 @@ function initStudyWorkbench() {
             window.activeTokensMap.set(lower, item);
         },
         saving: {
-            isSaved: (item) => isWordSaved(item.sentence, item.token),
-            entries: (token) => savedWordEntries(token),
-            toggle: (c) => toggleTargetCard({
-                token: c.token,
-                sentence: c.sentence || '',
-                meta: {
-                    meaning_zh: c.explanation_cn,
-                    meaning_en: c.explanation_en,
-                    lemma: c.lemma,
-                    pos: c.pos,
-                    ipa: c.phonetic,
-                    hook: c.hook,
-                },
-            }),
-            async setImportance(entries, level) {
-                try {
-                    await srsApi('POST', '/api/srs/importance', { card_ids: entries.map(w => w.card_id), importance: level });
-                    entries.forEach(w => { w.importance = level; });
-                } catch (err) {
-                    showSrsError(err);
-                }
+            ...wordBook.popoverSaving,
+            async toggle(item) {
+                await wordBook.popoverSaving.toggle(item);
+                refreshDueBadge();
             },
         },
     });
@@ -749,32 +743,12 @@ function initStudyWorkbench() {
         return note.cards.find(c => (c.mode === 'cloze' || c.mode === 'recognize') && c.target.toLowerCase() === clean) || null;
     }
 
-    // Every word in the deck, whichever sentence it was saved from (like a word book)
-    const savedWordsByText = new Map(); // lower-cased word -> [{card_id, sentence, importance}]
-
-    function savedWordEntries(token) {
-        return savedWordsByText.get((token || '').trim().toLowerCase()) || [];
-    }
-
     function isWordSaved(sentence, token) {
-        return Boolean(findTargetCard(sentence, token)) || savedWordEntries(token).length > 0;
+        return wordBook.isSaved(sentence, token);
     }
 
-    async function loadSavedWords() {
-        savedWordsByText.clear();
-        if (getUserToken()) {
-            try {
-                const data = await srsApi('GET', '/api/srs/words');
-                (data.words || []).forEach(w => {
-                    const key = w.text.trim().toLowerCase();
-                    if (!savedWordsByText.has(key)) savedWordsByText.set(key, []);
-                    savedWordsByText.get(key).push(w);
-                });
-            } catch (err) {
-                console.warn('Failed to load saved words:', err);
-            }
-        }
-        updateTableStarStates();
+    function loadSavedWords() {
+        return wordBook.load();
     }
 
     function findGrammarCard(sentence, title) {
@@ -903,32 +877,8 @@ function initStudyWorkbench() {
         };
     }
 
-    async function toggleTargetCard({ token, sentence, meta }) {
-        const cleanToken = (token || '').trim();
-        if (!cleanToken) return;
-        const local = findTargetCard(sentence, cleanToken);
-        const elsewhere = savedWordEntries(cleanToken);
-        try {
-            if (local || elsewhere.length) {
-                // The word is in the book (from this or another sentence): the star removes it
-                const ids = new Set(elsewhere.map(w => w.card_id));
-                if (local) ids.add(local.id);
-                for (const id of ids) {
-                    await srsApi('DELETE', `/api/srs/cards/${encodeURIComponent(id)}`);
-                }
-                if (local) forgetCard(sentence || cleanToken, local.id);
-                elsewhere.forEach(w => forgetCard(w.sentence, w.card_id));
-            } else {
-                const inSentence = Boolean(sentence) && sentence.toLowerCase().includes(cleanToken.toLowerCase());
-                // A word that is not in this sentence (e.g. from an AI answer) is saved on its own
-                const payload = inSentence ? sentenceNotePayload(sentence) : { sentence: cleanToken };
-                payload.targets = [{ text: cleanToken, mode: inSentence ? 'cloze' : 'recognize', meta: meta || {} }];
-                rememberNote(await srsApi('POST', '/api/srs/notes', payload));
-            }
-        } catch (err) {
-            showSrsError(err);
-        }
-        await loadSavedWords();
+    async function toggleTargetCard(word) {
+        await wordBook.toggle(word);
         refreshDueBadge();
     }
 
@@ -2961,7 +2911,7 @@ function initStudyWorkbench() {
     function handleLogout() {
         localStorage.removeItem(userTokenKey);
         srsNotesByKey.clear();
-        savedWordsByText.clear();
+        wordBook.clear();
         updateTableStarStates();
         refreshDueBadge();
         updateAuthUI(null);

@@ -29,10 +29,12 @@ def _at(day: str, hour: int) -> datetime.datetime:
 class LevelCurveTests(unittest.TestCase):
     def test_levels_follow_study_hours(self):
         self.assertEqual(game.level_threshold(1), 0)
-        self.assertEqual(game.level_threshold(game.MAX_LEVEL), game.TOP_LEVEL_XP)
-        # At 16 h a week (960 XP), level 10 arrives around week 8 and level 15 around week 16
-        self.assertTrue(6 * 960 <= game.level_threshold(10) <= 9 * 960)
-        self.assertTrue(14 * 960 <= game.level_threshold(15) <= 18 * 960)
+        self.assertEqual(game.level_threshold(game.MAX_LEVEL), 700 * 60)
+        # At 24 h a week (1440 XP): level ~12 at the week-8 check, ~17 at week 16
+        week = game.WEEK_TARGET_MIN
+        self.assertEqual(week, 24 * 60)
+        self.assertTrue(7 * week <= game.level_threshold(12) <= 9 * week)
+        self.assertTrue(14 * week <= game.level_threshold(17) <= 17 * week)
         info = game.level_for(game.level_threshold(5) + 1)
         self.assertEqual(info["level"], 5)
         self.assertEqual(game.level_for(10**9)["level"], game.MAX_LEVEL)
@@ -43,22 +45,32 @@ class LevelCurveTests(unittest.TestCase):
         self.assertEqual(game.week_number(datetime.date(2026, 10, 5)), 1)
         self.assertEqual(game.week_number(datetime.date(2026, 11, 29)), 8)
         self.assertEqual(game.week_target(datetime.date(2027, 6, 1)), game.MAINTENANCE_WEEK_TARGET_MIN)
-        self.assertEqual(game.week_target(datetime.date(2026, 10, 5)), 960)
+        self.assertEqual(game.week_target(datetime.date(2026, 10, 5)), 1440)
 
 
 class StudyTimeTests(unittest.TestCase):
     def setUp(self):
         self.user_id, _ = _new_user()
 
-    def test_minutes_beyond_three_hours_earn_half_xp(self):
-        now = _at("2026-10-06", 10)
-        game.log_time(self.user_id, "course", 120, "", PDT, now)
-        game.log_time(self.user_id, "listening", 120, "", PDT, now)
+    def test_minutes_beyond_five_hours_earn_half_xp(self):
+        now = _at("2026-10-06", 10)  # a Tuesday
+        game.log_time(self.user_id, "course", 200, "", PDT, now)
+        game.log_time(self.user_id, "listening", 200, "", PDT, now)
         state = game.state(self.user_id, PDT, now)
-        self.assertEqual(state["today"]["minutes"], 240)
-        self.assertEqual(state["xp"], 180 + 30)
-        self.assertEqual(state["today"]["target"], 180)
-        self.assertEqual(state["week"]["by_lane"]["course"], 120)
+        self.assertEqual(state["today"]["minutes"], 400)
+        self.assertEqual(state["xp"], 300 + 50)
+        self.assertEqual(state["today"]["target"], 240)
+        self.assertEqual(state["week"]["by_lane"]["course"], 200)
+
+    def test_car_listening_counts_half(self):
+        now = _at("2026-10-10", 10)  # a Saturday
+        game.log_time(self.user_id, "car", 60, "", PDT, now)
+        state = game.state(self.user_id, PDT, now)
+        self.assertEqual(state["today"]["by_lane"]["car"], 60)
+        self.assertEqual(state["today"]["minutes"], 30)
+        self.assertEqual(state["week"]["minutes"], 30)
+        self.assertEqual(state["xp"], 30)
+        self.assertEqual(state["today"]["target"], game.WEEKEND_TARGET_MIN)
 
     def test_heartbeats_are_capped_and_land_on_the_study_day(self):
         early = _at("2026-10-07", 2)  # 02:00 still belongs to the 6th

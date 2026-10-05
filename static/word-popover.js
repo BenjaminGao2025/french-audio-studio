@@ -646,5 +646,120 @@
         return { show, close, isOpen, refreshSaved, element: pop };
     }
 
-    root.FrenchWordPopover = { create, numberReading: frenchNumberReading, basicWords: BASIC_FRENCH_WORDS };
+    /**
+     * The word book: every word saved for review, whichever sentence it came from
+     * (like Eudic's word book). Shared by the study and review pages.
+     * options:
+     *   getToken()                 the user's login token
+     *   notePayload(sentence)      {sentence, translation_zh, translation_en, extra} for a new note
+     *   findLocal(sentence, token) a card the page already knows about, or null
+     *   onSaved(note), onRemoved(sentence, cardId), onChange(), onError(err)
+     */
+    function createWordBook(options) {
+        const byText = new Map();  // lower-cased word -> [{card_id, sentence, importance}]
+        const keyOf = (token) => (token || '').trim().toLowerCase();
+        const changed = () => { if (options.onChange) options.onChange(); };
+
+        async function call(method, path, body) {
+            const res = await fetch(path, {
+                method,
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${options.getToken()}` },
+                body: body ? JSON.stringify(body) : undefined,
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.detail?.message || `HTTP ${res.status}`);
+            return data;
+        }
+
+        function entries(token) {
+            return byText.get(keyOf(token)) || [];
+        }
+
+        function isSaved(sentence, token) {
+            return Boolean(options.findLocal && options.findLocal(sentence, token)) || entries(token).length > 0;
+        }
+
+        async function load() {
+            byText.clear();
+            if (options.getToken()) {
+                try {
+                    const data = await call('GET', '/api/srs/words');
+                    (data.words || []).forEach(w => {
+                        const key = keyOf(w.text);
+                        if (!byText.has(key)) byText.set(key, []);
+                        byText.get(key).push(w);
+                    });
+                } catch (err) {
+                    console.warn('Failed to load saved words:', err);
+                }
+            }
+            changed();
+        }
+
+        function clear() {
+            byText.clear();
+            changed();
+        }
+
+        async function toggle({ token, sentence, meta }) {
+            const clean = (token || '').trim();
+            if (!clean) return;
+            const local = options.findLocal ? options.findLocal(sentence, clean) : null;
+            const elsewhere = entries(clean);
+            try {
+                if (local || elsewhere.length) {
+                    // The word is in the book (from this or another sentence): the star removes it
+                    const ids = new Set(elsewhere.map(w => w.card_id));
+                    if (local) ids.add(local.id);
+                    for (const id of ids) await call('DELETE', `/api/srs/cards/${encodeURIComponent(id)}`);
+                    if (options.onRemoved) {
+                        if (local) options.onRemoved(sentence || clean, local.id);
+                        elsewhere.forEach(w => options.onRemoved(w.sentence, w.card_id));
+                    }
+                } else {
+                    const inSentence = Boolean(sentence) && sentence.toLowerCase().includes(clean.toLowerCase());
+                    // A word that is not in this sentence (e.g. from an AI answer) is saved on its own
+                    const payload = inSentence ? options.notePayload(sentence) : { sentence: clean };
+                    payload.targets = [{ text: clean, mode: inSentence ? 'cloze' : 'recognize', meta: meta || {} }];
+                    const note = await call('POST', '/api/srs/notes', payload);
+                    if (options.onSaved) options.onSaved(note);
+                }
+            } catch (err) {
+                if (options.onError) options.onError(err);
+            }
+            await load();
+        }
+
+        async function setImportance(list, level) {
+            try {
+                await call('POST', '/api/srs/importance', { card_ids: list.map(w => w.card_id), importance: level });
+                list.forEach(w => { w.importance = level; });
+            } catch (err) {
+                if (options.onError) options.onError(err);
+            }
+        }
+
+        // Ready-made `saving` option for create(): the popover star and importance stars
+        const popoverSaving = {
+            isSaved: (item) => isSaved(item.sentence, item.token),
+            entries,
+            toggle: (c) => toggle({
+                token: c.token,
+                sentence: c.sentence || '',
+                meta: {
+                    meaning_zh: c.explanation_cn,
+                    meaning_en: c.explanation_en,
+                    lemma: c.lemma,
+                    pos: c.pos,
+                    ipa: c.phonetic,
+                    hook: c.hook,
+                },
+            }),
+            setImportance,
+        };
+
+        return { load, clear, entries, isSaved, toggle, setImportance, popoverSaving };
+    }
+
+    root.FrenchWordPopover = { create, createWordBook, numberReading: frenchNumberReading, basicWords: BASIC_FRENCH_WORDS };
 })(window);

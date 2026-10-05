@@ -13,10 +13,11 @@
     const EN = I18N.lang() === 'en';
     const TOKEN_KEY = 'frenchStudio.userToken';
     const MUTE_KEY = 'frenchStudio.gameMuted';
-    const LANES = ['course', 'listening', 'reading', 'speaking', 'writing', 'review'];
-    // Pages whose time counts automatically. /listen does not: the plan says listening
-    // while walking is a bonus, not study time. Anything else can be logged by hand.
-    const PAGE_LANES = { '/study': 'reading', '/review': 'review' };
+    const LANES = ['course', 'listening', 'reading', 'speaking', 'writing', 'review', 'car'];
+    // Pages whose time counts automatically; anything else can be logged by hand.
+    // /listen counts the audio actually played (car/walk listening, worth half).
+    const PAGE_LANES = { '/study': 'reading', '/review': 'review', '/listen': 'car' };
+    const LANE_WEIGHTS = { car: 0.5 };
     const IDLE_MS = 120000;
     const TICK_MS = 5000;
     const FLUSH_SECONDS = 30;
@@ -30,7 +31,8 @@
             streak: (n) => `${n}-day streak`, family: 'Family day', weekend: 'Weekend',
             logTime: 'Log time', mute: 'Turn sounds off', unmute: 'Turn sounds on',
             lanesTitle: 'This week, by part of the plan', maintenance: 'Maintenance weeks: 5 h',
-            lanes: { course: 'Course', listening: 'Listening', reading: 'Reading', speaking: 'Speaking', writing: 'Writing', review: 'Review' },
+            lanes: { course: 'Course', listening: 'Listening', reading: 'Reading', speaking: 'Speaking', writing: 'Writing', review: 'Review', car: 'Car / walk' },
+            halfNote: 'Car and walk listening counts half: your eyes and mind are on the road.',
             quickTitle: 'Log study you did outside the app',
             presets: [
                 { lane: 'speaking', minutes: 60, label: 'Teacher class · 1 h' },
@@ -38,6 +40,8 @@
                 { lane: 'listening', minutes: 30, label: 'Listening · 30 min' },
                 { lane: 'reading', minutes: 30, label: 'Reading · 30 min' },
                 { lane: 'writing', minutes: 30, label: 'Writing · 30 min' },
+                { lane: 'car', minutes: 60, label: 'Car listening · 1 h' },
+                { lane: 'car', minutes: 30, label: 'Walk listening · 30 min' },
             ],
             other: 'Other', minutes: 'min', add: 'Add', undo: 'Undo',
             loggedToday: 'Logged today', nothingLogged: 'Nothing logged by hand today.',
@@ -54,7 +58,8 @@
             streak: (n) => `连续 ${n} 个学习日`, family: '家庭日', weekend: '周末',
             logTime: '记录时间', mute: '关闭音效', unmute: '打开音效',
             lanesTitle: '本周各模块（按计划分配）', maintenance: '保温期：每周 5 小时',
-            lanes: { course: '主课', listening: '听力', reading: '阅读', speaking: '口语', writing: '写作', review: '复习' },
+            lanes: { course: '主课', listening: '听力', reading: '阅读', speaking: '口语', writing: '写作', review: '复习', car: '开车·快走听' },
+            halfNote: '开车和快走时听按一半计时：注意力主要在路上。',
             quickTitle: '记录在 App 之外的学习',
             presets: [
                 { lane: 'speaking', minutes: 60, label: '老师课 · 1 小时' },
@@ -62,6 +67,8 @@
                 { lane: 'listening', minutes: 30, label: '听力 · 30 分钟' },
                 { lane: 'reading', minutes: 30, label: '阅读 · 30 分钟' },
                 { lane: 'writing', minutes: 30, label: '写作 · 30 分钟' },
+                { lane: 'car', minutes: 60, label: '开车听 · 1 小时' },
+                { lane: 'car', minutes: 30, label: '快走听 · 30 分钟' },
             ],
             other: '其他', minutes: '分钟', add: '添加', undo: '撤销',
             loggedToday: '今天手动记录的', nothingLogged: '今天还没有手动记录。',
@@ -264,7 +271,7 @@
             const pct = target ? Math.min(100, Math.round((done / target) * 100)) : 0;
             return `
                 <div class="lane-row ${target && done >= target ? 'is-done' : ''}">
-                    <span class="lane-name">${escapeHtml(T.lanes[lane])}</span>
+                    <span class="lane-name">${escapeHtml(T.lanes[lane])}${LANE_WEIGHTS[lane] ? ' ½' : ''}</span>
                     <span class="lane-bar"><span style="width:${pct}%"></span></span>
                     <span class="lane-num">${hours(done)}${target ? ` / ${hours(target)}` : ''} ${T.h}</span>
                 </div>`;
@@ -280,6 +287,7 @@
                     <h3>${T.lanesTitle}${week.maintenance ? ` · ${T.maintenance}` : ''}</h3>
                     ${lanes}
                     <p class="game-totals">${state.next_level_xp ? T.totals(state.hours_total, fmt(state.next_level_xp - state.xp)) : T.maxLevel(state.hours_total)}</p>
+                    <p class="game-hint">½ ${escapeHtml(T.halfNote)}</p>
                 </section>
                 <section>
                     <h3>${T.quickTitle}</h3>
@@ -302,7 +310,7 @@
     async function logTime(lane, minutes, note = '') {
         try {
             applyState(await api('POST', '/api/game/log', { lane, minutes, note, tz_offset: tz() }));
-            floatXp(minutes);
+            floatXp(Math.round(minutes * (LANE_WEIGHTS[lane] || 1)));
             SOUNDS.kill();
         } catch (err) {
             banner(T.saveFailed + err.message, '', 'is-error');
@@ -371,22 +379,50 @@
     }
 
     async function flush(keepalive = false) {
-        if (!pendingSeconds || !currentLane()) return;
-        const seconds = pendingSeconds;
+        const seconds = Math.round(pendingSeconds);
+        if (!seconds || !currentLane()) return;
         const lane = currentLane();
         pendingSeconds = 0;
         if (state) {  // show it right away; the server stays the source of truth
-            state.today.minutes += seconds / 60;
+            const effective = (seconds / 60) * (LANE_WEIGHTS[lane] || 1);
+            state.today.minutes += effective;
             state.today.by_lane[lane] = (state.today.by_lane[lane] || 0) + seconds / 60;
-            state.week.minutes += seconds / 60;
+            state.week.minutes += effective;
             state.week.by_lane[lane] = (state.week.by_lane[lane] || 0) + seconds / 60;
             renderHud();
         }
-        try { await api('POST', '/api/game/heartbeat', { lane, seconds, tz_offset: tz() }, keepalive); } catch (_) {}
+        // The server takes at most 120 s per beat; long locked-phone stretches go in chunks
+        for (let left = seconds; left > 0; left -= 120) {
+            try { await api('POST', '/api/game/heartbeat', { lane, seconds: Math.min(120, left), tz_offset: tz() }, keepalive); } catch (_) { break; }
+        }
+    }
+
+    // Audio pages count the seconds actually played, even with the phone locked
+    // (the position jump is added when the page wakes up again).
+    function trackPlayback() {
+        const lastPos = new WeakMap();
+        const take = (audio) => {
+            const before = lastPos.get(audio);
+            const now = audio.currentTime || 0;
+            if (before !== undefined && now > before && now - before < 1800) pendingSeconds += now - before;
+            lastPos.set(audio, now);
+        };
+        document.addEventListener('play', (e) => { if (e.target instanceof HTMLMediaElement) lastPos.set(e.target, e.target.currentTime || 0); }, true);
+        document.addEventListener('seeked', (e) => { if (e.target instanceof HTMLMediaElement) lastPos.set(e.target, e.target.currentTime || 0); }, true);
+        ['timeupdate', 'pause', 'ended'].forEach(ev => document.addEventListener(ev, (e) => {
+            if (e.target instanceof HTMLMediaElement) take(e.target);
+            if (pendingSeconds >= FLUSH_SECONDS) flush();
+        }, true));
+        document.addEventListener('visibilitychange', () => {
+            document.querySelectorAll('audio').forEach(a => { if (!a.paused) take(a); });
+            if (document.hidden) flush(true); else { flush(); loadState(); }
+        });
+        root.addEventListener('pagehide', () => flush(true));
     }
 
     function startTracking() {
         if (!pageLane) return;
+        if (pageLane === 'car') { trackPlayback(); return; }
         const mark = () => { lastActivity = Date.now(); };
         ['pointerdown', 'keydown', 'wheel', 'touchstart', 'input', 'mousemove'].forEach(ev =>
             document.addEventListener(ev, mark, { passive: true, capture: true }));

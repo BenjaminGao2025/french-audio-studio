@@ -1,17 +1,23 @@
 """
 French Audio Studio - study time, XP and hero level ("the game").
 
-Built around the learner's own plan (TCF Canada, NCLC 7 in all four skills):
-  * Hero level = effective study time. Level 25 is about 600 hours, the rough
-    A1 -> NCLC 7 distance, so level 10 lands near the week-8 check and level 15
-    near the week-16 exam-date decision at 16 h a week.
-  * XP: 1 per study minute (tracked in the app or logged by hand) up to the day's
-    3 hours, half after that, so marathon days are not rewarded.
+Built around the learner's own plan (TCF Canada, NCLC 7 = about B2 in all four skills):
+  * Hero level = effective study time. Level 25 is 700 hours: B2 takes about
+    480-620 guided hours from zero (Alliance Française / Cambridge planning
+    figures), plus TCF-specific practice. At 24 effective hours a week that is
+    late April 2027, the plan's first exam window (level ~12 at the week-8 check,
+    ~17 at the week-16 exam-date decision).
+  * Effective time: focused study counts fully; listening in the car or while
+    walking counts half (attention is on the road), a judgment call, not a study
+    result.
+  * XP: 1 per effective minute (tracked in the app or logged by hand) up to 5
+    hours a day, half after that.
     Reviews add Again 1 / Hard 2 / Good 4 / Easy 5, +3 for a card's first review,
     a combo bonus while answers keep coming Good/Easy, and +10 for the day's
     first Good/Easy ("First blood"). Clearing today's queue gives +20 once a day.
-  * Targets are weekly (16 h, split by the plan's six modules); weekdays aim for
-    3 h, weekends and family days have no target and never break a streak.
+  * Targets are weekly (24 h); weekdays aim for 4 h, weekend days for 2 h, family
+    days for nothing. Only weekdays count for the streak, and family days never
+    break it.
 """
 
 from __future__ import annotations
@@ -23,24 +29,28 @@ import auth_db
 import srs
 
 
-LANE_WEEK_TARGETS = {  # minutes per week, from the plan's 16-hour split
-    "course": 180,
+LANE_WEEK_TARGETS = {  # raw minutes per week (24 effective hours in total)
+    "course": 180,       # weekday mornings, as in the plan
     "listening": 210,
     "reading": 150,
-    "speaking": 210,
+    "speaking": 240,     # incl. 2 h with the teacher + a weekend hour
     "writing": 120,
-    "review": 90,
+    "review": 240,       # cards, incl. 20-30 min on the phone every day
+    "car": 600,          # car and walk listening: 10 h heard = 5 effective hours
 }
+LANE_WEIGHTS = {"car": 0.5}
 LANES = tuple(LANE_WEEK_TARGETS)
 PLAN_START = datetime.date(2026, 10, 5)  # week 1 of the plan
-WEEK_TARGET_MIN = sum(LANE_WEEK_TARGETS.values())
+WEEK_TARGET_MIN = round(sum(m * LANE_WEIGHTS.get(lane, 1) for lane, m in LANE_WEEK_TARGETS.items()))
 MAINTENANCE_WEEK_TARGET_MIN = 300  # May-Aug 2027 (new baby): 5 h a week
 MAINTENANCE = (datetime.date(2027, 5, 1), datetime.date(2027, 8, 31))
-DAY_TARGET_MIN = 180
+WEEKDAY_TARGET_MIN = 240
+WEEKEND_TARGET_MIN = 120
+DAY_FULL_XP_MIN = 300  # beyond 5 effective hours a day, XP is halved
 STREAK_MIN = 30  # minutes that make a weekday count for the streak
 
 MAX_LEVEL = 25
-TOP_LEVEL_XP = 36_000  # ~600 hours
+TOP_LEVEL_XP = 42_000  # 700 effective hours
 LEVEL_CURVE = 1.6  # early levels come fast, later ones slow down
 
 RATING_XP = {1: 1, 2: 2, 3: 4, 4: 5}
@@ -132,7 +142,7 @@ def level_for(xp: int) -> dict[str, Any]:
 
 
 def _day_minutes_xp(minutes: float) -> float:
-    return min(minutes, DAY_TARGET_MIN) + max(0.0, minutes - DAY_TARGET_MIN) / 2
+    return min(minutes, DAY_FULL_XP_MIN) + max(0.0, minutes - DAY_FULL_XP_MIN) / 2
 
 
 def _check_lane(lane: str) -> str:
@@ -290,17 +300,22 @@ def state(user_id: int, tz_offset: int, now=None) -> dict[str, Any]:
     minutes_by_day: dict[datetime.date, float] = {}
     today_lanes = {lane: 0.0 for lane in LANES}
     week_lanes = {lane: 0.0 for lane in LANES}
+    today_effective = 0.0
+    week_effective = 0.0
     logs_today = []
     for row in time_rows:
         day = datetime.date.fromisoformat(row["day"])
-        minutes = row["seconds"] / 60
-        minutes_by_day[day] = minutes_by_day.get(day, 0.0) + minutes
+        minutes = row["seconds"] / 60  # as heard/studied; car listening counts half below
+        effective = minutes * LANE_WEIGHTS.get(row["lane"], 1)
+        minutes_by_day[day] = minutes_by_day.get(day, 0.0) + effective
         if day == today:
             today_lanes[row["lane"]] += minutes
+            today_effective += effective
             if row["source"] == "manual":
                 logs_today.append({"id": row["id"], "lane": row["lane"], "minutes": round(minutes), "note": row["note"]})
         if week_start <= day <= week_end:
             week_lanes[row["lane"]] += minutes
+            week_effective += effective
 
     family_days = {datetime.date.fromisoformat(r["day"]) for r in event_rows if r["kind"] == "family_day"}
     wave_days = {datetime.date.fromisoformat(r["day"]) for r in event_rows if r["kind"] == "wave_cleared"}
@@ -322,6 +337,13 @@ def state(user_id: int, tz_offset: int, now=None) -> dict[str, Any]:
     active_days = {day for day, minutes in minutes_by_day.items() if minutes >= STREAK_MIN}
     family_today = today in family_days
     weekend = today.weekday() >= 5
+    maintenance = week_target(today) != WEEK_TARGET_MIN
+    if family_today:
+        day_target = 0
+    elif maintenance:
+        day_target = 0 if weekend else MAINTENANCE_WEEK_TARGET_MIN // 5
+    else:
+        day_target = WEEKEND_TARGET_MIN if weekend else WEEKDAY_TARGET_MIN
 
     return {
         **level_for(xp),
@@ -330,8 +352,8 @@ def state(user_id: int, tz_offset: int, now=None) -> dict[str, Any]:
         "hours_total": round(total_minutes / 60, 1),
         "today": {
             "day": today.isoformat(),
-            "minutes": round(sum(today_lanes.values())),
-            "target": 0 if (weekend or family_today) else DAY_TARGET_MIN,
+            "minutes": round(today_effective),
+            "target": day_target,
             "family_day": family_today,
             "weekend": weekend,
             "by_lane": {lane: round(value) for lane, value in today_lanes.items()},
@@ -347,11 +369,12 @@ def state(user_id: int, tz_offset: int, now=None) -> dict[str, Any]:
             "number": week_number(today),
             "start": week_start.isoformat(),
             "end": week_end.isoformat(),
-            "minutes": round(sum(week_lanes.values())),
+            "minutes": round(week_effective),
             "target": week_target(today),
-            "maintenance": week_target(today) != WEEK_TARGET_MIN,
+            "maintenance": maintenance,
             "by_lane": {lane: round(value) for lane, value in week_lanes.items()},
             "lane_targets": dict(LANE_WEEK_TARGETS),
+            "lane_weights": {lane: LANE_WEIGHTS.get(lane, 1) for lane in LANES},
         },
         "streak_days": _weekday_streak(active_days, family_days, today),
     }

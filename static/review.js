@@ -373,7 +373,19 @@
             .join('');
     }
 
-    // Word popover shared with the study page (static/word-popover.js).
+    // Word popover and word book shared with the study page (static/word-popover.js):
+    // the same star (add to / remove from review) and importance stars.
+    const wordBook = window.FrenchWordPopover.createWordBook({
+        getToken: () => getToken(),
+        notePayload(sentence) {
+            const note = session.current && session.current.note;
+            if (!note || note.sentence !== sentence) return { sentence };
+            return { sentence, translation_zh: note.translation_zh || '', translation_en: note.translation_en || '', extra: note.extra || {} };
+        },
+        onChange: () => wordPopover.refreshSaved(),
+        onError: (err) => showError(err.message),
+    });
+
     // The card's own target word already carries its meaning, so it shows instantly.
     const wordPopover = window.FrenchWordPopover.create({
         speak: (text) => playFrench(text),
@@ -386,6 +398,7 @@
             if (!meta.meaning_en && !meta.meaning_zh) return null;
             return { lemma: meta.lemma, pos: meta.pos, phonetic: meta.ipa, explanation_en: meta.meaning_en, explanation_cn: meta.meaning_zh };
         },
+        saving: wordBook.popoverSaving,
     });
 
     function ttsUrl(text) {
@@ -916,7 +929,7 @@
             els.deckList.innerHTML = notes.size ? Array.from(notes.values()).map(({ note, cards }) => `
                 <article class="deck-note">
                     <div class="deck-note-text">
-                        <p class="deck-note-fr">${clickableFr(note.sentence)}
+                        <p class="deck-note-fr" data-sentence="${escapeHtml(note.sentence)}">${clickableFr(note.sentence)}
                             <button class="icon-btn btn-play" type="button" data-speech="${escapeHtml(note.sentence)}" data-rate="1" title="${T.play}"><i data-lucide="volume-2"></i></button>
                         </p>
                         ${pick(note.translation_zh, note.translation_en) ? `<p class="deck-note-zh">${escapeHtml(pick(note.translation_zh, note.translation_en))}</p>` : ''}
@@ -951,8 +964,11 @@
     document.addEventListener('click', (e) => {
         const word = e.target.closest('.fr-word');
         if (word) {
+            // A word in the card library belongs to that row's sentence, otherwise to the current card
+            const row = word.closest('[data-sentence]');
             const card = session.current;
-            wordPopover.show(word.dataset.speech, word, { sentence: card && card.note ? card.note.sentence : '' });
+            const sentence = row ? row.dataset.sentence : (card && card.note ? card.note.sentence : '');
+            wordPopover.show(word.dataset.speech, word, { sentence });
             return;
         }
         const play = e.target.closest('.btn-play');
@@ -1048,5 +1064,6 @@
         return;
     }
     setupLegacyImport();
+    wordBook.load();
     loadQueue().catch(err => showError(err.message));
 })();
