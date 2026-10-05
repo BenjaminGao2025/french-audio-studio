@@ -40,8 +40,8 @@ function initStudyWorkbench() {
             reviewBtn: 'Review', reviewBtnTitle: "Today's review (listen · speak · fill in)", dueBadgeTitle: 'Cards due today',
             connectionSettings: 'Connection', connectionNotVerified: 'Connection not verified yet', notVerified: 'Not verified',
             toggleKey: 'Show or hide the API key', analysisModel: 'Analysis model',
-            modelGemini: 'Gemini 3.8 Flash (AGY) · fastest, recommended',
-            recommendedSuffix: ' · fastest, recommended',
+            modelGemini: 'Gemini 3.8 Flash (AGY) · fastest',
+            recommendedSuffix: ' · recommended',
             rememberDevice: 'Remember on this device',
             notTested: 'Not tested yet', notTestedDetail: 'Enter a key, then test the real connection',
             testConnection: 'Test connection',
@@ -167,8 +167,8 @@ function initStudyWorkbench() {
             reviewBtn: '复习', reviewBtnTitle: '今日复习（听 · 说 · 填）', dueBadgeTitle: '今天待复习卡片数',
             connectionSettings: '连接设置', connectionNotVerified: '连接尚未验证', notVerified: '未验证',
             toggleKey: '显示或隐藏 API Key', analysisModel: '分析模型',
-            modelGemini: 'Gemini 3.8 Flash (AGY) · 极速推荐',
-            recommendedSuffix: ' · 极速推荐',
+            modelGemini: 'Gemini 3.8 Flash (AGY) · 极速',
+            recommendedSuffix: ' · 推荐',
             rememberDevice: '记住在此设备',
             notTested: '尚未测试', notTestedDetail: '填写 Key 后测试实际连接',
             testConnection: '测试连接',
@@ -490,12 +490,13 @@ function initStudyWorkbench() {
         localStorage.setItem(modelKeyName, modelSelect.value);
     }
 
+    // A logged-in account wins: the server then uses its own upstream key, so an old
+    // manually typed key can never break requests. The manual key is for guests.
     function getEffectiveAuthToken() {
-        const key = apiKeyInput.value.trim();
-        if (key) return key;
         const userToken = localStorage.getItem(userTokenKey);
         if (userToken) return userToken;
-        return null;
+        const key = apiKeyInput.value.trim();
+        return key || null;
     }
 
     function requireAuthToken() {

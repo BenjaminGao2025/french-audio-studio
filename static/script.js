@@ -46,8 +46,8 @@ document.addEventListener('DOMContentLoaded', () => {
             connectionSettings: 'Connection', connectionSummaryTitle: 'Connection not verified yet',
             notVerified: 'Not verified', toggleKey: 'Show or hide the API key',
             modelLabel: 'Model',
-            modelGeminiOption: 'Gemini 3.8 Flash (AGY) · fastest, recommended',
-            recommendedSuffix: ' · fastest, recommended', modelSuffixPattern: /\s*·\s*(recommended|backup)$/,
+            modelGeminiOption: 'Gemini 3.8 Flash (AGY) · fastest',
+            recommendedSuffix: ' · recommended', modelSuffixPattern: /\s*·\s*(recommended|backup)$/,
             rememberKey: 'Remember on this device',
             notTested: 'Not tested yet', notTestedDetail: 'Enter a key, then test the real connection',
             testConnection: 'Test connection',
@@ -140,8 +140,8 @@ document.addEventListener('DOMContentLoaded', () => {
             connectionSettings: '连接设置', connectionSummaryTitle: '连接尚未验证',
             notVerified: '未验证', toggleKey: '显示或隐藏 API Key',
             modelLabel: '转换模型',
-            modelGeminiOption: 'Gemini 3.8 Flash (AGY) · 极速推荐',
-            recommendedSuffix: ' · 极速推荐', modelSuffixPattern: /\s*·\s*(推荐|备用)$/,
+            modelGeminiOption: 'Gemini 3.8 Flash (AGY) · 极速',
+            recommendedSuffix: ' · 推荐', modelSuffixPattern: /\s*·\s*(推荐|备用)$/,
             rememberKey: '记住在此设备',
             notTested: '尚未测试', notTestedDetail: '填写 Key 后测试实际连接',
             testConnection: '测试连接',
@@ -451,7 +451,11 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem(modelKeyName, modelSelect.value);
     }
 
+    // A logged-in account wins (the server supplies the upstream key); the manual key is for guests
     function requireApiKey() {
+        let userToken = '';
+        try { userToken = localStorage.getItem('frenchStudio.userToken') || ''; } catch (_) {}
+        if (userToken) return userToken;
         const key = apiKeyInput.value.trim();
         if (!key) {
             connectionSettings.open = true;
