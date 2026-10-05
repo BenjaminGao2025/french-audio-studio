@@ -44,7 +44,7 @@
             countLearningTitle: 'Just learned: comes back in a few minutes',
             countReviewTitle: 'Due for review', countNewTitle: 'New cards introduced today',
             progressAria: "Today's progress",
-            reveal: 'Show answer', spaceKey: 'Space',
+            reveal: 'Show answer', spaceKey: 'Enter · Space',
             gradeHint: 'How hard was it to remember?',
             rating1: 'Again', rating2: 'Hard', rating3: 'Good', rating4: 'Easy',
             doneDefault: 'Done for today', doneDefaultDesc: 'Spaced repetition brings each card back just before you would forget it.',
@@ -103,7 +103,7 @@
             countLearningTitle: '刚学、几分钟后要再见一次的卡',
             countReviewTitle: '到期该复习的卡', countNewTitle: '今天新引入的卡',
             progressAria: '今日进度',
-            reveal: '显示答案', spaceKey: '空格',
+            reveal: '显示答案', spaceKey: 'Enter · 空格',
             gradeHint: '刚才想起来有多难？',
             rating1: '重来', rating2: '困难', rating3: '良好', rating4: '简单',
             doneDefault: '今天的复习完成了', doneDefaultDesc: '间隔重复会在你快要忘记的时候再把卡片送回来。',
@@ -997,8 +997,24 @@
     });
 
     document.addEventListener('keydown', (e) => {
+        if (!session.current || els.stage.hidden) return;
+        // Enter continues: it shows the answer, then takes the suggested rating (Good if none),
+        // also from the fill-in box once the answer has been checked
+        if (e.key === 'Enter' && !e.isComposing && !e.shiftKey && !e.target.closest('.floating-word-popover, .game-panel, .btn-grade')) {
+            const inClozeBox = e.target.id === 'cloze-input';
+            if (session.revealed && !session.grading) {
+                e.preventDefault();
+                grade((session.attempt && session.attempt.suggested) || 3);
+                return;
+            }
+            if (!inClozeBox && !['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A'].includes(e.target.tagName)) {
+                e.preventDefault();
+                els.revealBtn.click();
+                return;
+            }
+        }
         const typing = e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT');
-        if (typing || !session.current || els.stage.hidden) return;
+        if (typing) return;
         if (e.code === 'Space' && !session.revealed) {
             e.preventDefault();
             els.revealBtn.click();
