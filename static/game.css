@@ -308,6 +308,8 @@
 }
 
 .game-banner.is-first strong { color: #ff8a7a; }
+.game-banner.is-small { padding: 8px 20px; }
+.game-banner.is-small strong { font-size: 20px; color: #9fe1cb; }
 .game-banner.is-big strong { color: #f6c453; font-size: 34px; }
 .game-banner.is-level { animation-duration: 2.2s; background: var(--primary); }
 .game-banner.is-level strong { font-size: 36px; }

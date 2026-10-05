@@ -403,6 +403,27 @@
     // Kill feed (called by the review page)
     // ---------------------------------------------------------------------
     const session = { kills: 0, deaths: 0, bestCombo: 0, xp: 0 };
+    let pendingKill = false;  // the callout already fired when the answer checked correct
+
+    function showKill(combo, firstBlood, sub = '') {
+        if (firstBlood) {
+            banner('First blood', sub, 'is-first');
+            SOUNDS.firstBlood();
+        } else if (CALLOUTS[combo]) {
+            banner(CALLOUTS[combo], sub, combo >= 5 ? 'is-big' : '');
+            SOUNDS.combo(combo);
+        } else {
+            banner('Kill', combo > 1 ? `Combo x${combo}` : sub, 'is-small');
+            SOUNDS.kill();
+        }
+    }
+
+    // A typed or spoken answer was right: react now, the XP follows when it is rated
+    function onCorrect() {
+        if (!state || pendingKill) return;
+        pendingKill = true;
+        showKill((state.today.combo || 0) + 1, !state.today.first_blood);
+    }
 
     function onReview(feed) {
         if (!feed) return;
@@ -410,19 +431,12 @@
         if (feed.kill) {
             session.kills += 1;
             session.bestCombo = Math.max(session.bestCombo, feed.combo || 0);
-            if (feed.first_blood) {
-                banner('First blood', `+${feed.xp} XP`, 'is-first');
-                SOUNDS.firstBlood();
-            } else if (CALLOUTS[feed.combo]) {
-                banner(CALLOUTS[feed.combo], `+${feed.xp} XP`, feed.combo >= 5 ? 'is-big' : '');
-                SOUNDS.combo(feed.combo);
-            } else {
-                SOUNDS.kill();
-            }
+            if (!pendingKill) showKill(feed.combo, feed.first_blood, `+${feed.xp} XP`);
         } else {
             if (feed.death) session.deaths += 1;
-            SOUNDS.soft();
+            if (!pendingKill) SOUNDS.soft();
         }
+        pendingKill = false;
         floatXp(feed.xp);
         applyState(feed.state);
     }
@@ -468,5 +482,5 @@
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
     else init();
 
-    root.FrenchGame = { onReview, onWaveCleared, setLane, refresh: loadState };
+    root.FrenchGame = { onCorrect, onReview, onWaveCleared, setLane, refresh: loadState };
 })(window);

@@ -520,6 +520,7 @@
                         </div>
                     </div>`,
             };
+            if (session.attempt.suggested >= 3 && window.FrenchGame) window.FrenchGame.onCorrect();
             reveal();
         }, 600);
     }
@@ -560,6 +561,7 @@
                     <span>${T.answer}<b class="letter-diff is-answer fr-word" data-speech="${escapeHtml(answer)}">${diff ? diff.answer : escapeHtml(answer)}</b></span>
                 </div>`,
         };
+        if (suggested >= 3 && window.FrenchGame) window.FrenchGame.onCorrect();
         reveal();
     }
 

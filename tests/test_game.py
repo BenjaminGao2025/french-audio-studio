@@ -121,6 +121,8 @@ class ReviewFeedbackTests(unittest.TestCase):
         self.assertEqual(death["state"]["today"]["kills"], 2)
         self.assertEqual(death["state"]["today"]["deaths"], 1)
         self.assertEqual(death["state"]["today"]["best_combo"], 2)
+        self.assertEqual(death["state"]["today"]["combo"], 0)
+        self.assertEqual(second["state"]["today"]["combo"], 2)
 
 
 class GameApiTests(unittest.TestCase):

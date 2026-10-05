@@ -312,6 +312,12 @@ def state(user_id: int, tz_offset: int, now=None) -> dict[str, Any]:
     xp = int(round(xp))
 
     today_reviews = [event for event in reviews if event["day"] == today]
+    combo_now = 0  # the running combo, so a reloaded page continues it
+    for event in today_reviews:
+        if event["kill"]:
+            combo_now = event["combo"]
+        elif event["death"]:
+            combo_now = 0
     total_minutes = sum(minutes_by_day.values())
     active_days = {day for day, minutes in minutes_by_day.items() if minutes >= STREAK_MIN}
     family_today = today in family_days
@@ -333,6 +339,7 @@ def state(user_id: int, tz_offset: int, now=None) -> dict[str, Any]:
             "kills": sum(1 for e in today_reviews if e["kill"]),
             "deaths": sum(1 for e in today_reviews if e["death"]),
             "best_combo": max((e["combo"] for e in today_reviews), default=0),
+            "combo": combo_now,
             "first_blood": any(e["first_blood"] for e in today_reviews),
             "wave_cleared": today in wave_days,
         },
