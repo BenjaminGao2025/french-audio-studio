@@ -819,3 +819,15 @@ kbd {
 .card-importance button.filled {
     color: #f59e0b;
 }
+
+/* Tap any French word to hear it */
+.fr-word {
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background-color 0.15s ease;
+}
+
+.fr-word:hover,
+.fr-word.is-playing {
+    background: var(--primary-soft);
+}

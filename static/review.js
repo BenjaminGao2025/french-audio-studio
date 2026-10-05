@@ -364,6 +364,16 @@
         return card.note.sentence;
     }
 
+    // French text with every word wrapped so a tap reads it aloud
+    function clickableFr(text) {
+        return String(text || '')
+            .split(/([A-Za-zÀ-ÖØ-öø-ÿŒœ0-9]+(?:['’-][A-Za-zÀ-ÖØ-öø-ÿŒœ]+)*)/)
+            .map((part, i) => (i % 2
+                ? `<span class="fr-word" data-speech="${escapeHtml(part)}">${escapeHtml(part)}</span>`
+                : escapeHtml(part)))
+            .join('');
+    }
+
     function ttsUrl(text) {
         return `/tts?text=${encodeURIComponent(text.trim())}&voice=${VOICE}`;
     }
@@ -571,7 +581,7 @@
             const parts = splitAroundTarget(note.sentence, card.target);
             const width = Math.max(4, card.target.length);
             const sentenceHtml = parts
-                ? `${escapeHtml(parts[0])}<span class="cloze-blank" style="min-width:${width}ch">?</span>${escapeHtml(parts[2])}`
+                ? `${clickableFr(parts[0])}<span class="cloze-blank" style="min-width:${width}ch">?</span>${clickableFr(parts[2])}`
                 : `<span class="cloze-blank" style="min-width:${width}ch">?</span>`;
             const clue = pick(meta.meaning_zh, meta.meaning_en);
             html += `
@@ -587,14 +597,14 @@
             html += `
                 <div class="cloze-prompt">
                     <p class="grammar-rule-pill">${T.rule}${escapeHtml(card.target)}</p>
-                    <p class="prompt-fr">${escapeHtml(before || '')}<span class="cloze-blank" style="min-width:${width}ch">?</span>${escapeHtml(after || '')}</p>
+                    <p class="prompt-fr">${clickableFr(before)}<span class="cloze-blank" style="min-width:${width}ch">?</span>${clickableFr(after)}</p>
                     ${meta.full_en ? `<p class="prompt-sub">${escapeHtml(meta.full_en)}</p>` : ''}
                     ${meta.hint ? `<p class="prompt-clue">${T.hint}${escapeHtml(meta.hint)}</p>` : ''}
                 </div>`;
         } else {
             html += `
                 <div class="recognize-prompt">
-                    <p class="prompt-word">${escapeHtml(card.target)}</p>
+                    <p class="prompt-word">${clickableFr(card.target)}</p>
                     ${meta.ipa ? `<p class="prompt-sub">${escapeHtml(window.SpeechEval.formatFriendlyPhonetic(meta.ipa))}</p>` : ''}
                     ${audioButtons(card.target, T.pronounce)}
                 </div>`;
@@ -625,7 +635,7 @@
         els.answerArea.innerHTML = `
             ${session.attempt ? session.attempt.html : ''}
             <div class="answer-sentence">
-                <p class="answer-fr">${escapeHtml(before || '')}<mark>${escapeHtml(meta.answer || '')}</mark>${escapeHtml(after || '')}</p>
+                <p class="answer-fr">${clickableFr(before)}<mark>${clickableFr(meta.answer)}</mark>${clickableFr(after)}</p>
                 ${audioButtons(meta.full_fr || '')}
                 ${meta.full_en ? `<p class="answer-en">${escapeHtml(meta.full_en)}</p>` : ''}
             </div>
@@ -636,7 +646,7 @@
             </div>
             <div class="answer-origin">
                 <span class="origin-label">${T.originLabel}</span>
-                <p class="answer-fr origin-fr">${escapeHtml(note.sentence)}
+                <p class="answer-fr origin-fr">${clickableFr(note.sentence)}
                     <button class="icon-btn btn-play" type="button" data-speech="${escapeHtml(note.sentence)}" data-rate="1" title="${T.playOriginal}"><i data-lucide="volume-2"></i></button>
                 </p>
                 ${pick(note.translation_zh, note.translation_en) ? `<p class="answer-en">${escapeHtml(pick(note.translation_zh, note.translation_en))}</p>` : ''}
@@ -652,8 +662,8 @@
         const meta = card.target_meta || {};
         const parts = card.target ? splitAroundTarget(note.sentence, card.target) : null;
         const sentenceHtml = parts
-            ? `${escapeHtml(parts[0])}<mark>${escapeHtml(parts[1])}</mark>${escapeHtml(parts[2])}`
-            : escapeHtml(note.sentence);
+            ? `${clickableFr(parts[0])}<mark>${clickableFr(parts[1])}</mark>${clickableFr(parts[2])}`
+            : clickableFr(note.sentence);
         const grammar = (note.extra && note.extra.grammar) || [];
         const metaBits = [meta.pos, meta.lemma && meta.lemma !== card.target ? `${T.baseForm}${meta.lemma}` : '', window.SpeechEval.formatFriendlyPhonetic(meta.ipa)].filter(Boolean);
 
@@ -886,7 +896,7 @@
             els.deckList.innerHTML = notes.size ? Array.from(notes.values()).map(({ note, cards }) => `
                 <article class="deck-note">
                     <div class="deck-note-text">
-                        <p class="deck-note-fr">${escapeHtml(note.sentence)}
+                        <p class="deck-note-fr">${clickableFr(note.sentence)}
                             <button class="icon-btn btn-play" type="button" data-speech="${escapeHtml(note.sentence)}" data-rate="1" title="${T.play}"><i data-lucide="volume-2"></i></button>
                         </p>
                         ${pick(note.translation_zh, note.translation_en) ? `<p class="deck-note-zh">${escapeHtml(pick(note.translation_zh, note.translation_en))}</p>` : ''}
@@ -919,6 +929,14 @@
     // Events
     // ---------------------------------------------------------------------
     document.addEventListener('click', (e) => {
+        const word = e.target.closest('.fr-word');
+        if (word) {
+            playFrench(word.dataset.speech);
+            document.querySelectorAll('.fr-word.is-playing').forEach(el => el.classList.remove('is-playing'));
+            word.classList.add('is-playing');
+            setTimeout(() => word.classList.remove('is-playing'), 900);
+            return;
+        }
         const play = e.target.closest('.btn-play');
         if (play) {
             playFrench(play.dataset.speech, parseFloat(play.dataset.rate || '1'));
