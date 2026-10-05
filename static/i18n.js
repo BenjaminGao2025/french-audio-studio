@@ -88,5 +88,16 @@
         watchForNewVersion();
     }
 
+    // One-time move to the new default model (GPT-6.1 Sol Thinking, 2026-09-30):
+    // forget the old saved default so the page picks the server's. A later manual choice sticks.
+    try {
+        if (!localStorage.getItem('frenchStudio.modelDefaultMigrated')) {
+            if (localStorage.getItem('frenchStudio.perplexityModel') === 'gemini-3.8-flash') {
+                localStorage.removeItem('frenchStudio.perplexityModel');
+            }
+            localStorage.setItem('frenchStudio.modelDefaultMigrated', '1');
+        }
+    } catch (_) {}
+
     root.FrenchI18n = { lang, setLang, pick, apply, mountToggle };
 })(window);
