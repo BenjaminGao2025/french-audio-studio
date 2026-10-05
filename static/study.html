@@ -188,7 +188,15 @@
                         <span class="step-number">02</span>
                         <h2 data-i18n="deckHeading">句子精析与发音复述</h2>
                     </div>
-                    <span id="sentence-count-badge" class="badge" data-i18n="sentenceCountEmpty">共 0 句</span>
+                    <div class="deck-playback">
+                        <button id="play-all-btn" class="btn btn-secondary" type="button">
+                            <i data-lucide="play" aria-hidden="true"></i><span data-i18n="playAll">全部播放</span>
+                        </button>
+                        <button class="btn btn-secondary btn-repeat-toggle" type="button" aria-pressed="false">
+                            <i data-lucide="repeat" aria-hidden="true"></i><span data-i18n="repeat">循环</span>
+                        </button>
+                        <span id="sentence-count-badge" class="badge" data-i18n="sentenceCountEmpty">共 0 句</span>
+                    </div>
                 </div>
 
                 <div id="sentences-container" class="sentences-container">

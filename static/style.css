@@ -1567,3 +1567,36 @@ audio {
         justify-content: center;
     }
 }
+
+/* Repeat switch and the floating Stop button (playback.js) */
+.btn-repeat-toggle.is-on {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+    color: var(--primary);
+}
+
+.playback-stop-pill {
+    position: fixed;
+    left: 50%;
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    z-index: 9000;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 22px;
+    border: none;
+    border-radius: 999px;
+    background: var(--danger);
+    color: #ffffff;
+    font: inherit;
+    font-weight: 700;
+    box-shadow: var(--shadow);
+    transform: translateX(-50%);
+    cursor: pointer;
+}
+
+.playback-stop-pill svg {
+    width: 16px;
+    height: 16px;
+}
+

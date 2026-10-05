@@ -55,6 +55,7 @@ function initStudyWorkbench() {
             parsed: 'Analysed', expandInput: 'Edit / enter a new text', expandInputTitle: 'Open the input to edit it or enter a new text',
             deckAria: 'Analysis and shadowing cards', deckHeading: 'Sentence analysis & pronunciation practice',
             sentenceCountEmpty: '0 sentences',
+            playAll: 'Play all', repeat: 'Repeat',
             historyTitle: 'History', historyTotalEmpty: '0 items',
             clearHistory: 'Clear history', clearHistoryTitle: 'Clear the history in this category', closeEsc: 'Close (Esc)',
             histAll: 'All', histStudy: '📖 Breakdowns', histTts: '🎧 Audio',
@@ -170,6 +171,7 @@ function initStudyWorkbench() {
             parsed: '已解析', expandInput: '重新编辑 / 输入新文本', expandInputTitle: '展开输入框以修改或输入新内容',
             deckAria: '解析与跟读卡片', deckHeading: '句子精析与发音复述',
             sentenceCountEmpty: '共 0 句',
+            playAll: '全部播放', repeat: '循环',
             historyTitle: '历史记录', historyTotalEmpty: '共 0 条',
             clearHistory: '清空历史', clearHistoryTitle: '清空当前分类历史', closeEsc: '关闭 (Esc)',
             histAll: '全部', histStudy: '📖 拆解精析', histTts: '🎧 音频制作',
@@ -645,13 +647,14 @@ function initStudyWorkbench() {
 
     let playbackLoopTimer = null;
 
-    // Plays French once, or keeps going in a repeat mode (FrenchPlayback, see playback.js):
-    // "loop" repeats this text, "all" goes on through the sentences on the page and starts over.
-    // Word lookups pass { once: true }. onEndCallback runs when playback really ends or is stopped.
+    // Plays French. { all: true } goes on through the page's sentences from this one; with
+    // Repeat on (playback.js) a single text plays again and again, and "all" starts over at
+    // the end. Word lookups pass { once: true }. onEndCallback runs when playback ends or stops.
     function playFrenchSpeech(text, onEndCallback = null, options = {}) {
         if (!text || !text.trim()) return;
         stopAllAudio();
-        const mode = options.once || !window.FrenchPlayback ? 'once' : window.FrenchPlayback.mode();
+        const repeat = !options.once && Boolean(window.FrenchPlayback && window.FrenchPlayback.repeat());
+        const mode = options.all ? 'all' : repeat ? 'loop' : 'once';
         const sentences = mode === 'all'
             ? Array.from(document.querySelectorAll('.sentence-french-text')).map(el => el.textContent.trim()).filter(Boolean)
             : [];
@@ -673,7 +676,7 @@ function initStudyWorkbench() {
             if (onEndCallback) onEndCallback();
         };
         currentAudioCleanup = endAll;  // stopAllAudio ends the whole loop
-        if (mode !== 'once') window.FrenchPlayback.setActive(true, stopAllAudio);
+        if (mode !== 'once' && window.FrenchPlayback) window.FrenchPlayback.setActive(true, stopAllAudio);
 
         const step = () => {
             if (mode === 'all') markReading(keys.indexOf(srsSentenceKey(current)));
@@ -685,7 +688,15 @@ function initStudyWorkbench() {
                     return;
                 }
                 const index = keys.indexOf(srsSentenceKey(current));
-                if (index !== -1) current = sentences[(index + 1) % sentences.length];
+                if (mode === 'all' && index !== -1) {
+                    // The last sentence: start over with Repeat on, otherwise the read-through is done
+                    if (index === sentences.length - 1 && !repeat) {
+                        if (currentAudioCleanup === endAll) currentAudioCleanup = null;
+                        endAll();
+                        return;
+                    }
+                    current = sentences[(index + 1) % sentences.length];
+                }
                 playbackLoopTimer = setTimeout(() => { if (!ended) step(); }, 800);
             });
         };
@@ -3162,6 +3173,26 @@ function initStudyWorkbench() {
                     startAnalysis();
                 }
             },
+        });
+    }
+
+    // Play all: reads every sentence in order (and starts over with Repeat on)
+    const playAllBtn = document.getElementById('play-all-btn');
+    if (playAllBtn) {
+        const setPlayAllLabel = (playing) => {
+            playAllBtn.classList.toggle('is-playing', playing);
+            playAllBtn.innerHTML = `<i data-lucide="${playing ? 'square' : 'play'}" aria-hidden="true"></i><span>${playing ? T.stop : T.playAll}</span>`;
+            refreshIcons();
+        };
+        playAllBtn.addEventListener('click', () => {
+            if (playAllBtn.classList.contains('is-playing')) {
+                stopAllAudio();
+                return;
+            }
+            const first = document.querySelector('.sentence-french-text');
+            if (!first) return;
+            setPlayAllLabel(true);
+            playFrenchSpeech(first.textContent.trim(), () => setPlayAllLabel(false), { all: true });
         });
     }
 

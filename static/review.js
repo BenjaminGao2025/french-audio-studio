@@ -406,11 +406,11 @@
         return `/tts?text=${encodeURIComponent(text.trim())}&voice=${VOICE}`;
     }
 
-    // In a repeat mode (playback.js) the same text plays again until stopped; word lookups play once
+    // With Repeat on (playback.js) the same text plays again until stopped; word lookups play once
     function playFrench(text, rate = 1, options = {}) {
         if (!text) return;
         stopAudio();
-        const repeat = !options.once && window.FrenchPlayback && window.FrenchPlayback.mode() !== 'once';
+        const repeat = !options.once && window.FrenchPlayback && window.FrenchPlayback.repeat();
         const audio = new Audio(ttsUrl(text));
         audio.playbackRate = rate;
         currentAudio = audio;
@@ -446,6 +446,7 @@
                 <button class="btn btn-secondary btn-play" type="button" data-speech="${escapeHtml(text)}" data-rate="0.75">
                     <i data-lucide="snail"></i><span>${T.slow}</span>
                 </button>
+                ${window.FrenchPlayback ? window.FrenchPlayback.toggleHtml() : ''}
             </div>`;
     }
 
