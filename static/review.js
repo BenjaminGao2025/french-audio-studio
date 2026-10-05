@@ -543,7 +543,7 @@
                 <div class="attempt-result cloze-result ${verdict.cls}">
                     <strong>${verdict.text}</strong>
                     ${diff ? `<span>${T.youWrote}<b class="letter-diff">${diff.typed}</b></span>` : ''}
-                    <span>${T.answer}<b class="letter-diff is-answer">${diff ? diff.answer : escapeHtml(answer)}</b></span>
+                    <span>${T.answer}<b class="letter-diff is-answer fr-word" data-speech="${escapeHtml(answer)}">${diff ? diff.answer : escapeHtml(answer)}</b></span>
                     ${diff && verdict.cls !== 'correct' ? `<small class="diff-legend-line">${T.diffLegend}</small>` : ''}
                 </div>`,
         };
@@ -679,7 +679,7 @@
             </div>
             ${card.target ? `
                 <div class="answer-target">
-                    <strong>${escapeHtml(card.target)}</strong>
+                    <strong>${clickableFr(card.target)}</strong>
                     ${metaBits.length ? `<span class="target-meta">${metaBits.map(escapeHtml).join(' · ')}</span>` : ''}
                     ${EN
                         ? (pick(meta.meaning_zh, meta.meaning_en) ? `<p>${escapeHtml(pick(meta.meaning_zh, meta.meaning_en))}</p>` : '')
