@@ -58,6 +58,7 @@
             stateNew: 'New', stateLearning: 'Learning', stateRelearning: 'Relearning', stateReview: 'Review',
             sessionExpired: 'Your login has expired. Please log in again.',
             requestFailed: (status) => `Request failed (HTTP ${status})`,
+            lookingUp: 'Looking it up…', noDefinition: 'No explanation found.', baseFormOf: 'base form: ',
             play: 'Play', slow: 'Slow', pronounce: 'Pronounce',
             noAsr: 'This browser has no speech recognition (Chrome, Edge and Safari do). Say it out loud, then show the answer to compare.',
             speakFrench: 'Speak French', doneTapToScore: 'Done, tap to score', tryAgain: 'Try again', myRecording: 'My recording',
@@ -118,6 +119,7 @@
             stateNew: '新卡', stateLearning: '学习中', stateRelearning: '重新学习', stateReview: '复习',
             sessionExpired: '登录已失效，请重新登录。',
             requestFailed: (status) => `请求失败（HTTP ${status}）`,
+            lookingUp: '查询中…', noDefinition: '没查到解释。', baseFormOf: '原形：',
             play: '播放', slow: '慢速', pronounce: '发音',
             noAsr: '这个浏览器不支持语音识别（Chrome / Edge / Safari 支持）。请大声说出来，再点「显示答案」对照。',
             speakFrench: '开口说法语', doneTapToScore: '说完了，点这里评分', tryAgain: '再说一次', myRecording: '我的录音',
@@ -372,6 +374,75 @@
                 ? `<span class="fr-word" data-speech="${escapeHtml(part)}">${escapeHtml(part)}</span>`
                 : escapeHtml(part)))
             .join('');
+    }
+
+    // ---------------------------------------------------------------------
+    // Word popover: tap a French word to hear it and see what it means
+    // ---------------------------------------------------------------------
+    const lookupCache = new Map();
+    let wordPop = null;
+
+    function closeWordPop() {
+        if (wordPop) { wordPop.remove(); wordPop = null; }
+    }
+
+    function fillWordPop(pop, word, info) {
+        const phonetic = info.phonetic ? window.SpeechEval.formatFriendlyPhonetic(info.phonetic) : '';
+        const bits = [info.pos, info.lemma && info.lemma.toLowerCase() !== word.toLowerCase() ? `${T.baseFormOf}${info.lemma}` : '', phonetic].filter(Boolean);
+        const main = EN ? (info.explanation_en || info.explanation_cn) : (info.explanation_cn || info.explanation_en);
+        const second = !EN && info.explanation_cn && info.explanation_en ? info.explanation_en : '';
+        pop.innerHTML = `
+            <div class="word-pop-head">
+                <strong>${escapeHtml(word)}</strong>
+                <button class="icon-btn btn-play word-pop-play" type="button" data-speech="${escapeHtml(word)}" data-rate="1" title="${T.play}"><i data-lucide="volume-2"></i></button>
+            </div>
+            ${bits.length ? `<p class="word-pop-meta">${bits.map(escapeHtml).join(' · ')}</p>` : ''}
+            <p class="word-pop-text">${escapeHtml(main || T.noDefinition)}</p>
+            ${second ? `<p class="word-pop-sub">${escapeHtml(second)}</p>` : ''}`;
+        refreshIcons();
+    }
+
+    function placeWordPop(pop, anchor) {
+        const rect = anchor.getBoundingClientRect();
+        const width = pop.offsetWidth;
+        const left = Math.min(Math.max(8, rect.left + rect.width / 2 - width / 2), window.innerWidth - width - 8);
+        let top = rect.bottom + 8;
+        if (top + pop.offsetHeight > window.innerHeight - 8) top = rect.top - pop.offsetHeight - 8;
+        pop.style.left = `${left + window.scrollX}px`;
+        pop.style.top = `${Math.max(8, top) + window.scrollY}px`;
+    }
+
+    async function showWordPop(anchor, word) {
+        closeWordPop();
+        const pop = document.createElement('div');
+        pop.className = 'word-pop';
+        pop.setAttribute('role', 'dialog');
+        document.body.appendChild(pop);
+        wordPop = pop;
+
+        const key = word.toLowerCase();
+        const card = session.current;
+        const meta = (card && card.target_meta) || {};
+        // The card's own target word already carries its meaning
+        if (!lookupCache.has(key) && card && card.target && card.target.toLowerCase() === key && (meta.meaning_en || meta.meaning_zh)) {
+            lookupCache.set(key, { lemma: meta.lemma, pos: meta.pos, phonetic: meta.ipa, explanation_en: meta.meaning_en, explanation_cn: meta.meaning_zh });
+        }
+        if (lookupCache.has(key)) {
+            fillWordPop(pop, word, lookupCache.get(key));
+            placeWordPop(pop, anchor);
+            return;
+        }
+        fillWordPop(pop, word, { explanation_en: T.lookingUp, explanation_cn: T.lookingUp });
+        placeWordPop(pop, anchor);
+        try {
+            const res = await fetch(`/api/lookup?word=${encodeURIComponent(word)}`, { headers: { Authorization: `Bearer ${getToken()}` } });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.detail?.message || T.requestFailed(res.status));
+            lookupCache.set(key, data);
+            if (wordPop === pop) { fillWordPop(pop, word, data); placeWordPop(pop, anchor); }
+        } catch (err) {
+            if (wordPop === pop) { fillWordPop(pop, word, { explanation_en: err.message, explanation_cn: err.message }); placeWordPop(pop, anchor); }
+        }
     }
 
     function ttsUrl(text) {
@@ -701,6 +772,7 @@
 
     function renderCard(card) {
         session.current = card;
+        closeWordPop();
         session.revealed = false;
         session.attempt = null;
         session.scoring = false;
@@ -932,11 +1004,13 @@
         const word = e.target.closest('.fr-word');
         if (word) {
             playFrench(word.dataset.speech);
+            showWordPop(word, word.dataset.speech);
             document.querySelectorAll('.fr-word.is-playing').forEach(el => el.classList.remove('is-playing'));
             word.classList.add('is-playing');
             setTimeout(() => word.classList.remove('is-playing'), 900);
             return;
         }
+        if (wordPop && !e.target.closest('.word-pop')) closeWordPop();
         const play = e.target.closest('.btn-play');
         if (play) {
             playFrench(play.dataset.speech, parseFloat(play.dataset.rate || '1'));
@@ -963,6 +1037,7 @@
     });
 
     document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && wordPop) { closeWordPop(); return; }
         const typing = e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT');
         if (typing || !session.current || els.stage.hidden) return;
         if (e.code === 'Space' && !session.revealed) {
