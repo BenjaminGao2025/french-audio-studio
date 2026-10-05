@@ -3,6 +3,7 @@ import testenv  # noqa: F401  (must run before the app is imported)
 import datetime
 import unittest
 import uuid
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -158,6 +159,26 @@ class GameApiTests(unittest.TestCase):
         self.assertEqual(res.json()["today"]["minutes"], 1)
         bad = self.client.post("/api/game/log", headers=self.headers, json={"lane": "dota", "minutes": 5})
         self.assertEqual(bad.status_code, 422)
+
+    def test_callouts_are_fixed_lines_generated_once(self):
+        self.assertEqual(self.client.get("/api/game/callout/hello.mp3").status_code, 404)
+        spoken = []
+
+        class FakeCommunicate:
+            def __init__(self, text, **kwargs):
+                spoken.append((text, kwargs["voice"]))
+
+            async def save(self, path):
+                with open(path, "wb") as handle:
+                    handle.write(b"ID3fake")
+
+        with patch.object(tts_service.edge_tts, "Communicate", FakeCommunicate):
+            first = self.client.get("/api/game/callout/double_kill.mp3")
+            second = self.client.get("/api/game/callout/double_kill.mp3")
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first.headers["content-type"], "audio/mpeg")
+        self.assertEqual(second.content, b"ID3fake")
+        self.assertEqual(spoken, [("Double kill!", game.CALLOUT_VOICE["voice"])])
 
     def test_review_response_carries_the_kill_feed(self):
         note = srs.add_note(self.user_id, "Bonjour.", targets=[{"text": "Bonjour"}])

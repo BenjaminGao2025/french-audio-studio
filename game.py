@@ -58,6 +58,21 @@ NEW_CARD_XP = 3
 FIRST_BLOOD_XP = 10
 WAVE_CLEARED_XP = 20
 MAX_HEARTBEAT_SECONDS = 120
+
+# Announcer lines for the kill feed: fixed phrases only, spoken once by TTS and cached
+CALLOUT_PHRASES = {
+    "first_blood": "First blood!",
+    "double_kill": "Double kill!",
+    "triple_kill": "Triple kill!",
+    "ultra_kill": "Ultra kill!",
+    "rampage": "Rampage!",
+    "unstoppable": "Unstoppable!",
+    "godlike": "Godlike!",
+    "beyond_godlike": "Beyond godlike!",
+    "wave_cleared": "Wave cleared!",
+    "level_up": "Level up!",
+}
+CALLOUT_VOICE = {"voice": "en-US-ChristopherNeural", "rate": "-5%", "pitch": "-10Hz"}
 MAX_AUTO_SECONDS_PER_LANE_DAY = 8 * 3600
 
 _initialized_db_paths: set[str] = set()

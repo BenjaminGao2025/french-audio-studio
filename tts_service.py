@@ -2156,6 +2156,24 @@ def game_family_day(req: GameDayRequest, authorization: str | None = Header(defa
     return game.state(user_id, req.tz_offset)
 
 
+@app.get("/api/game/callout/{name}.mp3")
+async def game_callout(name: str):
+    """The announcer's voice for one fixed callout (no free text, so no TTS proxy)."""
+    text = game.CALLOUT_PHRASES.get(name)
+    if not text:
+        raise HTTPException(status_code=404, detail={"message": "没有这条播报。"})
+    path = OUTPUT_DIR / "callouts" / f"{name}.mp3"
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(f"{path.name}.{uuid.uuid4().hex[:8]}.part")
+        try:
+            await edge_tts.Communicate(text, **game.CALLOUT_VOICE).save(str(tmp))
+            os.replace(tmp, path)
+        finally:
+            tmp.unlink(missing_ok=True)
+    return FileResponse(path, media_type="audio/mpeg", headers={"Cache-Control": "public, max-age=604800"})
+
+
 @app.post("/api/game/wave-cleared")
 def game_wave_cleared(req: GameDayRequest, authorization: str | None = Header(default=None)):
     user_id = _require_user_id(authorization)

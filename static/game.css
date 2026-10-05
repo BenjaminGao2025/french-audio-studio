@@ -279,7 +279,7 @@
 /* Callouts */
 .game-banner {
     position: fixed;
-    top: 22%;
+    top: 34%;
     left: 50%;
     z-index: 10000;
     display: flex;
@@ -296,7 +296,7 @@
 }
 
 .game-banner strong {
-    font-size: 28px;
+    font-size: 40px;
     letter-spacing: 0.02em;
     text-transform: uppercase;
 }
@@ -308,11 +308,41 @@
 }
 
 .game-banner.is-first strong { color: #ff8a7a; }
-.game-banner.is-small { padding: 8px 20px; }
-.game-banner.is-small strong { font-size: 20px; color: #9fe1cb; }
-.game-banner.is-big strong { color: #f6c453; font-size: 34px; }
+.game-banner.is-small { padding: 8px 22px; }
+.game-banner.is-small strong { font-size: 24px; color: #9fe1cb; }
+.game-banner.is-big strong { color: #f6c453; font-size: 52px; }
 .game-banner.is-level { animation-duration: 2.2s; background: var(--primary); }
-.game-banner.is-level strong { font-size: 36px; }
+.game-banner.is-level strong { font-size: 48px; }
+
+/* A short full-screen flash behind the big callouts */
+.game-flash {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    pointer-events: none;
+    background: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 60%);
+    animation: game-flash 0.6s ease-out forwards;
+}
+
+.game-flash.is-red { background: radial-gradient(circle at 50% 40%, rgba(255, 110, 90, 0.35), rgba(255, 110, 90, 0) 60%); }
+.game-flash.is-gold { background: radial-gradient(circle at 50% 40%, rgba(246, 196, 83, 0.45), rgba(246, 196, 83, 0) 62%); }
+
+@keyframes game-flash {
+    0% { opacity: 0; }
+    20% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+/* The checked answer lights up when it is right */
+.attempt-result.game-hit {
+    animation: game-hit 0.9s ease-out;
+}
+
+@keyframes game-hit {
+    0% { box-shadow: 0 0 0 0 rgba(40, 100, 61, 0.55); transform: scale(1); }
+    25% { box-shadow: 0 0 0 10px rgba(40, 100, 61, 0.18); transform: scale(1.02); }
+    100% { box-shadow: 0 0 0 18px rgba(40, 100, 61, 0); transform: scale(1); }
+}
 .game-banner.is-level span { color: #ffffff; font-size: 18px; }
 .game-banner.is-error { background: var(--danger); }
 .game-banner.is-error strong { font-size: 15px; text-transform: none; }
@@ -356,7 +386,9 @@
 
 @media (prefers-reduced-motion: reduce) {
     .game-banner,
-    .game-xp-float {
+    .game-xp-float,
+    .game-flash,
+    .attempt-result.game-hit {
         animation: none;
     }
 }
@@ -375,7 +407,12 @@
     }
 
     .game-banner strong {
-        font-size: 22px;
+        font-size: 30px;
+    }
+
+    .game-banner.is-big strong,
+    .game-banner.is-level strong {
+        font-size: 36px;
     }
 
     .lane-row {

@@ -110,39 +110,101 @@
     }
 
     // ---------------------------------------------------------------------
-    // Sounds: short synthesized cues, no recordings
+    // Sounds: soft synthesized cues, plus the announcer's voice for big moments
     // ---------------------------------------------------------------------
     let audioCtx = null;
     const muted = () => { try { return localStorage.getItem(MUTE_KEY) === '1'; } catch (_) { return false; } };
 
-    function tone(freq, start, duration, type = 'triangle', volume = 0.1) {
-        if (muted()) return;
+    function audio() {
+        if (muted()) return null;
         const AC = root.AudioContext || root.webkitAudioContext;
-        if (!AC) return;
+        if (!AC) return null;
         audioCtx = audioCtx || new AC();
         if (audioCtx.state === 'suspended') audioCtx.resume();
-        const t0 = audioCtx.currentTime + start;
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = type;
-        osc.frequency.setValueAtTime(freq, t0);
+        return audioCtx;
+    }
+
+    // A soft bell-like note: a sine with a quiet octave on top
+    function bell(freq, start, duration = 0.35, volume = 0.07) {
+        const ac = audio();
+        if (!ac) return;
+        const t0 = ac.currentTime + start;
+        [[1, volume], [2, volume * 0.25]].forEach(([mult, vol]) => {
+            const osc = ac.createOscillator();
+            const gain = ac.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq * mult, t0);
+            gain.gain.setValueAtTime(0.0001, t0);
+            gain.gain.exponentialRampToValueAtTime(vol, t0 + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+            osc.connect(gain).connect(ac.destination);
+            osc.start(t0);
+            osc.stop(t0 + duration + 0.05);
+        });
+    }
+
+    // A low thump under the big callouts
+    function thump(volume = 0.22) {
+        const ac = audio();
+        if (!ac) return;
+        const t0 = ac.currentTime;
+        const osc = ac.createOscillator();
+        const gain = ac.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(140, t0);
+        osc.frequency.exponentialRampToValueAtTime(45, t0 + 0.3);
         gain.gain.setValueAtTime(0.0001, t0);
-        gain.gain.exponentialRampToValueAtTime(volume, t0 + 0.015);
-        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
-        osc.connect(gain).connect(audioCtx.destination);
+        gain.gain.exponentialRampToValueAtTime(volume, t0 + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.35);
+        osc.connect(gain).connect(ac.destination);
         osc.start(t0);
-        osc.stop(t0 + duration + 0.05);
+        osc.stop(t0 + 0.4);
     }
 
     const SOUNDS = {
-        kill: () => { tone(880, 0, 0.09, 'triangle', 0.08); tone(1320, 0.06, 0.14, 'triangle', 0.08); },
-        combo: (n) => [523, 659, 784, 1047, 1319].slice(0, Math.min(n, 5))
-            .forEach((f, i) => tone(f, i * 0.07, 0.16, 'square', 0.05)),
-        firstBlood: () => { tone(110, 0, 0.4, 'sawtooth', 0.08); tone(220, 0, 0.4, 'triangle', 0.08); tone(1760, 0.14, 0.3, 'sine', 0.06); },
-        levelUp: () => { [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.11, 0.32, 'triangle', 0.1)); tone(1568, 0.46, 0.7, 'sine', 0.07); },
-        wave: () => { [392, 523, 659].forEach(f => tone(f, 0, 0.7, 'triangle', 0.06)); tone(784, 0.22, 0.7, 'sine', 0.07); },
-        soft: () => tone(330, 0, 0.1, 'sine', 0.04),
+        // a coin pickup, two semitones higher with each kill in a combo
+        kill: (combo = 1) => {
+            const k = Math.pow(2, (Math.min(Math.max(combo, 1) - 1, 7) * 2) / 12);
+            bell(988 * k, 0, 0.12);
+            bell(1319 * k, 0.08, 0.4);
+        },
+        big: () => thump(),
+        levelUp: () => { [523, 659, 784, 1047].forEach((f, i) => bell(f, i * 0.1, 0.5, 0.08)); bell(1568, 0.42, 0.9, 0.06); },
+        wave: () => { thump(0.15); [523, 659, 784].forEach((f, i) => bell(f, 0.05 + i * 0.06, 0.8, 0.06)); },
+        miss: () => bell(220, 0, 0.25, 0.035),
     };
+
+    // The announcer: fixed lines spoken by TTS on the server and cached (game.CALLOUT_PHRASES)
+    const VOICE_LINES = {
+        'First blood': 'first_blood', 'Double kill': 'double_kill', 'Triple kill': 'triple_kill',
+        'Ultra kill': 'ultra_kill', 'Rampage': 'rampage', 'Unstoppable': 'unstoppable', 'Godlike': 'godlike',
+        'Beyond godlike': 'beyond_godlike', 'Wave cleared': 'wave_cleared', 'Level up': 'level_up',
+    };
+    const voiceClips = {};
+
+    function voiceClip(key) {
+        if (!voiceClips[key]) {
+            voiceClips[key] = new Audio(`/api/game/callout/${key}.mp3`);
+            voiceClips[key].preload = 'auto';
+        }
+        return voiceClips[key];
+    }
+
+    function announce(line) {
+        const key = VOICE_LINES[line];
+        if (!key || muted()) return;
+        const clip = voiceClip(key);
+        clip.currentTime = 0;
+        clip.volume = 0.95;
+        clip.play().catch(() => {});
+    }
+
+    function flash(kind = '') {
+        const el = document.createElement('div');
+        el.className = `game-flash ${kind}`;
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 700);
+    }
 
     // ---------------------------------------------------------------------
     // Callouts: one at a time, never blocking clicks or typing
@@ -219,6 +281,8 @@
             renderMute();
             if (!muted()) SOUNDS.kill();
         });
+        // Reviews announce kills: load the voice lines up front so they play at once
+        if (root.location.pathname === '/review') Object.values(VOICE_LINES).forEach(voiceClip);
         panel.addEventListener('click', onPanelClick);
         panel.addEventListener('change', onPanelChange);
         panel.addEventListener('submit', onPanelSubmit);
@@ -355,7 +419,9 @@
         renderHud();
         if (before !== null && next.level > before) {
             banner('Level up', T.levelUp(next.level), 'is-level');
+            flash('is-gold');
             SOUNDS.levelUp();
+            announce('Level up');
             hud.classList.add('is-leveling');
             setTimeout(() => hud.classList.remove('is-leveling'), 2200);
         }
@@ -441,17 +507,34 @@
     const session = { kills: 0, deaths: 0, bestCombo: 0, xp: 0 };
     let pendingKill = false;  // the callout already fired when the answer checked correct
 
+    // The checked answer lights up the moment it is right
+    function glowAnswer() {
+        setTimeout(() => {
+            const boxes = document.querySelectorAll('.attempt-result');
+            const box = boxes[boxes.length - 1];
+            if (!box) return;
+            box.classList.remove('game-hit');
+            void box.offsetWidth;  // restart the animation
+            box.classList.add('game-hit');
+        }, 0);
+    }
+
     function showKill(combo, firstBlood, sub = '') {
         if (firstBlood) {
             banner('First blood', sub, 'is-first');
-            SOUNDS.firstBlood();
+            flash('is-red');
+            SOUNDS.big();
+            announce('First blood');
         } else if (CALLOUTS[combo]) {
             banner(CALLOUTS[combo], sub, combo >= 5 ? 'is-big' : '');
-            SOUNDS.combo(combo);
+            flash(combo >= 5 ? 'is-gold' : '');
+            SOUNDS.big();
+            announce(CALLOUTS[combo]);
         } else {
-            banner('Kill', combo > 1 ? `Combo x${combo}` : sub, 'is-small');
-            SOUNDS.kill();
+            banner(combo > 1 ? `Combo x${combo}` : 'Kill', sub, 'is-small');
+            SOUNDS.kill(combo);
         }
+        glowAnswer();
     }
 
     // A typed or spoken answer was right: react now, the XP follows when it is rated
@@ -470,7 +553,7 @@
             if (!pendingKill) showKill(feed.combo, feed.first_blood, `+${feed.xp} XP`);
         } else {
             if (feed.death) session.deaths += 1;
-            if (!pendingKill) SOUNDS.soft();
+            if (!pendingKill) SOUNDS.miss();
         }
         pendingKill = false;
         floatXp(feed.xp);
@@ -487,7 +570,9 @@
         } catch (_) { /* the summary still shows */ }
         if (xp) {
             banner('Wave cleared', `+${xp} XP`, 'is-big');
+            flash('is-gold');
             SOUNDS.wave();
+            announce('Wave cleared');
         }
         if (container && session.kills + session.deaths > 0) {
             let box = container.querySelector('.game-summary');
