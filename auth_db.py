@@ -14,8 +14,9 @@ import os
 import re
 import sqlite3
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 AUTH_SECRET = os.getenv("AUTH_SECRET", "")
 if len(AUTH_SECRET) < 32:
@@ -30,10 +31,20 @@ def _get_db_path() -> Path:
     return output_dir / "users.db"
 
 
+def _open_connection() -> sqlite3.Connection:
+    # timeout is the lock wait; busy_timeout is what sqlite actually honors per connection.
+    conn = sqlite3.connect(_get_db_path(), timeout=30)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA busy_timeout = 30000")
+    return conn
+
+
 def init_db() -> None:
-    db_path = _get_db_path()
-    with sqlite3.connect(db_path) as conn:
-        conn.execute(
+    conn = _open_connection()
+    try:
+        # WAL lets a background episode job write while review and history read.
+        conn.execute("PRAGMA journal_mode = WAL")
+        conn.executescript(
             """
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,10 +56,6 @@ def init_db() -> None:
                 plan TEXT NOT NULL DEFAULT 'trial',
                 status TEXT NOT NULL DEFAULT 'active'
             );
-            """
-        )
-        conn.execute(
-            """
             CREATE TABLE IF NOT EXISTS history_records (
                 id TEXT PRIMARY KEY,
                 user_id INTEGER,
@@ -57,19 +64,27 @@ def init_db() -> None:
                 payload_json TEXT NOT NULL,
                 created_at TEXT NOT NULL
             );
-            """
-        )
-        conn.execute(
-            """
             CREATE INDEX IF NOT EXISTS idx_history_user ON history_records(user_id, created_at DESC);
-            """
-        )
-        conn.execute(
-            """
             CREATE INDEX IF NOT EXISTS idx_history_type ON history_records(record_type, created_at DESC);
             """
         )
         conn.commit()
+    finally:
+        conn.close()
+
+
+@contextmanager
+def connect() -> Iterator[sqlite3.Connection]:
+    init_db()
+    conn = _open_connection()
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def _hash_password(password: str, salt: str) -> str:
@@ -119,7 +134,6 @@ def register_user(email: str, password: str) -> dict[str, Any]:
         raise ValueError("密码长度至少需 6 位。")
 
     init_db()
-    db_path = _get_db_path()
     salt = uuid.uuid4().hex
     pwd_hash = _hash_password(password, salt)
     now = datetime.datetime.utcnow()
@@ -128,7 +142,7 @@ def register_user(email: str, password: str) -> dict[str, Any]:
     trial_expires_iso = trial_expires.isoformat()
 
     try:
-        with sqlite3.connect(db_path) as conn:
+        with connect() as conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -159,10 +173,8 @@ def register_user(email: str, password: str) -> dict[str, Any]:
 def login_user(email: str, password: str) -> dict[str, Any]:
     clean_email = email.strip().lower()
     init_db()
-    db_path = _get_db_path()
 
-    with sqlite3.connect(db_path) as conn:
-        conn.row_factory = sqlite3.Row
+    with connect() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM users WHERE email = ?", (clean_email,))
         row = cursor.fetchone()
@@ -181,10 +193,8 @@ def login_user(email: str, password: str) -> dict[str, Any]:
 
 def get_user_status(user_id: int) -> dict[str, Any] | None:
     init_db()
-    db_path = _get_db_path()
 
-    with sqlite3.connect(db_path) as conn:
-        conn.row_factory = sqlite3.Row
+    with connect() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
         row = cursor.fetchone()
@@ -249,13 +259,12 @@ def save_history_record(
     Automatically deduplicates records with identical or near-identical text for the user.
     """
     init_db()
-    db_path = _get_db_path()
     now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
     clean_type = (record_type or "unknown").strip().lower()
     clean_text = (text or "").strip()
     payload_str = json.dumps(payload, ensure_ascii=False)
 
-    with sqlite3.connect(db_path) as conn:
+    with connect() as conn:
         cursor = conn.cursor()
         # Find existing duplicate record for user and delete old ones
         cursor.execute(
@@ -300,7 +309,6 @@ def get_history_records(
     Retrieve unified history records ordered by created_at DESC with deduplication.
     """
     init_db()
-    db_path = _get_db_path()
     query = "SELECT id, user_id, record_type, text, payload_json, created_at FROM history_records WHERE user_id = ?"
     params: list[Any] = [user_id]
 
@@ -313,8 +321,7 @@ def get_history_records(
 
     results: list[dict[str, Any]] = []
 
-    with sqlite3.connect(db_path) as conn:
-        conn.row_factory = sqlite3.Row
+    with connect() as conn:
         cursor = conn.cursor()
         cursor.execute(query, params)
         rows = cursor.fetchall()
@@ -352,14 +359,12 @@ def delete_history_record(record_id: str, user_id: int) -> bool:
     Delete a single history record by ID.
     """
     init_db()
-    db_path = _get_db_path()
     query = "DELETE FROM history_records WHERE id = ? AND user_id = ?"
     params: list[Any] = [record_id, user_id]
 
-    with sqlite3.connect(db_path) as conn:
+    with connect() as conn:
         cursor = conn.cursor()
         cursor.execute(query, params)
-        conn.commit()
         return cursor.rowcount > 0
 
 
@@ -368,17 +373,15 @@ def clear_history_records(user_id: int, record_type: str | None = None) -> int:
     Clear history records.
     """
     init_db()
-    db_path = _get_db_path()
     query = "DELETE FROM history_records WHERE user_id = ?"
     params: list[Any] = [user_id]
     if record_type:
         query += " AND record_type = ?"
         params.append(record_type.strip().lower())
 
-    with sqlite3.connect(db_path) as conn:
+    with connect() as conn:
         cursor = conn.cursor()
         cursor.execute(query, params)
-        conn.commit()
         return cursor.rowcount
 
 
@@ -409,8 +412,7 @@ def _admin_cli(argv: list[str]) -> None:
     sub.add_parser("claim-anonymous-history").add_argument("email")
     args = parser.parse_args(argv)
 
-    init_db()
-    with sqlite3.connect(_get_db_path()) as conn:
+    with connect() as conn:
         user_id = _user_id_by_email(conn, args.email)
         if args.command == "set-password":
             password = getpass.getpass("New password: ")

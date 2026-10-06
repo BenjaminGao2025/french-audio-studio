@@ -42,7 +42,7 @@ def init_db() -> None:
     if db_path in _initialized_db_paths:
         return
     auth_db.init_db()
-    with sqlite3.connect(db_path) as conn:
+    with auth_db.connect() as conn:
         conn.executescript(
             """
             CREATE TABLE IF NOT EXISTS srs_notes (
@@ -92,11 +92,9 @@ def init_db() -> None:
     _initialized_db_paths.add(db_path)
 
 
-def _connect() -> sqlite3.Connection:
+def _connect():
     init_db()
-    conn = sqlite3.connect(auth_db._get_db_path())
-    conn.row_factory = sqlite3.Row
-    return conn
+    return auth_db.connect()
 
 
 def _now() -> datetime.datetime:

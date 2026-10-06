@@ -2938,6 +2938,7 @@ function initStudyWorkbench() {
 
     function handleLogout() {
         localStorage.removeItem(userTokenKey);
+        fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => {});
         srsNotesByKey.clear();
         wordBook.clear();
         updateTableStarStates();

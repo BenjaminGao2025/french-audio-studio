@@ -99,5 +99,17 @@
         }
     } catch (_) {}
 
+    // Audio tags cannot send the bearer token. Exchange it for the HttpOnly session cookie.
+    try {
+        const token = localStorage.getItem('frenchStudio.userToken');
+        if (token) {
+            fetch('/api/auth/session', {
+                method: 'POST',
+                headers: { Authorization: 'Bearer ' + token },
+                credentials: 'same-origin',
+            }).catch(function () {});
+        }
+    } catch (_) {}
+
     root.FrenchI18n = { lang, setLang, pick, apply, mountToggle };
 })(window);

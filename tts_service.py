@@ -18,7 +18,7 @@ import httpx
 
 logger = logging.getLogger("tts_service")
 from fastapi import FastAPI, Header, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
@@ -284,6 +284,10 @@ def _authorization_token(authorization: str | None) -> str:
     return token
 
 
+SESSION_COOKIE = "fas_session"
+SESSION_MAX_AGE = 90 * 24 * 3600
+
+
 def _bearer_value(authorization: str | None) -> str:
     if not authorization:
         return ""
@@ -293,8 +297,45 @@ def _bearer_value(authorization: str | None) -> str:
     return authorization.strip()
 
 
-def _require_user_id(authorization: str | None) -> int:
-    payload = auth_db.verify_token(_bearer_value(authorization))
+def _session_value(authorization: str | None, request: Request | None = None) -> str:
+    header = _bearer_value(authorization)
+    if header:
+        return header
+    if request is not None:
+        return request.cookies.get(SESSION_COOKIE, "")
+    return ""
+
+
+def _cookie_secure(request: Request) -> bool:
+    forwarded = request.headers.get("x-forwarded-proto", "")
+    proto = (forwarded or request.url.scheme).split(",")[0].strip().lower()
+    return proto == "https"
+
+
+def _set_session_cookie(response: Response, token: str, request: Request) -> None:
+    response.set_cookie(
+        SESSION_COOKIE,
+        token,
+        max_age=SESSION_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        secure=_cookie_secure(request),
+        path="/",
+    )
+
+
+def _clear_session_cookie(response: Response, request: Request) -> None:
+    response.delete_cookie(
+        SESSION_COOKIE,
+        path="/",
+        httponly=True,
+        samesite="lax",
+        secure=_cookie_secure(request),
+    )
+
+
+def _require_user_id(authorization: str | None, request: Request | None = None) -> int:
+    payload = auth_db.verify_token(_session_value(authorization, request))
     if not payload:
         raise HTTPException(
             status_code=401,
@@ -1195,8 +1236,10 @@ async def request_french_analysis(request: AnalyzeRequest, api_key: str) -> dict
 
 
 def _timestamp() -> str:
+    # 128-bit id. These files are fetched by URL with no auth header (audio players),
+    # so a 6-hex suffix was the whole secret.
     now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    return f"{now}_{uuid.uuid4().hex[:6]}"
+    return f"{now}_{uuid.uuid4().hex}"
 
 
 def _safe_timestamp(
@@ -1269,7 +1312,7 @@ def _output_file(
         filename=filename if download else None,
         headers={
             "Access-Control-Expose-Headers": "Content-Disposition",
-            **({"Cache-Control": f"public, max-age={cache_seconds}"} if cache_seconds else {}),
+            **({"Cache-Control": f"private, max-age={cache_seconds}"} if cache_seconds else {}),
         },
     )
 
@@ -1871,11 +1914,15 @@ async def lookup_word(
 
 @app.get("/tts")
 async def generate_tts(
+    request: Request,
     text: str,
     voice: str = "fr-FR-DeniseNeural",
     format: Literal["mp3", "srt"] = "mp3",
     download: bool = False,
 ):
+    # <audio> cannot send an Authorization header. Same-origin cookie is the credential.
+    # Anonymous calls used to be an open Edge-TTS proxy on the public site.
+    _require_user_id(request.headers.get("authorization"), request)
     if len(text) > TTS_SNIPPET_MAX_CHARS:
         raise HTTPException(status_code=422, detail="文本过长，请使用音频工作台生成。")
     # Snippets are cached by (voice, text) hash, so the same URL always returns the same audio.
@@ -1889,24 +1936,51 @@ class AuthRequest(BaseModel):
     password: str
 
 
+def _auth_response(payload: dict, request: Request) -> JSONResponse:
+    response = JSONResponse(payload)
+    token = payload.get("token")
+    if isinstance(token, str) and token:
+        _set_session_cookie(response, token, request)
+    return response
+
+
 @app.post("/api/auth/register")
-async def register_account(req: AuthRequest):
+async def register_account(req: AuthRequest, request: Request):
     if not auth_db.ALLOW_REGISTRATION:
         raise HTTPException(status_code=403, detail={"message": "本站暂不开放注册。"})
     try:
-        res = auth_db.register_user(req.email, req.password)
-        return res
+        return _auth_response(auth_db.register_user(req.email, req.password), request)
     except ValueError as e:
         raise HTTPException(status_code=400, detail={"message": str(e)})
 
 
 @app.post("/api/auth/login")
-async def login_account(req: AuthRequest):
+async def login_account(req: AuthRequest, request: Request):
     try:
-        res = auth_db.login_user(req.email, req.password)
-        return res
+        return _auth_response(auth_db.login_user(req.email, req.password), request)
     except ValueError as e:
         raise HTTPException(status_code=400, detail={"message": str(e)})
+
+
+@app.post("/api/auth/session")
+async def refresh_session(request: Request, authorization: str | None = Header(default=None)):
+    """Turn an existing bearer token into the cookie that audio requests can carry."""
+    token = _bearer_value(authorization)
+    if not auth_db.verify_token(token):
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "login_required", "message": "请先登录账号。"},
+        )
+    response = Response(status_code=204)
+    _set_session_cookie(response, token, request)
+    return response
+
+
+@app.post("/api/auth/logout")
+async def logout_account(request: Request):
+    response = Response(status_code=204)
+    _clear_session_cookie(response, request)
+    return response
 
 
 @app.get("/api/auth/me")

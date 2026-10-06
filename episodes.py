@@ -20,11 +20,11 @@ import hashlib
 import io
 import json
 import re
-import sqlite3
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Awaitable, Callable
+from typing import Any, Awaitable, Callable, Iterator
 
 import av
 import edge_tts
@@ -58,25 +58,24 @@ class Segment:
 # ---------------------------------------------------------------------------
 # Storage
 # ---------------------------------------------------------------------------
-def _db() -> sqlite3.Connection:
-    auth_db.init_db()
-    conn = sqlite3.connect(auth_db._get_db_path())
-    conn.row_factory = sqlite3.Row
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS episodes (
-            id TEXT PRIMARY KEY,
-            user_id INTEGER NOT NULL,
-            title TEXT NOT NULL DEFAULT '',
-            status TEXT NOT NULL,
-            duration REAL NOT NULL DEFAULT 0,
-            error TEXT NOT NULL DEFAULT '',
-            sentences_json TEXT NOT NULL DEFAULT '[]',
-            created_at TEXT NOT NULL
+@contextmanager
+def _db() -> Iterator[Any]:
+    with auth_db.connect() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS episodes (
+                id TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                title TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL,
+                duration REAL NOT NULL DEFAULT 0,
+                error TEXT NOT NULL DEFAULT '',
+                sentences_json TEXT NOT NULL DEFAULT '[]',
+                created_at TEXT NOT NULL
+            )
+            """
         )
-        """
-    )
-    return conn
+        yield conn
 
 
 def episodes_dir() -> Path:
@@ -111,7 +110,7 @@ def update_episode(episode_id: str, **fields: Any) -> None:
         )
 
 
-def _row_payload(row: sqlite3.Row) -> dict[str, Any]:
+def _row_payload(row: Any) -> dict[str, Any]:
     status = row["status"]
     if status == "generating" and _now() - datetime.datetime.fromisoformat(row["created_at"]) > STALE_AFTER:
         status = "failed"  # the job died (e.g. service restart)
@@ -178,7 +177,7 @@ def learning_material(user_id: int) -> list[dict[str, Any]]:
             "key": key, "sentence": sentence.strip(), "en": "", "build_up": [], "words": [], "in_deck": False,
         })
 
-    with sqlite3.connect(auth_db._get_db_path()) as conn:
+    with auth_db.connect() as conn:
         history = conn.execute(
             "SELECT payload_json FROM history_records WHERE user_id = ? AND record_type = 'study' "
             "ORDER BY created_at DESC",
@@ -202,7 +201,7 @@ def learning_material(user_id: int) -> list[dict[str, Any]]:
                     item["words"].append(word)
 
     srs.init_db()
-    with sqlite3.connect(auth_db._get_db_path()) as conn:
+    with auth_db.connect() as conn:
         notes = conn.execute(
             "SELECT id, sentence, translation_en FROM srs_notes WHERE user_id = ?", (user_id,)
         ).fetchall()

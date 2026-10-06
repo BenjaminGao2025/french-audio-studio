@@ -789,6 +789,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertEqual(reg_res.status_code, 200)
         data = reg_res.json()
         self.assertIn("token", data)
+        self.assertIn("fas_session", reg_res.cookies)
         self.assertEqual(data["user"]["email"], test_email)
         self.assertEqual(data["user"]["plan"], "trial")
         self.assertEqual(data["user"]["days_left"], 60)
@@ -812,6 +813,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
         )
         self.assertEqual(login_res.status_code, 200)
         self.assertIn("token", login_res.json())
+        self.assertIn("fas_session", login_res.cookies)
 
         # 4. Duplicate register fails
         dup_res = self.client.post(
@@ -977,11 +979,42 @@ class FrenchAudioStudioTests(unittest.TestCase):
         path = tts_service.OUTPUT_DIR / "TTS_fr-FR-DeniseNeural_snip_test.mp3"
         path.write_bytes(b"ID3")
         create_mock.return_value = (path.name, "unused.srt")
-        response = self.client.get("/tts", params={"text": "Bonjour", "t": "attacker_chosen"})
+        response = self.client.get(
+            "/tts",
+            params={"text": "Bonjour", "t": "attacker_chosen"},
+            headers=self._login_headers(),
+        )
         self.assertEqual(response.status_code, 200)
-        self.assertIn("max-age=", response.headers["cache-control"])
+        self.assertEqual(response.headers["cache-control"], "private, max-age=2592000")
         # The client can no longer choose the cache file name.
         create_mock.assert_awaited_once_with("Bonjour", "fr-FR-DeniseNeural")
+
+    def test_tts_requires_login(self):
+        response = self.client.get("/tts", params={"text": "Bonjour"})
+        self.assertEqual(response.status_code, 401)
+
+    def test_tts_accepts_session_cookie(self):
+        self.client.post(
+            "/api/auth/login",
+            json={"email": _unique_email(), "password": "password123"},
+        )
+        # Login of an unknown user must not plant a cookie.
+        self.assertNotIn("fas_session", self.client.cookies)
+        email = _unique_email()
+        auth_db.register_user(email, "password123")
+        logged_in = self.client.post(
+            "/api/auth/login", json={"email": email, "password": "password123"}
+        )
+        self.assertEqual(logged_in.status_code, 200)
+        with patch("tts_service.create_speech_files", new_callable=AsyncMock) as create_mock:
+            path = tts_service.OUTPUT_DIR / "TTS_fr-FR-DeniseNeural_snip_cookie.mp3"
+            path.write_bytes(b"ID3")
+            create_mock.return_value = (path.name, "unused.srt")
+            response = self.client.get("/tts", params={"text": "Bonjour"})
+        self.assertEqual(response.status_code, 200)
+        self.client.post("/api/auth/logout")
+        self.assertNotIn("fas_session", self.client.cookies)
+        self.assertEqual(self.client.get("/tts", params={"text": "Bonjour"}).status_code, 401)
 
     def test_snippets_up_to_limit_use_stable_hash_names(self):
         long_text = "Phrase assez longue. " * 12  # ~250 chars, above the old 150 limit
@@ -991,8 +1024,21 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertTrue(a.startswith("snip_"))
 
     def test_tts_snippet_rejects_long_text(self):
-        response = self.client.get("/tts", params={"text": "a" * 601})
+        response = self.client.get("/tts", params={"text": "a" * 601}, headers=self._login_headers())
         self.assertEqual(response.status_code, 422)
+
+    def test_full_length_speech_names_are_unguessable(self):
+        long_text = "a" * 601
+        a = tts_service._safe_timestamp(None, text=long_text, voice="fr-FR-DeniseNeural")
+        b = tts_service._safe_timestamp(None, text=long_text, voice="fr-FR-DeniseNeural")
+        self.assertNotEqual(a, b)
+        self.assertRegex(a, r"^[0-9]{8}_[0-9]{6}_[0-9a-f]{32}$")
+
+    def test_database_uses_wal(self):
+        auth_db.init_db()
+        with auth_db.connect() as conn:
+            mode = conn.execute("PRAGMA journal_mode").fetchone()[0]
+        self.assertEqual(mode, "wal")
 
     def test_session_token_without_server_key_returns_503(self):
         headers = self._login_headers()
