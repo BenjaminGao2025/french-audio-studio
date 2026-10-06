@@ -16,18 +16,18 @@
     --primary-line: #b8cbe2;
     --primary-contrast: #ffffff;
     --focus-ring: rgba(var(--primary-rgb), 0.2);
-    /* Mist blue for secondary emphasis; teal is reserved for success. */
+    /* Mist blue for secondary emphasis. Green only means right / done, in small marks. */
     --accent: #476f8c;
     --accent-soft: #edf4fa;
     --accent-line: #b9cedf;
     --danger: #a94e58;
     --danger-soft: #fbf1f2;
     --danger-line: #e1b9bf;
-    --success: #327564;
-    --success-rgb: 50, 117, 100;
-    --success-soft: #edf7f3;
-    --success-line: #b6d7ca;
-    --success-highlight: #a0d5c4;
+    --success: #2b7a4b;
+    --success-rgb: 43, 122, 75;
+    --success-soft: #edf6f0;
+    --success-line: #b8dac4;
+    --success-highlight: #a8d6b8;
     --shadow: 0 2px 8px rgba(32, 40, 46, 0.04);
     --shadow-overlay: 0 16px 48px rgba(32, 40, 46, 0.16);
     --radius-sm: 6px;

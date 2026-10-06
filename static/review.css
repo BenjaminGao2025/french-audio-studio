@@ -827,3 +827,7 @@ kbd {
 .fr-word.is-active-word {
     background: var(--primary-soft);
 }
+
+.cloze-blank-wrap {
+    white-space: nowrap;
+}

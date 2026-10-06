@@ -135,3 +135,37 @@ textarea::placeholder, input::placeholder { color: var(--placeholder); }
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
+
+/* Green only means "right" or "done", in small marks: never a page area or a category */
+.cloze-result.correct { background: var(--surface-subtle); }
+.cloze-result.correct > strong { color: var(--success); }
+.cloze-result.correct > strong::before { content: "✓ "; }
+.buildup-step-row.is-final-step { background: var(--primary-soft); border-color: var(--primary-line); }
+.buildup-step-row.is-final-step .buildup-step-badge { background: var(--surface); border-color: var(--primary-line); color: var(--primary); }
+.deck-row-due.due-future { background: var(--surface-muted); color: var(--muted); }
+.pos-tag.pos-verb { background: var(--primary-soft); color: var(--primary); border-color: var(--primary-line); }
+.history-type-badge.tts-badge { background: var(--surface-muted); color: var(--ink); }
+
+/* Header tools: one look for every control (buttons, settings, language) */
+.topbar-actions .btn-secondary,
+.topbar-actions .nav-deck-btn,
+.topbar-actions .connection-settings summary,
+.topbar-actions .new-limit-control {
+    height: 38px;
+    min-height: 38px;
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    color: var(--ink);
+    font-size: var(--text-sm);
+    font-weight: 600;
+}
+.topbar-actions .btn-secondary:hover,
+.topbar-actions .nav-deck-btn:hover,
+.topbar-actions .connection-settings summary:hover,
+.topbar-actions .new-limit-control:hover { background: var(--surface-muted); border-color: var(--line-strong); }
+.topbar-actions .nav-deck-btn svg { color: var(--primary); }
+.topbar-actions .new-limit-control { display: inline-flex; align-items: center; gap: 2px; padding: 0 4px 0 12px; color: var(--muted); cursor: pointer; }
+.topbar-actions .new-limit-control select { height: 30px; min-height: 0; border: 0; background: transparent; color: var(--ink); font-weight: 700; padding: 0 6px; cursor: pointer; }
+.topbar-actions .new-limit-control select:focus-visible { outline-offset: 0; }
+

@@ -100,7 +100,7 @@ function initStudyWorkbench() {
             dictate: 'Say it', feynmanCheck: 'Let the AI find gaps',
             askPlaceholder: "Ask anything, or answer the AI's follow-up question (Chinese or English). e.g. What about de + la?",
             askMicTitle: 'Ask by speaking', askMic: 'Say', ask: 'Ask',
-            b1Badge: 'B1 analysis', shortPhrase: 'Short phrase', collapse: 'Collapse', collapseTitle: 'Collapse this sentence',
+            shortPhrase: 'Short phrase', collapse: 'Collapse', collapseTitle: 'Collapse this sentence',
             listenSentence: 'Listen to the whole sentence', readSentenceAria: 'Read the sentence aloud',
             originalSentence: 'Original', pronounceTitle: 'Listen to the model pronunciation', pronounce: 'Listen',
             buildupRecordTitle: 'Record yourself saying this step and get a score', shadowScore: 'Shadow & score',
@@ -216,7 +216,7 @@ function initStudyWorkbench() {
             dictate: '用说的', feynmanCheck: '让 AI 找漏洞',
             askPlaceholder: '有问题随时问，或回答 AI 的追问（中文或英语都行）例：那 de + la 呢？',
             askMicTitle: '用说的提问', askMic: '说', ask: '问',
-            b1Badge: 'B1 精析', shortPhrase: '短语', collapse: '收起', collapseTitle: '折叠本句',
+            shortPhrase: '短语', collapse: '收起', collapseTitle: '折叠本句',
             listenSentence: '收听整句标准发音', readSentenceAria: '朗读句子',
             originalSentence: '原句', pronounceTitle: '点击听范读发音', pronounce: '发音',
             buildupRecordTitle: '录音跟读此递进步骤并智能打分', shadowScore: '跟读打分',
@@ -1512,7 +1512,6 @@ function initStudyWorkbench() {
                             <div class="meta-row-left" style="display: flex; align-items: center; gap: 8px;">
                                 <span class="sentence-index-pill">Phrase ${idx + 1}</span>
                                 <div class="hero-tags">
-                                    <span class="v2-badge">${T.b1Badge}</span>
                                     ${isShortSentence ? `<span class="badge badge-short-phrase">${T.shortPhrase}</span>` : ''}
                                 </div>
                             </div>

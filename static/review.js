@@ -402,6 +402,15 @@
         saving: wordBook.popoverSaving,
     });
 
+    // The blank plus the punctuation right after it never break apart ("… ? ." on two lines)
+    function blankHtml(width, after) {
+        const tail = (String(after || '').match(/^[.,;:!?…»)\]]+/) || [''])[0];
+        return {
+            html: `<span class="cloze-blank-wrap"><span class="cloze-blank" style="min-width:${width}ch">?</span>${escapeHtml(tail)}</span>`,
+            rest: String(after || '').slice(tail.length),
+        };
+    }
+
     function ttsUrl(text) {
         return `/tts?text=${encodeURIComponent(text.trim())}&voice=${VOICE}`;
     }
@@ -627,7 +636,7 @@
             const parts = splitAroundTarget(note.sentence, card.target);
             const width = Math.max(4, card.target.length);
             const sentenceHtml = parts
-                ? `${clickableFr(parts[0])}<span class="cloze-blank" style="min-width:${width}ch">?</span>${clickableFr(parts[2])}`
+                ? (() => { const b = blankHtml(width, parts[2]); return `${clickableFr(parts[0])}${b.html}${clickableFr(b.rest)}`; })()
                 : `<span class="cloze-blank" style="min-width:${width}ch">?</span>`;
             const clue = pick(meta.meaning_zh, meta.meaning_en);
             html += `
@@ -643,7 +652,7 @@
             html += `
                 <div class="cloze-prompt">
                     <p class="grammar-rule-pill">${T.rule}${escapeHtml(card.target)}</p>
-                    <p class="prompt-fr">${clickableFr(before)}<span class="cloze-blank" style="min-width:${width}ch">?</span>${clickableFr(after)}</p>
+                    <p class="prompt-fr">${clickableFr(before)}${(() => { const b = blankHtml(width, after); return b.html + clickableFr(b.rest); })()}</p>
                     ${meta.full_en ? `<p class="prompt-sub">${escapeHtml(meta.full_en)}</p>` : ''}
                     ${meta.hint ? `<p class="prompt-clue">${T.hint}${escapeHtml(meta.hint)}</p>` : ''}
                 </div>`;
