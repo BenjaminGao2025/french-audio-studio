@@ -682,7 +682,9 @@ function initStudyWorkbench() {
             if (mode === 'all') markReading(keys.indexOf(srsSentenceKey(current)));
             playClip(current, () => {
                 if (ended) return;
-                if (mode === 'once') {
+                // Repeat may have been switched off meanwhile: a single text stops, "all" finishes the pass
+                const repeatNow = Boolean(window.FrenchPlayback && window.FrenchPlayback.repeat());
+                if (mode === 'once' || (mode === 'loop' && !repeatNow)) {
                     if (currentAudioCleanup === endAll) currentAudioCleanup = null;
                     endAll();
                     return;
@@ -690,7 +692,7 @@ function initStudyWorkbench() {
                 const index = keys.indexOf(srsSentenceKey(current));
                 if (mode === 'all' && index !== -1) {
                     // The last sentence: start over with Repeat on, otherwise the read-through is done
-                    if (index === sentences.length - 1 && !repeat) {
+                    if (index === sentences.length - 1 && !repeatNow) {
                         if (currentAudioCleanup === endAll) currentAudioCleanup = null;
                         endAll();
                         return;

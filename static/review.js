@@ -419,6 +419,10 @@
             audio.addEventListener('ended', () => {
                 setTimeout(() => {
                     if (currentAudio !== audio) return;
+                    if (!window.FrenchPlayback.repeat()) {  // Repeat was switched off meanwhile
+                        stopAudio();
+                        return;
+                    }
                     audio.currentTime = 0;
                     audio.play().catch(() => {});
                 }, 800);
