@@ -193,3 +193,134 @@
         width: 100%;
     }
 }
+
+/* Episode settings: level, length, today's request */
+.episode-form {
+    display: grid;
+    gap: var(--space-4);
+}
+
+.episode-form .control-group {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    min-width: 0;
+}
+
+.episode-form legend,
+.episode-form .field-label {
+    display: block;
+    margin-bottom: var(--space-2);
+    color: var(--ink);
+    font-size: var(--text-sm);
+    font-weight: 650;
+}
+
+.field-hint {
+    color: var(--muted);
+    font-weight: 500;
+}
+
+.field-desc {
+    margin: var(--space-2) 0 0;
+    color: var(--muted);
+    font-size: var(--text-sm);
+}
+
+.level-segments label.is-recommended span::after {
+    content: "";
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-left: 6px;
+    border-radius: 50%;
+    background: var(--primary);
+    vertical-align: middle;
+}
+
+.request-field textarea,
+.episode-adjust textarea {
+    width: 100%;
+    min-height: 64px;
+    padding: 10px 12px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    resize: vertical;
+}
+
+.listen-tips summary {
+    color: var(--muted);
+    font-size: var(--text-sm);
+    cursor: pointer;
+}
+
+/* Episode card: request, downloads + Adjust, the remake form */
+.episode-request {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: var(--text-sm);
+    font-style: italic;
+}
+
+.episode-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2) var(--space-4);
+}
+
+.episode-adjust-btn {
+    min-height: 36px;
+    padding: 0 12px;
+    font-size: var(--text-sm);
+}
+
+.episode-adjust {
+    display: grid;
+    gap: var(--space-3);
+    margin-top: var(--space-2);
+    padding: var(--space-4);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--surface-subtle);
+}
+
+.adjust-title {
+    margin: 0;
+    font-size: var(--text-sm);
+}
+
+.adjust-title span {
+    color: var(--muted);
+}
+
+.adjust-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.adjust-row .btn {
+    min-height: 34px;
+    padding: 0 12px;
+    font-size: var(--text-sm);
+}
+
+.adjust-phrase.is-on {
+    border-color: var(--primary-line);
+    background: var(--primary-soft);
+    color: var(--primary);
+}
+
+.adjust-level-label {
+    color: var(--ink);
+    font-size: var(--text-sm);
+    font-weight: 650;
+}

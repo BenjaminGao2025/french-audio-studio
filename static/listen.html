@@ -67,24 +67,58 @@
 
             <section id="listen-intro" class="listen-panel listen-intro" hidden>
                 <div class="intro-text">
-                    <h2 data-i18n="introTitle">用你学过的内容，做成开车时听的节目</h2>
-                    <p data-i18n="introDesc">每集约 15–20 分钟：先复习你拆解过的句子（法语 → 英文 → 慢速法语 → 停顿跟读），再一层层搭长句，然后是用你学过的词新编的小对话和小故事（先带英文、再纯法语），最后纯法语再听一遍。法国和加拿大口音交替。</p>
+                    <h2 data-i18n="introTitle">用你学过的内容，做一集法语节目</h2>
+                    <p data-i18n="introDesc">先复习你拆解过的句子，再一层层搭长句，然后是用你学过的词新编的对话和故事，最后纯法语再听一遍。法国和加拿大口音交替。</p>
+                </div>
+
+                <form id="episode-form" class="episode-form" autocomplete="off">
+                    <fieldset class="control-group">
+                        <legend><span data-i18n="levelLegend">难度</span> <span id="level-hint" class="field-hint"></span></legend>
+                        <div class="segmented-control level-segments">
+                            <label><input type="radio" name="level" value="A1"><span>A1</span></label>
+                            <label><input type="radio" name="level" value="A2"><span>A2</span></label>
+                            <label><input type="radio" name="level" value="B1"><span>B1</span></label>
+                            <label><input type="radio" name="level" value="B2"><span>B2</span></label>
+                        </div>
+                        <p id="level-desc" class="field-desc"></p>
+                    </fieldset>
+
+                    <fieldset class="control-group">
+                        <legend data-i18n="lengthLegend">时长</legend>
+                        <div class="segmented-control length-segments">
+                            <label><input type="radio" name="minutes" value="20" checked><span data-i18n="min20">20 分钟</span></label>
+                            <label><input type="radio" name="minutes" value="30"><span data-i18n="min30">30 分钟</span></label>
+                            <label><input type="radio" name="minutes" value="45"><span data-i18n="min45">45 分钟</span></label>
+                            <label><input type="radio" name="minutes" value="60"><span data-i18n="min60">60 分钟</span></label>
+                        </div>
+                    </fieldset>
+
+                    <label class="control-group request-field" for="episode-request">
+                        <span class="field-label" data-i18n="requestLabel">今天想听什么（可选）</span>
+                        <textarea id="episode-request" rows="2" maxlength="500" data-i18n-placeholder="requestPlaceholder" placeholder="比如：多练数字和日期；多一些在考试中心的对话；少一点英文"></textarea>
+                    </label>
+
+                    <div class="intro-action">
+                        <button id="make-episode-btn" class="btn btn-primary make-episode-btn" type="submit">
+                            <i data-lucide="wand-sparkles" aria-hidden="true"></i>
+                            <span data-i18n="makeEpisode">生成新的一集</span>
+                        </button>
+                        <p class="make-hint" data-i18n="makeHint">需要几分钟，越长越久。每集内容都不一样。</p>
+                        <button class="btn btn-secondary btn-repeat-toggle" type="button" aria-pressed="false">
+                            <i data-lucide="repeat" aria-hidden="true"></i><span data-i18n="repeat">循环播放</span>
+                        </button>
+                    </div>
+                </form>
+
+                <details class="listen-tips">
+                    <summary data-i18n="tipsTitle">怎么用</summary>
                     <ul class="intro-tips">
                         <li data-i18n="tipPhone">在手机上直接播放，或下载 MP3 和字幕（LRC / SRT）导入「每日法语听力」等 App。</li>
                         <li data-i18n="tipRepeat">停顿的地方大声跟读，开车时正好可以开口练。</li>
+                        <li data-i18n="tipAdjust">听完觉得不合适，点那一集的「调整」，说说哪里要改，新的一集会替换它。</li>
                         <li data-i18n="tipSafety">出发前准备好，开车时不要操作手机。</li>
                     </ul>
-                </div>
-                <div class="intro-action">
-                    <button id="make-episode-btn" class="btn btn-primary make-episode-btn" type="button">
-                        <i data-lucide="wand-sparkles" aria-hidden="true"></i>
-                        <span data-i18n="makeEpisode">生成新的一集</span>
-                    </button>
-                    <p class="make-hint" data-i18n="makeHint">大约需要 1–2 分钟。每集内容都不一样。</p>
-                    <button class="btn btn-secondary btn-repeat-toggle" type="button" aria-pressed="false">
-                        <i data-lucide="repeat" aria-hidden="true"></i><span data-i18n="repeat">循环播放</span>
-                    </button>
-                </div>
+                </details>
             </section>
 
             <section id="episode-list" class="episode-list" aria-live="polite"></section>

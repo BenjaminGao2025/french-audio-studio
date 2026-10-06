@@ -10,6 +10,10 @@ material, so a beginner can actually follow it hands-free:
                  (first with English, then French only)
   4. French only - the review sentences again without translation
 French lines alternate France and Canada voices; English is simple.
+
+Each episode has settings: a level (A1-B2, recommended from the learner's
+study hours), a length (20-60 min) and an optional request in plain words
+("more numbers", "less English"), which shapes the stories and the style.
 """
 
 from __future__ import annotations
@@ -19,6 +23,7 @@ import datetime
 import hashlib
 import io
 import json
+import math
 import re
 import uuid
 from contextlib import contextmanager
@@ -41,6 +46,56 @@ SLOW_RATE = "-30%"
 REVIEW_COUNT = 14
 BUILDUP_COUNT = 2
 SHADOW_MAX_WORDS = 14
+
+# Levels: how the episode sounds. Hours are cumulative guided-study hours for each
+# CEFR level (Alliance Française / Cambridge planning figures: A1 ~100, A2 ~220, B1 ~420).
+LEVELS = ("A1", "A2", "B1", "B2")
+LEVEL_UP_TO_HOURS = (("A1", 100), ("A2", 220), ("B1", 420))
+LEVEL_STYLE = {
+    # slow: rate of the slow repeat (None = no slow line); english: say the English line
+    # in review/build-up; story_english: English after each story line on the first pass;
+    # density: content per minute (less English and no slow lines leave room for more)
+    "A1": {"slow": "-30%", "english": True, "story_english": True, "density": 1.0},
+    "A2": {"slow": "-20%", "english": True, "story_english": True, "density": 1.05},
+    "B1": {"slow": None, "english": True, "story_english": True, "density": 1.15},
+    "B2": {"slow": None, "english": False, "story_english": False, "density": 1.35},
+}
+SLOWER = {"-30%": "-40%", "-20%": "-30%", None: "-20%"}
+LENGTHS = (20, 30, 45, 60)
+BASE_MINUTES = 18  # what REVIEW_COUNT / BUILDUP_COUNT / two stories add up to at A1
+MAX_STORIES = 10
+
+
+def recommended_level(hours: float) -> str:
+    for level, limit in LEVEL_UP_TO_HOURS:
+        if hours < limit:
+            return level
+    return "B2"
+
+
+def episode_style(level: str, adjust: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The level's style, changed by what the learner asked for (speed / English)."""
+    style = dict(LEVEL_STYLE.get(level, LEVEL_STYLE["A1"]))
+    adjust = adjust or {}
+    if adjust.get("speed") == "slower":
+        style["slow"] = SLOWER.get(style["slow"], "-40%")
+    elif adjust.get("speed") == "faster":
+        style["slow"] = None
+    if adjust.get("english") == "less":
+        style["english"] = style["story_english"] = False
+    elif adjust.get("english") == "more":
+        style["english"] = style["story_english"] = True
+    return style
+
+
+def episode_plan(minutes: int, style: dict[str, Any], available: int) -> dict[str, int]:
+    """How many review sentences, build-ups and stories fill the wanted length."""
+    scale = minutes / BASE_MINUTES * style.get("density", 1.0)
+    wanted_review = round(REVIEW_COUNT * scale)
+    review = min(available, wanted_review)
+    # Not enough studied sentences: a story (~3 min) stands in for ~5 review sentences (~35 s each)
+    stories = max(1, round(2 * scale)) + math.ceil(max(0, wanted_review - review) * 35 / 180)
+    return {"review": review, "buildups": round(BUILDUP_COUNT * scale), "stories": min(stories, MAX_STORIES)}
 STALE_AFTER = datetime.timedelta(minutes=30)
 TTS_CONCURRENCY = 4
 
@@ -75,6 +130,9 @@ def _db() -> Iterator[Any]:
             )
             """
         )
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(episodes)")}
+        if "settings_json" not in columns:
+            conn.execute("ALTER TABLE episodes ADD COLUMN settings_json TEXT NOT NULL DEFAULT '{}'")
         yield conn
 
 
@@ -88,18 +146,18 @@ def _now() -> datetime.datetime:
     return datetime.datetime.now(datetime.timezone.utc)
 
 
-def create_episode(user_id: int) -> dict[str, Any]:
+def create_episode(user_id: int, settings: dict[str, Any] | None = None) -> dict[str, Any]:
     episode_id = uuid.uuid4().hex
     with _db() as conn:
         conn.execute(
-            "INSERT INTO episodes (id, user_id, status, created_at) VALUES (?, ?, 'generating', ?)",
-            (episode_id, user_id, _now().isoformat()),
+            "INSERT INTO episodes (id, user_id, status, created_at, settings_json) VALUES (?, ?, 'generating', ?, ?)",
+            (episode_id, user_id, _now().isoformat(), json.dumps(settings or {}, ensure_ascii=False)),
         )
     return get_episode(user_id, episode_id)
 
 
 def update_episode(episode_id: str, **fields: Any) -> None:
-    allowed = {"title", "status", "duration", "error", "sentences_json"}
+    allowed = {"title", "status", "duration", "error", "sentences_json", "settings_json"}
     sets = {key: value for key, value in fields.items() if key in allowed}
     if not sets:
         return
@@ -121,6 +179,7 @@ def _row_payload(row: Any) -> dict[str, Any]:
         "duration": row["duration"],
         "error": row["error"],
         "created_at": row["created_at"],
+        "settings": json.loads(row["settings_json"] or "{}") if "settings_json" in row.keys() else {},
     }
 
 
@@ -223,18 +282,23 @@ def learning_material(user_id: int) -> list[dict[str, Any]]:
     return [item for item in items.values() if item["en"]]
 
 
-def pick_material(user_id: int, material: list[dict[str, Any]]) -> tuple[list[dict], list[dict]]:
+def pick_material(
+    user_id: int,
+    material: list[dict[str, Any]],
+    review_count: int = REVIEW_COUNT,
+    buildup_count: int = BUILDUP_COUNT,
+) -> tuple[list[dict], list[dict]]:
     """Least-played first; saved-to-review and real sentences (4+ words) before headings."""
     usage = _sentence_usage(user_id)
     ranked = sorted(
         material,
         key=lambda m: (usage.get(m["key"], 0), not m["in_deck"], len(m["sentence"].split()) < 4),
     )
-    review = ranked[:REVIEW_COUNT]
+    review = ranked[:review_count]
     buildups = sorted(
         (m for m in material if len(m["build_up"]) >= 3),
         key=lambda m: usage.get(m["key"], 0),
-    )[:BUILDUP_COUNT]
+    )[:buildup_count]
     return review, buildups
 
 
@@ -255,7 +319,9 @@ def build_script(
     review: list[dict[str, Any]],
     buildups: list[dict[str, Any]],
     stories: list[dict[str, Any]],
+    style: dict[str, Any] | None = None,
 ) -> list[Segment]:
+    style = style or LEVEL_STYLE["A1"]
     s: list[Segment] = []
 
     def fr(text: str, en: str, voice: str, **kw: Any) -> Segment:
@@ -271,10 +337,11 @@ def build_script(
         for index, item in enumerate(review):
             voice = FR_VOICES[index % len(FR_VOICES)]
             s.append(fr(item["sentence"], item["en"], voice, pause_after=0.9))
-            s.append(Segment(item["en"], EN_VOICE, pause_after=0.8))
+            if style["english"]:
+                s.append(Segment(item["en"], EN_VOICE, pause_after=0.8))
             # Repeating aloud only works for short sentences; long ones are practised in part two
             repeatable = len(item["sentence"].split()) <= SHADOW_MAX_WORDS
-            s.append(fr(item["sentence"], item["en"], voice, rate=SLOW_RATE, shadow=repeatable, pause_after=1.5))
+            s.append(fr(item["sentence"], item["en"], voice, rate=style["slow"] or "+0%", shadow=repeatable, pause_after=1.5))
             s.append(fr(item["sentence"], item["en"], voice, pause_after=2.0))
 
     if buildups:
@@ -283,7 +350,7 @@ def build_script(
             voice = FR_VOICES[(index + 1) % len(FR_VOICES)]
             for step in item["build_up"]:
                 s.append(fr(step["fr"], step["en"], voice, pause_after=0.8))
-                if step["en"]:
+                if step["en"] and style["english"]:
                     s.append(Segment(step["en"], EN_VOICE, pause_after=0.8))
                 s.append(fr(step["fr"], step["en"], voice, shadow=True))
             s[-1].pause_after = 2.0
@@ -293,11 +360,12 @@ def build_script(
         if not lines:
             continue
         label = "Part three" if index == 0 else "Next"
-        say_en(f"{label}. A short story: {story.get('title_en') or 'a new story'}. First with English.", 1.2)
+        first_pass = "First with English." if style["story_english"] else "First listen."
+        say_en(f"{label}. {story.get('title_en') or 'A new story'}. {first_pass}", 1.2)
         for line in lines:
             voice = STORY_VOICES.get(line.get("speaker"), STORY_VOICES["N"])
             s.append(fr(line["fr"], line.get("en", ""), voice, pause_after=0.7))
-            if line.get("en"):
+            if line.get("en") and style["story_english"]:
                 s.append(Segment(line["en"], EN_VOICE, pause_after=1.1))
         say_en("Now listen again, in French only.", 1.2)
         for line in lines:

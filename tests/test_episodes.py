@@ -81,6 +81,39 @@ class MaterialTests(unittest.TestCase):
         self.assertTrue({s.voice for s in french} & {"fr-CA-JeanNeural", "fr-CA-SylvieNeural"})
 
 
+class LevelAndLengthTests(unittest.TestCase):
+    def test_level_follows_study_hours(self):
+        self.assertEqual(episodes.recommended_level(7), "A1")
+        self.assertEqual(episodes.recommended_level(100), "A2")
+        self.assertEqual(episodes.recommended_level(300), "B1")
+        self.assertEqual(episodes.recommended_level(700), "B2")
+
+    def test_request_adjusts_the_style(self):
+        self.assertEqual(episodes.episode_style("A1", {"speed": "slower"})["slow"], "-40%")
+        self.assertEqual(episodes.episode_style("B1", {"speed": "slower"})["slow"], "-20%")
+        self.assertIsNone(episodes.episode_style("A2", {"speed": "faster"})["slow"])
+        less = episodes.episode_style("A1", {"english": "less"})
+        self.assertFalse(less["english"] or less["story_english"])
+
+    def test_length_scales_the_content(self):
+        style = episodes.episode_style("A1")
+        short, long = episodes.episode_plan(20, style, 200), episodes.episode_plan(60, style, 200)
+        self.assertGreater(long["review"], short["review"])
+        self.assertGreater(long["stories"], short["stories"])
+        # Few studied sentences: more stories fill the time
+        self.assertGreater(episodes.episode_plan(60, style, 5)["stories"], long["stories"])
+        self.assertLessEqual(episodes.episode_plan(60, style, 0)["stories"], episodes.MAX_STORIES)
+
+    def test_b2_has_no_english_lines_or_slow_repeats(self):
+        user_id = _user_with_material()
+        review, buildups = episodes.pick_material(user_id, episodes.learning_material(user_id))
+        script = episodes.build_script(1, review, buildups, [STORY], episodes.episode_style("B2"))
+        english = [seg.text for seg in script if seg.voice == episodes.EN_VOICE]
+        self.assertFalse(any(item["en"] in english for item in review))
+        self.assertNotIn("Thank you very much.", english)
+        self.assertFalse(any(seg.rate != "+0%" for seg in script if seg.voice != episodes.EN_VOICE))
+
+
 class RenderTests(unittest.TestCase):
     def test_render_writes_mp3_and_subtitles(self):
         segments = [
@@ -149,6 +182,46 @@ class JobAndApiTests(unittest.TestCase):
         self.assertFalse(self.client.delete(f"/api/episodes/{episode['id']}", headers={"Authorization": f"Bearer {other}"}).json()["success"])
         self.assertTrue(self.client.delete(f"/api/episodes/{episode['id']}", headers={"Authorization": f"Bearer {token}"}).json()["success"])
         self.assertEqual(self.client.get(f"/episodes/{episode['id']}.mp3").status_code, 404)
+
+    def test_settings_are_saved_and_a_remake_replaces_the_old_episode(self):
+        user_id = _user_with_material()
+        token = auth_db._generate_token(user_id, "x@example.com")
+        headers = {"Authorization": f"Bearer {token}"}
+        old = episodes.create_episode(user_id, {"level": "A1", "minutes": 20})
+        episodes.update_episode(old["id"], status="ready", title="Episode 1")
+        with patch("tts_service._generate_episode", new_callable=AsyncMock) as job:
+            res = self.client.post("/api/episodes", headers=headers,
+                                   json={"level": "B1", "minutes": 45, "request": "more numbers", "replace_id": old["id"]})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["settings"], {"level": "B1", "minutes": 45, "request": "more numbers"})
+        self.assertEqual(job.await_args.args[5], old["id"])
+        bad = self.client.post("/api/episodes", headers=headers, json={"minutes": 25})
+        self.assertEqual(bad.status_code, 422)
+        listed = self.client.get("/api/episodes", headers=headers).json()
+        self.assertEqual(listed["recommended_level"], "A1")
+        self.assertEqual(listed["lengths"], [20, 30, 45, 60])
+
+        new = episodes.create_episode(user_id, {"level": "B1", "minutes": 45, "request": "more numbers"})
+        with patch("episodes.synthesize", side_effect=fake_synth), \
+                patch("tts_service._read_episode_request", new_callable=AsyncMock, return_value={"speed": "slower", "focus": "numbers"}), \
+                patch("tts_service._write_stories", new_callable=AsyncMock, return_value=[STORY]) as stories:
+            asyncio.run(tts_service._generate_episode(user_id, new["id"], "k", "gemini-3.8-flash",
+                                                      {"level": "B1", "minutes": 45, "request": "more numbers"}, old["id"]))
+        ready = episodes.get_episode(user_id, new["id"])
+        self.assertEqual(ready["status"], "ready", ready["error"])
+        self.assertEqual(ready["settings"]["adjust"], {"speed": "slower", "focus": "numbers"})
+        self.assertEqual(stories.await_args.kwargs["level"], "B1")
+        self.assertEqual(stories.await_args.kwargs["focus"], "numbers")
+        with self.assertRaises(KeyError):
+            episodes.get_episode(user_id, old["id"])
+
+    def test_episode_request_is_read_into_style_changes(self):
+        reply = (None, '{"speed": "slower", "english": "less", "focus": "numbers and dates", "extra": 1}')
+        with patch("tts_service._post_chat", new_callable=AsyncMock, return_value=reply):
+            adjust = asyncio.run(tts_service._read_episode_request("k", "too fast, more numbers, less English"))
+        self.assertEqual(adjust, {"speed": "slower", "english": "less", "focus": "numbers and dates"})
+        with patch("tts_service._post_chat", new_callable=AsyncMock, return_value=(None, "not json")):
+            self.assertEqual(asyncio.run(tts_service._read_episode_request("k", "hm")), {})
 
     def test_job_without_material_fails_cleanly(self):
         user_id = auth_db.register_user(f"empty_{uuid.uuid4().hex[:10]}@example.com", "password123")["user"]["id"]
