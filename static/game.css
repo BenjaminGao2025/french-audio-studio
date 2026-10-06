@@ -302,15 +302,15 @@
 }
 
 .game-banner span {
-    color: #f6d58b;
+    color: var(--success-highlight);
     font-size: 15px;
     font-weight: 700;
 }
 
 .game-banner.is-first strong { color: #ff8a7a; }
 .game-banner.is-small { padding: 8px 22px; }
-.game-banner.is-small strong { font-size: 24px; color: #9fe1cb; }
-.game-banner.is-big strong { color: #f6c453; font-size: 52px; }
+.game-banner.is-small strong { font-size: 24px; color: var(--success-highlight); }
+.game-banner.is-big strong { color: var(--success-highlight); font-size: 52px; }
 .game-banner.is-level { animation-duration: 2.2s; background: var(--primary); }
 .game-banner.is-level strong { font-size: 48px; }
 
@@ -325,7 +325,7 @@
 }
 
 .game-flash.is-red { background: radial-gradient(circle at 50% 40%, rgba(255, 110, 90, 0.35), rgba(255, 110, 90, 0) 60%); }
-.game-flash.is-gold { background: radial-gradient(circle at 50% 40%, rgba(246, 196, 83, 0.45), rgba(246, 196, 83, 0) 62%); }
+.game-flash.is-gold { background: radial-gradient(circle at 50% 40%, rgba(var(--primary-rgb), 0.3), rgba(var(--primary-rgb), 0) 62%); }
 
 @keyframes game-flash {
     0% { opacity: 0; }
@@ -339,9 +339,9 @@
 }
 
 @keyframes game-hit {
-    0% { box-shadow: 0 0 0 0 rgba(40, 100, 61, 0.55); transform: scale(1); }
-    25% { box-shadow: 0 0 0 10px rgba(40, 100, 61, 0.18); transform: scale(1.02); }
-    100% { box-shadow: 0 0 0 18px rgba(40, 100, 61, 0); transform: scale(1); }
+    0% { box-shadow: 0 0 0 0 rgba(var(--success-rgb), 0.55); transform: scale(1); }
+    25% { box-shadow: 0 0 0 10px rgba(var(--success-rgb), 0.18); transform: scale(1.02); }
+    100% { box-shadow: 0 0 0 18px rgba(var(--success-rgb), 0); transform: scale(1); }
 }
 .game-banner.is-level span { color: #ffffff; font-size: 18px; }
 .game-banner.is-error { background: var(--danger); }

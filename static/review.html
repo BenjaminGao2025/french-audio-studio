@@ -7,10 +7,12 @@
     <meta name="asset-version" content="__ASSET_VERSION__">
     <title>今日复习 - 1000H French</title>
     <link rel="icon" href="/favicon.ico?v=2" sizes="any">
+    <link rel="stylesheet" href="/static/tokens.css?v=__ASSET_VERSION__">
     <link rel="stylesheet" href="/static/style.css?v=__ASSET_VERSION__">
     <link rel="stylesheet" href="/static/game.css?v=__ASSET_VERSION__">
     <link rel="stylesheet" href="/static/review.css?v=__ASSET_VERSION__">
     <link rel="stylesheet" href="/static/word-popover.css?v=__ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/ui.css?v=__ASSET_VERSION__">
     <script src="https://unpkg.com/lucide@1.34.0/dist/umd/lucide.min.js" defer></script>
     <script src="/static/i18n.js?v=__ASSET_VERSION__" defer></script>
     <script src="/static/game.js?v=__ASSET_VERSION__" defer></script>
@@ -28,7 +30,6 @@
                 </div>
                 <div>
                     <p class="product-label">1000H French</p>
-                    <h1 data-i18n="heading">今日复习</h1>
                 </div>
             </div>
 
@@ -80,6 +81,10 @@
         </header>
 
         <main class="review-main">
+            <div class="page-intro">
+                <h1 data-i18n="heading">今日复习</h1>
+                <p><span class="copy-zh">专注眼前这张卡，巩固已经学过的内容。</span><span class="copy-en">One card at a time. Strengthen what you have learned.</span></p>
+            </div>
             <section id="login-required" class="review-panel review-message" hidden>
                 <i data-lucide="lock" aria-hidden="true"></i>
                 <h2 data-i18n="loginTitle">复习卡片保存在服务器上，请先登录</h2>

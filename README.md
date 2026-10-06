@@ -10,6 +10,8 @@
 
 [English](#english) | [中文说明](#中文说明)
 
+界面开发规范：[设计原则与设计系统](DESIGN_SYSTEM.md)。共享设计变量位于 `static/tokens.css`，组件视觉规则位于 `static/ui.css`。
+
 ---
 
 <span id="中文说明"></span>

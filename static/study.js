@@ -1473,7 +1473,8 @@ function initStudyWorkbench() {
 
                 // 1b. Feynman self-test: the learner explains first, the AI only points out gaps
                 const feynmanSelfTestHtml = `
-                    <div class="feynman-selftest">
+                    <details class="feynman-selftest">
+                        <summary class="feynman-selftest-summary">${EN ? 'Explain it yourself · optional practice' : '用自己的话讲一遍 · 可选练习'}</summary>
                         <div class="feynman-selftest-head">
                             <span class="feynman-anchor-badge">${T.feynmanBadge}</span>
                             <span class="feynman-selftest-sub">${T.feynmanSub}</span>
@@ -1502,7 +1503,7 @@ function initStudyWorkbench() {
                                 <button class="btn-ask" type="submit"><i data-lucide="send"></i><span>${T.ask}</span></button>
                             </form>
                         </div>
-                    </div>
+                    </details>
                 `;
 
                 const heroHtml = `
@@ -3026,7 +3027,7 @@ function initStudyWorkbench() {
         const text = frenchInput.value.trim();
         if (!text) {
             statusMessage.textContent = T.emptyInput;
-            statusMessage.style.color = '#e11d48';
+            statusMessage.className = 'status-message status-error';
             frenchInput.focus();
             return;
         }
@@ -3246,4 +3247,3 @@ if (document.readyState === 'loading') {
 } else {
     initStudyWorkbench();
 }
-

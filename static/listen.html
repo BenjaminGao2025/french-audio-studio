@@ -7,9 +7,11 @@
     <meta name="asset-version" content="__ASSET_VERSION__">
     <title>开车听 - 1000H French</title>
     <link rel="icon" href="/favicon.ico?v=2" sizes="any">
+    <link rel="stylesheet" href="/static/tokens.css?v=__ASSET_VERSION__">
     <link rel="stylesheet" href="/static/style.css?v=__ASSET_VERSION__">
     <link rel="stylesheet" href="/static/game.css?v=__ASSET_VERSION__">
     <link rel="stylesheet" href="/static/listen.css?v=__ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/ui.css?v=__ASSET_VERSION__">
     <script src="https://unpkg.com/lucide@1.34.0/dist/umd/lucide.min.js" defer></script>
     <script src="/static/i18n.js?v=__ASSET_VERSION__" defer></script>
     <script src="/static/game.js?v=__ASSET_VERSION__" defer></script>
@@ -25,7 +27,6 @@
                 </div>
                 <div>
                     <p class="product-label">1000H French</p>
-                    <h1 data-i18n="heading">开车听</h1>
                 </div>
             </div>
 
@@ -54,6 +55,10 @@
         </header>
 
         <main class="listen-main">
+            <div class="page-intro">
+                <h1 data-i18n="heading">开车听</h1>
+                <p><span class="copy-zh">把学过的内容，变成随时可以听的法语节目。</span><span class="copy-en">Turn what you have studied into French episodes for the road.</span></p>
+            </div>
             <section id="login-required" class="listen-panel listen-message" hidden>
                 <h2 data-i18n="loginTitle">请先登录</h2>
                 <p data-i18n="loginDesc">节目是用你学过的内容生成的，需要先登录。</p>

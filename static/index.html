@@ -7,8 +7,10 @@
     <meta name="asset-version" content="__ASSET_VERSION__">
     <title>法语音频工作台</title>
     <link rel="icon" href="/favicon.ico?v=2" sizes="any">
+    <link rel="stylesheet" href="/static/tokens.css?v=__ASSET_VERSION__">
     <link rel="stylesheet" href="/static/style.css?v=__ASSET_VERSION__">
     <link rel="stylesheet" href="/static/game.css?v=__ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/ui.css?v=__ASSET_VERSION__">
     <script src="https://unpkg.com/lucide@1.34.0/dist/umd/lucide.min.js" defer></script>
     <script src="/static/i18n.js?v=__ASSET_VERSION__" defer></script>
     <script src="/static/game.js?v=__ASSET_VERSION__" defer></script>
@@ -25,7 +27,6 @@
                 </div>
                 <div>
                     <p class="product-label">1000H French</p>
-                    <h1 data-i18n="heading">法语音频工作台</h1>
                 </div>
             </div>
 
@@ -105,6 +106,10 @@
         </header>
 
         <main>
+            <div class="page-intro">
+                <h1 data-i18n="heading">法语音频工作台</h1>
+                <p><span class="copy-zh">把想法变成法语，再听见它。</span><span class="copy-en">Turn your ideas into French, then hear them.</span></p>
+            </div>
             <section class="task-mode-band" aria-label="处理方式" data-i18n-aria="taskModeLegend">
                 <fieldset class="control-group task-mode-control">
                     <legend data-i18n="taskModeLegend">处理方式</legend>
@@ -174,6 +179,8 @@
                 </article>
             </section>
 
+            <details class="advanced-settings">
+                <summary><span class="copy-zh">声音与表达设置</span><span class="copy-en">Voice &amp; expression settings</span></summary>
             <section class="controls-band" aria-label="转换参数" data-i18n-aria="controlsAria">
                 <fieldset class="control-group style-control">
                     <legend data-i18n="styleLegend">表达风格</legend>
@@ -231,6 +238,8 @@
                     </select>
                 </div>
             </section>
+
+            </details>
 
             <section class="action-row" aria-label="生成操作" data-i18n-aria="actionAria">
                 <div id="status-message" class="status-message" role="status" aria-live="polite"></div>

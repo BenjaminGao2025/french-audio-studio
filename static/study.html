@@ -7,10 +7,12 @@
     <meta name="asset-version" content="__ASSET_VERSION__">
     <title>法语拆解与跟读复述 - 1000H French</title>
     <link rel="icon" href="/favicon.ico?v=2" sizes="any">
+    <link rel="stylesheet" href="/static/tokens.css?v=__ASSET_VERSION__">
     <link rel="stylesheet" href="/static/style.css?v=__ASSET_VERSION__">
     <link rel="stylesheet" href="/static/game.css?v=__ASSET_VERSION__">
     <link rel="stylesheet" href="/static/study.css?v=__ASSET_VERSION__">
     <link rel="stylesheet" href="/static/word-popover.css?v=__ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/ui.css?v=__ASSET_VERSION__">
     <script>window.activeTokensMap = new Map(); var activeTokensMap = window.activeTokensMap;</script>
     <script src="https://unpkg.com/lucide@1.34.0/dist/umd/lucide.min.js" defer></script>
     <script src="/static/i18n.js?v=__ASSET_VERSION__" defer></script>
@@ -30,7 +32,6 @@
                 </div>
                 <div>
                     <p class="product-label">1000H French</p>
-                    <h1 data-i18n="heading">法语拆解与跟读复述</h1>
                 </div>
             </div>
 
@@ -117,6 +118,10 @@
         </header>
 
         <main>
+            <div class="page-intro">
+                <h1 data-i18n="heading">法语拆解与跟读复述</h1>
+                <p><span class="copy-zh">读懂一句话，分步练习，再开口复述。</span><span class="copy-en">Understand a sentence, practise step by step, then say it yourself.</span></p>
+            </div>
             <!-- 今日复习入口：先复习，再学新句子 -->
             <a id="today-review-banner" class="today-review-banner" href="/review" hidden>
                 <i data-lucide="brain" aria-hidden="true"></i>

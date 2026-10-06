@@ -1,0 +1,101 @@
+<div id="french-palette-preview">
+  <div class="fp-options" aria-label="配色方案">
+    <button type="button" class="cursor-interaction" data-palette="ink" aria-pressed="true">墨蓝与雾蓝 · 推荐</button>
+    <button type="button" class="cursor-interaction" data-palette="teal" aria-pressed="false">海盐青绿</button>
+    <button type="button" class="cursor-interaction" data-palette="indigo" aria-pressed="false">柔和靛蓝</button>
+  </div>
+  <section class="fp-app" aria-label="学习卡片配色预览">
+    <header class="fp-header"><span class="fp-brand">1000H French</span><span class="fp-review">复习</span></header>
+    <div class="fp-content">
+      <div class="fp-title">拆解与复述</div>
+      <div class="fp-subtitle">读懂一句话，分步练习，再开口复述。</div>
+      <article class="fp-lesson">
+        <div class="fp-meta"><span>句子 01</span><span class="fp-tag">B1 精析</span></div>
+        <p class="fp-french">Je voudrais prendre un café avec toi.</p>
+        <p class="fp-translation">我想和你一起喝杯咖啡。</p>
+        <div class="fp-tabs"><span class="fp-selected">搭句子</span><span>逐词剖析</span><span>语法考点</span></div>
+        <div class="fp-practice"><span class="fp-step">STEP 1</span><div><p>Je voudrais un café.</p><span>我想要一杯咖啡。</span></div></div>
+        <div class="fp-actions"><button type="button" class="fp-play cursor-interaction"><i data-lucide="volume-2" aria-hidden="true"></i> 播放原句</button><button type="button" class="fp-primary cursor-interaction"><i data-lucide="mic" aria-hidden="true"></i> 开始跟读</button></div>
+        <div class="fp-status" role="status" aria-live="polite"><i data-lucide="check" aria-hidden="true"></i><span>已加入复习</span></div>
+      </article>
+      <div class="fp-colors" aria-label="颜色用途">
+        <span><i class="fp-swatch fp-swatch-primary"></i>主操作 <code data-primary-code>#345B8C</code></span>
+        <span><i class="fp-swatch fp-swatch-soft"></i>选中底色 <code data-soft-code>#EAF1FA</code></span>
+        <span><i class="fp-swatch fp-swatch-accent"></i>辅助强调 <code data-accent-code>#476F8C</code></span>
+      </div>
+    </div>
+  </section>
+</div>
+<style>
+  #french-palette-preview { color-scheme: light dark; font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", sans-serif; --fp-outer-ink: light-dark(#243449,#dfe7f4); --fp-outer-line: light-dark(#dce3ed,#3a475c); }
+  #french-palette-preview .fp-options { display:flex; flex-wrap:wrap; gap:8px; padding:0 0 16px; }
+  #french-palette-preview .fp-options button { font:inherit; font-size:14px; border:1px solid var(--fp-outer-line); color:var(--fp-outer-ink); background:transparent; border-radius:6px; padding:10px 14px; }
+  #french-palette-preview .fp-options button[aria-pressed="true"] { background:light-dark(#eaf1fa,#253c58); border-color:light-dark(#345b8c,#8aaad9); }
+  #french-palette-preview .fp-app { --fp-page:light-dark(#f5f7fb,#17222e); --fp-card:light-dark(#ffffff,#202e3d); --fp-ink:light-dark(#243449,#e3ebf4); --fp-muted:light-dark(#617087,#a9b8cc); --fp-line:light-dark(#dce3ed,#394b60); --fp-primary:light-dark(#345b8c,#8cb3e5); --fp-primary-ink:light-dark(#ffffff,#17222e); --fp-soft:light-dark(#eaf1fa,#293f58); --fp-accent:light-dark(#476f8c,#9abbd6); background:var(--fp-page); color:var(--fp-ink); border:1px solid var(--fp-line); border-radius:12px; overflow:hidden; }
+  #french-palette-preview .fp-header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:18px 24px; border-bottom:1px solid var(--fp-line); font-size:14px; }
+  #french-palette-preview .fp-brand { font-weight:500; }
+  #french-palette-preview .fp-review { color:var(--fp-primary); padding:5px 12px; background:var(--fp-soft); border-radius:6px; }
+  #french-palette-preview .fp-content { padding:24px; }
+  #french-palette-preview .fp-title { font-size:24px; font-weight:500; }
+  #french-palette-preview .fp-subtitle { color:var(--fp-muted); font-size:14px; margin:8px 0 22px; }
+  #french-palette-preview .fp-lesson { background:var(--fp-card); border:1px solid var(--fp-line); border-radius:10px; padding:20px; }
+  #french-palette-preview .fp-meta { display:flex; align-items:center; gap:12px; color:var(--fp-muted); font-size:12px; }
+  #french-palette-preview .fp-tag { color:var(--fp-accent); background:var(--fp-soft); border-radius:4px; padding:3px 7px; }
+  #french-palette-preview .fp-french { font-size:22px; line-height:1.5; margin:16px 0 8px; font-weight:500; }
+  #french-palette-preview .fp-translation { color:var(--fp-muted); font-size:14px; margin:0 0 20px; }
+  #french-palette-preview .fp-tabs { display:flex; flex-wrap:wrap; gap:8px; padding-bottom:14px; border-bottom:1px solid var(--fp-line); font-size:13px; color:var(--fp-muted); }
+  #french-palette-preview .fp-tabs span { padding:7px 10px; }
+  #french-palette-preview .fp-tabs .fp-selected { color:var(--fp-primary); background:var(--fp-soft); border-radius:6px; }
+  #french-palette-preview .fp-practice { display:flex; gap:14px; padding:20px 0; align-items:baseline; }
+  #french-palette-preview .fp-step { font-size:12px; color:var(--fp-accent); white-space:nowrap; }
+  #french-palette-preview .fp-practice p { margin:0 0 6px; font-size:16px; }
+  #french-palette-preview .fp-practice div>span { color:var(--fp-muted); font-size:13px; }
+  #french-palette-preview .fp-actions { display:flex; flex-wrap:wrap; gap:10px; justify-content:flex-end; }
+  #french-palette-preview .fp-actions button { display:flex; align-items:center; justify-content:center; gap:8px; min-height:42px; padding:9px 16px; font:inherit; font-size:14px; font-weight:500; border-radius:6px; }
+  #french-palette-preview .fp-play { background:var(--fp-card); color:var(--fp-ink); border:1px solid var(--fp-line); }
+  #french-palette-preview .fp-primary { background:var(--fp-primary); color:var(--fp-primary-ink); border:1px solid var(--fp-primary); }
+  #french-palette-preview .fp-status { display:flex; align-items:center; gap:8px; color:light-dark(#327564,#9ad2bd); background:light-dark(#edf7f3,#243e36); font-size:13px; padding:10px 12px; border-radius:6px; margin-top:16px; }
+  #french-palette-preview .fp-colors { display:flex; flex-wrap:wrap; gap:12px 20px; margin-top:16px; color:var(--fp-muted); font-size:12px; }
+  #french-palette-preview .fp-colors>span { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  #french-palette-preview .fp-swatch { display:inline-block; height:12px; width:12px; border-radius:3px; }
+  #french-palette-preview .fp-swatch-primary { background:var(--fp-primary); }
+  #french-palette-preview .fp-swatch-soft { background:var(--fp-soft); }
+  #french-palette-preview .fp-swatch-accent { background:var(--fp-accent); }
+  @media(max-width:480px) { #french-palette-preview .fp-content { padding:16px; } #french-palette-preview .fp-lesson { padding:16px; } #french-palette-preview .fp-french { font-size:20px; } #french-palette-preview .fp-actions button { flex:1; } }
+</style>
+<script>
+(() => {
+  const root = document.getElementById('french-palette-preview');
+  const app = root.querySelector('.fp-app');
+  const schemes = {
+    ink:{name:'墨蓝与雾蓝',primary:'#345B8C',dark:'#8CB3E5',soft:'#EAF1FA',softDark:'#293F58',accent:'#476F8C',accentDark:'#9ABBD6'},
+    teal:{name:'海盐青绿',primary:'#28766F',dark:'#8CD0C4',soft:'#E8F4F0',softDark:'#253F3B',accent:'#3F7068',accentDark:'#A0CDC3'},
+    indigo:{name:'柔和靛蓝',primary:'#595AA0',dark:'#B0AFE8',soft:'#F0EFFA',softDark:'#35334E',accent:'#686594',accentDark:'#BCB8DF'}
+  };
+  const state = { palette:'ink', accent:'#476F8C' };
+  function render() {
+    const p=schemes[state.palette] || schemes.ink;
+    app.style.setProperty('--fp-primary',`light-dark(${p.primary},${p.dark})`);
+    app.style.setProperty('--fp-soft',`light-dark(${p.soft},${p.softDark})`);
+    app.style.setProperty('--fp-accent',`light-dark(${state.accent},${p.accentDark})`);
+    root.querySelector('[data-primary-code]').textContent=p.primary;
+    root.querySelector('[data-soft-code]').textContent=p.soft;
+    root.querySelector('[data-accent-code]').textContent=state.accent;
+    root.querySelectorAll('[data-palette]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.palette===state.palette)));
+  }
+  root.querySelectorAll('[data-palette]').forEach(button=>button.addEventListener('click',()=>{
+    state.palette=button.dataset.palette; state.accent=schemes[state.palette].accent; render();
+    if(window.openai?.setWidgetState) window.openai.setWidgetState({modelContent:{palette:schemes[state.palette].name},privateContent:{palette:state.palette}}).catch(()=>{});
+  }));
+  const saved=window.openai?.widgetState?.privateContent?.palette;
+  if(schemes[saved]) { state.palette=saved; state.accent=schemes[saved].accent; }
+  window.addEventListener('openai:set_globals',event=>{const s=event.detail?.globals?.widgetState?.privateContent?.palette;if(schemes[s]){state.palette=s;state.accent=schemes[s].accent;render();}});
+  root.querySelector('.fp-primary').addEventListener('click',()=>{root.querySelector('.fp-status span').textContent='跟读练习已准备好';});
+  root.querySelector('.fp-play').addEventListener('click',()=>{root.querySelector('.fp-status span').textContent='配色预览 · 播放原句';});
+  render();
+  if(globalThis.Tweak) {
+    const tweak=new Tweak({container:app,onChange:render});
+    tweak.addColorPicker(state,'accent',{label:'辅助强调色',reference:'--fp-accent'});
+  }
+})();
+</script>

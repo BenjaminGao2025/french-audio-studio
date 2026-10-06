@@ -1,26 +1,4 @@
-:root {
-    --page: #f3f5f1;
-    --surface: #ffffff;
-    --surface-muted: #eef1ed;
-    --ink: #1b211e;
-    --muted: #68726c;
-    --line: #d7ddd8;
-    --line-strong: #b9c3bc;
-    --primary: #08776a;
-    --primary-hover: #075e55;
-    --primary-soft: #e3f2ef;
-    --primary-contrast: #ffffff;
-    --surface-subtle: #f7f8f6;
-    --radius-sm: 7px;
-    --accent: #c98a1d;
-    --accent-soft: #fff3d7;
-    --danger: #a9362a;
-    --danger-soft: #fbe9e6;
-    --success: #28643d;
-    --success-soft: #e8f4eb;
-    --shadow: 0 12px 32px rgba(28, 40, 33, 0.08);
-    --font: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", sans-serif;
-}
+/* Shared design tokens are defined in tokens.css. */
 
 * {
     box-sizing: border-box;
@@ -275,7 +253,7 @@ h2 {
 
 .connection-settings[open] summary {
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(8, 119, 106, 0.12);
+    box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.12);
 }
 
 .summary-chevron {
@@ -342,7 +320,7 @@ input[type="text"]:focus,
 select:focus,
 textarea:focus {
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(8, 119, 106, 0.12);
+    box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.12);
 }
 
 .check-row {
@@ -491,11 +469,11 @@ main {
 .model-used {
     max-width: 260px;
     overflow: hidden;
-    border: 1px solid #ebd39f;
+    border: 1px solid var(--accent-line);
     border-radius: 999px;
     background: var(--accent-soft);
     padding: 3px 8px;
-    color: #7a510b;
+    color: var(--accent);
     font-size: 11px;
     line-height: 1.2;
     text-overflow: ellipsis;
@@ -517,26 +495,26 @@ main {
 }
 
 .task-used[data-state="resolved"] {
-    border-color: #b7d8c0;
+    border-color: var(--success-line);
     background: var(--success-soft);
     color: var(--success);
 }
 
 .task-used[data-state="failed"] {
-    border-color: #e6bbb5;
+    border-color: var(--danger-line);
     background: var(--danger-soft);
     color: var(--danger);
 }
 
 .model-used[data-quality="passed"],
 .model-used[data-quality="proofread"] {
-    border-color: #b7d8c0;
+    border-color: var(--success-line);
     background: var(--success-soft);
     color: var(--success);
 }
 
 .model-used[data-quality="failed"] {
-    border-color: #e6bbb5;
+    border-color: var(--danger-line);
     background: var(--danger-soft);
     color: var(--danger);
 }
@@ -587,12 +565,12 @@ main {
 }
 
 .editor-panel textarea:focus {
-    box-shadow: inset 0 0 0 2px rgba(8, 119, 106, 0.18);
+    box-shadow: inset 0 0 0 2px rgba(var(--primary-rgb), 0.18);
 }
 
 textarea::placeholder,
 input::placeholder {
-    color: #9ba49e;
+    color: var(--placeholder);
     opacity: 1;
 }
 
@@ -688,7 +666,7 @@ input::placeholder {
 
 .segmented-control input:focus-visible + span {
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(8, 119, 106, 0.12);
+    box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.12);
 }
 
 select {
@@ -783,7 +761,7 @@ select {
 .btn-primary {
     border-color: var(--primary);
     background: var(--primary);
-    color: #ffffff;
+    color: var(--surface);
 }
 
 .btn-primary:hover {
@@ -1296,13 +1274,13 @@ audio {
 }
 
 .history-type-badge.tts-badge {
-    background: #eef7f2;
-    color: #0f6c48;
+    background: var(--success-soft);
+    color: var(--success);
 }
 
 .history-type-badge.study-badge {
-    background: #eef4ff;
-    color: #1a56db;
+    background: var(--primary-soft);
+    color: var(--primary);
 }
 
 .history-time-group {
@@ -1338,7 +1316,7 @@ audio {
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
-    background: #faf8f5;
+    background: var(--surface-subtle);
     padding: 8px 12px;
     border-radius: var(--radius-xs);
 }
@@ -1418,7 +1396,7 @@ audio {
 
 .nav-history-btn .count-badge {
     background: var(--accent);
-    color: #fff;
+    color: var(--surface);
     font-size: 11px;
     font-weight: 700;
     padding: 1px 6px;
@@ -1483,7 +1461,7 @@ audio {
     border: none;
     border-radius: 999px;
     background: var(--ink);
-    color: #ffffff;
+    color: var(--surface);
     font: inherit;
     font-size: 14px;
     font-weight: 700;
@@ -1540,11 +1518,6 @@ audio {
     right: 5px;
 }
 
-/* The Review tab carries the label; the launcher only needs the due count */
-.nav-deck-btn [data-i18n="reviewBtn"] {
-    display: none;
-}
-
 /* Mid widths: text-only tabs keep everything on one row */
 @media (max-width: 1100px) {
     .nav-tab i,
@@ -1590,7 +1563,7 @@ audio {
     border: none;
     border-radius: 999px;
     background: var(--danger);
-    color: #ffffff;
+    color: var(--surface);
     font: inherit;
     font-weight: 700;
     box-shadow: var(--shadow);
@@ -1610,4 +1583,3 @@ audio {
 .history-snippet:hover {
     background: var(--primary-soft);
 }
-
