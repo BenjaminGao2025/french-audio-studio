@@ -2,11 +2,11 @@
 French Audio Studio - study time, XP and hero level ("the game").
 
 Built around the learner's own plan (TCF Canada, NCLC 7 = about B2 in all four skills):
-  * Hero level = effective study time. Level 25 is 700 hours: B2 takes about
-    480-620 guided hours from zero (Alliance Française / Cambridge planning
-    figures), plus TCF-specific practice. At 24 effective hours a week that is
-    late April 2027, the plan's first exam window (level ~12 at the week-8 check,
-    ~17 at the week-16 exam-date decision).
+  * Hero level = effective study time: one level per hour (60 XP), level 1000 =
+    1000 hours, the "1000H" goal. NCLC 7 is about B2 in all four skills; B2 takes
+    about 480-620 guided hours from zero (Alliance Française / Cambridge planning
+    figures) plus TCF practice, so the first exam window comes around level
+    600-750 and 1000 leaves room to spare.
   * Effective time: focused study counts fully; listening in the car or while
     walking counts half (attention is on the road), a judgment call, not a study
     result.
@@ -49,9 +49,9 @@ WEEKEND_TARGET_MIN = 120
 DAY_FULL_XP_MIN = 300  # beyond 5 effective hours a day, XP is halved
 STREAK_MIN = 30  # minutes that make a weekday count for the streak
 
-MAX_LEVEL = 25
-TOP_LEVEL_XP = 42_000  # 700 effective hours
-LEVEL_CURVE = 1.6  # early levels come fast, later ones slow down
+# One level per hour (60 XP): level 1000 = 1000 hours, the "1000H" goal
+XP_PER_LEVEL = 60
+MAX_LEVEL = 1000
 
 RATING_XP = {1: 1, 2: 2, 3: 4, 4: 5}
 NEW_CARD_XP = 3
@@ -142,15 +142,12 @@ def week_target(day: datetime.date) -> int:
 
 
 def level_threshold(level: int) -> int:
-    """Total XP needed to reach a level (level 1 starts at 0)."""
-    level = max(1, min(MAX_LEVEL, level))
-    return round(TOP_LEVEL_XP * ((level - 1) / (MAX_LEVEL - 1)) ** LEVEL_CURVE)
+    """Total XP needed to reach a level (level 0 is the start)."""
+    return max(0, min(MAX_LEVEL, level)) * XP_PER_LEVEL
 
 
 def level_for(xp: int) -> dict[str, Any]:
-    level = 1
-    while level < MAX_LEVEL and xp >= level_threshold(level + 1):
-        level += 1
+    level = min(MAX_LEVEL, max(0, xp) // XP_PER_LEVEL)
     start = level_threshold(level)
     nxt = level_threshold(level + 1) if level < MAX_LEVEL else None
     progress = 1.0 if nxt is None else (xp - start) / max(1, nxt - start)

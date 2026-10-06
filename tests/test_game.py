@@ -29,15 +29,15 @@ def _at(day: str, hour: int) -> datetime.datetime:
 
 class LevelCurveTests(unittest.TestCase):
     def test_levels_follow_study_hours(self):
-        self.assertEqual(game.level_threshold(1), 0)
-        self.assertEqual(game.level_threshold(game.MAX_LEVEL), 700 * 60)
-        # At 24 h a week (1440 XP): level ~12 at the week-8 check, ~17 at week 16
-        week = game.WEEK_TARGET_MIN
-        self.assertEqual(week, 24 * 60)
-        self.assertTrue(7 * week <= game.level_threshold(12) <= 9 * week)
-        self.assertTrue(14 * week <= game.level_threshold(17) <= 17 * week)
-        info = game.level_for(game.level_threshold(5) + 1)
+        # One level per hour: level 1000 = 1000 hours
+        self.assertEqual(game.level_threshold(0), 0)
+        self.assertEqual(game.level_threshold(game.MAX_LEVEL), 1000 * 60)
+        self.assertEqual(game.WEEK_TARGET_MIN, 24 * 60)
+        self.assertEqual(game.level_for(59)["level"], 0)
+        info = game.level_for(5 * 60 + 30)
         self.assertEqual(info["level"], 5)
+        self.assertEqual(info["next_level_xp"], 6 * 60)
+        self.assertEqual(info["progress"], 0.5)
         self.assertEqual(game.level_for(10**9)["level"], game.MAX_LEVEL)
         self.assertIsNone(game.level_for(10**9)["next_level_xp"])
 
