@@ -799,7 +799,12 @@
         els.gradeRow.hidden = false;
         refreshIcons();
 
-        if (card.mode === 'speak' || card.mode === 'cloze' || card.mode === 'grammar') playFrench(cardSpeech(card));
+        if (card.mode === 'speak' || card.mode === 'cloze' || card.mode === 'grammar') {
+            // Let the announcer finish first, so the voices never overlap
+            const wait = window.FrenchGame ? window.FrenchGame.voiceBusyMs() : 0;
+            if (!wait) playFrench(cardSpeech(card));
+            else setTimeout(() => { if (session.current === card && session.revealed) playFrench(cardSpeech(card)); }, wait);
+        }
     }
 
     async function grade(rating) {

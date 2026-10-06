@@ -182,6 +182,7 @@
         'Beyond godlike': 'beyond_godlike', 'Wave cleared': 'wave_cleared', 'Level up': 'level_up',
     };
     const voiceClips = {};
+    let voiceEndsAt = 0;
 
     function voiceClip(key) {
         if (!voiceClips[key]) {
@@ -197,7 +198,13 @@
         const clip = voiceClip(key);
         clip.currentTime = 0;
         clip.volume = 0.95;
-        clip.play().catch(() => {});
+        // Until it is done (plus a breath), other speech waits: see voiceBusyMs()
+        voiceEndsAt = Date.now() + ((Number.isFinite(clip.duration) && clip.duration) || 1.3) * 1000 + 250;
+        clip.play().catch(() => { voiceEndsAt = 0; });
+    }
+
+    function voiceBusyMs() {
+        return Math.max(0, voiceEndsAt - Date.now());
     }
 
     function flash(kind = '') {
@@ -606,5 +613,5 @@
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
     else init();
 
-    root.FrenchGame = { onCorrect, onReview, onWaveCleared, setLane, refresh: loadState };
+    root.FrenchGame = { voiceBusyMs, onCorrect, onReview, onWaveCleared, setLane, refresh: loadState };
 })(window);
