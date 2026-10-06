@@ -61,6 +61,7 @@ MAX_HEARTBEAT_SECONDS = 120
 
 # Announcer lines for the kill feed: fixed phrases only, spoken once by TTS and cached
 CALLOUT_PHRASES = {
+    "kill": "Kill!",
     "first_blood": "First blood!",
     "double_kill": "Double kill!",
     "triple_kill": "Triple kill!",

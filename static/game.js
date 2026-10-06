@@ -21,8 +21,9 @@
     const IDLE_MS = 120000;
     const TICK_MS = 5000;
     const FLUSH_SECONDS = 30;
-    // Big callouts; other combos only get the small "Combo xN" chip
-    const CALLOUTS = { 2: 'Double kill', 3: 'Triple kill', 4: 'Ultra kill', 5: 'Rampage', 7: 'Unstoppable', 10: 'Godlike', 15: 'Beyond godlike' };
+    // Every kill is announced; the line climbs with the combo and holds until the next tier
+    const CALLOUT_TIERS = [[15, 'Beyond godlike'], [10, 'Godlike'], [7, 'Unstoppable'], [5, 'Rampage'], [4, 'Ultra kill'], [3, 'Triple kill'], [2, 'Double kill'], [1, 'Kill']];
+    const calloutFor = (combo) => (CALLOUT_TIERS.find(([min]) => combo >= min) || [0, 'Kill'])[1];
 
     const TEXT = {
         en: {
@@ -176,7 +177,7 @@
 
     // The announcer: fixed lines spoken by TTS on the server and cached (game.CALLOUT_PHRASES)
     const VOICE_LINES = {
-        'First blood': 'first_blood', 'Double kill': 'double_kill', 'Triple kill': 'triple_kill',
+        'Kill': 'kill', 'First blood': 'first_blood', 'Double kill': 'double_kill', 'Triple kill': 'triple_kill',
         'Ultra kill': 'ultra_kill', 'Rampage': 'rampage', 'Unstoppable': 'unstoppable', 'Godlike': 'godlike',
         'Beyond godlike': 'beyond_godlike', 'Wave cleared': 'wave_cleared', 'Level up': 'level_up',
     };
@@ -525,14 +526,16 @@
             flash('is-red');
             SOUNDS.big();
             announce('First blood');
-        } else if (CALLOUTS[combo]) {
-            banner(CALLOUTS[combo], sub, combo >= 5 ? 'is-big' : '');
-            flash(combo >= 5 ? 'is-gold' : '');
-            SOUNDS.big();
-            announce(CALLOUTS[combo]);
         } else {
-            banner(combo > 1 ? `Combo x${combo}` : 'Kill', sub, 'is-small');
+            const line = calloutFor(combo);
+            const big = combo >= 2;
+            banner(line, combo > 1 ? `Combo x${combo}${sub ? ` · ${sub}` : ''}` : sub, combo >= 5 ? 'is-big' : big ? '' : 'is-small');
+            if (big) {
+                flash(combo >= 5 ? 'is-gold' : '');
+                SOUNDS.big();
+            }
             SOUNDS.kill(combo);
+            announce(line);
         }
         glowAnswer();
     }
