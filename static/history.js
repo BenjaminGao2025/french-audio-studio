@@ -635,6 +635,15 @@
         },
 
         wireRecordEvents(container) {
+            // Clicking the text opens the record, like its main button
+            container.querySelectorAll('.history-snippet').forEach(snippet => {
+                snippet.addEventListener('click', () => {
+                    const item = snippet.closest('.history-item');
+                    const main = item && item.querySelector('.btn-restore-item, .btn-send-to-study, .btn-import-study');
+                    if (main) main.click();
+                });
+            });
+
             // Audio Play/Pause
             container.querySelectorAll('.btn-hist-play').forEach(btn => {
                 btn.addEventListener('click', () => {
@@ -726,7 +735,11 @@
                     const item = loadRawHistory().find(x => x.id === id);
                     if (!item) return;
                     this.closeModal();
-                    window.location.href = `/study?text=${encodeURIComponent(item.text)}`;
+                    // A saved breakdown opens as it is (no new analysis); plain text gets analysed
+                    const saved = item.type === 'study' && item.sentences && item.sentences.length;
+                    window.location.href = saved
+                        ? `/study?restore=${encodeURIComponent(item.id)}`
+                        : `/study?text=${encodeURIComponent(item.text)}`;
                 });
             });
 

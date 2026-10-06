@@ -9,6 +9,9 @@
     --primary: #08776a;
     --primary-hover: #075e55;
     --primary-soft: #e3f2ef;
+    --primary-contrast: #ffffff;
+    --surface-subtle: #f7f8f6;
+    --radius-sm: 7px;
     --accent: #c98a1d;
     --accent-soft: #fff3d7;
     --danger: #a9362a;
@@ -1598,5 +1601,13 @@ audio {
 .playback-stop-pill svg {
     width: 16px;
     height: 16px;
+}
+
+.history-snippet {
+    cursor: pointer;
+}
+
+.history-snippet:hover {
+    background: var(--primary-soft);
 }
 

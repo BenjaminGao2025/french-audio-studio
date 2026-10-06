@@ -3218,6 +3218,12 @@ function initStudyWorkbench() {
     window.renderStudyDeck = renderStudyDeck;
     const urlParams = new URLSearchParams(window.location.search);
     const prefillText = urlParams.get('text');
+    // Opened from the Audio Studio history: show the saved breakdown, no new analysis
+    const restoreId = urlParams.get('restore');
+    const restoreItem = restoreId && window.FrenchHistory
+        ? window.FrenchHistory.getRecords('study').find(r => r.id === restoreId)
+        : null;
+    if (restoreItem) window.FrenchHistory.onRestoreStudy(restoreItem);
     if (urlParams.get('login') === '1') {
         checkCurrentUser().then(() => {
             if (!localStorage.getItem(userTokenKey)) openAuthModal();
