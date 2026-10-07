@@ -46,12 +46,11 @@ textarea::placeholder, input::placeholder { color: var(--placeholder); }
 .action-row { margin: var(--space-4) 0 var(--space-6); }
 .model-used, .model-used[data-quality="passed"], .model-used[data-quality="proofread"], .task-used[data-state="resolved"] { background: var(--surface-subtle); border-color: var(--line); color: var(--muted); }
 .model-used { max-width: 170px; }
-.badge, .tab-pill, .feynman-badge, .feynman-anchor-badge { background: var(--surface-muted); color: var(--muted); border-color: var(--line); box-shadow: none; font-weight: 600; }
+.badge { background: var(--surface-muted); color: var(--muted); border-color: var(--line); box-shadow: none; font-weight: 600; }
 .today-review-banner { background: var(--surface); border-color: var(--line); color: var(--ink); box-shadow: none; }
 .today-review-cta { background: var(--primary); color: var(--primary-contrast); }
 .feynman-tip-banner, .buildup-section, .shadowing-panel { background: var(--surface-subtle); border-color: var(--line); box-shadow: none; }
-.feynman-selftest-sub, .fb-variation { color: var(--ink); }
-.feynman-anchor-badge { background: var(--surface-muted); color: var(--muted); }
+.fb-variation { color: var(--ink); }
 .btn-buildup-speak, .btn-buildup-record, .btn-feynman-mic, .btn-feynman-check, .btn-token-star { box-shadow: none; transform: none; }
 .btn-buildup-speak, .btn-buildup-record, .btn-feynman-check { background: var(--surface); color: var(--ink); border-color: var(--line-strong); }
 .btn-buildup-speak:hover, .btn-buildup-record:hover, .btn-feynman-check:hover { background: var(--surface-muted); border-color: var(--line-strong); transform: none; box-shadow: none; }

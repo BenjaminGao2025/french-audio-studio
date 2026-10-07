@@ -1061,16 +1061,6 @@
     color: var(--primary);
 }
 
-.feynman-badge {
-    font-size: 10px;
-    font-weight: 800;
-    padding: 1px 6px;
-    border-radius: 4px;
-    background: var(--primary-soft);
-    color: var(--primary);
-    letter-spacing: 0.02em;
-}
-
 .feynman-tip-banner {
     display: flex;
     align-items: center;
@@ -1276,12 +1266,6 @@
     line-height: 1.4;
 }
 
-.final-step-tag {
-    color: var(--muted);
-    font-size: var(--text-xs);
-    font-weight: 600;
-}
-
 .buildup-en-text {
     font-size: 13.5px;
     color: var(--muted);
@@ -1293,12 +1277,6 @@
     color: var(--muted);
     font-size: 13px;
     line-height: 1.5;
-}
-
-.buildup-new-note .new-tag {
-    margin-right: 4px;
-    color: var(--ink);
-    font-weight: 600;
 }
 
 /* Build-up Step Shadowing & Scoring */
@@ -1437,23 +1415,6 @@
     background: var(--surface-subtle);
     border-radius: 6px;
     border: 1px solid var(--surface-muted);
-}
-
-/* ==========================================================================
-   Feynman badge
-   ========================================================================== */
-.feynman-anchor-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    background: var(--primary);
-    color: var(--surface);
-    font-size: 11px;
-    font-weight: 800;
-    padding: 2.5px 7px;
-    border-radius: 4px;
-    letter-spacing: 0.03em;
-    box-shadow: 0 1px 2px rgba(var(--primary-rgb), 0.2);
 }
 
 /* 5. Grammar & Memory Hooks */
@@ -2411,16 +2372,36 @@ a.nav-deck-btn {
     height: 14px;
 }
 
-/* Feynman self-test: a quiet text button that opens a small form */
-.feynman-selftest {
-    margin-bottom: var(--space-1);
+/* One line at the top of a panel that says what the panel is for */
+.panel-hint {
+    margin: 0 0 var(--space-3);
+    color: var(--muted);
+    font-size: var(--text-sm);
+    line-height: 1.5;
 }
 
-.feynman-selftest-summary {
+/* Explain it: the learner writes first, the AI points out gaps */
+.feynman-selftest {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.feynman-selftest .panel-hint {
+    margin-bottom: 0;
+}
+
+.buildup-section-header .panel-hint {
+    flex: 1;
+    min-width: 220px;
+    margin: 0;
+}
+
+.feynman-variation-box > summary {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 4px 0;
+    padding: 2px 0;
     color: var(--primary);
     font-size: var(--text-sm);
     font-weight: 600;
@@ -2428,11 +2409,11 @@ a.nav-deck-btn {
     cursor: pointer;
 }
 
-.feynman-selftest-summary::-webkit-details-marker {
+.feynman-variation-box > summary::-webkit-details-marker {
     display: none;
 }
 
-.feynman-selftest-summary::before {
+.feynman-variation-box > summary::before {
     content: '+';
     width: 14px;
     font-size: 17px;
@@ -2440,33 +2421,25 @@ a.nav-deck-btn {
     text-align: center;
 }
 
-.feynman-selftest[open] > .feynman-selftest-summary::before {
+.feynman-variation-box[open] > summary::before {
     content: '−';
 }
 
-.feynman-selftest[open] {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-    margin: var(--space-2) 0 var(--space-3);
-    padding: var(--space-3) var(--space-4) var(--space-4);
-    border: 1px solid var(--line);
-    border-radius: var(--radius-sm);
-    background: var(--surface-subtle);
+.feynman-variation-box[open] > .feynman-variation {
+    margin-top: var(--space-2);
 }
 
-.feynman-selftest-head {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    gap: var(--space-2);
+.feynman-ask {
+    margin-top: var(--space-4);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--line);
 }
 
-.feynman-selftest-sub {
-    flex: 1;
-    min-width: 200px;
+.feynman-ask-label {
+    margin: 0 0 var(--space-2);
+    color: var(--ink);
     font-size: var(--text-sm);
-    line-height: 1.5;
+    font-weight: 600;
 }
 
 /* Tabs: underlined labels, no boxes */
@@ -2504,15 +2477,6 @@ a.nav-deck-btn {
 .card-tab-btn.active {
     border-bottom-color: var(--primary);
     color: var(--primary);
-}
-
-.card-tab-btn .tab-pill {
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--muted);
-    font-size: var(--text-xs);
-    font-weight: 600;
 }
 
 .card-tab-panel {
@@ -2741,6 +2705,14 @@ a.nav-deck-btn {
     }
 
     .card-tabs-bar {
-        gap: var(--space-4);
+        gap: 14px;
+    }
+
+    .card-tab-btn {
+        font-size: 13px;
+    }
+
+    .ask-row .btn-ask > span {
+        display: none;
     }
 }

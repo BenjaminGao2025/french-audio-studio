@@ -92,29 +92,29 @@ function initStudyWorkbench() {
             startRecording: 'Click to start recording', evaluating: 'Scoring...', accuracy: 'Accuracy: ', completeness: 'Completeness: ',
             legendCorrect: 'Accurate', legendClose: 'Close / slight difference', legendMissed: 'Missed or needs fixing',
             myRecording: 'My recording', retryShadowing: 'Try again',
-            feynmanBadge: '🧠 Feynman self-test',
-            feynmanSub: "Don't read the explanation below yet. In your own words (Chinese or English): what does this sentence say? Why is its key grammar or collocation used this way?",
+            feynmanSub: 'In your own words (Chinese or English): what does this sentence say, and why is it built this way? The AI only points out what you missed.',
+            variationLabel: 'Also make a sentence of your own (optional)', askLabel: 'Ask a question',
             feynmanPlaceholder: 'e.g. This sentence says…; aucune is already negative, so there is no pas… (Enter to check, Shift+Enter for a new line)',
             variationPlaceholder: '(Optional) Change a word and make a new French sentence of your own',
             dictateTitle: 'Say it instead (Chinese mixed with French, or English). The server transcribes it into the box above, and you can still edit it.',
-            dictate: 'Say it', feynmanCheck: 'Let the AI find gaps',
+            dictate: 'Speak instead', feynmanCheck: 'Let the AI find gaps',
             askPlaceholder: "Ask anything, or answer the AI's follow-up question (Chinese or English). e.g. What about de + la?",
-            askMicTitle: 'Ask by speaking', askMic: 'Say', ask: 'Ask',
+            askMicTitle: 'Ask by speaking', askMic: 'Speak', ask: 'Ask',
             listenSentence: 'Listen to the whole sentence', readSentenceAria: 'Read the sentence aloud',
-            originalSentence: 'Original', pronounceTitle: 'Listen to the model pronunciation', pronounce: 'Listen',
-            buildupRecordTitle: 'Record yourself saying this step and get a score', shadowScore: 'Shadow & score',
+            pronounceTitle: 'Listen to the model pronunciation', pronounce: 'Listen',
+            buildupRecordTitle: 'Say this step yourself and get a score', shadowScore: 'Say it',
             playMyRecordingTitle: 'Play back my recording', retryTitle: 'Record again', retryShort: 'Retry',
             modeSwitchAria: 'Study mode',
-            modeNormal: 'Read along', modeNormalTitle: 'Read along: show the full French text',
-            modeBlind: 'Blind recall', modeBlindTitle: 'Feynman blind recall: the key chunks are hidden, so you say the sentence from memory',
-            recommended: 'Recommended',
+            modeNormal: 'Show all', modeNormalTitle: 'Show the full French of every step',
+            modeBlind: 'Test me', modeBlindTitle: 'Hide the new words of each step, so you say them from memory',
+            buildupHint: 'Build the sentence one piece at a time: listen to each step, then say it yourself.',
             blindTipStrong: 'Feynman challenge', blindTipText: ': the new words of each step are hidden. Look at the meaning and say the French from memory!',
             revealAll: 'Reveal all', hideAgain: 'Hide again',
             fwBadge: 'Function words',
             expandDetails: 'Show details', collapseDetails: 'Hide details',
             showBreakdown: 'Show the breakdown', hideBreakdown: 'Hide the breakdown',
             memoryHook: 'Memory hook:',
-            tabBuildup: 'Build-up', tabWords: 'Words', tabGrammar: 'Grammar', tabPron: 'Pronunciation',
+            tabBuildup: 'Steps', tabWords: 'Words', tabGrammar: 'Grammar', tabPron: 'Sounds', tabExplain: 'Explain it',
             thWord: '① Word / phrase (Forme & Audio)', thEnglish: '② English explanation (Anglais)', thChinese: '③ Chinese meaning & usage (Chinois)',
             transcribing: 'Transcribing…', dictationLogin: 'Speech recognition requires logging in first.',
             transcribeFailed: (status) => `Transcription failed (HTTP ${status})`, notHeard: "Didn't catch that. Please try again.",
@@ -204,8 +204,8 @@ function initStudyWorkbench() {
             startRecording: '点击开始录音跟读', evaluating: '评测中...', accuracy: '准确度: ', completeness: '完整度: ',
             legendCorrect: '发音准确', legendClose: '接近/轻微差异', legendMissed: '漏读或需纠正',
             myRecording: '我的录音', retryShadowing: '重新跟读',
-            feynmanBadge: '🧠 费曼自测',
-            feynmanSub: '先别看下面的讲解。用自己的话讲（中文或英语都行）：这句话在说什么？最关键的语法或搭配为什么这么用？',
+            feynmanSub: '用自己的话讲（中文或英语都行）：这句话在说什么，为什么这样说？AI 只指出你漏掉的地方。',
+            variationLabel: '再用它造一个自己的句子（可选）', askLabel: '有问题就问',
             feynmanPlaceholder: '例：这句是说……；aucune 本身就是否定，所以没有 pas……（回车让 AI 找漏洞，Shift+回车换行）',
             variationPlaceholder: '（可选）换一个词，自己造一个新的法语句子',
             dictateTitle: '用说的（中文夹法语、英语都可以），服务器识别后填进上面的框，可以再改',
@@ -213,20 +213,20 @@ function initStudyWorkbench() {
             askPlaceholder: '有问题随时问，或回答 AI 的追问（中文或英语都行）例：那 de + la 呢？',
             askMicTitle: '用说的提问', askMic: '说', ask: '问',
             listenSentence: '收听整句标准发音', readSentenceAria: '朗读句子',
-            originalSentence: '原句', pronounceTitle: '点击听范读发音', pronounce: '发音',
-            buildupRecordTitle: '录音跟读此递进步骤并智能打分', shadowScore: '跟读打分',
+            pronounceTitle: '点击听范读发音', pronounce: '发音',
+            buildupRecordTitle: '自己说一遍这一步，并给你打分', shadowScore: '跟读打分',
             playMyRecordingTitle: '回听我的录音', retryTitle: '重新录音跟读', retryShort: '重练',
             modeSwitchAria: '学习模式切换',
-            modeNormal: '对照跟读', modeNormalTitle: '对照跟读：显示完整法语文本',
-            modeBlind: '费曼盲测复述', modeBlindTitle: '费曼盲测复述：遮挡关键句式，检验记忆并闭卷复述',
-            recommended: '推荐',
+            modeNormal: '全部显示', modeNormalTitle: '显示每一步完整的法语',
+            modeBlind: '考考我', modeBlindTitle: '遮住每一步新加的词，凭记忆说出来',
+            buildupHint: '一块一块把句子搭起来：每一步先听，再自己说一遍。',
             blindTipStrong: '费曼认知挑战', blindTipText: '：递进关键词已遮挡。看着释义，凭借脑内记忆说出这句法语！',
             revealAll: '一键揭晓', hideAgain: '重新遮挡',
             fwBadge: '基础虚词',
             expandDetails: '展开解析', collapseDetails: '收起解析',
             showBreakdown: '展开这句的解析', hideBreakdown: '收起这句的解析',
             memoryHook: '记忆钩子：',
-            tabBuildup: '搭句子', tabWords: '逐词剖析', tabGrammar: '语法考点', tabPron: '发音重点',
+            tabBuildup: '一步步搭', tabWords: '逐词剖析', tabGrammar: '语法考点', tabPron: '发音重点', tabExplain: '自己讲',
             thWord: '① 词汇 / 词组短语 (Forme & Audio)', thEnglish: '② 英文简明解释 (Anglais)', thChinese: '③ 中文释义与语法搭配 (Chinois)',
             transcribing: '识别中…', dictationLogin: '语音识别需要先登录。',
             transcribeFailed: (status) => `识别失败（HTTP ${status}）`, notHeard: '没听清，再说一次试试。',
@@ -1480,14 +1480,13 @@ function initStudyWorkbench() {
 
                 // 1b. Feynman self-test: the learner explains first, the AI only points out gaps
                 const feynmanSelfTestHtml = `
-                    <details class="feynman-selftest">
-                        <summary class="feynman-selftest-summary">${EN ? 'Explain it yourself · optional practice' : '用自己的话讲一遍 · 可选练习'}</summary>
-                        <div class="feynman-selftest-head">
-                            <span class="feynman-anchor-badge">${T.feynmanBadge}</span>
-                            <span class="feynman-selftest-sub">${T.feynmanSub}</span>
-                        </div>
+                    <div class="feynman-selftest">
+                        <p class="panel-hint">${T.feynmanSub}</p>
                         <textarea class="feynman-input" rows="3" maxlength="2000" placeholder="${T.feynmanPlaceholder}"></textarea>
-                        <input class="feynman-variation" type="text" maxlength="500" autocomplete="off" spellcheck="false" placeholder="${T.variationPlaceholder}">
+                        <details class="feynman-variation-box">
+                            <summary>${T.variationLabel}</summary>
+                            <input class="feynman-variation" type="text" maxlength="500" autocomplete="off" spellcheck="false" placeholder="${T.variationPlaceholder}">
+                        </details>
                         <div class="feynman-actions">
                             <span class="dictation-status" aria-live="polite"></span>
                             ${canRecordAudio ? `
@@ -1501,6 +1500,7 @@ function initStudyWorkbench() {
                         </div>
                         <div class="feynman-feedback" hidden></div>
                         <div class="feynman-ask">
+                            <p class="feynman-ask-label">${T.askLabel}</p>
                             <div class="ask-thread" aria-live="polite"></div>
                             <form class="ask-row" autocomplete="off">
                                 <input class="ask-input" type="text" maxlength="1000" placeholder="${T.askPlaceholder}">
@@ -1510,7 +1510,7 @@ function initStudyWorkbench() {
                                 <button class="btn-ask" type="submit"><i data-lucide="send"></i><span>${T.ask}</span></button>
                             </form>
                         </div>
-                    </details>
+                    </div>
                 `;
 
                 // 2. Sentence Build-up (一层一层搭句子 - 5词及以内短句/标题无需生硬拆解)
@@ -1527,7 +1527,6 @@ function initStudyWorkbench() {
                                 <div class="buildup-step-content">
                                     <div class="buildup-fr-row">
                                         <span class="buildup-fr-text" lang="fr">${highlightedFr}</span>
-                                        ${isFinal ? `<span class="final-step-tag">${T.originalSentence}</span>` : ''}
                                         <div class="buildup-action-group">
                                             <button class="btn-buildup-speak" type="button" title="${T.pronounceTitle}" data-speech="${escapeHtml(step.fr)}">
                                                 <i data-lucide="volume-2"></i>
@@ -1542,7 +1541,7 @@ function initStudyWorkbench() {
                                     <div class="buildup-en-text">${escapeHtml(step.en)}</div>
                                     ${step.new ? `
                                         <div class="buildup-new-note">
-                                            <span class="new-tag">New:</span> ${escapeHtml(step.new)}
+                                            ${escapeHtml(step.new)}
                                         </div>
                                     ` : ''}
                                     <div class="buildup-score-card" hidden>
@@ -1577,6 +1576,7 @@ function initStudyWorkbench() {
                     buildupHtml = `
                         <div class="study-card-section buildup-section">
                             <div class="buildup-section-header">
+                                <p class="panel-hint">${T.buildupHint}</p>
                                 <div class="feynman-mode-switch" role="group" aria-label="${T.modeSwitchAria}">
                                     <button class="btn-feynman-toggle active" data-mode="normal" type="button" title="${T.modeNormalTitle}">
                                         <i data-lucide="eye"></i>
@@ -1585,7 +1585,6 @@ function initStudyWorkbench() {
                                     <button class="btn-feynman-toggle" data-mode="blind" type="button" title="${T.modeBlindTitle}">
                                         <i data-lucide="brain"></i>
                                         <span>${T.modeBlind}</span>
-                                        <span class="feynman-badge">${T.recommended}</span>
                                     </button>
                                 </div>
                             </div>
@@ -1683,20 +1682,17 @@ function initStudyWorkbench() {
                 }
 
                 const tabs = [
-                    hasValidBuildup && { id: 'buildup', label: T.tabBuildup, count: s.build_up.length, html: buildupHtml },
-                    { id: 'words', label: T.tabWords, count: wordsList.length, html: wordsSectionHtml },
-                    grammarHtml && { id: 'grammar', label: T.tabGrammar, count: s.grammar_points.length, html: grammarHtml },
-                    pronTipsHtml && { id: 'pron', label: T.tabPron, count: s.pronunciation_tips.length, html: pronTipsHtml },
+                    hasValidBuildup && { id: 'buildup', label: T.tabBuildup, html: buildupHtml },
+                    { id: 'words', label: T.tabWords, html: interlinearHtml + wordsSectionHtml },
+                    grammarHtml && { id: 'grammar', label: T.tabGrammar, html: grammarHtml },
+                    pronTipsHtml && { id: 'pron', label: T.tabPron, html: pronTipsHtml },
                     !hasValidBuildup && { id: 'shadowing', label: T.shadowScore, html: shadowingHtml },
+                    { id: 'explain', label: T.tabExplain, html: feynmanSelfTestHtml },
                 ].filter(Boolean);
                 const bodyHtml = `
-                    ${interlinearHtml}
-                    ${feynmanSelfTestHtml}
                     <div class="card-tabs-bar" role="tablist">
                         ${tabs.map((t, i) => `
-                            <button class="card-tab-btn ${i === 0 ? 'active' : ''}" data-tab="${t.id}" type="button" role="tab" aria-selected="${i === 0}">
-                                ${t.label}${t.count ? ` <span class="tab-pill">${t.count}</span>` : ''}
-                            </button>
+                            <button class="card-tab-btn ${i === 0 ? 'active' : ''}" data-tab="${t.id}" type="button" role="tab" aria-selected="${i === 0}">${t.label}</button>
                         `).join('')}
                     </div>
                     ${tabs.map((t, i) => `

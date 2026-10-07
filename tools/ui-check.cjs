@@ -91,11 +91,10 @@ const card = { id: 'ui-fixture', note_id: 'fixture', mode: 'recognize', state: '
           await page.evaluate(s => window.FrenchHistory.onRestoreStudy({ text: s.sentence, sentences: [s], sentenceCount: 1 }), sentence);
           await page.waitForTimeout(150);
           assert(await page.locator('.sentence-card').isVisible());
-          assert.equal(await page.locator('.feynman-selftest').getAttribute('open'), null);
-          await page.locator('.feynman-selftest-summary').click();
+          assert(!(await page.locator('.feynman-input').isVisible()));
+          await page.locator('.card-tab-btn[data-tab="explain"]').click();
           assert(await page.locator('.feynman-input').isVisible());
           await check(`${width}/${lang}/study/selftest`);
-          await page.locator('.feynman-selftest-summary').click();
           for (const tab of ['words', 'grammar', 'buildup']) {
             await page.locator(`.card-tab-btn[data-tab="${tab}"]`).click();
             assert(await page.locator(`.card-tab-panel[data-panel="${tab}"]`).isVisible());
