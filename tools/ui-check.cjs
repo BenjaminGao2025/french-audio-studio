@@ -2,7 +2,7 @@ const fs = require('fs');
 const assert = require('assert/strict');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright-core');
 const root = require('path').resolve(__dirname, '../static') + '/';
-const pages = { '/': 'index.html', '/study': 'study.html', '/review': 'review.html', '/listen': 'listen.html' };
+const pages = { '/': 'index.html', '/study': 'study.html', '/review': 'review.html', '/listen': 'listen.html', '/write': 'write.html' };
 const sentence = {
   schemaVersion: 2,
   sentence: "Je voudrais prendre un café avec toi demain matin.",
@@ -35,6 +35,8 @@ const card = { id: 'ui-fixture', note_id: 'fixture', mode: 'recognize', state: '
         if (path === '/api/srs/queue') return route.fulfill({ json: { cards: [card], counts: { learning: 0, review: 1, new: 0 } } });
         if (path === '/api/srs/cards') return route.fulfill({ json: { cards: [] } });
         if (path === '/api/history') return route.fulfill({ json: { records: [] } });
+                if (path === '/api/write/tasks') return route.fulfill({ json: { recommended_task: 'T1', recommended_level: 'A1', hours: 0, tasks: {}, subjects: {}, attempts: [] } });
+        if (path === '/api/write/attempts') return route.fulfill({ json: { attempts: [] } });
         if (path === '/api/episodes') return route.fulfill({ json: { episodes: [] } });
         return route.continue();
       });

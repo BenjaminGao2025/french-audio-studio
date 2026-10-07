@@ -27,6 +27,7 @@ import auth_db
 import episodes
 import game
 import srs
+import writing
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -2709,6 +2710,168 @@ def srs_import_legacy(
     authorization: str | None = Header(default=None),
 ):
     return srs.import_legacy_cards(_require_user_id(authorization), req.cards)
+
+# ---------------------------------------------------------------------------
+# Writing practice (TCF EE)
+# ---------------------------------------------------------------------------
+
+
+async def _generate_write_feedback_1(
+    user_id: int, attempt_id: str, api_key: str | None, model: str
+) -> None:
+    try:
+        attempt = writing.get_attempt(user_id, attempt_id)
+        if not attempt:
+            return
+        payload = writing.build_round1_payload(attempt, _map_upstream_model(model))
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
+            _, raw_text = await _post_chat(client, payload, headers)
+        feedback = writing.parse_round1_feedback(
+            raw_text, attempt["text_1"], attempt["task"], attempt["subject"]
+        )
+        writing.set_attempt_feedback_1(attempt_id, feedback)
+    except Exception as exc:
+        logger.warning("Writing round 1 feedback failed: %s", exc)
+        writing.set_attempt_feedback_1(attempt_id, {}, error=str(exc))
+
+
+async def _generate_write_feedback_2(
+    user_id: int, attempt_id: str, api_key: str | None, model: str
+) -> None:
+    try:
+        attempt = writing.get_attempt(user_id, attempt_id)
+        if not attempt:
+            return
+        payload = writing.build_round2_payload(attempt, _map_upstream_model(model))
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
+            _, raw_text = await _post_chat(client, payload, headers)
+        feedback = writing.parse_round2_feedback(raw_text)
+        writing.set_attempt_feedback_2(attempt_id, feedback)
+    except Exception as exc:
+        logger.warning("Writing round 2 feedback failed: %s", exc)
+        writing.set_attempt_feedback_2(attempt_id, {}, error=str(exc))
+
+
+@app.get("/write")
+async def write_page():
+    return _html_page("write.html")
+
+
+@app.get("/api/write/tasks")
+def write_tasks(authorization: str | None = Header(default=None)):
+    user_id = _require_user_id(authorization)
+    hours = game.state(user_id, 0)["hours_total"]
+    rec_level = episodes.recommended_level(hours)
+    rec_task = "T1" if rec_level in ("A1", "A2") else ("T2" if rec_level == "B1" else "T3")
+    return {
+        "recommended_task": rec_task,
+        "recommended_level": rec_level,
+        "hours": hours,
+        "tasks": writing.TASKS,
+        "subjects": writing.SUBJECTS,
+        "attempts": writing.list_attempts(user_id, limit=20),
+    }
+
+
+class WriteSubjectRequest(BaseModel):
+    task: Literal["T1", "T2", "T3"]
+    level: Literal["A1", "A2", "B1", "B2"] = "A1"
+    theme: str = ""
+    model: TransformModel = FAST_MODEL
+
+
+@app.post("/api/write/subject")
+async def write_new_subject(
+    req: WriteSubjectRequest,
+    authorization: str | None = Header(default=None),
+):
+    _require_user_id(authorization)
+    api_key = _authorization_token(authorization)
+    payload = writing.build_new_subject_payload(
+        req.task, req.level, req.theme, _map_upstream_model(req.model)
+    )
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
+        _, raw_text = await _post_chat(client, payload, headers)
+    return writing.parse_new_subject(raw_text, req.task)
+
+
+class WriteRound1Request(BaseModel):
+    task: Literal["T1", "T2", "T3"]
+    subject: dict[str, Any]
+    level: str = "A1"
+    text: str = Field(min_length=1, max_length=10000)
+    seconds: int = 0
+    model: TransformModel = PERPLEXITY_MODEL
+
+
+@app.post("/api/write/attempts")
+async def create_write_attempt(
+    req: WriteRound1Request,
+    authorization: str | None = Header(default=None),
+):
+    user_id = _require_user_id(authorization)
+    try:
+        api_key = _authorization_token(authorization)
+    except HTTPException:
+        api_key = None
+    attempt = writing.create_attempt(
+        user_id, req.task, req.subject, req.level, req.text.strip(), req.seconds
+    )
+    task = asyncio.create_task(_generate_write_feedback_1(user_id, attempt["id"], api_key, req.model))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return attempt
+
+
+@app.get("/api/write/attempts/{attempt_id}")
+def get_write_attempt(
+    attempt_id: str,
+    authorization: str | None = Header(default=None),
+):
+    user_id = _require_user_id(authorization)
+    attempt = writing.get_attempt(user_id, attempt_id)
+    if not attempt:
+        raise HTTPException(status_code=404, detail={"message": "写作记录不存在。"})
+    return attempt
+
+
+class WriteRound2Request(BaseModel):
+    text: str = Field(min_length=1, max_length=10000)
+    seconds: int = 0
+    model: TransformModel = PERPLEXITY_MODEL
+
+
+@app.post("/api/write/attempts/{attempt_id}/round2")
+async def submit_write_round2(
+    attempt_id: str,
+    req: WriteRound2Request,
+    authorization: str | None = Header(default=None),
+):
+    user_id = _require_user_id(authorization)
+    try:
+        api_key = _authorization_token(authorization)
+    except HTTPException:
+        api_key = None
+    attempt = writing.get_attempt(user_id, attempt_id)
+    if not attempt:
+        raise HTTPException(status_code=404, detail={"message": "写作记录不存在。"})
+    updated = writing.update_attempt_round2(user_id, attempt_id, req.text.strip(), req.seconds)
+    task = asyncio.create_task(_generate_write_feedback_2(user_id, attempt_id, api_key, req.model))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return updated
+
+
+@app.get("/api/write/attempts")
+def list_write_attempts(
+    authorization: str | None = Header(default=None),
+):
+    user_id = _require_user_id(authorization)
+    return {"attempts": writing.list_attempts(user_id, limit=30)}
+
 
 if __name__ == "__main__":
     import uvicorn

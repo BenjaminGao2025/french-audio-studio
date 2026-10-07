@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light">
+    <meta name="asset-version" content="__ASSET_VERSION__">
+    <title>写作练习 - 1000H French</title>
+    <link rel="icon" href="/favicon.ico?v=2" sizes="any">
+    <link rel="stylesheet" href="/static/tokens.css?v=__ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/style.css?v=__ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/game.css?v=__ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/write.css?v=__ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/ui.css?v=__ASSET_VERSION__">
+    <script src="https://unpkg.com/lucide@1.34.0/dist/umd/lucide.min.js" defer></script>
+    <script src="/static/i18n.js?v=__ASSET_VERSION__" defer></script>
+    <script src="/static/game.js?v=__ASSET_VERSION__" defer></script>
+    <script src="/static/playback.js?v=__ASSET_VERSION__" defer></script>
+    <script src="/static/write.js?v=__ASSET_VERSION__" defer></script>
+</head>
+<body>
+    <div class="app-shell">
+        <header class="topbar">
+            <div class="brand-block">
+                <div class="brand-mark" aria-hidden="true">
+                    <i data-lucide="pen-tool"></i>
+                </div>
+                <div>
+                    <p class="product-label">1000H French</p>
+                </div>
+            </div>
+
+            <nav class="nav-tabs" aria-label="页面切换" data-i18n-aria="navAria">
+                <a href="/" class="nav-tab">
+                    <i data-lucide="headphones" aria-hidden="true"></i>
+                    <span data-i18n="navAudio">音频工作台</span>
+                </a>
+                <a href="/study" class="nav-tab">
+                    <i data-lucide="sparkles" aria-hidden="true"></i>
+                    <span data-i18n="navStudy">拆解与复述</span>
+                </a>
+                <a href="/write" class="nav-tab active" aria-current="page">
+                    <i data-lucide="pen-tool" aria-hidden="true"></i>
+                    <span data-i18n="navWrite">写作</span>
+                </a>
+                <a href="/review" class="nav-tab">
+                    <i data-lucide="brain" aria-hidden="true"></i>
+                    <span data-i18n="navReview">今日复习</span>
+                </a>
+                <a href="/listen" class="nav-tab">
+                    <i data-lucide="car" aria-hidden="true"></i>
+                    <span data-i18n="navListen">开车听</span>
+                </a>
+            </nav>
+
+            <div class="topbar-actions">
+                <button id="lang-toggle" class="btn btn-secondary lang-toggle" type="button"></button>
+            </div>
+        </header>
+
+        <main class="write-main">
+            <div class="page-intro">
+                <h1 data-i18n="heading">写作练习</h1>
+                <p>
+                    <span class="copy-zh">TCF Canada 写作（EE）专项：结构自查与两轮订正。</span>
+                    <span class="copy-en">TCF Canada writing (EE): task checklist and two-round guided feedback.</span>
+                </p>
+            </div>
+
+            <section id="login-required" class="editor-panel write-message" hidden>
+                <h2 data-i18n="loginTitle">请先登录</h2>
+                <p data-i18n="loginDesc">写作练习需要保存记录和提供个性化反馈，请先登录账号。</p>
+                <a class="btn btn-primary" href="/study?login=1" data-i18n="loginBtn">去登录</a>
+            </section>
+
+            <div id="write-workspace" class="write-workspace" hidden>
+                <!-- Task & Subject Selection -->
+                <section class="editor-panel task-panel">
+                    <div class="panel-heading">
+                        <h2 data-i18n="taskSelectTitle">选择任务与题目</h2>
+                        <span id="level-badge" class="badge"></span>
+                    </div>
+                    <div class="task-selector-row">
+                        <div class="segmented-control task-segments">
+                            <label>
+                                <input type="radio" name="task" value="T1" checked>
+                                <span>T1 · 60–120 词 (10 min)</span>
+                            </label>
+                            <label>
+                                <input type="radio" name="task" value="T2">
+                                <span>T2 · 120–150 词 (20 min)</span>
+                            </label>
+                            <label>
+                                <input type="radio" name="task" value="T3">
+                                <span>T3 · 120–180 词 (30 min)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="subject-card" class="subject-card">
+                        <div class="subject-header">
+                            <h3 id="subject-title"></h3>
+                            <div class="subject-actions">
+                                <button id="btn-next-subject" class="btn btn-secondary btn-sm" type="button" data-i18n="btnNextSubject">换一题</button>
+                                <button id="btn-new-ai-subject" class="btn btn-secondary btn-sm" type="button" data-i18n="btnAiSubject">AI 出新题</button>
+                            </div>
+                        </div>
+                        <p id="subject-prompt" class="subject-prompt"></p>
+                        <ul id="subject-requirements" class="subject-requirements"></ul>
+                        <!-- For T3: Doc 1 and Doc 2 -->
+                        <div id="t3-documents" class="t3-docs-grid" hidden>
+                            <div class="doc-card">
+                                <h4>Document 1</h4>
+                                <p id="t3-doc1"></p>
+                            </div>
+                            <div class="doc-card">
+                                <h4>Document 2</h4>
+                                <p id="t3-doc2"></p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Editor Section -->
+                <section class="editor-panel write-editor-panel">
+                    <div class="editor-toolbar">
+                        <div class="word-count-widget">
+                            <span class="word-count-label" data-i18n="wordCount">字数：</span>
+                            <span id="word-count-val" class="word-count-val">0</span>
+                            <span id="word-count-range" class="word-count-range">/ 60–120</span>
+                            <span id="word-count-status" class="badge"></span>
+                        </div>
+                        <div class="timer-widget">
+                            <button id="btn-timer-toggle" class="btn btn-secondary btn-timer" type="button">
+                                <i data-lucide="clock"></i>
+                                <span id="timer-display">10:00</span>
+                            </button>
+                            <button id="btn-timer-reset" class="icon-btn btn-secondary" type="button" title="重置计时" aria-label="重置计时">
+                                <i data-lucide="rotate-ccw"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="editor-body">
+                        <textarea id="write-input" class="write-textarea" placeholder="在此用法语作答……" data-i18n-placeholder="writePlaceholder" rows="12"></textarea>
+                    </div>
+
+                    <div class="editor-footer">
+                        <div class="footer-left">
+                            <span id="save-status" class="muted"></span>
+                        </div>
+                        <div class="footer-actions">
+                            <button id="btn-submit-r1" class="btn btn-primary" type="button" data-i18n="btnSubmitR1">提交第一轮批改 (Round 1)</button>
+                            <button id="btn-submit-r2" class="btn btn-primary" type="button" data-i18n="btnSubmitR2" hidden>提交第二轮订正 (Round 2)</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Feedback Section -->
+                <section id="feedback-panel" class="editor-panel write-feedback-panel" hidden>
+                    <!-- Loading status -->
+                    <div id="feedback-loading" class="feedback-loading" hidden>
+                        <div class="loading-spinner"></div>
+                        <p id="loading-msg" class="loading-msg"></p>
+                    </div>
+
+                    <!-- Round 1 Feedback -->
+                    <div id="r1-container" hidden>
+                        <div class="panel-heading">
+                            <h2 data-i18n="r1Title">第一轮：自查清单与修改提示</h2>
+                            <span class="badge" data-i18n="r1Badge">Round 1</span>
+                        </div>
+                        <div class="feedback-content">
+                            <!-- Praise -->
+                            <div id="r1-praise" class="praise-box">
+                                <div class="praise-icon"><i data-lucide="sparkles"></i></div>
+                                <div>
+                                    <h4 data-i18n="praiseTitle">做得好的一点</h4>
+                                    <p id="r1-praise-text"></p>
+                                </div>
+                            </div>
+
+                            <!-- Checklist -->
+                            <div class="feedback-block">
+                                <h4 data-i18n="checklistTitle">任务要求自查 (Checklist)</h4>
+                                <ul id="r1-checklist" class="checklist-items"></ul>
+                            </div>
+
+                            <!-- Errors & Hints -->
+                            <div class="feedback-block">
+                                <h4 data-i18n="errorsTitle">重点修改提示（请在上方输入框自行修改）</h4>
+                                <p class="muted hint-note" data-i18n="hintNote">第一轮只指出错误位置和语法线索，不直接给答案。请根据提示在上方修改后，提交第二轮。</p>
+                                <div id="r1-errors" class="error-cards"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Round 2 Feedback -->
+                    <div id="r2-container" hidden>
+                        <div class="panel-heading">
+                            <h2 data-i18n="r2Title">第二轮：订正结果与精选结构</h2>
+                            <span class="badge" data-i18n="r2Badge">Round 2</span>
+                        </div>
+                        <div class="feedback-content">
+                            <!-- Fixed check -->
+                            <div class="feedback-block">
+                                <h4 data-i18n="fixedTitle">修改核对</h4>
+                                <ul id="r2-fixed-list" class="checklist-items"></ul>
+                            </div>
+
+                            <!-- Corrected text & Cards -->
+                            <div class="feedback-block">
+                                <h4 data-i18n="correctedTitle">逐句最小修正（可加入生词卡）</h4>
+                                <div id="r2-sentences" class="sentence-correction-list"></div>
+                            </div>
+
+                            <!-- Reusable Structures -->
+                            <div class="feedback-block">
+                                <h4 data-i18n="structuresTitle">可复用句式（学结构，不背范文）</h4>
+                                <div id="r2-structures" class="structures-list"></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Past Attempts Section -->
+                <section class="editor-panel past-attempts-panel">
+                    <div class="panel-heading">
+                        <h2 data-i18n="pastTitle">历史写作练习</h2>
+                        <span id="past-count" class="badge">0</span>
+                    </div>
+                    <div id="past-attempts-list" class="past-list">
+                        <p class="muted" data-i18n="noPast">暂无历史练习记录。</p>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

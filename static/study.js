@@ -35,7 +35,7 @@ function initStudyWorkbench() {
         en: {
             pageTitle: 'French Breakdown & Shadowing - 1000H French',
             heading: 'French Breakdown & Shadowing',
-            navAria: 'Pages', navAudio: 'Audio Studio', navStudy: 'Study', navReview: 'Review', navListen: 'Listen',
+            navAria: 'Pages', navAudio: 'Audio Studio', navStudy: 'Study', navWrite: 'Write', navReview: 'Review', navListen: 'Listen',
             account: 'Account', login: 'Log in', trialBadgeTitle: 'Account validity',
             reviewBtn: 'Review', reviewBtnTitle: "Today's review (listen · speak · fill in)", dueBadgeTitle: 'Cards due today',
             connectionSettings: 'Connection', connectionNotVerified: 'Connection not verified yet', notVerified: 'Not verified',
@@ -151,7 +151,7 @@ function initStudyWorkbench() {
         zh: {
             pageTitle: '法语拆解与跟读复述 - 1000H French',
             heading: '法语拆解与跟读复述',
-            navAria: '页面切换', navAudio: '音频工作台', navStudy: '拆解与复述', navReview: '今日复习', navListen: '开车听',
+            navAria: '页面切换', navAudio: '音频工作台', navStudy: '拆解与复述', navWrite: '写作', navReview: '今日复习', navListen: '开车听',
             account: '账号', login: '登录', trialBadgeTitle: '账号有效期',
             reviewBtn: '复习', reviewBtnTitle: '今日复习（听 · 说 · 填）', dueBadgeTitle: '今天待复习卡片数',
             connectionSettings: '连接设置', connectionNotVerified: '连接尚未验证', notVerified: '未验证',
@@ -999,20 +999,7 @@ function initStudyWorkbench() {
             return true;
         }
 
-        // 7. Multi-word French phrases (e.g. "deux ans", "grand homme", "tout à fait")
-        if (clean.includes(' ')) {
-            const words = clean.split(/\s+/);
-            const allEnglish = words.every(w => englishStopWords.has(w.toLowerCase()));
-            if (!allEnglish) {
-                return true;
-            }
-        }
-
-        // 8. If clean length >= 3 and not an English stopword, check if it looks like French vocabulary (e.g. "deux", "ans", "diplômes", "beaux")
-        if (clean.length >= 3 && !englishStopWords.has(lower)) {
-            return true;
-        }
-
+        // Unknown words in explanations stay plain text; length is not language evidence.
         return false;
     }
 
@@ -1288,7 +1275,7 @@ function initStudyWorkbench() {
             <div class="word-card ${isFunc ? 'is-function-word' : 'is-content-word'}" data-pos-cat="${posCat}">
                 <div class="word-card-top">
                     <div class="word-card-token-group">
-                        <span class="token-word" title="${T.clickForMeaning}">${escapeHtml(tokenText)}</span>
+                        <span class="token-word" lang="fr" title="${T.clickForMeaning}">${escapeHtml(tokenText)}</span>
                         <button class="btn-token-speak" type="button" title="${T.clickToPronounce}" data-speech="${escapeHtml(tokenText)}">
                             <i data-lucide="volume-2"></i>
                         </button>
@@ -1457,7 +1444,7 @@ function initStudyWorkbench() {
                         <div class="gloss-track">
                             ${s.alignment.map(a => `
                                 <div class="gloss-pair">
-                                    <span class="gloss-fr">${escapeHtml(cleanAlignmentToken(a.fr))}</span>
+                                    <span class="gloss-fr" lang="fr">${escapeHtml(cleanAlignmentToken(a.fr))}</span>
                                     <span class="gloss-en">${escapeHtml(cleanAlignmentToken(a.en))}</span>
                                 </div>
                             `).join('')}
@@ -1523,7 +1510,7 @@ function initStudyWorkbench() {
                             ` : ''}
                         </div>
                         <div class="sentence-text-row">
-                            <p class="sentence-french-text">${renderInteractiveWordsHtml(sentenceText)}</p>
+                            <p class="sentence-french-text" lang="fr">${renderInteractiveWordsHtml(sentenceText)}</p>
                             <button class="btn-speak-round" type="button" title="${T.listenSentence}" aria-label="${T.readSentenceAria}">
                                 <i data-lucide="volume-2"></i>
                             </button>
@@ -1554,7 +1541,7 @@ function initStudyWorkbench() {
                                 <div class="buildup-step-badge">Step ${sIdx + 1}</div>
                                 <div class="buildup-step-content">
                                     <div class="buildup-fr-row">
-                                        <span class="buildup-fr-text">${highlightedFr}</span>
+                                        <span class="buildup-fr-text" lang="fr">${highlightedFr}</span>
                                         ${isFinal ? `<span class="final-step-tag">${T.originalSentence}</span>` : ''}
                                         <div class="buildup-action-group">
                                             <button class="btn-buildup-speak" type="button" title="${T.pronounceTitle}" data-speech="${escapeHtml(step.fr)}">
@@ -1838,7 +1825,7 @@ function initStudyWorkbench() {
                             <span class="schema-version-pill legacy-pill">${T.legacyBadge}</span>
                         </div>
                         <div class="sentence-text-row">
-                            <p class="sentence-french-text">${renderInteractiveWordsHtml(sentenceText)}</p>
+                            <p class="sentence-french-text" lang="fr">${renderInteractiveWordsHtml(sentenceText)}</p>
                             <button class="btn-speak-round" type="button" title="${T.listenSentence}" aria-label="${T.readSentenceAria}">
                                 <i data-lucide="volume-2"></i>
                             </button>
@@ -1869,7 +1856,7 @@ function initStudyWorkbench() {
                             <td>
                                 <div class="token-cell">
                                     <div class="token-main-row">
-                                        <span class="token-word">${escapeHtml(tokenText)}</span>
+                                        <span class="token-word" lang="fr">${escapeHtml(tokenText)}</span>
                                         <div class="token-actions">
                                             <button class="btn-token-speak" type="button" title="${T.clickToPronounce}" data-speech="${escapeHtml(tokenText)}">
                                                 <i data-lucide="volume-2"></i>
@@ -2981,7 +2968,7 @@ function initStudyWorkbench() {
         return tokens.map(token => {
             if (/^[A-Za-zÀ-ÖØ-öø-ÿŒœ\d]/i.test(token)) {
                 const clean = token.replace(/['’]$/, '').trim() || token.trim();
-                return `<span class="interactive-word" role="button" tabindex="0" data-word="${escapeHtml(clean)}" data-token="${escapeHtml(token.trim())}" title="${escapeHtml(clean)}${T.wordTitleSuffix}">${escapeHtml(token)}</span>`;
+                return `<span class="interactive-word" lang="fr" role="button" tabindex="0" data-word="${escapeHtml(clean)}" data-token="${escapeHtml(token.trim())}" title="${escapeHtml(clean)}${T.wordTitleSuffix}">${escapeHtml(token)}</span>`;
             }
             return escapeHtml(token);
         }).join('');

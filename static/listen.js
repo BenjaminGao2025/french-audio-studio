@@ -20,7 +20,7 @@
         en: {
             pageTitle: 'Listen - 1000H French',
             heading: 'Listen while driving',
-            navAria: 'Pages', navAudio: 'Audio Studio', navStudy: 'Study', navReview: 'Review', navListen: 'Listen',
+            navAria: 'Pages', navAudio: 'Audio Studio', navStudy: 'Study', navWrite: 'Write', navReview: 'Review', navListen: 'Listen',
             loginTitle: 'Please log in first',
             loginDesc: 'Episodes are made from what you studied, so you need to log in.',
             loginBtn: 'Log in',
@@ -70,7 +70,7 @@
         zh: {
             pageTitle: '开车听 - 1000H French',
             heading: '开车听',
-            navAria: '页面切换', navAudio: '音频工作台', navStudy: '拆解与复述', navReview: '今日复习', navListen: '开车听',
+            navAria: '页面切换', navAudio: '音频工作台', navStudy: '拆解与复述', navWrite: '写作', navReview: '今日复习', navListen: '开车听',
             loginTitle: '请先登录',
             loginDesc: '节目是用你学过的内容生成的，需要先登录。',
             loginBtn: '去登录',

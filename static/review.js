@@ -29,7 +29,7 @@
         en: {
             pageTitle: "Today's Review - 1000H French",
             heading: "Today's Review",
-            navAria: 'Pages', navAudio: 'Audio Studio', navStudy: 'Study', navReview: 'Review', navListen: 'Listen',
+            navAria: 'Pages', navAudio: 'Audio Studio', navStudy: 'Study', navWrite: 'Write', navReview: 'Review', navListen: 'Listen',
             newLimit: 'New / day', newLimitTitle: 'Maximum number of new cards introduced per day',
             priority: 'Priority', priorityTitle: 'Only review cards at least this important',
             priorityAll: 'All', importanceTitle: (n) => `Importance ${n} of 5`,
@@ -88,7 +88,7 @@
         zh: {
             pageTitle: '今日复习 - 1000H French',
             heading: '今日复习',
-            navAria: '页面切换', navAudio: '音频工作台', navStudy: '拆解与复述', navReview: '今日复习', navListen: '开车听',
+            navAria: '页面切换', navAudio: '音频工作台', navStudy: '拆解与复述', navWrite: '写作', navReview: '今日复习', navListen: '开车听',
             newLimit: '每天新卡', newLimitTitle: '每天最多引入多少张新卡',
             priority: '重点', priorityTitle: '只复习重要度不低于所选星级的卡片',
             priorityAll: '全部', importanceTitle: (n) => `重要度 ${n} / 5`,
@@ -369,7 +369,7 @@
         return String(text || '')
             .split(/([A-Za-zÀ-ÖØ-öø-ÿŒœ0-9]+(?:['’-][A-Za-zÀ-ÖØ-öø-ÿŒœ]+)*)/)
             .map((part, i) => (i % 2
-                ? `<span class="fr-word" data-speech="${escapeHtml(part)}">${escapeHtml(part)}</span>`
+                ? `<span class="fr-word" lang="fr" data-speech="${escapeHtml(part)}">${escapeHtml(part)}</span>`
                 : escapeHtml(part)))
             .join('');
     }
