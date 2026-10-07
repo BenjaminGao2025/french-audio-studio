@@ -124,6 +124,33 @@
     height: 15px;
 }
 
+.hud-focus {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface-muted);
+    color: var(--primary);
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.hud-focus:hover {
+    background: var(--surface);
+    border-color: var(--primary);
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.hud-focus svg {
+    width: 13px;
+    height: 13px;
+}
+
 .game-hud.is-leveling .hud-hero {
     border-color: var(--accent);
     box-shadow: 0 0 0 4px var(--accent-soft);
@@ -154,6 +181,61 @@
 .game-panel h3 + .game-logs,
 .game-panel .game-custom + h3 {
     margin-top: 14px;
+}
+
+.skill-group {
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+}
+
+.skill-group:last-of-type {
+    border-bottom: none;
+    margin-bottom: 4px;
+}
+
+.skill-group-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.skill-group-title {
+    display: inline-flex;
+    align-items: center;
+}
+
+.skill-group-link {
+    color: var(--ink);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.skill-group-link:hover {
+    color: var(--primary);
+    text-decoration: underline;
+}
+
+.skill-group-link svg {
+    width: 13px;
+    height: 13px;
+    color: var(--muted);
+}
+
+.skill-group-progress {
+    color: var(--muted);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.skill-group-progress.is-done {
+    color: var(--success);
+    font-weight: 700;
 }
 
 .lane-row {
@@ -402,7 +484,8 @@
         width: 72px;
     }
 
-    .hud-btn span {
+    .hud-btn span,
+    .hud-focus span {
         display: none;
     }
 

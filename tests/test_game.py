@@ -48,6 +48,12 @@ class LevelCurveTests(unittest.TestCase):
         self.assertEqual(game.week_target(datetime.date(2027, 6, 1)), game.MAINTENANCE_WEEK_TARGET_MIN)
         self.assertEqual(game.week_target(datetime.date(2026, 10, 5)), 1440)
 
+    def test_rebalanced_targets_and_skills(self):
+        self.assertEqual(game.LANE_WEEK_TARGETS["writing"], 210)
+        self.assertEqual(game.LANE_WEEK_TARGETS["review"], 150)
+        self.assertEqual(game.WEEK_TARGET_MIN, 1440)
+
+
 
 class StudyTimeTests(unittest.TestCase):
     def setUp(self):
@@ -62,6 +68,36 @@ class StudyTimeTests(unittest.TestCase):
         self.assertEqual(state["xp"], 300 + 50)
         self.assertEqual(state["today"]["target"], 240)
         self.assertEqual(state["week"]["by_lane"]["course"], 200)
+
+    def test_tcf_skills_grouping_and_furthest_behind(self):
+        now = _at("2026-10-06", 10)  # a Tuesday
+        st = game.state(self.user_id, PDT, now)
+        week = st["week"]
+        skills = week["skills"]
+        self.assertEqual(skills["CO"]["target"], 510)  # listening (210) + car*0.5 (300)
+        self.assertEqual(skills["CE"]["target"], 150)  # reading (150)
+        self.assertEqual(skills["EE"]["target"], 210)  # writing (210)
+        self.assertEqual(skills["EO"]["target"], 240)  # speaking (240)
+        self.assertEqual(skills["shared"]["target"], 330)  # course (180) + review (150)
+        total_target = sum(s["target"] for s in skills.values())
+        self.assertEqual(total_target, 1440)
+        self.assertEqual(week["focus_skill"]["skill"], "CO")
+        self.assertEqual(week["focus_skill"]["link"], "/listen")
+
+        # Log some listening time: 200 min listening -> EO becomes furthest behind (target 240 vs EE 210)
+        game.log_time(self.user_id, "listening", 200, "", PDT, now)
+        st = game.state(self.user_id, PDT, now)
+        week = st["week"]
+        self.assertEqual(week["focus_skill"]["skill"], "EO")
+        self.assertEqual(week["focus_skill"]["link"], "/speak")
+
+        # Log speaking time: 240 min speaking -> EE becomes furthest behind
+        game.log_time(self.user_id, "speaking", 240, "", PDT, now)
+        st = game.state(self.user_id, PDT, now)
+        week = st["week"]
+        self.assertEqual(week["focus_skill"]["skill"], "EE")
+        self.assertEqual(week["focus_skill"]["link"], "/write")
+
 
     def test_car_listening_counts_half(self):
         now = _at("2026-10-10", 10)  # a Saturday

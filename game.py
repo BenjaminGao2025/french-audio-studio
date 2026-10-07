@@ -34,12 +34,26 @@ LANE_WEEK_TARGETS = {  # raw minutes per week (24 effective hours in total)
     "listening": 210,
     "reading": 150,
     "speaking": 240,     # incl. 2 h with the teacher + a weekend hour
-    "writing": 120,
-    "review": 240,       # cards, incl. 20-30 min on the phone every day
+    "writing": 210,      # TCF EE practice (increased from 120)
+    "review": 150,       # cards (decreased from 240, sum stays 1440 min)
     "car": 600,          # car and walk listening: 10 h heard = 5 effective hours
 }
 LANE_WEIGHTS = {"car": 0.5}
 LANES = tuple(LANE_WEEK_TARGETS)
+
+TCF_SKILL_LANES = {
+    "CO": ("listening", "car"),
+    "CE": ("reading",),
+    "EE": ("writing",),
+    "EO": ("speaking",),
+    "shared": ("course", "review"),
+}
+TCF_SKILL_LINKS = {
+    "CO": "/listen",
+    "CE": "/study",
+    "EE": "/write",
+    "EO": "/speak",
+}
 PLAN_START = datetime.date(2026, 10, 5)  # week 1 of the plan
 WEEK_TARGET_MIN = round(sum(m * LANE_WEIGHTS.get(lane, 1) for lane, m in LANE_WEEK_TARGETS.items()))
 MAINTENANCE_WEEK_TARGET_MIN = 300  # May-Aug 2027 (new baby): 5 h a week
@@ -358,6 +372,32 @@ def state(user_id: int, tz_offset: int, now=None) -> dict[str, Any]:
     else:
         day_target = WEEKEND_TARGET_MIN if weekend else WEEKDAY_TARGET_MIN
 
+    skills = {}
+    for skill_key, skill_lanes in TCF_SKILL_LANES.items():
+        done = sum(week_lanes[lane] * LANE_WEIGHTS.get(lane, 1) for lane in skill_lanes)
+        target = 0 if maintenance else sum(LANE_WEEK_TARGETS[lane] * LANE_WEIGHTS.get(lane, 1) for lane in skill_lanes)
+        skills[skill_key] = {
+            "minutes": round(done),
+            "target": round(target),
+            "lanes": list(skill_lanes),
+            "link": TCF_SKILL_LINKS.get(skill_key),
+        }
+
+    exam_skills = ["CO", "CE", "EE", "EO"]
+    furthest = min(
+        exam_skills,
+        key=lambda s: (
+            skills[s]["minutes"] / skills[s]["target"] if skills[s]["target"] else 1.0,
+            -(skills[s]["target"] - skills[s]["minutes"]),
+        ),
+    )
+    focus_skill = {
+        "skill": furthest,
+        "link": TCF_SKILL_LINKS[furthest],
+        "minutes": skills[furthest]["minutes"],
+        "target": skills[furthest]["target"],
+    }
+
     return {
         **level_for(xp),
         "xp": xp,
@@ -388,6 +428,8 @@ def state(user_id: int, tz_offset: int, now=None) -> dict[str, Any]:
             "by_lane": {lane: round(value) for lane, value in week_lanes.items()},
             "lane_targets": dict(LANE_WEEK_TARGETS),
             "lane_weights": {lane: LANE_WEIGHTS.get(lane, 1) for lane in LANES},
+            "skills": skills,
+            "focus_skill": focus_skill,
         },
         "streak_days": _weekday_streak(active_days, family_days, today),
     }

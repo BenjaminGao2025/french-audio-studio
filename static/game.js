@@ -32,6 +32,20 @@
             streak: (n) => `${n}-day streak`, family: 'Family day', weekend: 'Weekend',
             logTime: 'Log time', mute: 'Turn sounds off', unmute: 'Turn sounds on',
             lanesTitle: 'This week, by part of the plan', maintenance: 'Maintenance weeks: 5 h',
+            skillsTitle: 'TCF Skills (24 h weekly target)',
+            skills: {
+                CO: 'CO · Listening',
+                CE: 'CE · Reading',
+                EE: 'EE · Writing',
+                EO: 'EO · Speaking',
+                shared: 'Shared · Course & Cards',
+            },
+            focusSkill: {
+                CO: 'Focus: CO (Listening)',
+                CE: 'Focus: CE (Reading)',
+                EE: 'Focus: EE (Writing)',
+                EO: 'Focus: EO (Speaking)',
+            },
             lanes: { course: 'Course', listening: 'Listening', reading: 'Reading', speaking: 'Speaking', writing: 'Writing', review: 'Review', car: 'Car / walk' },
             halfNote: 'Car and walk listening counts half: your eyes and mind are on the road.',
             quickTitle: 'Log study you did outside the app',
@@ -59,6 +73,20 @@
             streak: (n) => `连续 ${n} 个学习日`, family: '家庭日', weekend: '周末',
             logTime: '记录时间', mute: '关闭音效', unmute: '打开音效',
             lanesTitle: '本周各模块（按计划分配）', maintenance: '保温期：每周 5 小时',
+            skillsTitle: 'TCF 四项技能（每周 24 小时目标）',
+            skills: {
+                CO: 'CO · 听力理解',
+                CE: 'CE · 阅读理解',
+                EE: 'EE · 书面表达',
+                EO: 'EO · 口语表达',
+                shared: '公共 · 课程与卡片',
+            },
+            focusSkill: {
+                CO: '补短板: CO 听力',
+                CE: '补短板: CE 阅读',
+                EE: '补短板: EE 写作',
+                EO: '补短板: EO 口语',
+            },
             lanes: { course: '主课', listening: '听力', reading: '阅读', speaking: '口语', writing: '写作', review: '复习', car: '开车·快走听' },
             halfNote: '开车和快走时听按一半计时：注意力主要在路上。',
             quickTitle: '记录在 App 之外的学习',
@@ -273,6 +301,7 @@
             <span class="hud-stat hud-today"><i data-lucide="sun" aria-hidden="true"></i><span></span></span>
             <span class="hud-stat hud-week"><i data-lucide="calendar-days" aria-hidden="true"></i><span></span></span>
             <span class="hud-stat hud-streak"><i data-lucide="flame" aria-hidden="true"></i><span></span></span>
+            <a class="hud-focus" href="/write" hidden><i data-lucide="compass" aria-hidden="true"></i><span></span></a>
             <span class="hud-spacer"></span>
             <button class="hud-btn hud-log" type="button"><i data-lucide="plus" aria-hidden="true"></i><span>${escapeHtml(T.logTime)}</span></button>
             <button class="hud-btn hud-mute" type="button"><i data-lucide="volume-2" aria-hidden="true"></i></button>`;
@@ -330,24 +359,70 @@
         const streakEl = hud.querySelector('.hud-streak');
         streakEl.hidden = !state.streak_days;
         streakEl.querySelector('span').textContent = T.streak(state.streak_days);
+
+        const focusEl = hud.querySelector('.hud-focus');
+        if (focusEl) {
+            if (week.focus_skill && week.focus_skill.link) {
+                focusEl.href = week.focus_skill.link;
+                const sc = week.focus_skill.skill;
+                focusEl.querySelector('span').textContent = (T.focusSkill && T.focusSkill[sc]) || `Focus: ${sc}`;
+                focusEl.hidden = false;
+            } else {
+                focusEl.hidden = true;
+            }
+        }
+
         refreshIcons();
         if (!panel.hidden) renderPanel();
     }
 
+    const SKILL_GROUPS = [
+        { key: 'CO', lanes: ['listening', 'car'], link: '/listen' },
+        { key: 'CE', lanes: ['reading'], link: '/study' },
+        { key: 'EE', lanes: ['writing'], link: '/write' },
+        { key: 'EO', lanes: ['speaking'], link: '/speak' },
+        { key: 'shared', lanes: ['course', 'review'], link: null },
+    ];
+
     function renderPanel() {
         if (!state) return;
         const week = state.week;
-        const lanes = LANES.map(lane => {
-            const done = week.by_lane[lane] || 0;
-            const target = week.maintenance ? 0 : week.lane_targets[lane];
-            const pct = target ? Math.min(100, Math.round((done / target) * 100)) : 0;
+        const skillsHtml = SKILL_GROUPS.map(group => {
+            const skillData = (week.skills && week.skills[group.key]) || {};
+            const done = skillData.minutes || 0;
+            const target = skillData.target || 0;
+            const titleText = (T.skills && T.skills[group.key]) || group.key;
+
+            const lanesHtml = group.lanes.map(lane => {
+                const laneDone = week.by_lane[lane] || 0;
+                const laneTarget = week.maintenance ? 0 : week.lane_targets[lane];
+                const pct = laneTarget ? Math.min(100, Math.round((laneDone / laneTarget) * 100)) : 0;
+                return `
+                    <div class="lane-row ${laneTarget && laneDone >= laneTarget ? 'is-done' : ''}">
+                        <span class="lane-name">${escapeHtml(T.lanes[lane])}${LANE_WEIGHTS[lane] ? ' ½' : ''}</span>
+                        <span class="lane-bar"><span style="width:${pct}%"></span></span>
+                        <span class="lane-num">${hours(laneDone)}${laneTarget ? ` / ${hours(laneTarget)}` : ''} ${T.h}</span>
+                    </div>`;
+            }).join('');
+
             return `
-                <div class="lane-row ${target && done >= target ? 'is-done' : ''}">
-                    <span class="lane-name">${escapeHtml(T.lanes[lane])}${LANE_WEIGHTS[lane] ? ' ½' : ''}</span>
-                    <span class="lane-bar"><span style="width:${pct}%"></span></span>
-                    <span class="lane-num">${hours(done)}${target ? ` / ${hours(target)}` : ''} ${T.h}</span>
+                <div class="skill-group">
+                    <div class="skill-group-header">
+                        <span class="skill-group-title">
+                            ${group.link
+                                ? `<a class="skill-group-link" href="${escapeHtml(group.link)}"><span>${escapeHtml(titleText)}</span><i data-lucide="arrow-up-right" aria-hidden="true"></i></a>`
+                                : `<span>${escapeHtml(titleText)}</span>`}
+                        </span>
+                        <span class="skill-group-progress ${target && done >= target ? 'is-done' : ''}">
+                            ${hours(done)}${target ? ` / ${hours(target)}` : ''} ${T.h}
+                        </span>
+                    </div>
+                    <div class="skill-group-lanes">
+                        ${lanesHtml}
+                    </div>
                 </div>`;
         }).join('');
+
         const logs = state.today.logs.length
             ? state.today.logs.map(log => `
                 <li>${escapeHtml(T.lanes[log.lane])} · ${log.minutes} ${T.minutes}${log.note ? ` · ${escapeHtml(log.note)}` : ''}
@@ -356,8 +431,8 @@
         panel.innerHTML = `
             <div class="game-panel-grid">
                 <section>
-                    <h3>${T.lanesTitle}${week.maintenance ? ` · ${T.maintenance}` : ''}</h3>
-                    ${lanes}
+                    <h3>${T.skillsTitle || T.lanesTitle}${week.maintenance ? ` · ${T.maintenance}` : ''}</h3>
+                    ${skillsHtml}
                     <p class="game-totals">${state.next_level_xp ? T.totals(state.hours_total, fmt(state.next_level_xp - state.xp)) : T.maxLevel(state.hours_total)}</p>
                     <p class="game-hint">½ ${escapeHtml(T.halfNote)}</p>
                 </section>
