@@ -100,25 +100,21 @@ function initStudyWorkbench() {
             dictate: 'Say it', feynmanCheck: 'Let the AI find gaps',
             askPlaceholder: "Ask anything, or answer the AI's follow-up question (Chinese or English). e.g. What about de + la?",
             askMicTitle: 'Ask by speaking', askMic: 'Say', ask: 'Ask',
-            shortPhrase: 'Short phrase', collapse: 'Collapse', collapseTitle: 'Collapse this sentence',
             listenSentence: 'Listen to the whole sentence', readSentenceAria: 'Read the sentence aloud',
             originalSentence: 'Original', pronounceTitle: 'Listen to the model pronunciation', pronounce: 'Listen',
             buildupRecordTitle: 'Record yourself saying this step and get a score', shadowScore: 'Shadow & score',
             playMyRecordingTitle: 'Play back my recording', retryTitle: 'Record again', retryShort: 'Retry',
-            buildupTitle: 'Sentence Build-up', modeSwitchAria: 'Study mode',
+            modeSwitchAria: 'Study mode',
             modeNormal: 'Read along', modeNormalTitle: 'Read along: show the full French text',
             modeBlind: 'Blind recall', modeBlindTitle: 'Feynman blind recall: the key chunks are hidden, so you say the sentence from memory',
             recommended: 'Recommended',
             blindTipStrong: 'Feynman challenge', blindTipText: ': the new words of each step are hidden. Look at the meaning and say the French from memory!',
             revealAll: 'Reveal all', hideAgain: 'Hide again',
-            wordBreakdownTitle: 'Word Breakdown',
-            filterContent: (n) => `Content words (${n})`, filterAll: (n) => `All (${n})`, filterFunction: (n) => `Function words only (${n})`,
-            fwToggleTitle: 'Show or hide the function word cards', fwBadge: 'Function words', fwCount: (n) => `${n} word${n === 1 ? '' : 's'}`,
+            fwBadge: 'Function words',
             expandDetails: 'Show details', collapseDetails: 'Hide details',
-            memoryHook: 'Memory hook:', grammarTitle: 'Grammar & Memory Hooks', pronTitle: 'Pronunciation Tips',
-            accordionTitle: 'Click to show or hide the analysis of this sentence', readOriginal: 'Play the sentence',
+            showBreakdown: 'Show the breakdown', hideBreakdown: 'Hide the breakdown',
+            memoryHook: 'Memory hook:',
             tabBuildup: 'Build-up', tabWords: 'Words', tabGrammar: 'Grammar', tabPron: 'Pronunciation',
-            legacyBadge: 'Legacy Chinese analysis',
             thWord: '① Word / phrase (Forme & Audio)', thEnglish: '② English explanation (Anglais)', thChinese: '③ Chinese meaning & usage (Chinois)',
             transcribing: 'Transcribing…', dictationLogin: 'Speech recognition requires logging in first.',
             transcribeFailed: (status) => `Transcription failed (HTTP ${status})`, notHeard: "Didn't catch that. Please try again.",
@@ -216,25 +212,21 @@ function initStudyWorkbench() {
             dictate: '用说的', feynmanCheck: '让 AI 找漏洞',
             askPlaceholder: '有问题随时问，或回答 AI 的追问（中文或英语都行）例：那 de + la 呢？',
             askMicTitle: '用说的提问', askMic: '说', ask: '问',
-            shortPhrase: '短语', collapse: '收起', collapseTitle: '折叠本句',
             listenSentence: '收听整句标准发音', readSentenceAria: '朗读句子',
             originalSentence: '原句', pronounceTitle: '点击听范读发音', pronounce: '发音',
             buildupRecordTitle: '录音跟读此递进步骤并智能打分', shadowScore: '跟读打分',
             playMyRecordingTitle: '回听我的录音', retryTitle: '重新录音跟读', retryShort: '重练',
-            buildupTitle: '一层一层搭句子 (Sentence Build-up)', modeSwitchAria: '学习模式切换',
+            modeSwitchAria: '学习模式切换',
             modeNormal: '对照跟读', modeNormalTitle: '对照跟读：显示完整法语文本',
             modeBlind: '费曼盲测复述', modeBlindTitle: '费曼盲测复述：遮挡关键句式，检验记忆并闭卷复述',
             recommended: '推荐',
             blindTipStrong: '费曼认知挑战', blindTipText: '：递进关键词已遮挡。看着释义，凭借脑内记忆说出这句法语！',
             revealAll: '一键揭晓', hideAgain: '重新遮挡',
-            wordBreakdownTitle: '逐词剖析 (Word Breakdown)',
-            filterContent: (n) => `核心实词 (${n})`, filterAll: (n) => `全部 (${n})`, filterFunction: (n) => `仅看虚词 (${n})`,
-            fwToggleTitle: '点击展开/收起基础虚词详细卡片', fwBadge: '基础虚词', fwCount: (n) => `共 ${n} 词`,
+            fwBadge: '基础虚词',
             expandDetails: '展开解析', collapseDetails: '收起解析',
-            memoryHook: '记忆钩子：', grammarTitle: '语法考点与记忆钩子 (Grammar & Memory Hooks)', pronTitle: '发音重点与连音提示 (Pronunciation Tips)',
-            accordionTitle: '点击展开/折叠此句分析', readOriginal: '朗读原句',
+            showBreakdown: '展开这句的解析', hideBreakdown: '收起这句的解析',
+            memoryHook: '记忆钩子：',
             tabBuildup: '搭句子', tabWords: '逐词剖析', tabGrammar: '语法考点', tabPron: '发音重点',
-            legacyBadge: '旧版中文精析',
             thWord: '① 词汇 / 词组短语 (Forme & Audio)', thEnglish: '② 英文简明解释 (Anglais)', thChinese: '③ 中文释义与语法搭配 (Chinois)',
             transcribing: '识别中…', dictationLogin: '语音识别需要先登录。',
             transcribeFailed: (status) => `识别失败（HTTP ${status}）`, notHeard: '没听清，再说一次试试。',
@@ -1239,60 +1231,47 @@ function initStudyWorkbench() {
         return 'other';
     }
 
-    function getPosTagClass(pos) {
-        const cat = getPosCategory(pos);
-        switch (cat) {
-            case 'verb': return 'pos-verb';
-            case 'noun': return 'pos-noun';
-            case 'adj': return 'pos-adj';
-            case 'adv': return 'pos-adv';
-            case 'function': return 'pos-function';
-            default: return 'pos-other';
-        }
-    }
-
     function isFunctionWordPos(pos) {
         return getPosCategory(pos) === 'function';
     }
 
     function renderWordBreakdownCard(w, sentenceText = '', transZh = '') {
         const tokenText = w.fr || w.token || '';
-        const lemma = w.lemma && w.lemma !== tokenText ? w.lemma : '';
+        const sameText = (a, b) => (a || '').trim().toLowerCase() === (b || '').trim().toLowerCase();
+        const lemma = w.lemma && !sameText(w.lemma, tokenText) ? w.lemma : '';
         const pos = w.type || w.pos || '';
         const ipa = w.ipa || w.phonetic || '';
         const meaning = w.meaning || w.explanation_en || '';
         const why = w.why || '';
-        const engLink = w.english_link || '';
+        const engLink = w.english_link && !sameText(w.english_link, tokenText) ? w.english_link : '';
         const falseFriend = Boolean(w.false_friend);
         const isSaved = isWordSaved(sentenceText, tokenText);
-        const posCat = getPosCategory(pos);
-        const posClass = getPosTagClass(pos);
-        const isFunc = isFunctionWordPos(pos);
+        const fullExpEn = `${meaning}${why ? ' (' + why + ')' : ''}`;
 
-        let linkCellHtml = '';
+        let linkHtml = '';
         if (falseFriend) {
-            linkCellHtml = `
-                <div class="false-friend-badge" title="${T.falseFriendTitle}">
+            linkHtml = `
+                <p class="word-link is-false-friend" title="${T.falseFriendTitle}">
                     <i data-lucide="alert-triangle"></i>
-                    <span>False friend! ${escapeHtml(engLink || why || 'Different meaning')}</span>
-                </div>
+                    <span>False friend: ${escapeHtml(w.english_link || why || 'different meaning')}</span>
+                </p>
             `;
         } else if (engLink) {
-            linkCellHtml = `
-                <div class="english-link-pill" title="${T.englishLinkTitle}">
+            linkHtml = `
+                <p class="word-link" title="${T.englishLinkTitle}">
                     <i data-lucide="link"></i>
-                    <span>${escapeHtml(tokenText)} → <strong>${escapeHtml(engLink)}</strong></span>
-                </div>
+                    <span>${escapeHtml(engLink)}</span>
+                </p>
             `;
         }
 
-        const fullExpEn = `${meaning}${why ? ' (' + why + ')' : ''}`;
-
         return `
-            <div class="word-card ${isFunc ? 'is-function-word' : 'is-content-word'}" data-pos-cat="${posCat}">
-                <div class="word-card-top">
-                    <div class="word-card-token-group">
-                        <span class="token-word" lang="fr" title="${T.clickForMeaning}">${escapeHtml(tokenText)}</span>
+            <div class="word-item">
+                <div class="word-item-head">
+                    <span class="token-word" lang="fr" title="${T.clickForMeaning}">${escapeHtml(tokenText)}</span>
+                    ${ipa ? `<span class="word-ipa">${escapeHtml(formatFriendlyPhonetic(ipa))}</span>` : ''}
+                    ${pos || lemma ? `<span class="word-meta">${[pos, lemma ? T.baseForm + lemma : ''].filter(Boolean).map(escapeHtml).join(' · ')}</span>` : ''}
+                    <span class="word-item-actions">
                         <button class="btn-token-speak" type="button" title="${T.clickToPronounce}" data-speech="${escapeHtml(tokenText)}">
                             <i data-lucide="volume-2"></i>
                         </button>
@@ -1308,24 +1287,46 @@ function initStudyWorkbench() {
                             data-sentence-cn="${escapeHtml(transZh)}">
                             <i data-lucide="star"></i>
                         </button>
-                    </div>
-                    <div class="word-card-tags">
-                        ${pos ? `<span class="pos-tag ${posClass}">${escapeHtml(pos)}</span>` : ''}
-                        ${ipa ? `<span class="phonetic-tag">${escapeHtml(formatFriendlyPhonetic(ipa))}</span>` : ''}
-                        ${lemma ? `<span class="lemma-tag">${T.baseForm}${escapeHtml(lemma)}</span>` : ''}
-                    </div>
+                    </span>
                 </div>
-                <div class="word-card-body">
-                    <div class="word-meaning">${escapeHtml(EN ? pick(w.meaning_zh || w.explanation_cn, meaning) : meaning)}</div>
-                    ${!EN && w.meaning_zh ? `<div class="word-meaning-zh">${escapeHtml(w.meaning_zh)}</div>` : ''}
-                    ${why ? `<div class="word-why"><span class="why-label">Why:</span> ${escapeHtml(why)}</div>` : ''}
-                </div>
-                ${linkCellHtml ? `
-                    <div class="word-card-footer">
-                        ${linkCellHtml}
-                    </div>
-                ` : ''}
+                <p class="word-meaning">${escapeHtml(EN ? pick(w.meaning_zh || w.explanation_cn, meaning) : meaning)}</p>
+                ${!EN && w.meaning_zh ? `<p class="word-meaning-zh">${escapeHtml(w.meaning_zh)}</p>` : ''}
+                ${why ? `<p class="word-why">${escapeHtml(why)}</p>` : ''}
+                ${linkHtml}
             </div>
+        `;
+    }
+
+    // The header is the same whether the sentence is open or closed: one line of French
+    // (the largest text on the page), its translation, and the sentence actions.
+    function sentenceHeadHtml({ sentenceText, transEn, transZh, idx, total, open }) {
+        const isMulti = total > 1;
+        const primary = EN ? pick(transZh, transEn) : transEn;
+        const secondary = !EN && transZh ? transZh : '';
+        return `
+            <header class="sentence-head">
+                ${isMulti ? `
+                    <button class="sentence-toggle" type="button" aria-expanded="${open}" aria-controls="sentence-body-${idx}"
+                        title="${open ? T.hideBreakdown : T.showBreakdown}" aria-label="${open ? T.hideBreakdown : T.showBreakdown}">
+                        <i data-lucide="chevron-right"></i>
+                    </button>
+                ` : ''}
+                <div class="sentence-head-text">
+                    <p class="sentence-french-text" lang="fr">${renderInteractiveWordsHtml(sentenceText)}</p>
+                    ${primary ? `<p class="sentence-translation">${escapeHtml(primary)}</p>` : ''}
+                    ${secondary ? `<p class="sentence-translation translation-cn">${escapeHtml(secondary)}</p>` : ''}
+                </div>
+                <div class="sentence-head-actions">
+                    ${isMulti ? `<span class="sentence-position">${idx + 1} / ${total}</span>` : ''}
+                    <button class="btn-speak-round" type="button" title="${T.listenSentence}" aria-label="${T.readSentenceAria}">
+                        <i data-lucide="volume-2"></i>
+                    </button>
+                    <button class="btn-sentence-save" type="button" data-sentence="${escapeHtml(sentenceText)}" title="${T.sentenceAdd}">
+                        <i data-lucide="bookmark-plus"></i>
+                        <span class="sentence-save-label">${T.addToReview}</span>
+                    </button>
+                </div>
+            </header>
         `;
     }
 
@@ -1394,9 +1395,11 @@ function initStudyWorkbench() {
                 }
             });
 
+            const open = sentences.length === 1 || idx === 0;
             const card = document.createElement('article');
-            card.className = `sentence-card ${isV2 ? 'is-v2-card' : 'is-v1-card'}`;
+            card.className = open ? 'sentence-card is-open' : 'sentence-card';
             card.dataset.index = idx;
+            const headHtml = sentenceHeadHtml({ sentenceText, transEn, transZh, idx, total: sentences.length, open });
 
             // Shared Shadowing & Scoring HTML
             const shadowingHtml = `
@@ -1510,41 +1513,6 @@ function initStudyWorkbench() {
                     </details>
                 `;
 
-                const heroHtml = `
-                    <div class="sentence-hero">
-                        <div class="sentence-meta-row">
-                            <div class="meta-row-left" style="display: flex; align-items: center; gap: 8px;">
-                                <span class="sentence-index-pill">Phrase ${idx + 1}</span>
-                                <div class="hero-tags">
-                                    ${isShortSentence ? `<span class="badge badge-short-phrase">${T.shortPhrase}</span>` : ''}
-                                </div>
-                            </div>
-                            ${sentences.length > 1 ? `
-                                <button class="btn-hero-collapse" type="button" title="${T.collapseTitle}">
-                                    <i data-lucide="chevron-up"></i>
-                                    <span>${T.collapse}</span>
-                                </button>
-                            ` : ''}
-                        </div>
-                        <div class="sentence-text-row">
-                            <p class="sentence-french-text" lang="fr">${renderInteractiveWordsHtml(sentenceText)}</p>
-                            <button class="btn-speak-round" type="button" title="${T.listenSentence}" aria-label="${T.readSentenceAria}">
-                                <i data-lucide="volume-2"></i>
-                            </button>
-                            <button class="btn-sentence-save" type="button" data-sentence="${escapeHtml(sentenceText)}" title="${T.sentenceAdd}">
-                                <i data-lucide="bookmark-plus"></i>
-                                <span class="sentence-save-label">${T.addToReview}</span>
-                            </button>
-                        </div>
-                        ${interlinearHtml}
-                        <div class="sentence-translations">
-                            <div class="translation-en translation-primary">${escapeHtml(EN ? pick(transZh, transEn) : transEn)}</div>
-                            ${transZh && !EN ? `<div class="translation-zh translation-secondary">${escapeHtml(transZh)}</div>` : ''}
-                        </div>
-                        ${feynmanSelfTestHtml}
-                    </div>
-                `;
-
                 // 2. Sentence Build-up (一层一层搭句子 - 5词及以内短句/标题无需生硬拆解)
                 let buildupHtml = '';
                 if (hasValidBuildup) {
@@ -1609,10 +1577,6 @@ function initStudyWorkbench() {
                     buildupHtml = `
                         <div class="study-card-section buildup-section">
                             <div class="buildup-section-header">
-                                <div class="section-title" style="margin-bottom: 0;">
-                                    <i data-lucide="layers"></i>
-                                    <span>${T.buildupTitle}</span>
-                                </div>
                                 <div class="feynman-mode-switch" role="group" aria-label="${T.modeSwitchAria}">
                                     <button class="btn-feynman-toggle active" data-mode="normal" type="button" title="${T.modeNormalTitle}">
                                         <i data-lucide="eye"></i>
@@ -1636,68 +1600,29 @@ function initStudyWorkbench() {
                     `;
                 }
 
-                // 4. Word-by-word Analysis Cards (2 columns, POS color-coded, function words collapsible)
+                // 4. Words: content words first, function words behind one toggle
                 const contentWords = [];
                 const functionWords = [];
-
                 wordsList.forEach(w => {
-                    const pos = w.type || w.pos || '';
-                    if (isFunctionWordPos(pos)) {
-                        functionWords.push(w);
-                    } else {
-                        contentWords.push(w);
-                    }
+                    (isFunctionWordPos(w.type || w.pos || '') ? functionWords : contentWords).push(w);
                 });
-
-                const effectiveContentWords = (contentWords.length === 0) ? wordsList : contentWords;
-                const effectiveFunctionWords = (contentWords.length === 0) ? [] : functionWords;
-
-                const contentCardsHtml = effectiveContentWords.map(w => renderWordBreakdownCard(w, sentenceText, transZh)).join('');
-                const functionCardsHtml = effectiveFunctionWords.map(w => renderWordBreakdownCard(w, sentenceText, transZh)).join('');
-                const hasFunctionWords = effectiveFunctionWords.length > 0;
-                const functionTokensPreview = effectiveFunctionWords.map(w => escapeHtml(w.fr || w.token || '')).join(' · ');
+                const shownWords = contentWords.length ? contentWords : wordsList;
+                const hiddenWords = contentWords.length ? functionWords : [];
+                const renderWords = list => list.map(w => renderWordBreakdownCard(w, sentenceText, transZh)).join('');
 
                 const wordsSectionHtml = `
-                    <div class="study-card-section words-cards-section">
-                        <div class="section-title">
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <i data-lucide="book-open"></i>
-                                <span>${T.wordBreakdownTitle}</span>
-                            </div>
-                            <div class="words-filter-tabs">
-                                <button class="btn-words-filter ${hasFunctionWords ? 'active' : ''}" data-filter="content" type="button">${T.filterContent(effectiveContentWords.length)}</button>
-                                <button class="btn-words-filter ${!hasFunctionWords ? 'active' : ''}" data-filter="all" type="button">${T.filterAll(wordsList.length)}</button>
-                                ${hasFunctionWords ? `
-                                    <button class="btn-words-filter" data-filter="function" type="button">${T.filterFunction(effectiveFunctionWords.length)}</button>
-                                ` : ''}
-                            </div>
+                    <div class="word-list">${renderWords(shownWords)}</div>
+                    ${hiddenWords.length ? `
+                        <div class="small-words">
+                            <button class="small-words-toggle" type="button" aria-expanded="false">
+                                <span class="small-words-label">${T.fwBadge}</span>
+                                <span class="small-words-preview" lang="fr">${hiddenWords.map(w => escapeHtml(w.fr || w.token || '')).join(' · ')}</span>
+                                <span class="small-words-action">${T.expandDetails}</span>
+                                <i data-lucide="chevron-down"></i>
+                            </button>
+                            <div class="word-list" hidden>${renderWords(hiddenWords)}</div>
                         </div>
-
-                        <div class="words-cards-container">
-                            <div class="words-cards-grid">
-                                ${contentCardsHtml}
-                            </div>
-
-                            ${hasFunctionWords ? `
-                                <div class="function-words-collapse-section">
-                                    <div class="function-words-summary-bar" role="button" tabindex="0" title="${T.fwToggleTitle}">
-                                        <div class="fw-summary-left">
-                                            <span class="fw-summary-badge">${T.fwBadge}</span>
-                                            <span class="fw-summary-tokens">${functionTokensPreview}</span>
-                                            <span class="fw-summary-count">${T.fwCount(effectiveFunctionWords.length)}</span>
-                                        </div>
-                                        <div class="fw-summary-right">
-                                            <span class="fw-toggle-label">${T.expandDetails}</span>
-                                            <i data-lucide="chevron-down" class="fw-chevron"></i>
-                                        </div>
-                                    </div>
-                                    <div class="function-words-cards-grid" hidden>
-                                        ${functionCardsHtml}
-                                    </div>
-                                </div>
-                            ` : ''}
-                        </div>
-                    </div>
+                    ` : ''}
                 `;
 
                 // 5. Grammar Points + Memory Hooks
@@ -1736,10 +1661,6 @@ function initStudyWorkbench() {
 
                     grammarHtml = `
                         <div class="study-card-section grammar-section">
-                            <div class="section-title">
-                                <i data-lucide="sparkles"></i>
-                                <span>${T.grammarTitle}</span>
-                            </div>
                             <div class="grammar-points-list">
                                 ${pointsHtml}
                             </div>
@@ -1754,10 +1675,6 @@ function initStudyWorkbench() {
 
                     pronTipsHtml = `
                         <div class="study-card-section pronunciation-section">
-                            <div class="section-title">
-                                <i data-lucide="volume-2"></i>
-                                <span>${T.pronTitle}</span>
-                            </div>
                             <ul class="pronunciation-tips-list">
                                 ${tipsHtml}
                             </ul>
@@ -1765,99 +1682,30 @@ function initStudyWorkbench() {
                     `;
                 }
 
-                const isMultiSentence = sentences.length > 1;
-                const isCollapsed = isMultiSentence && idx > 0;
-
-                const accordionHeaderHtml = isMultiSentence ? `
-                    <div class="card-accordion-header" role="button" tabindex="0" title="${T.accordionTitle}">
-                        <div class="accordion-header-left">
-                            <span class="sentence-index-pill">Phrase ${idx + 1}</span>
-                            <span class="accordion-preview-fr">${escapeHtml(sentenceText.length > 65 ? sentenceText.slice(0, 65) + '...' : sentenceText)}</span>
-                        </div>
-                        <div class="accordion-header-right">
-                            <button class="btn-token-speak btn-accordion-speak" type="button" title="${T.readOriginal}" data-speech="${escapeHtml(sentenceText)}">
-                                <i data-lucide="volume-2"></i>
+                const tabs = [
+                    hasValidBuildup && { id: 'buildup', label: T.tabBuildup, count: s.build_up.length, html: buildupHtml },
+                    { id: 'words', label: T.tabWords, count: wordsList.length, html: wordsSectionHtml },
+                    grammarHtml && { id: 'grammar', label: T.tabGrammar, count: s.grammar_points.length, html: grammarHtml },
+                    pronTipsHtml && { id: 'pron', label: T.tabPron, count: s.pronunciation_tips.length, html: pronTipsHtml },
+                    !hasValidBuildup && { id: 'shadowing', label: T.shadowScore, html: shadowingHtml },
+                ].filter(Boolean);
+                const bodyHtml = `
+                    ${interlinearHtml}
+                    ${feynmanSelfTestHtml}
+                    <div class="card-tabs-bar" role="tablist">
+                        ${tabs.map((t, i) => `
+                            <button class="card-tab-btn ${i === 0 ? 'active' : ''}" data-tab="${t.id}" type="button" role="tab" aria-selected="${i === 0}">
+                                ${t.label}${t.count ? ` <span class="tab-pill">${t.count}</span>` : ''}
                             </button>
-                            <span class="accordion-preview-trans">${escapeHtml(pick(transZh, transEn))}</span>
-                            <i data-lucide="chevron-down" class="accordion-chevron"></i>
-                        </div>
+                        `).join('')}
                     </div>
-                ` : '';
-
-                const cardContentHtml = `
-                    <div class="card-content-wrapper">
-                        ${heroHtml}
-                        <div class="card-tabs-bar" role="tablist">
-                            ${hasValidBuildup ? `
-                                <button class="card-tab-btn active" data-tab="buildup" type="button" role="tab" aria-selected="true">
-                                    <i data-lucide="layers"></i>
-                                    <span>${T.tabBuildup}</span>
-                                    <span class="tab-pill">${s.build_up.length}</span>
-                                </button>
-                            ` : ''}
-                            <button class="card-tab-btn ${!hasValidBuildup ? 'active' : ''}" data-tab="words" type="button" role="tab" aria-selected="${!hasValidBuildup}">
-                                <i data-lucide="book-open"></i>
-                                <span>${T.tabWords}</span>
-                                <span class="tab-pill">${wordsList.length}</span>
-                            </button>
-                            ${s.grammar_points && s.grammar_points.length > 0 ? `
-                                <button class="card-tab-btn" data-tab="grammar" type="button" role="tab" aria-selected="false">
-                                    <i data-lucide="sparkles"></i>
-                                    <span>${T.tabGrammar}</span>
-                                    <span class="tab-pill">${s.grammar_points.length}</span>
-                                </button>
-                            ` : ''}
-                            ${s.pronunciation_tips && s.pronunciation_tips.length > 0 ? `
-                                <button class="card-tab-btn" data-tab="pron" type="button" role="tab" aria-selected="false">
-                                    <i data-lucide="volume-2"></i>
-                                    <span>${T.tabPron}</span>
-                                    <span class="tab-pill">${s.pronunciation_tips.length}</span>
-                                </button>
-                            ` : ''}
-                            ${!hasValidBuildup ? `
-                                <button class="card-tab-btn" data-tab="shadowing" type="button" role="tab" aria-selected="false">
-                                    <i data-lucide="mic"></i>
-                                    <span>${T.shadowScore}</span>
-                                </button>
-                            ` : ''}
-                        </div>
-                        <div class="card-tab-body">
-                            ${hasValidBuildup ? `<div class="card-tab-panel active" data-panel="buildup">${buildupHtml}</div>` : ''}
-                            <div class="card-tab-panel ${!hasValidBuildup ? 'active' : ''}" data-panel="words" ${hasValidBuildup ? 'hidden' : ''}>${wordsSectionHtml}</div>
-                            ${s.grammar_points && s.grammar_points.length > 0 ? `<div class="card-tab-panel" data-panel="grammar" hidden>${grammarHtml}</div>` : ''}
-                            ${s.pronunciation_tips && s.pronunciation_tips.length > 0 ? `<div class="card-tab-panel" data-panel="pron" hidden>${pronTipsHtml}</div>` : ''}
-                            ${!hasValidBuildup ? `<div class="card-tab-panel" data-panel="shadowing" hidden>${shadowingHtml}</div>` : ''}
-                        </div>
-                    </div>
+                    ${tabs.map((t, i) => `
+                        <div class="card-tab-panel ${i === 0 ? 'active' : ''}" data-panel="${t.id}" role="tabpanel" ${i === 0 ? '' : 'hidden'}>${t.html}</div>
+                    `).join('')}
                 `;
-
-                card.className = `sentence-card ${isV2 ? 'is-v2-card' : 'is-v1-card'} ${isCollapsed ? 'is-accordion-collapsed' : 'is-accordion-expanded'}`;
-                card.innerHTML = accordionHeaderHtml + cardContentHtml;
+                card.innerHTML = headHtml + `<div class="sentence-body" id="sentence-body-${idx}" ${open ? '' : 'hidden'}>${bodyHtml}</div>`;
             } else {
                 // ==================== LEGACY V1 RENDERING ====================
-                const heroHtml = `
-                    <div class="sentence-hero">
-                        <div class="sentence-meta-row">
-                            <span class="sentence-index-pill">Phrase ${idx + 1}</span>
-                            <span class="schema-version-pill legacy-pill">${T.legacyBadge}</span>
-                        </div>
-                        <div class="sentence-text-row">
-                            <p class="sentence-french-text" lang="fr">${renderInteractiveWordsHtml(sentenceText)}</p>
-                            <button class="btn-speak-round" type="button" title="${T.listenSentence}" aria-label="${T.readSentenceAria}">
-                                <i data-lucide="volume-2"></i>
-                            </button>
-                            <button class="btn-sentence-save" type="button" data-sentence="${escapeHtml(sentenceText)}" title="${T.sentenceAdd}">
-                                <i data-lucide="bookmark-plus"></i>
-                                <span class="sentence-save-label">${T.addToReview}</span>
-                            </button>
-                        </div>
-                        <div class="sentence-translations">
-                            <div class="translation-cn"${EN && transEn ? ' hidden' : ''}>${escapeHtml(transZh)}</div>
-                            <div class="translation-en">${escapeHtml(transEn)}</div>
-                        </div>
-                    </div>
-                `;
-
                 let rowsHtml = '';
                 wordsList.forEach(tok => {
                     const tokenText = tok.token || tok.fr || '';
@@ -1922,7 +1770,7 @@ function initStudyWorkbench() {
                     </div>
                 `;
 
-                card.innerHTML = heroHtml + shadowingHtml + tableHtml;
+                card.innerHTML = headHtml + `<div class="sentence-body" id="sentence-body-${idx}" ${open ? '' : 'hidden'}>${shadowingHtml}${tableHtml}</div>`;
             }
 
             sentencesContainer.appendChild(card);
@@ -2224,35 +2072,25 @@ function initStudyWorkbench() {
             });
         });
 
-        // Multi-sentence accordion toggle
-        const accordionHeader = card.querySelector('.card-accordion-header');
-        if (accordionHeader) {
-            accordionHeader.addEventListener('click', (e) => {
-                if (e.target.closest('.btn-accordion-speak')) return;
-                const isCollapsed = card.classList.contains('is-accordion-collapsed');
-                card.classList.toggle('is-accordion-collapsed', !isCollapsed);
-                card.classList.toggle('is-accordion-expanded', isCollapsed);
-                refreshIcons();
-            });
-            const accSpeakBtn = accordionHeader.querySelector('.btn-accordion-speak');
-            if (accSpeakBtn) {
-                accSpeakBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    accSpeakBtn.style.transform = 'scale(1.2)';
-                    playFrenchSpeech(targetSentence, () => {
-                        accSpeakBtn.style.transform = '';
-                    });
-                });
-            }
-        }
-
-        const btnHeroCollapse = card.querySelector('.btn-hero-collapse');
-        if (btnHeroCollapse) {
-            btnHeroCollapse.addEventListener('click', (e) => {
-                e.stopPropagation();
-                card.classList.add('is-accordion-collapsed');
-                card.classList.remove('is-accordion-expanded');
-                refreshIcons();
+        // Open / close a sentence: the whole header toggles it (buttons and, when open,
+        // the French words keep their own actions; a text selection is not a click)
+        const head = card.querySelector('.sentence-head');
+        const toggle = card.querySelector('.sentence-toggle');
+        const body = card.querySelector('.sentence-body');
+        if (head && toggle && body) {
+            const setOpen = (open) => {
+                card.classList.toggle('is-open', open);
+                body.hidden = !open;
+                toggle.setAttribute('aria-expanded', String(open));
+                toggle.title = open ? T.hideBreakdown : T.showBreakdown;
+                toggle.setAttribute('aria-label', toggle.title);
+                if (open) refreshIcons();
+            };
+            head.addEventListener('click', (e) => {
+                if (e.target.closest('button:not(.sentence-toggle), a')) return;
+                if (card.classList.contains('is-open') && e.target.closest('.interactive-word')) return;
+                if (String(window.getSelection && window.getSelection()).trim()) return;
+                setOpen(!card.classList.contains('is-open'));
             });
         }
 
@@ -2387,75 +2225,17 @@ function initStudyWorkbench() {
             });
         });
 
-        // 3c. Word Breakdown Filter Tabs & Function Words Accordion
-        const filterBtns = card.querySelectorAll('.btn-words-filter');
-        filterBtns.forEach(btn => {
+        // 3c. Function words stay behind one toggle under the word list
+        card.querySelectorAll('.small-words-toggle').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                filterBtns.forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                const filter = btn.dataset.filter;
-                const contentGrid = card.querySelector('.words-cards-grid');
-                const fwSection = card.querySelector('.function-words-collapse-section');
-                const fwGrid = card.querySelector('.function-words-cards-grid');
-                const fwSummary = card.querySelector('.function-words-summary-bar');
-
-                if (filter === 'all') {
-                    if (contentGrid) contentGrid.hidden = false;
-                    if (fwSection) {
-                        fwSection.hidden = false;
-                        if (fwGrid) fwGrid.hidden = false;
-                        if (fwSummary) {
-                            fwSummary.classList.add('is-expanded');
-                            const label = fwSummary.querySelector('.fw-toggle-label');
-                            if (label) label.textContent = T.collapseDetails;
-                        }
-                    }
-                } else if (filter === 'content') {
-                    if (contentGrid) contentGrid.hidden = false;
-                    if (fwSection) {
-                        fwSection.hidden = false;
-                        if (fwGrid) fwGrid.hidden = true;
-                        if (fwSummary) {
-                            fwSummary.classList.remove('is-expanded');
-                            const label = fwSummary.querySelector('.fw-toggle-label');
-                            if (label) label.textContent = T.expandDetails;
-                        }
-                    }
-                } else if (filter === 'function') {
-                    if (contentGrid) contentGrid.hidden = true;
-                    if (fwSection) {
-                        fwSection.hidden = false;
-                        if (fwGrid) fwGrid.hidden = false;
-                        if (fwSummary) {
-                            fwSummary.classList.add('is-expanded');
-                            const label = fwSummary.querySelector('.fw-toggle-label');
-                            if (label) label.textContent = T.collapseDetails;
-                        }
-                    }
-                }
-                refreshIcons();
+                const list = btn.nextElementSibling;
+                const open = list.hidden;
+                list.hidden = !open;
+                btn.setAttribute('aria-expanded', String(open));
+                btn.querySelector('.small-words-action').textContent = open ? T.collapseDetails : T.expandDetails;
             });
         });
-
-        const fwSummaryBar = card.querySelector('.function-words-summary-bar');
-        const fwCardsGrid = card.querySelector('.function-words-cards-grid');
-        if (fwSummaryBar && fwCardsGrid) {
-            fwSummaryBar.addEventListener('click', () => {
-                const isHidden = fwCardsGrid.hidden;
-                fwCardsGrid.hidden = !isHidden;
-                fwSummaryBar.classList.toggle('is-expanded', isHidden);
-                const label = fwSummaryBar.querySelector('.fw-toggle-label');
-                if (label) label.textContent = isHidden ? T.collapseDetails : T.expandDetails;
-                refreshIcons();
-            });
-            fwSummaryBar.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    fwSummaryBar.click();
-                }
-            });
-        }
 
         // 4. Shadowing Controllers (Main sentence + Every buildup step!)
         function bindShadowingController(scopeElement, sentenceText, transNote = '', isCompact = false) {
