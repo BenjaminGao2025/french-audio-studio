@@ -615,13 +615,17 @@
             renderImportance();
         });
 
-        // Double-click any other French text on the page to look it up
+        // Only explicitly marked French content can trigger double-click lookup.
         document.addEventListener('dblclick', (e) => {
             if (pop.contains(e.target)) return;
             if (wordSelector && e.target.closest(wordSelector)) return;
             if (e.target.closest('button, input, textarea, select')) return;
+            const frenchRegion = e.target.closest('[lang]');
+            if (!frenchRegion || !/^fr(?:-|$)/i.test(frenchRegion.lang)) return;
             const selection = root.getSelection();
             if (!selection || selection.rangeCount === 0) return;
+            const range = selection.getRangeAt(0);
+            if (!frenchRegion.contains(range.startContainer) || !frenchRegion.contains(range.endContainer)) return;
             const selected = selection.toString().trim();
             if (!selected) return;
             const rect = selection.getRangeAt(0).getBoundingClientRect();
@@ -676,7 +680,21 @@
         }
 
         function isSaved(sentence, token) {
-            return Boolean(options.findLocal && options.findLocal(sentence, token)) || entries(token).length > 0;
+            if (options.findLocal && options.findLocal(sentence, token)) return true;
+            if (entries(token).length > 0) return true;
+            const clean = keyOf(token);
+            if (!clean) return false;
+            for (const [text, list] of byText.entries()) {
+                if (text.includes(' ') || text.includes("'") || text.includes("’")) {
+                    const re = new RegExp(`(^|[\\s'’])${clean}([\\s'’]|$)`, 'i');
+                    if (re.test(text)) {
+                        if (!sentence) return true;
+                        const sKey = (s) => (s || '').replace(/’/g, "'").replace(/ /g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+                        if (list.some(w => sKey(w.sentence) === sKey(sentence))) return true;
+                    }
+                }
+            }
+            return false;
         }
 
         async function load() {
@@ -706,21 +724,41 @@
             if (!clean) return;
             const local = options.findLocal ? options.findLocal(sentence, clean) : null;
             const elsewhere = entries(clean);
+            const chunkElsewhere = [];
+            if (!local && elsewhere.length === 0) {
+                const cKey = clean.toLowerCase();
+                for (const [text, list] of byText.entries()) {
+                    if (text.includes(' ') || text.includes("'") || text.includes("’")) {
+                        const re = new RegExp(`(^|[\\s'’])${cKey}([\\s'’]|$)`, 'i');
+                        if (re.test(text)) {
+                            const sKey = (s) => (s || '').replace(/’/g, "'").replace(/ /g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+                            list.forEach(w => {
+                                if (!sentence || sKey(w.sentence) === sKey(sentence)) chunkElsewhere.push(w);
+                            });
+                        }
+                    }
+                }
+            }
             try {
-                if (local || elsewhere.length) {
+                if (local || elsewhere.length || chunkElsewhere.length) {
                     // The word is in the book (from this or another sentence): the star removes it
-                    const ids = new Set(elsewhere.map(w => w.card_id));
+                    const ids = new Set([...elsewhere, ...chunkElsewhere].map(w => w.card_id));
                     if (local) ids.add(local.id);
                     for (const id of ids) await call('DELETE', `/api/srs/cards/${encodeURIComponent(id)}`);
                     if (options.onRemoved) {
                         if (local) options.onRemoved(sentence || clean, local.id);
-                        elsewhere.forEach(w => options.onRemoved(w.sentence, w.card_id));
+                        [...elsewhere, ...chunkElsewhere].forEach(w => options.onRemoved(w.sentence, w.card_id));
                     }
                 } else {
                     const inSentence = Boolean(sentence) && sentence.toLowerCase().includes(clean.toLowerCase());
                     // A word that is not in this sentence (e.g. from an AI answer) is saved on its own
                     const payload = inSentence ? options.notePayload(sentence) : { sentence: clean };
-                    payload.targets = [{ text: clean, mode: inSentence ? 'cloze' : 'recognize', meta: meta || {} }];
+                    let targetText = clean;
+                    if (inSentence && options.resolveChunk) {
+                        targetText = options.resolveChunk(sentence, clean) || clean;
+                    }
+                    payload.targets = [{ text: targetText, mode: inSentence ? 'cloze' : 'recognize', meta: meta || {} }];
+                    payload.auto_listen = true;
                     const note = await call('POST', '/api/srs/notes', payload);
                     if (options.onSaved) options.onSaved(note);
                 }

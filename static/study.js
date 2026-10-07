@@ -371,6 +371,15 @@ function initStudyWorkbench() {
         getToken: () => getUserToken(),
         notePayload: (sentence) => sentenceNotePayload(sentence),
         findLocal: (sentence, token) => findTargetCard(sentence, token),
+        resolveChunk(sentence, token) {
+            const clean = (token || '').trim().toLowerCase();
+            const phrase = phraseByWord.get(`${srsSentenceKey(sentence)}::${clean}`);
+            if (phrase && phrase.token) {
+                const words = phrase.token.trim().split(/\s+/);
+                if (words.length >= 2 && words.length <= 4) return phrase.token;
+            }
+            return null;
+        },
         onSaved: (note) => rememberNote(note),
         onRemoved: (sentence, cardId) => forgetCard(sentence, cardId),
         onChange: () => updateTableStarStates(),
@@ -768,7 +777,15 @@ function initStudyWorkbench() {
         const note = srsNotesByKey.get(srsSentenceKey(sentence || token));
         const clean = (token || '').trim().toLowerCase();
         if (!note || !clean) return null;
-        return note.cards.find(c => (c.mode === 'cloze' || c.mode === 'recognize') && c.target.toLowerCase() === clean) || null;
+        const exact = note.cards.find(c => (c.mode === 'cloze' || c.mode === 'recognize') && c.target.toLowerCase() === clean);
+        if (exact) return exact;
+        const chunk = note.cards.find(c => {
+            if (c.mode !== 'cloze') return false;
+            const target = c.target.toLowerCase();
+            const re = new RegExp(`(^|[\\s'’])${clean}([\\s'’]|$)`, 'i');
+            return re.test(target);
+        });
+        return chunk || null;
     }
 
     function isWordSaved(sentence, token) {

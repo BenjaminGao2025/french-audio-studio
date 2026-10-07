@@ -121,6 +121,143 @@ def target_in_sentence(sentence: str, target: str) -> bool:
     return re.search(start + re.escape(target) + end, sentence, re.IGNORECASE) is not None
 
 
+FUNCTION_WORDS = {
+    "à", "de", "du", "des", "le", "la", "les", "l'", "un", "une",
+    "et", "en", "au", "aux", "ce", "se", "ne", "pas", "que", "qui", "y",
+    "d'", "n'", "s'", "c'", "qu'", "j'", "m'", "t'",
+}
+
+
+def sentence_word_count(sentence: str) -> int:
+    """Word count for French sentences, splitting apostrophes (j'ai -> 2 words)."""
+    cleaned = sentence.replace("'", " ").replace("’", " ")
+    tokens = re.findall(r"[a-zA-ZÀ-ÿ0-9]+(?:-[a-zA-ZÀ-ÿ0-9]+)*", cleaned)
+    return len(tokens)
+
+
+def is_function_word(token: str) -> bool:
+    clean = re.sub(r"\s+", " ", token).strip().lower().replace("’", "'")
+    if clean in FUNCTION_WORDS:
+        return True
+    if clean.endswith("'") and clean in FUNCTION_WORDS:
+        return True
+    return False
+
+
+def expand_function_word(sentence: str, token: str, extra: dict[str, Any] | None = None) -> str:
+    """Expand a small French function word into the smallest chunk (2-4 words) around it.
+
+    Uses extra phrase/grammar data if available; otherwise expands neighbouring words.
+    """
+    clean_token = token.strip()
+    if not clean_token:
+        return token
+    clean_sentence = re.sub(r"\s+", " ", sentence).strip()
+    if not is_function_word(clean_token):
+        return clean_token
+
+    # 1. Check if extra provides phrase data (e.g. from study analysis)
+    if extra:
+        phrase_candidate = extra.get("phrase") or extra.get("expression")
+        if phrase_candidate and isinstance(phrase_candidate, str):
+            p_clean = phrase_candidate.strip()
+            if p_clean and re.search(r"(?i)\b" + re.escape(clean_token) + r"\b", p_clean):
+                if 2 <= sentence_word_count(p_clean) <= 4 and p_clean.lower() in clean_sentence.lower():
+                    m = re.search(re.escape(p_clean), clean_sentence, re.IGNORECASE)
+                    if m:
+                        return clean_sentence[m.start():m.end()]
+                    return p_clean
+        grammar = extra.get("grammar")
+        if isinstance(grammar, list):
+            for g in grammar:
+                title = (g.get("title") or "") if isinstance(g, dict) else str(g)
+                m_title = re.search(r"['\"«]([^'\"»]+)['\"»]", title)
+                cand = m_title.group(1).strip() if m_title else title.strip()
+                if cand and 2 <= sentence_word_count(cand) <= 4 and cand.lower() in clean_sentence.lower():
+                    if re.search(r"(?i)\b" + re.escape(clean_token) + r"\b", cand):
+                        m = re.search(re.escape(cand), clean_sentence, re.IGNORECASE)
+                        if m:
+                            return clean_sentence[m.start():m.end()]
+
+    # 2. Tokenize sentence into word match spans
+    pattern = re.compile(r"[A-Za-zÀ-ÖØ-öø-ÿŒœ0-9]+['’]?|[A-Za-zÀ-ÖØ-öø-ÿŒœ0-9]+", re.IGNORECASE)
+    matches = list(pattern.finditer(clean_sentence))
+    if not matches:
+        return clean_token
+
+    token_norm = clean_token.lower().replace("’", "'")
+    target_idx = -1
+    for i, m in enumerate(matches):
+        w = m.group().lower().replace("’", "'")
+        if w == token_norm or (token_norm.endswith("'") and w == token_norm):
+            target_idx = i
+            break
+        if token_norm.rstrip("'") == w:
+            target_idx = i
+            break
+
+    if target_idx == -1:
+        m = re.search(r"(?<!\w)" + re.escape(clean_token) + r"(?!\w)", clean_sentence, re.IGNORECASE)
+        if not m:
+            return clean_token
+        for i, tok in enumerate(matches):
+            if tok.start() <= m.start() < tok.end():
+                target_idx = i
+                break
+
+    if target_idx == -1:
+        return clean_token
+
+    total = len(matches)
+    start_i = target_idx
+    end_i = target_idx
+
+    if token_norm == "pas":
+        if target_idx > 0:
+            start_i = max(0, target_idx - 2 if (target_idx >= 2 and matches[target_idx - 2].group().lower() == "ne") else target_idx - 1)
+        end_i = target_idx
+    elif token_norm == "ne":
+        curr = target_idx
+        while curr + 1 < total and (curr - target_idx + 1) < 4:
+            next_word = matches[curr + 1].group().lower().replace("’", "'")
+            curr += 1
+            if next_word in ("pas", "plus", "jamais", "rien", "que"):
+                break
+            if not is_function_word(next_word):
+                if curr + 1 < total and matches[curr + 1].group().lower().replace("’", "'") in ("pas", "plus", "jamais", "rien", "que"):
+                    curr += 1
+                break
+        end_i = curr
+    else:
+        curr = target_idx
+        while curr + 1 < total and (curr - target_idx + 1) < 4:
+            next_word = matches[curr + 1].group().lower().replace("’", "'")
+            curr += 1
+            if not is_function_word(next_word):
+                break
+        end_i = curr
+
+        chunk_words = end_i - start_i + 1
+        if chunk_words < 2 and start_i > 0:
+            start_i = max(0, start_i - 1)
+
+        if target_idx > 0 and target_idx + 1 < total and (end_i - start_i + 1) <= 2:
+            prev_word = matches[target_idx - 1].group().lower()
+            if prev_word in ("tout", "rien", "peu", "il", "plus", "moins"):
+                start_i = target_idx - 1
+
+    chunk_len = end_i - start_i + 1
+    if chunk_len < 2 and end_i + 1 < total:
+        end_i += 1
+    elif chunk_len < 2 and start_i > 0:
+        start_i -= 1
+
+    start_char = matches[start_i].start()
+    end_char = matches[end_i].end()
+    return clean_sentence[start_char:end_char].strip()
+
+
+
 def study_day_start(now: datetime.datetime, tz_offset_minutes: int) -> datetime.datetime:
     """UTC instant when the learner's current study day began.
 
@@ -226,6 +363,7 @@ def add_note(
     extra: dict[str, Any] | None = None,
     modes: Iterable[str] = (),
     targets: Iterable[dict[str, Any]] = (),
+    auto_listen: bool = False,
 ) -> dict[str, Any]:
     """Create (or reuse) the note for a sentence and add the requested cards.
 
@@ -279,14 +417,24 @@ def add_note(
         for mode in modes:
             if mode in ("listen", "speak"):
                 wanted.append((mode, "", {}, DEFAULT_IMPORTANCE))
+        has_cloze = False
         for target in targets:
             text = re.sub(r"\s+", " ", str(target.get("text") or "")).strip()
             mode = target.get("mode") or "cloze"
-            if mode == "cloze" and not target_in_sentence(clean_sentence, text):
-                mode = "recognize"  # a blank is impossible if the chunk is not in the sentence
+            if mode == "cloze":
+                if not target_in_sentence(clean_sentence, text):
+                    mode = "recognize"  # a blank is impossible if the chunk is not in the sentence
+                elif is_function_word(text):
+                    text = expand_function_word(clean_sentence, text, extra)
+            if mode == "cloze":
+                has_cloze = True
             if text and mode in ("cloze", "recognize", "grammar"):
                 importance = _clamp_importance(target.get("importance", DEFAULT_IMPORTANCE))
                 wanted.append((mode, text, _clean_meta(target.get("meta")), importance))
+
+        if auto_listen and has_cloze and sentence_word_count(clean_sentence) <= 25:
+            if not any(m == "listen" for m, _, _, _ in wanted):
+                wanted.append(("listen", "", {}, DEFAULT_IMPORTANCE))
 
         for mode, text, meta, importance in wanted:
             fsrs_card = Card(due=now)
@@ -600,3 +748,108 @@ def import_legacy_cards(user_id: int, cards: Iterable[dict[str, Any]]) -> dict[s
         )
         imported += 1
     return {"imported": imported, "skipped": skipped}
+
+
+def backfill_listen_cards(
+    user_id: int | None = None,
+    max_words: int = 25,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Find notes that only have cloze cards (no listen card).
+
+    If the sentence has at most `max_words` (default 25), add a listen card.
+    """
+    now = _now()
+    eligible_count = 0
+    created_count = 0
+    skipped_count = 0
+    with _connect() as conn:
+        query = """
+            SELECT n.id, n.user_id, n.sentence
+            FROM srs_notes n
+            WHERE EXISTS (
+                SELECT 1 FROM srs_cards c WHERE c.note_id = n.id AND c.mode = 'cloze'
+            )
+            AND NOT EXISTS (
+                SELECT 1 FROM srs_cards c WHERE c.note_id = n.id AND c.mode = 'listen'
+            )
+        """
+        params: list[Any] = []
+        if user_id is not None:
+            query += " AND n.user_id = ?"
+            params.append(user_id)
+        query += " ORDER BY n.created_at"
+        rows = conn.execute(query, params).fetchall()
+
+        for row in rows:
+            sentence = row["sentence"]
+            if sentence_word_count(sentence) <= max_words:
+                eligible_count += 1
+                if not dry_run:
+                    fsrs_card = Card(due=now)
+                    card_id = "card_" + uuid.uuid4().hex
+                    conn.execute(
+                        """
+                        INSERT OR IGNORE INTO srs_cards (
+                            id, note_id, user_id, mode, target, target_json,
+                            fsrs_json, due, is_new, created_at, importance
+                        )
+                        VALUES (?, ?, ?, 'listen', '', '{}', ?, ?, 1, ?, ?)
+                        """,
+                        (
+                            card_id, row["id"], row["user_id"],
+                            json.dumps(fsrs_card.to_dict()), _iso(fsrs_card.due),
+                            _iso(now), DEFAULT_IMPORTANCE,
+                        ),
+                    )
+                    created_count += 1
+            else:
+                skipped_count += 1
+
+        if not dry_run:
+            conn.commit()
+
+    return {
+        "eligible": eligible_count,
+        "created": created_count,
+        "skipped_too_long": skipped_count,
+        "dry_run": dry_run,
+    }
+
+
+def _admin_cli(argv: list[str]) -> None:
+    """Admin maintenance commands:
+    python srs.py backfill-listen [--dry-run] [--email EMAIL] [--user-id ID] [--max-words 25]
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(prog="srs.py")
+    sub = parser.add_subparsers(dest="command", required=True)
+    backfill_p = sub.add_parser("backfill-listen", help="Backfill listen cards for notes that only have cloze cards")
+    backfill_p.add_argument("--dry-run", action="store_true", help="Count candidates without writing to the database")
+    backfill_p.add_argument("--user-id", type=int, default=None, help="Target specific user ID")
+    backfill_p.add_argument("--email", default=None, help="Target specific user email")
+    backfill_p.add_argument("--max-words", type=int, default=25, help="Maximum sentence words for listen card (default 25)")
+    args = parser.parse_args(argv)
+
+    if args.command == "backfill-listen":
+        target_uid = args.user_id
+        if args.email and target_uid is None:
+            with _connect() as conn:
+                row = conn.execute("SELECT id FROM users WHERE email = ?", (args.email.strip().lower(),)).fetchone()
+                if not row:
+                    raise SystemExit(f"No user with email {args.email!r}.")
+                target_uid = row[0]
+        res = backfill_listen_cards(user_id=target_uid, max_words=args.max_words, dry_run=args.dry_run)
+        prefix = "[DRY RUN] " if res["dry_run"] else ""
+        print(
+            f"{prefix}Found {res['eligible']} eligible note(s) (<= {args.max_words} words). "
+            f"Created {res['created']} listen card(s). Skipped {res['skipped_too_long']} note(s) > {args.max_words} words."
+        )
+
+
+if __name__ == "__main__":
+    import sys
+
+    _admin_cli(sys.argv[1:])
+

@@ -295,5 +295,125 @@ class SrsApiTests(unittest.TestCase):
         self.assertNotIn("__ASSET_VERSION__", res.text)
 
 
+class CardBalanceTests(unittest.TestCase):
+    def setUp(self):
+        self.user_id, self.headers = _new_user()
+        self.client = TestClient(tts_service.app)
+
+    def test_sentence_word_count(self):
+        self.assertEqual(srs.sentence_word_count("Bonjour tout le monde !"), 4)
+        self.assertEqual(srs.sentence_word_count("J'ai un rendez-vous."), 4)
+        self.assertEqual(srs.sentence_word_count("C'est l'heure de partir."), 6)
+
+    def test_expand_function_word(self):
+        # Content word remains unchanged
+        self.assertEqual(srs.expand_function_word("Je vais à la gare.", "gare"), "gare")
+        # Function word expands to neighbouring chunk (2-4 words)
+        self.assertEqual(srs.expand_function_word("Je vais à la gare.", "à"), "à la gare")
+        self.assertEqual(srs.expand_function_word("Je prends le train.", "le"), "le train")
+        self.assertEqual(srs.expand_function_word("Je ne sais pas.", "ne"), "ne sais pas")
+        self.assertEqual(srs.expand_function_word("Je ne sais pas.", "pas"), "ne sais pas")
+        self.assertEqual(srs.expand_function_word("C'est à moi.", "à"), "à moi")
+        # With extra phrase/grammar
+        self.assertEqual(
+            srs.expand_function_word("C'est tout de suite.", "de", extra={"phrase": "tout de suite"}),
+            "tout de suite",
+        )
+
+    def test_auto_listen_added_for_short_sentence_with_cloze(self):
+        note = srs.add_note(
+            self.user_id,
+            "Je prends le train pour aller à Paris.",
+            targets=[{"text": "train"}],
+            auto_listen=True,
+        )
+        modes = sorted(c["mode"] for c in note["cards"])
+        self.assertEqual(modes, ["cloze", "listen"])
+
+    def test_auto_listen_not_added_for_long_sentence(self):
+        long_sentence = (
+            "Un deux trois quatre cinq six sept huit neuf dix "
+            "onze douze treize quatorze quinze seize dix-sept dix-huit dix-neuf vingt "
+            "vingt-et-un vingt-deux vingt-trois vingt-quatre vingt-cinq vingt-six."
+        )
+        self.assertGreater(srs.sentence_word_count(long_sentence), 25)
+        note = srs.add_note(
+            self.user_id,
+            long_sentence,
+            targets=[{"text": "trois"}],
+            auto_listen=True,
+        )
+        modes = [c["mode"] for c in note["cards"]]
+        self.assertEqual(modes, ["cloze"])
+
+    def test_auto_listen_function_word_chunked_in_add_note(self):
+        note = srs.add_note(
+            self.user_id,
+            "Je vais à la gare.",
+            targets=[{"text": "à"}],
+            auto_listen=True,
+        )
+        cloze_card = next(c for c in note["cards"] if c["mode"] == "cloze")
+        self.assertEqual(cloze_card["target"], "à la gare")
+        self.assertTrue(any(c["mode"] == "listen" for c in note["cards"]))
+
+    def test_api_notes_auto_listen_and_chunk(self):
+        res = self.client.post(
+            "/api/srs/notes",
+            headers=self.headers,
+            json={
+                "sentence": "Je prends le train.",
+                "targets": [{"text": "le"}],
+                "auto_listen": True,
+            },
+        )
+        self.assertEqual(res.status_code, 200)
+        cards = res.json()["cards"]
+        cloze_card = next(c for c in cards if c["mode"] == "cloze")
+        self.assertEqual(cloze_card["target"], "le train")
+        self.assertTrue(any(c["mode"] == "listen" for c in cards))
+        self.assertFalse(any(c["mode"] == "speak" for c in cards))
+
+    def test_backfill_listen_cards(self):
+        user_id, _ = _new_user()
+        # Note 1: short sentence, only cloze -> eligible
+        note1 = srs.add_note(user_id, "Je vais au supermarché.", targets=[{"text": "supermarché"}], auto_listen=False)
+        self.assertEqual([c["mode"] for c in note1["cards"]], ["cloze"])
+
+        # Note 2: long sentence, only cloze -> skipped
+        long_sentence = (
+            "Un deux trois quatre cinq six sept huit neuf dix "
+            "onze douze treize quatorze quinze seize dix-sept dix-huit dix-neuf vingt "
+            "vingt-et-un vingt-deux vingt-trois vingt-quatre vingt-cinq vingt-six."
+        )
+        srs.add_note(user_id, long_sentence, targets=[{"text": "quatre"}], auto_listen=False)
+
+        # Note 3: already has listen card -> not touched
+        srs.add_note(user_id, "Bonjour tout le monde.", modes=["listen"])
+
+        # Dry run
+        dry = srs.backfill_listen_cards(user_id=user_id, dry_run=True)
+        self.assertEqual(dry["eligible"], 1)
+        self.assertEqual(dry["created"], 0)
+        self.assertEqual(dry["skipped_too_long"], 1)
+
+        # Real run
+        real = srs.backfill_listen_cards(user_id=user_id, dry_run=False)
+        self.assertEqual(real["eligible"], 1)
+        self.assertEqual(real["created"], 1)
+        self.assertEqual(real["skipped_too_long"], 1)
+
+        # Verify note 1 now has listen card
+        updated_note1 = srs.get_note(user_id, note1["id"])
+        updated_modes = sorted(c["mode"] for c in updated_note1["cards"])
+        self.assertEqual(updated_modes, ["cloze", "listen"])
+
+        # Idempotent: second run does nothing
+        second = srs.backfill_listen_cards(user_id=user_id, dry_run=False)
+        self.assertEqual(second["eligible"], 0)
+        self.assertEqual(second["created"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()
+

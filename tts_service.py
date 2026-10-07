@@ -2075,6 +2075,7 @@ class SrsNoteRequest(BaseModel):
     extra: dict[str, Any] = Field(default_factory=dict)
     modes: list[Literal["listen", "speak"]] = Field(default_factory=list)
     targets: list[SrsTarget] = Field(default_factory=list, max_length=20)
+    auto_listen: bool = False
 
 
 class SrsLookupRequest(BaseModel):
@@ -2140,6 +2141,7 @@ def srs_add_note(
             extra=req.extra,
             modes=req.modes,
             targets=[t.model_dump() for t in req.targets],
+            auto_listen=req.auto_listen,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail={"message": str(exc)})
