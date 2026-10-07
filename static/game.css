@@ -489,6 +489,44 @@
         display: none;
     }
 
+    /* Phone: one row. Week, streak and XP numbers are in the panel behind the level */
+    .game-hud {
+        flex-wrap: nowrap;
+        gap: 8px;
+    }
+
+    .hud-hero {
+        gap: 8px;
+        padding-right: 8px;
+    }
+
+    .hud-xp-bar {
+        width: 48px;
+    }
+
+    .hud-xp-text,
+    .hud-week,
+    .hud-streak {
+        display: none;
+    }
+
+    .hud-today > span,
+    .hud-today svg {
+        display: none;
+    }
+
+    .hud-today {
+        white-space: nowrap;
+    }
+
+    .hud-today::after {
+        content: attr(data-short);
+    }
+
+    .hud-spacer {
+        min-width: 0;
+    }
+
     .game-banner strong {
         font-size: 30px;
     }

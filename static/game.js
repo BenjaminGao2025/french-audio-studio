@@ -352,6 +352,8 @@
                 : `${T.weekend} · ${hours(today.minutes)} ${T.h}`;
         const todayEl = hud.querySelector('.hud-today');
         todayEl.querySelector('span').textContent = todayText;
+        todayEl.dataset.short = today.target ? `${hours(today.minutes)}/${hours(today.target)} ${T.h}` : `${hours(today.minutes)} ${T.h}`;
+        todayEl.title = todayText;
         todayEl.classList.toggle('is-done', Boolean(today.target) && today.minutes >= today.target);
         const week = state.week;
         hud.querySelector('.hud-week span').textContent = `${T.week(week.number)} · ${hours(week.minutes)} / ${hours(week.target)} ${T.h}`;
@@ -366,6 +368,7 @@
                 focusEl.href = week.focus_skill.link;
                 const sc = week.focus_skill.skill;
                 focusEl.querySelector('span').textContent = (T.focusSkill && T.focusSkill[sc]) || `Focus: ${sc}`;
+                focusEl.title = focusEl.querySelector('span').textContent;
                 focusEl.hidden = false;
             } else {
                 focusEl.hidden = true;
