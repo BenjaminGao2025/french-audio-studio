@@ -11,40 +11,26 @@
     gap: 16px;
 }
 
-.review-topbar-actions {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-/* The review settings need the room: tabs move to their own row earlier */
-@media (max-width: 1100px) {
-    .topbar:has(.review-topbar-actions) {
-        flex-wrap: wrap;
-        gap: 10px 12px;
-        padding-block: 10px;
-    }
-
-    .topbar:has(.review-topbar-actions) .nav-tabs {
-        order: 3;
-        width: 100%;
-    }
-
-    .topbar:has(.review-topbar-actions) .nav-tab {
-        flex: 1;
-        justify-content: center;
-    }
-}
-
-/* Phone: the library button keeps its icon, the settings keep one row */
+/* Phone: the library button keeps only its icon */
 @media (max-width: 480px) {
     #toggle-browser-btn [data-i18n="library"] {
         display: none;
     }
+}
 
-    .review-topbar-actions {
-        gap: 8px;
-    }
+/* Review settings sit beside the page title, not in the site header */
+.review-intro {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--space-3) var(--space-6);
+}
+
+.review-settings {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
 }
 
 .new-limit-control {
@@ -707,11 +693,6 @@ kbd {
 }
 
 @media (max-width: 760px) {
-    .review-topbar-actions {
-        width: 100%;
-        justify-content: space-between;
-    }
-
     .review-panel {
         padding: 16px;
     }

@@ -2663,6 +2663,10 @@ function initStudyWorkbench() {
             currentAuthUser = user;
             const shortName = user.email.split('@')[0];
             if (userAuthStatusText) userAuthStatusText.textContent = shortName;
+            if (userAuthBtn) {
+                userAuthBtn.classList.add('is-signed-in');
+                userAuthBtn.title = user.email;
+            }
             if (userTrialBadge) {
                 userTrialBadge.textContent = T.daysLeftShort(user.days_left);
                 userTrialBadge.hidden = user.plan === 'pro';
@@ -2672,6 +2676,10 @@ function initStudyWorkbench() {
         } else {
             currentAuthUser = null;
             if (userAuthStatusText) userAuthStatusText.textContent = T.login;
+            if (userAuthBtn) {
+                userAuthBtn.classList.remove('is-signed-in');
+                userAuthBtn.title = T.account;
+            }
             if (userTrialBadge) userTrialBadge.hidden = true;
         }
         refreshIcons();

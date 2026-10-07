@@ -5,7 +5,7 @@ body { line-height: 1.6; }
 .brand-mark { background: var(--surface); border-color: var(--line); border-radius: var(--radius-md); }
 .brand-block .product-label { font-size: 16px; font-weight: 700; }
 .nav-tabs { background: transparent; border: 0; padding: 0; gap: 4px; border-radius: 0; }
-.nav-tab { border-radius: var(--radius-sm); padding: 9px 13px; font-weight: 600; }
+.nav-tab { border-radius: var(--radius-sm); padding: 8px 10px; font-weight: 600; }
 .nav-tab.active, .nav-tab.active:visited { background: var(--primary-soft); box-shadow: none; }
 .topbar-actions { gap: var(--space-2); }
 .topbar-actions .btn-secondary { background: transparent; border-color: transparent; }
@@ -107,9 +107,6 @@ textarea::placeholder, input::placeholder { color: var(--placeholder); }
     .editor-grid { gap: var(--space-4); }
     .action-buttons { width: 100%; }
     .action-buttons .btn-primary { width: 100%; min-height: 48px; }
-    .new-limit-control { font-size: 12px; }
-    .review-topbar-actions { flex-wrap: wrap; }
-    .review-topbar-actions .new-limit-control { order: 2; }
     .review-panel, .listen-panel { padding: var(--space-4); }
     .review-message, .listen-message { padding: var(--space-8) var(--space-4); }
     .review-message h2, .listen-message h2 { font-size: 18px; line-height: 1.5; }
@@ -128,7 +125,7 @@ textarea::placeholder, input::placeholder { color: var(--placeholder); }
 .topbar-actions .btn-secondary,
 .topbar-actions .nav-deck-btn,
 .topbar-actions .connection-settings summary,
-.topbar-actions .new-limit-control {
+.review-settings .new-limit-control {
     height: 38px;
     min-height: 38px;
     background: transparent;
@@ -141,9 +138,9 @@ textarea::placeholder, input::placeholder { color: var(--placeholder); }
 .topbar-actions .btn-secondary:hover,
 .topbar-actions .nav-deck-btn:hover,
 .topbar-actions .connection-settings summary:hover,
-.topbar-actions .new-limit-control:hover { background: var(--surface-muted); border-color: var(--line-strong); }
+.review-settings .new-limit-control:hover { background: var(--surface-muted); border-color: var(--line-strong); }
 .topbar-actions .nav-deck-btn svg { color: var(--primary); }
-.topbar-actions .new-limit-control { display: inline-flex; align-items: center; gap: 2px; padding: 0 4px 0 12px; color: var(--muted); cursor: pointer; }
-.topbar-actions .new-limit-control select { height: 30px; min-height: 0; border: 0; background: transparent; color: var(--ink); font-weight: 700; padding: 0 6px; cursor: pointer; }
-.topbar-actions .new-limit-control select:focus-visible { outline-offset: 0; }
+.review-settings .new-limit-control { display: inline-flex; align-items: center; gap: 2px; padding: 0 4px 0 12px; color: var(--muted); cursor: pointer; }
+.review-settings .new-limit-control select { height: 30px; min-height: 0; border: 0; background: transparent; color: var(--ink); font-weight: 700; padding: 0 6px; cursor: pointer; }
+.review-settings .new-limit-control select:focus-visible { outline-offset: 0; }
 

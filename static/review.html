@@ -60,26 +60,7 @@
                 </a>
             </nav>
 
-            <div class="topbar-actions review-topbar-actions">
-                <label class="new-limit-control" title="每天最多引入多少张新卡" data-i18n-title="newLimitTitle">
-                    <span data-i18n="newLimit">每天新卡</span>
-                    <select id="new-limit-select">
-                        <option value="0">0</option>
-                        <option value="5">5</option>
-                        <option value="10">10</option>
-                        <option value="15">15</option>
-                        <option value="20">20</option>
-                    </select>
-                </label>
-                <label class="new-limit-control" title="只复习重要度不低于所选星级的卡片" data-i18n-title="priorityTitle">
-                    <span data-i18n="priority">重点</span>
-                    <select id="min-importance-select">
-                        <option value="1" data-i18n="priorityAll">全部</option>
-                        <option value="3">★3+</option>
-                        <option value="4">★4+</option>
-                        <option value="5">★5</option>
-                    </select>
-                </label>
+            <div class="topbar-actions">
                 <button id="toggle-browser-btn" class="btn btn-secondary" type="button" title="卡片库" aria-label="卡片库" data-i18n-title="library" data-i18n-aria="library">
                     <i data-lucide="library" aria-hidden="true"></i>
                     <span data-i18n="library">卡片库</span>
@@ -89,9 +70,32 @@
         </header>
 
         <main class="review-main">
-            <div class="page-intro">
-                <h1 data-i18n="heading">今日复习</h1>
-                <p><span class="copy-zh">专注眼前这张卡，巩固已经学过的内容。</span><span class="copy-en">One card at a time. Strengthen what you have learned.</span></p>
+            <div class="page-intro review-intro">
+                <div>
+                    <h1 data-i18n="heading">今日复习</h1>
+                    <p><span class="copy-zh">专注眼前这张卡，巩固已经学过的内容。</span><span class="copy-en">One card at a time. Strengthen what you have learned.</span></p>
+                </div>
+                <div class="review-settings">
+                        <label class="new-limit-control" title="每天最多引入多少张新卡" data-i18n-title="newLimitTitle">
+                            <span data-i18n="newLimit">每天新卡</span>
+                            <select id="new-limit-select">
+                                <option value="0">0</option>
+                                <option value="5">5</option>
+                                <option value="10">10</option>
+                                <option value="15">15</option>
+                                <option value="20">20</option>
+                            </select>
+                        </label>
+                        <label class="new-limit-control" title="只复习重要度不低于所选星级的卡片" data-i18n-title="priorityTitle">
+                            <span data-i18n="priority">重点</span>
+                            <select id="min-importance-select">
+                                <option value="1" data-i18n="priorityAll">全部</option>
+                                <option value="3">★3+</option>
+                                <option value="4">★4+</option>
+                                <option value="5">★5</option>
+                            </select>
+                        </label>
+                </div>
             </div>
             <section id="login-required" class="review-panel review-message" hidden>
                 <i data-lucide="lock" aria-hidden="true"></i>

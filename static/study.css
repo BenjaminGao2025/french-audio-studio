@@ -763,6 +763,11 @@
 /* ==========================================================================
    User Authentication & Trial System
    ========================================================================== */
+/* Signed in: the account button is an icon; the email is in its tooltip */
+.user-auth-btn.is-signed-in #user-auth-status-text {
+    display: none;
+}
+
 .user-auth-btn {
     display: inline-flex;
     align-items: center;
