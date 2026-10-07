@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light">
+    <meta name="asset-version" content="__ASSET_VERSION__">
+    <title>口语练习 - 1000H French</title>
+    <link rel="icon" href="/favicon.ico?v=2" sizes="any">
+    <link rel="stylesheet" href="/static/tokens.css?v=__ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/style.css?v=__ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/game.css?v=__ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/speak.css?v=__ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/ui.css?v=__ASSET_VERSION__">
+    <script src="https://unpkg.com/lucide@1.34.0/dist/umd/lucide.min.js" defer></script>
+    <script src="/static/i18n.js?v=__ASSET_VERSION__" defer></script>
+    <script src="/static/game.js?v=__ASSET_VERSION__" defer></script>
+    <script src="/static/playback.js?v=__ASSET_VERSION__" defer></script>
+    <script src="/static/speak.js?v=__ASSET_VERSION__" defer></script>
+</head>
+<body>
+    <div class="app-shell">
+        <header class="topbar">
+            <div class="brand-block">
+                <div class="brand-mark" aria-hidden="true">
+                    <i data-lucide="mic"></i>
+                </div>
+                <div>
+                    <p class="product-label">1000H French</p>
+                </div>
+            </div>
+
+            <nav class="nav-tabs" aria-label="页面切换" data-i18n-aria="navAria">
+                <a href="/" class="nav-tab">
+                    <i data-lucide="headphones" aria-hidden="true"></i>
+                    <span data-i18n="navAudio">音频工作台</span>
+                </a>
+                <a href="/study" class="nav-tab">
+                    <i data-lucide="sparkles" aria-hidden="true"></i>
+                    <span data-i18n="navStudy">拆解与复述</span>
+                </a>
+                <a href="/write" class="nav-tab">
+                    <i data-lucide="pen-tool" aria-hidden="true"></i>
+                    <span data-i18n="navWrite">写作</span>
+                </a>
+                <a href="/speak" class="nav-tab active" aria-current="page">
+                    <i data-lucide="mic" aria-hidden="true"></i>
+                    <span data-i18n="navSpeak">口语</span>
+                </a>
+                <a href="/review" class="nav-tab">
+                    <i data-lucide="brain" aria-hidden="true"></i>
+                    <span data-i18n="navReview">今日复习</span>
+                </a>
+                <a href="/listen" class="nav-tab">
+                    <i data-lucide="car" aria-hidden="true"></i>
+                    <span data-i18n="navListen">开车听</span>
+                </a>
+            </nav>
+
+            <div class="topbar-actions">
+                <button id="lang-toggle" class="btn btn-secondary lang-toggle" type="button"></button>
+            </div>
+        </header>
+
+        <main class="speak-main">
+            <div class="page-intro">
+                <h1 data-i18n="heading">口语练习</h1>
+                <p>
+                    <span class="copy-zh">TCF Canada 口语（EO）专项：真题互动、机检自查与两轮订正。</span>
+                    <span class="copy-en">TCF Canada speaking (EO): authentic task simulation, checklist and guided feedback.</span>
+                </p>
+            </div>
+
+            <section id="login-required" class="editor-panel speak-message" hidden>
+                <h2 data-i18n="loginTitle">请先登录</h2>
+                <p data-i18n="loginDesc">口语练习需要保存记录和提供个性化反馈，请先登录账号。</p>
+                <a class="btn btn-primary" href="/study?login=1" data-i18n="loginBtn">去登录</a>
+            </section>
+
+            <div id="speak-workspace" class="speak-workspace" hidden>
+                <!-- Task & Subject Selection -->
+                <section class="editor-panel task-panel">
+                    <div class="panel-heading">
+                        <h2 data-i18n="taskSelectTitle">选择口语任务</h2>
+                        <span id="level-badge" class="badge"></span>
+                    </div>
+                    <div class="task-selector-row">
+                        <div class="segmented-control task-segments">
+                            <label>
+                                <input type="radio" name="task" value="T1" checked>
+                                <span>T1 · 个人问答 (2 min)</span>
+                            </label>
+                            <label>
+                                <input type="radio" name="task" value="T2">
+                                <span>T2 · 提问互动 (3:30 min)</span>
+                            </label>
+                            <label>
+                                <input type="radio" name="task" value="T3">
+                                <span>T3 · 观点陈述 (4:30 min)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div id="subject-card" class="subject-card">
+                        <div class="subject-header">
+                            <h3 id="subject-title"></h3>
+                            <div class="subject-actions">
+                                <button id="btn-next-subject" class="btn btn-secondary btn-sm" type="button" data-i18n="btnNextSubject">换一题</button>
+                            </div>
+                        </div>
+                        <p id="subject-prompt" class="subject-prompt"></p>
+
+                        <!-- T1 Questions Container -->
+                        <div id="t1-questions-box" class="t1-questions-box" hidden>
+                            <h4 data-i18n="t1QuestionsTitle">考官提问清单（点击可听发音）：</h4>
+                            <div id="t1-questions-list" class="question-pill-list"></div>
+                        </div>
+
+                        <!-- T2 Role-play Information points -->
+                        <div id="t2-info-box" class="t2-info-box" hidden>
+                            <p class="role-note" id="t2-role-text"></p>
+                            <h4 data-i18n="t2TargetsTitle">需由你主动提问获取的信息点：</h4>
+                            <ul id="t2-targets-list" class="subject-requirements"></ul>
+                        </div>
+
+                        <!-- T3 Structure helper -->
+                        <div id="t3-structure-box" class="t3-structure-box" hidden>
+                            <div class="structure-toggle-row">
+                                <label class="timer-option-label">
+                                    <input type="checkbox" id="t3-short-timer">
+                                    <span data-i18n="t3ShortTimer">基础模式 (短计时 1.5–2 min)</span>
+                                </label>
+                            </div>
+                            <h4 data-i18n="t3StructureTitle">发言框架推荐：</h4>
+                            <div id="t3-structure-guide" class="structure-guide-grid"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Recording & Interaction Workspace -->
+                <section class="editor-panel speak-interaction-panel">
+                    <div class="editor-toolbar">
+                        <div class="recording-status-widget">
+                            <span id="recording-status-dot" class="status-dot"></span>
+                            <span id="recording-status-text" class="status-text" data-i18n="readyToRecord">准备录音</span>
+                        </div>
+                        <div class="timer-widget">
+                            <button id="btn-timer-toggle" class="btn btn-secondary btn-timer" type="button">
+                                <i data-lucide="clock"></i>
+                                <span id="timer-display">02:00</span>
+                            </button>
+                            <button id="btn-timer-reset" class="icon-btn btn-secondary" type="button" title="重置计时" aria-label="重置计时">
+                                <i data-lucide="rotate-ccw"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- T2 Turn-based Dialogue Area -->
+                    <div id="t2-dialogue-area" class="t2-dialogue-area" hidden>
+                        <div id="dialogue-turns" class="dialogue-turns"></div>
+                    </div>
+
+                    <!-- Recorder controls -->
+                    <div class="recorder-control-box">
+                        <button id="btn-record" class="btn-record" type="button" aria-label="开始录音">
+                            <i data-lucide="mic"></i>
+                            <span id="record-btn-label" data-i18n="startRecording">按此开始录音</span>
+                        </button>
+                        <div id="recording-audio-preview" class="recording-audio-preview" hidden>
+                            <audio id="learner-audio" controls></audio>
+                        </div>
+                    </div>
+
+                    <!-- Transcript & Stats Area -->
+                    <div class="transcript-box">
+                        <div class="transcript-header">
+                            <div class="th-left">
+                                <label for="transcript-input"><strong data-i18n="transcriptLabel">法语语音识别文稿</strong></label>
+                                <span class="transcription-notice" data-i18n="asrNotice">由语音识别自动生成；明显转写误差不计为语法错误。</span>
+                            </div>
+                            <div class="th-right">
+                                <span id="speak-stats-badge" class="badge"></span>
+                            </div>
+                        </div>
+                        <textarea id="transcript-input" class="write-textarea" placeholder="录音后此处将自动生成法语文字转写，您也可以微调……" data-i18n-placeholder="transcriptPlaceholder" rows="8"></textarea>
+                    </div>
+
+                    <div class="editor-footer">
+                        <div class="footer-left">
+                            <span id="save-status" class="muted"></span>
+                        </div>
+                        <div class="footer-actions">
+                            <button id="btn-submit-r1" class="btn btn-primary" type="button" data-i18n="btnSubmitR1">提交第一轮口语批改 (Round 1)</button>
+                            <button id="btn-submit-r2" class="btn btn-primary" type="button" data-i18n="btnSubmitR2" hidden>再讲一遍并核对 (Round 2)</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Feedback Section -->
+                <section id="feedback-panel" class="editor-panel speak-feedback-panel" hidden>
+                    <!-- Loading status -->
+                    <div id="feedback-loading" class="feedback-loading" hidden>
+                        <div class="loading-spinner"></div>
+                        <p id="loading-msg" class="loading-msg"></p>
+                    </div>
+
+                    <!-- Round 1 Feedback -->
+                    <div id="r1-container" hidden>
+                        <div class="panel-heading">
+                            <h2 data-i18n="r1Title">第一轮：自查清单与发音线索</h2>
+                            <span class="badge" data-i18n="r1Badge">Round 1</span>
+                        </div>
+                        <div class="feedback-content">
+                            <!-- Stats & Praise -->
+                            <div class="stats-praise-grid">
+                                <div class="stat-card">
+                                    <h4 data-i18n="statPace">语速与流利度</h4>
+                                    <p id="r1-pace-text" class="stat-main"></p>
+                                </div>
+                                <div id="r1-praise" class="praise-box">
+                                    <div class="praise-icon"><i data-lucide="sparkles"></i></div>
+                                    <div>
+                                        <h4 data-i18n="praiseTitle">做得好的一点</h4>
+                                        <p id="r1-praise-text"></p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Checklist -->
+                            <div class="feedback-block">
+                                <h4 data-i18n="checklistTitle">口语任务清单 (Checklist)</h4>
+                                <ul id="r1-checklist" class="checklist-items"></ul>
+                            </div>
+
+                            <!-- Errors & Hints -->
+                            <div class="feedback-block">
+                                <h4 data-i18n="errorsTitle">表达重点提示（请在上方文稿核对或点击“再讲一遍”）</h4>
+                                <p class="muted hint-note" data-i18n="hintNote">第一轮只指出错误位置和语法线索，不直接给答案。请根据提示自行纠正。</p>
+                                <div id="r1-errors" class="error-cards"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Round 2 Feedback -->
+                    <div id="r2-container" hidden>
+                        <div class="panel-heading">
+                            <h2 data-i18n="r2Title">第二轮：纠错核对与可复用口语句式</h2>
+                            <span class="badge" data-i18n="r2Badge">Round 2</span>
+                        </div>
+                        <div class="feedback-content">
+                            <!-- Fixed check -->
+                            <div class="feedback-block">
+                                <h4 data-i18n="fixedTitle">纠正核对</h4>
+                                <ul id="r2-fixed-list" class="checklist-items"></ul>
+                            </div>
+
+                            <!-- Corrected text & Cards -->
+                            <div class="feedback-block">
+                                <h4 data-i18n="correctedTitle">逐句最小修正（可加入生词卡跟读复习）</h4>
+                                <div id="r2-sentences" class="sentence-correction-list"></div>
+                            </div>
+
+                            <!-- Reusable Structures -->
+                            <div class="feedback-block">
+                                <h4 data-i18n="structuresTitle">高频口语句式（学结构，不背范文）</h4>
+                                <div id="r2-structures" class="structures-list"></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Past Attempts Section -->
+                <section class="editor-panel past-attempts-panel">
+                    <div class="panel-heading">
+                        <h2 data-i18n="pastTitle">历史口语练习</h2>
+                        <span id="past-count" class="badge">0</span>
+                    </div>
+                    <div id="past-attempts-list" class="past-list">
+                        <p class="muted" data-i18n="noPast">暂无历史口语练习记录。</p>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

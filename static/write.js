@@ -14,7 +14,7 @@
         en: {
             pageTitle: 'Writing Practice - 1000H French',
             heading: 'Writing practice',
-            navAria: 'Pages', navAudio: 'Audio Studio', navStudy: 'Study', navWrite: 'Write', navReview: 'Review', navListen: 'Listen',
+            navAria: 'Pages', navAudio: 'Audio Studio', navStudy: 'Study', navWrite: 'Write', navSpeak: 'Speak', navReview: 'Review', navListen: 'Listen',
             loginTitle: 'Please log in first',
             loginDesc: 'Writing practice requires saving your history and generating personalized feedback. Please log in.',
             loginBtn: 'Log in',
@@ -54,7 +54,7 @@
         zh: {
             pageTitle: '写作练习 - 1000H French',
             heading: '写作练习',
-            navAria: '页面切换', navAudio: '音频工作台', navStudy: '拆解与复述', navWrite: '写作', navReview: '今日复习', navListen: '开车听',
+            navAria: '页面切换', navAudio: '音频工作台', navStudy: '拆解与复述', navWrite: '写作', navSpeak: '口语', navReview: '今日复习', navListen: '开车听',
             loginTitle: '请先登录',
             loginDesc: '写作练习需要保存记录和提供个性化反馈，请先登录账号。',
             loginBtn: '去登录',

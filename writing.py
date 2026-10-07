@@ -573,10 +573,7 @@ def parse_round1_feedback(
 
     raw_errors = data.get("errors") or []
     cleaned_errors = []
-    forbidden_leak = re.compile(
-        r"(?:change\s+to|replace\s+with|should\s+be|write\s+['\"]|write\s+|correct\s+form\s+is)\s+([^,.;]+)",
-        re.IGNORECASE,
-    )
+    forbidden_leak = re.compile(r"(?:change\s+to|replace\s+with|should\s+be|write|say|correct\s+form\s+is)\s+['\"]?([^,.;'\"]+)", re.IGNORECASE)
     for err in raw_errors[:8]:
         span = str(err.get("span") or "").strip()
         etype = str(err.get("type") or "wrong word").lower()

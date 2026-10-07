@@ -16,7 +16,7 @@
     const LANES = ['course', 'listening', 'reading', 'speaking', 'writing', 'review', 'car'];
     // Pages whose time counts automatically; anything else can be logged by hand.
     // /listen counts the audio actually played (car/walk listening, worth half).
-    const PAGE_LANES = { '/study': 'reading', '/write': 'writing', '/review': 'review', '/listen': 'car' };
+    const PAGE_LANES = { '/study': 'reading', '/write': 'writing', '/speak': 'speaking', '/review': 'review', '/listen': 'car' };
     const LANE_WEIGHTS = { car: 0.5 };
     const IDLE_MS = 120000;
     const TICK_MS = 5000;
