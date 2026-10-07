@@ -114,7 +114,7 @@ function initStudyWorkbench() {
             expandDetails: 'Show details', collapseDetails: 'Hide details',
             showBreakdown: 'Show the breakdown', hideBreakdown: 'Hide the breakdown',
             memoryHook: 'Memory hook:',
-            tabBuildup: 'Steps', tabWords: 'Words', tabGrammar: 'Grammar', tabPron: 'Sounds', tabExplain: 'Explain it',
+            tabBuildup: 'Steps', tabWords: 'Words', tabGrammar: 'Grammar', tabPron: 'Sounds', tabExplain: 'Explain it', glossLabel: 'Word by word',
             thWord: '① Word / phrase (Forme & Audio)', thEnglish: '② English explanation (Anglais)', thChinese: '③ Chinese meaning & usage (Chinois)',
             transcribing: 'Transcribing…', dictationLogin: 'Speech recognition requires logging in first.',
             transcribeFailed: (status) => `Transcription failed (HTTP ${status})`, notHeard: "Didn't catch that. Please try again.",
@@ -226,7 +226,7 @@ function initStudyWorkbench() {
             expandDetails: '展开解析', collapseDetails: '收起解析',
             showBreakdown: '展开这句的解析', hideBreakdown: '收起这句的解析',
             memoryHook: '记忆钩子：',
-            tabBuildup: '一步步搭', tabWords: '逐词剖析', tabGrammar: '语法考点', tabPron: '发音重点', tabExplain: '自己讲',
+            tabBuildup: '一步步搭', tabWords: '逐词剖析', tabGrammar: '语法考点', tabPron: '发音重点', tabExplain: '自己讲', glossLabel: '逐词对照',
             thWord: '① 词汇 / 词组短语 (Forme & Audio)', thEnglish: '② 英文简明解释 (Anglais)', thChinese: '③ 中文释义与语法搭配 (Chinois)',
             transcribing: '识别中…', dictationLogin: '语音识别需要先登录。',
             transcribeFailed: (status) => `识别失败（HTTP ${status}）`, notHeard: '没听清，再说一次试试。',
@@ -1268,9 +1268,11 @@ function initStudyWorkbench() {
         return `
             <div class="word-item">
                 <div class="word-item-head">
-                    <span class="token-word" lang="fr" title="${T.clickForMeaning}">${escapeHtml(tokenText)}</span>
-                    ${ipa ? `<span class="word-ipa">${escapeHtml(formatFriendlyPhonetic(ipa))}</span>` : ''}
-                    ${pos || lemma ? `<span class="word-meta">${[pos, lemma ? T.baseForm + lemma : ''].filter(Boolean).map(escapeHtml).join(' · ')}</span>` : ''}
+                    <span class="word-item-title">
+                        <span class="token-word" lang="fr" title="${T.clickForMeaning}">${escapeHtml(tokenText)}</span>
+                        ${ipa ? `<span class="word-ipa">${escapeHtml(formatFriendlyPhonetic(ipa))}</span>` : ''}
+                        ${pos || lemma ? `<span class="word-meta">${[pos, lemma ? T.baseForm + lemma : ''].filter(Boolean).map(escapeHtml).join(' · ')}</span>` : ''}
+                    </span>
                     <span class="word-item-actions">
                         <button class="btn-token-speak" type="button" title="${T.clickToPronounce}" data-speech="${escapeHtml(tokenText)}">
                             <i data-lucide="volume-2"></i>
@@ -1461,6 +1463,7 @@ function initStudyWorkbench() {
                 // 1. Sentence Hero: French text + Interlinear Gloss + Translations
                 const interlinearHtml = (s.alignment && s.alignment.length > 0) ? `
                     <div class="interlinear-gloss">
+                        <p class="gloss-label">${T.glossLabel}</p>
                         <div class="gloss-track">
                             ${s.alignment.map(a => `
                                 <div class="gloss-pair">

@@ -915,6 +915,7 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
         "- If there is no English look-alike, leave it empty. Do not force one.\n\n"
         "Word-by-word alignment:\n"
         "- Top row French, bottom row English, word by word, keeping the French order.\n"
+        "- The English under each French chunk is its literal meaning. Every French word is translated, small words too: à = to / at, de = of / from, du = of the, au = to the. Never drop a preposition just because natural English drops it: 'à la question' = 'to the question', not 'the question'. When natural English says it differently (correspond à = matches), say so in the order note.\n"
         "- Then one short sentence on where French and English order differ. If they are the same, say so.\n"
         "- For very short phrases of 4 words or fewer where word order is identical to English, you may leave \"alignment\": [] and \"order_note\": \"\".\n\n"
         "Build-up (layers):\n"
