@@ -31,7 +31,7 @@
 }
 
 /* Task & Subject */
-.task-panel {
+.task-panel { height: auto;
     background: var(--surface);
     border: 1px solid var(--line);
     padding: var(--space-6);
@@ -514,6 +514,23 @@
 }
 
 @media (max-width: 768px) {
+    .task-selector-row .segmented-control.task-segments {
+        display: flex;
+        flex-direction: column;
+        height: auto;
+        gap: 4px;
+        padding: 4px;
+    }
+    .task-selector-row .segmented-control.task-segments label,
+    .task-selector-row .segmented-control.task-segments label:first-child {
+        width: 100%;
+        grid-column: auto;
+    }
+    .task-selector-row .segmented-control.task-segments span {
+        height: 38px;
+        width: 100%;
+    }
+
     .t3-docs-grid {
         grid-template-columns: 1fr;
     }
