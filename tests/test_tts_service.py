@@ -724,6 +724,18 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertEqual(data["sentences"][0]["original"], "Je vais au marché.")
         self.assertEqual(data["sentences"][0]["tokens"][0]["lemma"], "aller")
 
+    def test_option_labels_join_the_sentence_they_mark(self):
+        raw = json.dumps({"sentences": [
+            {"schemaVersion": 2, "sentence": "A.", "translation_en": "A.", "words": []},
+            {"schemaVersion": 2, "sentence": "C'est une taille 42.", "translation_en": "It's a size 42.", "words": []},
+            {"schemaVersion": 2, "sentence": "B. Elle ne coûte pas cher.", "translation_en": "B. It is not expensive.", "words": []},
+            {"schemaVersion": 2, "sentence": "Oui, elle est rouge.", "label": "C", "words": []},
+        ]})
+        parsed = tts_service._parse_analysis_json(raw, "x")["sentences"]
+        self.assertEqual([(p["label"], p["sentence"]) for p in parsed], [
+            ("A", "C'est une taille 42."), ("B", "Elle ne coûte pas cher."), ("C", "Oui, elle est rouge.")])
+        self.assertEqual(parsed[1]["translation_en"], "It is not expensive.")
+
     def test_parse_analysis_json_handles_code_fences(self):
         raw = '```json\n{"sentences": [{"original": "Bonjour.", "translation_en": "Hello.", "translation_cn": "你好。", "tokens": []}]}\n```'
         parsed = tts_service._parse_analysis_json(raw, "Bonjour.")

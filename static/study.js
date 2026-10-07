@@ -1301,7 +1301,7 @@ function initStudyWorkbench() {
 
     // The header is the same whether the sentence is open or closed: one line of French
     // (the largest text on the page), its translation, and the sentence actions.
-    function sentenceHeadHtml({ sentenceText, transEn, transZh, idx, total, open }) {
+    function sentenceHeadHtml({ sentenceText, transEn, transZh, idx, total, open, label = '' }) {
         const isMulti = total > 1;
         const primary = EN ? pick(transZh, transEn) : transEn;
         const secondary = !EN && transZh ? transZh : '';
@@ -1314,6 +1314,7 @@ function initStudyWorkbench() {
                     </button>
                 ` : ''}
                 <div class="sentence-head-text">
+                    ${label ? `<span class="sentence-label">${escapeHtml(label)}</span>` : ''}
                     <p class="sentence-french-text" lang="fr">${renderInteractiveWordsHtml(sentenceText)}</p>
                     ${primary ? `<p class="sentence-translation">${escapeHtml(primary)}</p>` : ''}
                     ${secondary ? `<p class="sentence-translation translation-cn">${escapeHtml(secondary)}</p>` : ''}
@@ -1332,8 +1333,23 @@ function initStudyWorkbench() {
         `;
     }
 
+    // Answer options ("A.", "B.") are labels: older analyses kept them as sentences of their own
+    const OPTION_LABEL = /^\(?([A-Ha-h]|\d{1,2})[.)]\)?$/;
+    function attachOptionLabels(list) {
+        const out = [];
+        let pending = '';
+        (list || []).forEach(s => {
+            const match = (s.sentence || s.original || '').trim().match(OPTION_LABEL);
+            if (match) { pending = match[1]; return; }
+            out.push(pending && !s.label ? { ...s, label: pending } : s);
+            pending = '';
+        });
+        return out;
+    }
+
     function renderStudyDeck(sentences) {
         window.renderStudyDeck = renderStudyDeck;
+        sentences = attachOptionLabels(sentences);
         sentencesContainer.innerHTML = '';
         if (!window.activeTokensMap) {
             window.activeTokensMap = new Map();
@@ -1401,7 +1417,7 @@ function initStudyWorkbench() {
             const card = document.createElement('article');
             card.className = open ? 'sentence-card is-open' : 'sentence-card';
             card.dataset.index = idx;
-            const headHtml = sentenceHeadHtml({ sentenceText, transEn, transZh, idx, total: sentences.length, open });
+            const headHtml = sentenceHeadHtml({ sentenceText, transEn, transZh, idx, total: sentences.length, open, label: s.label });
 
             // Shared Shadowing & Scoring HTML
             const shadowingHtml = `
@@ -2786,7 +2802,14 @@ function initStudyWorkbench() {
     // Sentences (or lines), with very short ones kept together, up to ~90 characters a part
     function splitForAnalysis(text) {
         // Never split inside « … » (French puts a space before the closing mark)
-        const sentences = text.split(/(?<=[.!?…]["»”)]?)\s+(?![»”])|\n+/).map(s => s.trim()).filter(Boolean);
+        const sentences = text.split(/(?<=[.!?…]["»”)]?)\s+(?![»”])|\n+/).map(s => s.trim()).filter(Boolean)
+            .reduce((list, s) => {
+                // "A." on its own line labels the answer after it
+                const last = list[list.length - 1];
+                if (last && OPTION_LABEL.test(last)) list[list.length - 1] = `${last} ${s}`;
+                else list.push(s);
+                return list;
+            }, []);
         const parts = [];
         sentences.forEach(sentence => {
             const last = parts[parts.length - 1];

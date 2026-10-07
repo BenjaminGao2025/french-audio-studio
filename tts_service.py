@@ -839,6 +839,34 @@ def _is_unwanted_token(token_text: str) -> bool:
     return False
 
 
+OPTION_LABEL_RE = re.compile(r"^\(?([A-Ha-h]|\d{1,2})[.)]\)?$")
+OPTION_PREFIX_RE = re.compile(r"^\(?([A-Ha-h]|\d{1,2})[.)]\)?\s+(?=\S)")
+
+
+def _attach_option_labels(sentences: list[dict]) -> list[dict]:
+    """Answer options like "A." are labels, not sentences: put them on the sentence they mark."""
+    out: list[dict] = []
+    pending = ""
+    for item in sentences:
+        text = str(item.get("sentence") or "").strip()
+        only = OPTION_LABEL_RE.match(text)
+        if only:
+            pending = only.group(1)
+            continue
+        label = pending or str(item.get("label") or "")[:3]
+        prefix = OPTION_PREFIX_RE.match(text)
+        if prefix:
+            label = label or prefix.group(1)
+            text = text[prefix.end():]
+            item = {**item, "sentence": text, "original": text}
+            for key in ("translation_en", "translation_zh", "translation_cn"):
+                if item.get(key):
+                    item[key] = OPTION_PREFIX_RE.sub("", str(item[key]), count=1)
+        out.append({**item, "label": label} if label else item)
+        pending = ""
+    return out
+
+
 def _filter_sentence_tokens(tokens: list[dict]) -> list[dict]:
     filtered = [tok for tok in tokens if not _is_unwanted_token(tok.get("token", ""))]
     if filtered:
@@ -895,6 +923,8 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
         "GOOD:\n"
         "ne becomes n' before a vowel: ne + est → n'est.\n"
         "Here it works with aucune to mean \"no\".\n\n"
+        "Answer options:\n"
+        "- A label like 'A.', 'B.', '1.' or 'a)' before an answer option is not a sentence. Never return it as its own sentence; leave it out of \"sentence\" and put it in \"label\" (e.g. \"label\": \"A\") of the sentence it marks.\n\n"
         "Accuracy rules:\n"
         "- The word table must cover every word in the sentence, in order, including small words like par, les, de, à.\n"
         "- Fixed expressions stay together as ONE entry when their meaning is not the sum of the words "
@@ -1132,6 +1162,7 @@ def _parse_analysis_json(raw_text: str, fallback_text: str) -> dict:
 
                 valid_sentences.append({
                     "schemaVersion": 2,
+                    "label": str(s.get("label") or "").strip()[:3],
                     "sentence": sentence_text,
                     "original": sentence_text,
                     "translation_en": trans_en,
@@ -1171,6 +1202,7 @@ def _parse_analysis_json(raw_text: str, fallback_text: str) -> dict:
                     "translation_zh": str(s.get("translation_cn", "")),
                     "tokens": filtered_tokens,
                 })
+        valid_sentences = _attach_option_labels(valid_sentences)
         if valid_sentences:
             return {"sentences": valid_sentences}
 
