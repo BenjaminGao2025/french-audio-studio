@@ -613,6 +613,6 @@
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
     else init();
 
-    function callout(line = Wave cleared) { announce(line); if (SOUNDS.wave) SOUNDS.wave(); }
+    function callout(line = 'Wave cleared') { announce(line); if (SOUNDS.wave) SOUNDS.wave(); }
     root.FrenchGame = { voiceBusyMs, onCorrect, onReview, onWaveCleared, setLane, refresh: loadState, announce, callout };
 })(window);
