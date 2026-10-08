@@ -295,6 +295,24 @@ class SrsApiTests(unittest.TestCase):
         self.assertNotIn("__ASSET_VERSION__", res.text)
 
 
+class ChooseCardsTests(unittest.TestCase):
+    def setUp(self):
+        self.user_id, _ = _new_user()
+        note = srs.add_note(self.user_id, "Nous les acceptons.", translation_en="We accept them.",
+                            modes=["listen", "speak"], targets=[{"text": "acceptons"}])
+        self.cards = {c["mode"]: c["id"] for c in note["cards"]}
+
+    def test_queue_can_hold_one_card_type(self):
+        queue = srs.build_queue(self.user_id, 0, 10, modes=["speak"])
+        self.assertEqual([c["mode"] for c in queue["cards"]], ["speak"])
+
+    def test_practice_queue_keeps_the_chosen_order(self):
+        picked = [self.cards["cloze"], self.cards["listen"], "card_not_mine"]
+        queue = srs.practice_queue(self.user_id, picked)
+        self.assertEqual([c["id"] for c in queue["cards"]], picked[:2])
+        self.assertTrue(all("intervals" in c for c in queue["cards"]))
+
+
 class CardBalanceTests(unittest.TestCase):
     def setUp(self):
         self.user_id, self.headers = _new_user()

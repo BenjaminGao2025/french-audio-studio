@@ -14,6 +14,7 @@
     const TOKEN_KEY = 'frenchStudio.userToken';
     const NEW_LIMIT_KEY = 'frenchStudio.srs.newLimit';
     const MIN_IMPORTANCE_KEY = 'frenchStudio.srs.minImportance';
+    const CARD_TYPE_KEY = 'frenchStudio.srs.cardType';
     const LEGACY_DECK_KEY = 'frenchStudio.ankiDeck';
     const LEGACY_IMPORTED_KEY = 'frenchStudio.ankiDeck.importedAt';
     const LEARN_AHEAD_MS = 20 * 60 * 1000;
@@ -32,6 +33,10 @@
             navAria: 'Pages', navAudio: 'Audio Studio', navStudy: 'Study', navWrite: 'Write', navSpeak: 'Speak', navReview: 'Review', navListen: 'Listen',
             newLimit: 'New / day', newLimitTitle: 'Maximum number of new cards introduced per day',
             priority: 'Priority', priorityTitle: 'Only review cards at least this important',
+            cardType: 'Cards', cardTypeTitle: 'Review only one kind of card', cardTypeAll: 'All', cardTypeListen: 'Listen', cardTypeSpeak: 'Speak', cardTypeFill: 'Fill in', cardTypeGrammar: 'Grammar',
+            practise: 'Practise', practiseTitle: 'Practise the cards of this sentence now', practiseShown: (n) => `Practise these ${n} cards`,
+            practising: (n) => `Practising ${n} cards you picked. Ratings count as normal reviews.`, practiceExit: "Back to today's review",
+            practiceDone: (n) => `Practised ${n} cards`, practiceDoneDesc: 'These cards will come back when they are due.',
             priorityAll: 'All', importanceTitle: (n) => `Importance ${n} of 5`,
             library: 'Card library',
             loginTitle: 'Your cards are saved on the server. Please log in first.',
@@ -91,6 +96,10 @@
             navAria: '页面切换', navAudio: '音频工作台', navStudy: '拆解与复述', navWrite: '写作', navSpeak: '口语', navReview: '今日复习', navListen: '开车听',
             newLimit: '每天新卡', newLimitTitle: '每天最多引入多少张新卡',
             priority: '重点', priorityTitle: '只复习重要度不低于所选星级的卡片',
+            cardType: '卡片', cardTypeTitle: '只复习这一种卡片', cardTypeAll: '全部', cardTypeListen: '听', cardTypeSpeak: '说', cardTypeFill: '填空', cardTypeGrammar: '语法',
+            practise: '练这句', practiseTitle: '现在就练这个句子的卡片', practiseShown: (n) => `练这 ${n} 张卡`,
+            practising: (n) => `正在练你选的 ${n} 张卡，评分照常计入复习。`, practiceExit: '回到今日复习',
+            practiceDone: (n) => `练完 ${n} 张卡`, practiceDoneDesc: '这些卡片到期时会再出现。',
             priorityAll: '全部', importanceTitle: (n) => `重要度 ${n} / 5`,
             library: '卡片库',
             loginTitle: '复习卡片保存在服务器上，请先登录',
@@ -191,6 +200,11 @@
         deckList: $('deck-list'),
         newLimitSelect: $('new-limit-select'),
         minImportanceSelect: $('min-importance-select'),
+        cardTypeSelect: $('card-type-select'),
+        practiceBar: $('practice-bar'),
+        practiceText: $('practice-text'),
+        practiceExit: $('practice-exit'),
+        practiceShownBtn: $('practice-shown-btn'),
         cardImportance: $('card-importance'),
         error: $('review-error'),
     };
@@ -206,7 +220,9 @@
         scoring: false,
         reviewed: 0,
         total: 0,
+        practice: false,  // a set of cards the learner picked in the library
     };
+    let shownCardIds = [];
 
     let currentAudio = null;
     let recorder = null;
@@ -231,6 +247,10 @@
 
     function getToken() {
         try { return localStorage.getItem(TOKEN_KEY) || ''; } catch (_) { return ''; }
+    }
+
+    function getCardType() {
+        try { return localStorage.getItem(CARD_TYPE_KEY) || ''; } catch (_) { return ''; }
     }
 
     function getMinImportance() {
@@ -871,6 +891,12 @@
             session.current = null;
             els.stage.hidden = true;
             els.done.hidden = false;
+            if (session.practice) {
+                els.doneTitle.textContent = T.practiceDone(session.reviewed);
+                els.doneDetail.textContent = T.practiceDoneDesc;
+                refreshIcons();
+                return;
+            }
             els.doneTitle.textContent = session.reviewed ? T.doneCount(session.reviewed) : T.nothingDue;
             els.doneDetail.textContent = session.reviewed
                 ? T.doneDesc
@@ -890,7 +916,25 @@
 
     async function loadQueue() {
         showError('');
-        const data = await api('GET', `/api/srs/queue?tz_offset=${new Date().getTimezoneOffset()}&new_limit=${getNewLimit()}&min_importance=${getMinImportance()}`);
+        const data = await api('GET', `/api/srs/queue?tz_offset=${new Date().getTimezoneOffset()}&new_limit=${getNewLimit()}&min_importance=${getMinImportance()}&modes=${encodeURIComponent(getCardType())}`);
+        session.practice = false;
+        els.practiceBar.hidden = true;
+        applyQueue(data);
+    }
+
+    // Practise cards picked in the library, due or not
+    async function startPractice(cardIds) {
+        showError('');
+        const data = await api('POST', '/api/srs/practice', { card_ids: cardIds.slice(0, 200) });
+        session.practice = true;
+        els.practiceText.textContent = T.practising(data.cards.length);
+        els.practiceBar.hidden = false;
+        els.browser.hidden = true;
+        applyQueue(data);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function applyQueue(data) {
         const now = Date.now();
         const notYetDue = c => (c.state === 'learning' || c.state === 'relearning') && Date.parse(c.due) > now;
         session.queue = (data.cards || []).filter(c => !notYetDue(c));
@@ -958,6 +1002,9 @@
                 notes.get(card.note_id).cards.push(card);
             });
             els.deckStats.textContent = T.deckStats(notes.size, data.cards.length, Boolean(q));
+            shownCardIds = data.cards.map(card => card.id);
+            els.practiceShownBtn.hidden = !shownCardIds.length;
+            els.practiceShownBtn.textContent = T.practiseShown(Math.min(shownCardIds.length, 200));
             els.deckList.innerHTML = notes.size ? Array.from(notes.values()).map(({ note, cards }) => `
                 <article class="deck-note">
                     <div class="deck-note-text">
@@ -965,6 +1012,7 @@
                             <button class="icon-btn btn-play" type="button" data-speech="${escapeHtml(note.sentence)}" data-rate="1" title="${T.play}"><i data-lucide="volume-2"></i></button>
                         </p>
                         ${pick(note.translation_zh, note.translation_en) ? `<p class="deck-note-zh">${escapeHtml(pick(note.translation_zh, note.translation_en))}</p>` : ''}
+                        <button class="btn-practise" type="button" data-card-ids="${cards.map(card => escapeHtml(card.id)).join(',')}" title="${T.practiseTitle}">${T.practise}</button>
                     </div>
                     <div class="deck-note-cards">
                         ${cards.map(card => `
@@ -1006,6 +1054,11 @@
         const play = e.target.closest('.btn-play');
         if (play) {
             playFrench(play.dataset.speech, parseFloat(play.dataset.rate || '1'));
+            return;
+        }
+        const practise = e.target.closest('.btn-practise');
+        if (practise) {
+            startPractice(practise.dataset.cardIds.split(',')).catch(err => showError(err.message));
             return;
         }
         const del = e.target.closest('.chip-delete');
@@ -1086,6 +1139,20 @@
         } catch (err) {
             showError(err.message);
         }
+    });
+
+    els.practiceShownBtn.addEventListener('click', () => {
+        startPractice(shownCardIds).catch(err => showError(err.message));
+    });
+
+    els.practiceExit.addEventListener('click', () => {
+        loadQueue().catch(err => showError(err.message));
+    });
+
+    els.cardTypeSelect.value = getCardType();
+    els.cardTypeSelect.addEventListener('change', () => {
+        try { localStorage.setItem(CARD_TYPE_KEY, els.cardTypeSelect.value); } catch (_) { /* per-browser setting */ }
+        if (getToken()) loadQueue().catch(err => showError(err.message));
     });
 
     els.minImportanceSelect.value = String(getMinImportance());

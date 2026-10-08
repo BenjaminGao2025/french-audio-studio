@@ -55,7 +55,9 @@ LEVEL_STYLE = {
     # slow: rate of the slow repeat (None = no slow line); english: say the English line
     # in review/build-up; story_english: English after each story line on the first pass;
     # density: content per minute (less English and no slow lines leave room for more)
-    "A1": {"slow": "-30%", "english": True, "story_english": True, "density": 1.0},
+    # meaning_first (A1): English first, then the French slowly twice, then at normal speed,
+    # and stories line by line the same way, so a beginner always knows what they hear
+    "A1": {"slow": "-30%", "english": True, "story_english": True, "density": 1.0, "meaning_first": True},
     "A2": {"slow": "-20%", "english": True, "story_english": True, "density": 1.05},
     "B1": {"slow": None, "english": True, "story_english": True, "density": 1.15},
     "B2": {"slow": None, "english": False, "story_english": False, "density": 1.35},
@@ -322,6 +324,8 @@ def build_script(
     style: dict[str, Any] | None = None,
 ) -> list[Segment]:
     style = style or LEVEL_STYLE["A1"]
+    meaning_first = bool(style.get("meaning_first"))
+    slow = style["slow"] or "+0%"
     s: list[Segment] = []
 
     def fr(text: str, en: str, voice: str, **kw: Any) -> Segment:
@@ -336,12 +340,19 @@ def build_script(
         say_en("Part one. Sentences you studied.", 1.2)
         for index, item in enumerate(review):
             voice = FR_VOICES[index % len(FR_VOICES)]
+            # Repeating aloud only works for short sentences; long ones are practised in part two
+            repeatable = len(item["sentence"].split()) <= SHADOW_MAX_WORDS
+            if meaning_first:
+                if style["english"]:
+                    s.append(Segment(item["en"], EN_VOICE, pause_after=0.8))
+                s.append(fr(item["sentence"], item["en"], voice, rate=slow, pause_after=1.2))
+                s.append(fr(item["sentence"], item["en"], voice, rate=slow, shadow=repeatable, pause_after=1.5))
+                s.append(fr(item["sentence"], item["en"], voice, pause_after=2.0))
+                continue
             s.append(fr(item["sentence"], item["en"], voice, pause_after=0.9))
             if style["english"]:
                 s.append(Segment(item["en"], EN_VOICE, pause_after=0.8))
-            # Repeating aloud only works for short sentences; long ones are practised in part two
-            repeatable = len(item["sentence"].split()) <= SHADOW_MAX_WORDS
-            s.append(fr(item["sentence"], item["en"], voice, rate=style["slow"] or "+0%", shadow=repeatable, pause_after=1.5))
+            s.append(fr(item["sentence"], item["en"], voice, rate=slow, shadow=repeatable, pause_after=1.5))
             s.append(fr(item["sentence"], item["en"], voice, pause_after=2.0))
 
     if buildups:
@@ -349,6 +360,12 @@ def build_script(
         for index, item in enumerate(buildups):
             voice = FR_VOICES[(index + 1) % len(FR_VOICES)]
             for step in item["build_up"]:
+                if meaning_first:
+                    if step["en"] and style["english"]:
+                        s.append(Segment(step["en"], EN_VOICE, pause_after=0.8))
+                    s.append(fr(step["fr"], step["en"], voice, rate=slow, pause_after=1.0))
+                    s.append(fr(step["fr"], step["en"], voice, rate=slow, shadow=True))
+                    continue
                 s.append(fr(step["fr"], step["en"], voice, pause_after=0.8))
                 if step["en"] and style["english"]:
                     s.append(Segment(step["en"], EN_VOICE, pause_after=0.8))
@@ -360,10 +377,16 @@ def build_script(
         if not lines:
             continue
         label = "Part three" if index == 0 else "Next"
-        first_pass = "First with English." if style["story_english"] else "First listen."
+        first_pass = ("First the meaning, then slow French." if meaning_first else "First with English.") if style["story_english"] else "First listen."
         say_en(f"{label}. {story.get('title_en') or 'A new story'}. {first_pass}", 1.2)
         for line in lines:
             voice = STORY_VOICES.get(line.get("speaker"), STORY_VOICES["N"])
+            if meaning_first:
+                if line.get("en") and style["story_english"]:
+                    s.append(Segment(line["en"], EN_VOICE, pause_after=0.7))
+                s.append(fr(line["fr"], line.get("en", ""), voice, rate=slow, pause_after=1.0))
+                s.append(fr(line["fr"], line.get("en", ""), voice, rate=slow, pause_after=1.4))
+                continue
             s.append(fr(line["fr"], line.get("en", ""), voice, pause_after=0.7))
             if line.get("en") and style["story_english"]:
                 s.append(Segment(line["en"], EN_VOICE, pause_after=1.1))

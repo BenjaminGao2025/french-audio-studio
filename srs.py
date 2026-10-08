@@ -524,6 +524,29 @@ _CARD_WITH_NOTE_SQL = """
 """
 
 
+def practice_queue(user_id: int, card_ids: list[str], now: datetime.datetime | None = None) -> dict[str, Any]:
+    """The cards the learner picked, in their order, due or not. Ratings count as normal reviews."""
+    now = now or _now()
+    ids = list(dict.fromkeys(card_ids))
+    if not ids:
+        return {"cards": [], "counts": {"learning": 0, "review": 0, "new": 0, "total": 0}}
+    with _connect() as conn:
+        rows = conn.execute(
+            _CARD_WITH_NOTE_SQL + f" AND c.id IN ({','.join('?' * len(ids))})", (user_id, *ids)
+        ).fetchall()
+    order = {card_id: index for index, card_id in enumerate(ids)}
+    cards = [_card_payload(row, now, with_preview=True) for row in sorted(rows, key=lambda r: order[r["id"]])]
+    return {
+        "cards": cards,
+        "counts": {
+            "learning": sum(1 for c in cards if c["state"] in ("learning", "relearning")),
+            "review": sum(1 for c in cards if c["state"] == "review"),
+            "new": sum(1 for c in cards if c["state"] == "new"),
+            "total": len(cards),
+        },
+    }
+
+
 def _today_activity(conn: sqlite3.Connection, user_id: int, day_start: datetime.datetime):
     rows = conn.execute(
         "SELECT note_id, card_id, was_new FROM srs_reviews WHERE user_id = ? AND reviewed_at >= ?",
@@ -539,8 +562,11 @@ def build_queue(
     new_limit: int = DEFAULT_NEW_LIMIT,
     now: datetime.datetime | None = None,
     min_importance: int = 1,
+    modes: Iterable[str] = (),
 ) -> dict[str, Any]:
     """Today's review queue: learning cards, then due reviews, then new cards.
+
+    `modes` limits it to some card types (e.g. only "listen" while driving).
 
     Siblings are buried: a sentence contributes at most one card per day unless
     that card is still in its short learning steps, so "listen" comes first and
@@ -560,8 +586,11 @@ def build_queue(
             (user_id, max(horizon, day_end), _clamp_importance(min_importance)),
         ).fetchall()
 
+    wanted_modes = set(modes)
     learning, reviews, new_cards = [], [], []
     for row in rows:
+        if wanted_modes and row["mode"] not in wanted_modes:
+            continue
         card = Card.from_dict(json.loads(row["fsrs_json"]))
         state = _state_name(card)
         if state in ("learning", "relearning"):

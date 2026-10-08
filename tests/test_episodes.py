@@ -63,6 +63,16 @@ class MaterialTests(unittest.TestCase):
         self.assertEqual(review[-1]["sentence"], "Objectifs")
         self.assertEqual([b["sentence"] for b in buildups], ["Les cours commencent lundi matin."])
 
+    def test_a1_gives_the_meaning_before_the_french(self):
+        item = {"key": "k", "sentence": "Je viens de me réveiller.", "en": "I just woke up.", "build_up": [], "words": [], "in_deck": True}
+        script = episodes.build_script(1, [item], [], [], episodes.episode_style("A1"))
+        lines = [(seg.voice == episodes.EN_VOICE, seg.rate) for seg in script if seg.text in (item["sentence"], item["en"])]
+        self.assertEqual(lines, [(True, "+0%"), (False, "-30%"), (False, "-30%"), (False, "+0%"), (False, "+0%")])
+        # A2 keeps "try first": French, then the English
+        script = episodes.build_script(1, [item], [], [], episodes.episode_style("A2"))
+        first = next(seg for seg in script if seg.text in (item["sentence"], item["en"]))
+        self.assertEqual(first.text, item["sentence"])
+
     def test_script_has_review_buildup_story_and_french_only_parts(self):
         user_id = _user_with_material()
         review, buildups = episodes.pick_material(user_id, episodes.learning_material(user_id))

@@ -1869,6 +1869,65 @@ async def ask_tutor(
     return {"answer": answer[:3000]}
 
 
+class AskCardRequest(BaseModel):
+    sentence: str = Field(min_length=1, max_length=1000)
+    translation_zh: str = Field(default="", max_length=2000)
+    translation_en: str = Field(default="", max_length=2000)
+    question: str = Field(min_length=1, max_length=1000)
+    answer: str = Field(min_length=1, max_length=3000)
+    model: TransformModel = PERPLEXITY_MODEL
+
+
+def _ask_point_payload(request: AskCardRequest) -> dict:
+    system = (
+        "A French learner (A1–A2, native Chinese) asked a tutor a question about a sentence. "
+        "Turn the answer into ONE grammar point they can practise.\n"
+        f"Sentence: {request.sentence}\nQuestion: {request.question}\nTutor's answer: {request.answer}\n"
+        "- title: the rule in a few words, e.g. 'Object pronoun before the verb (les)'.\n"
+        "- explanation: one short sentence in simple English.\n"
+        "- hook: a tiny memory hook from the sentence, e.g. 'nous les acceptons = we them accept'.\n"
+        'Output valid JSON only: {"title": "...", "explanation": "...", "hook": "..."}'
+    )
+    return {
+        "model": _map_upstream_model(FAST_MODEL),
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": "Write the grammar point."}],
+        "response_format": {"type": "json_object"},
+        "stream": False,
+        "temperature": 0.2,
+    }
+
+
+@app.post("/api/ask/card")
+async def ask_to_card(request: AskCardRequest, authorization: str | None = Header(default=None)):
+    """A tutor answer becomes a grammar card: the rule, then a new fill-in sentence that uses it."""
+    _require_user_id(authorization)
+    headers = {"Authorization": f"Bearer {_authorization_token(authorization)}", "Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
+        _, raw_text = await _post_chat(client, _ask_point_payload(request), headers)
+    cleaned = re.sub(r"<think>[\s\S]*?</think>", "", raw_text)
+    try:
+        point = json.loads(cleaned[cleaned.find("{"): cleaned.rfind("}") + 1])
+        grammar = GrammarPointIn(
+            title=str(point.get("title") or "").strip()[:300],
+            explanation=str(point.get("explanation") or "").strip()[:1000],
+            hook=str(point.get("hook") or "").strip()[:500],
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=422, detail={"code": "ask_card_failed", "message": "AI 没能整理出要点，请再点一次。"}
+        ) from exc
+    return await srs_add_grammar_card(
+        GrammarCardRequest(
+            sentence=request.sentence,
+            translation_zh=request.translation_zh,
+            translation_en=request.translation_en,
+            grammar=grammar,
+            model=request.model,
+        ),
+        authorization,
+    )
+
+
 LOOKUP_CACHE: dict[str, dict] = {}
 
 
@@ -2137,11 +2196,22 @@ def srs_queue(
     tz_offset: int = Query(default=0, ge=-840, le=840),
     new_limit: int = Query(default=srs.DEFAULT_NEW_LIMIT, ge=0, le=100),
     min_importance: int = Query(default=1, ge=1, le=5),
+    modes: str = Query(default="", max_length=80),
     authorization: str | None = Header(default=None),
 ):
+    wanted = [mode for mode in modes.split(",") if mode in srs.MODES]
     return srs.build_queue(
-        _require_user_id(authorization), tz_offset, new_limit, min_importance=min_importance
+        _require_user_id(authorization), tz_offset, new_limit, min_importance=min_importance, modes=wanted
     )
+
+
+class SrsPracticeRequest(BaseModel):
+    card_ids: list[str] = Field(min_length=1, max_length=200)
+
+
+@app.post("/api/srs/practice")
+def srs_practice(req: SrsPracticeRequest, authorization: str | None = Header(default=None)):
+    return srs.practice_queue(_require_user_id(authorization), req.card_ids)
 
 
 class SrsImportanceRequest(BaseModel):

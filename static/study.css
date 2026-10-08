@@ -2476,6 +2476,33 @@ a.nav-deck-btn {
     border-top: 1px solid var(--line);
 }
 
+.ask-save {
+    align-self: flex-start;
+    margin: -2px 0 var(--space-2);
+    padding: 2px 0;
+    border: 0;
+    background: none;
+    color: var(--primary);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ask-save:hover:not(:disabled) {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.ask-save:disabled {
+    color: var(--muted);
+    cursor: default;
+}
+
+.ask-save.is-saved {
+    color: var(--success);
+}
+
 .feynman-ask-label {
     margin: 0 0 var(--space-2);
     color: var(--ink);

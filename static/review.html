@@ -95,6 +95,16 @@
                                 <option value="5">★5</option>
                             </select>
                         </label>
+                        <label class="new-limit-control" title="只复习这一种卡片" data-i18n-title="cardTypeTitle">
+                            <span data-i18n="cardType">卡片</span>
+                            <select id="card-type-select">
+                                <option value="" data-i18n="cardTypeAll">全部</option>
+                                <option value="listen" data-i18n="cardTypeListen">听</option>
+                                <option value="speak" data-i18n="cardTypeSpeak">说</option>
+                                <option value="cloze,recognize" data-i18n="cardTypeFill">填空</option>
+                                <option value="grammar" data-i18n="cardTypeGrammar">语法</option>
+                            </select>
+                        </label>
                 </div>
             </div>
             <section id="login-required" class="review-panel review-message" hidden>
@@ -114,6 +124,11 @@
                     <button id="legacy-dismiss-btn" class="btn btn-secondary" type="button" data-i18n="notNow">暂不</button>
                 </div>
             </section>
+
+            <div id="practice-bar" class="practice-bar" hidden>
+                <span id="practice-text"></span>
+                <button id="practice-exit" class="btn btn-secondary" type="button" data-i18n="practiceExit">回到今日复习</button>
+            </div>
 
             <section id="review-summary" class="review-summary" hidden>
                 <div class="summary-counts">
@@ -169,6 +184,7 @@
                 <div class="deck-browser-head">
                     <h2 data-i18n="library">卡片库</h2>
                     <input id="deck-search" type="search" placeholder="搜索句子、词或中文意思" data-i18n-placeholder="searchPlaceholder" autocomplete="off">
+                    <button id="practice-shown-btn" class="btn btn-secondary" type="button" hidden></button>
                 </div>
                 <p id="deck-stats" class="deck-stats"></p>
                 <div id="deck-list" class="deck-list"></div>

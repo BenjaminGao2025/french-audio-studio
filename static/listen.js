@@ -29,7 +29,7 @@
             levelLegend: 'Level',
             levelHint: (level, hours) => `· ${level} fits your ${hours} h of study`,
             levelDesc: {
-                A1: 'Slow repeats, English after every line, short present-tense sentences.',
+                A1: 'The English meaning first, then the French slowly twice and once at normal speed. Short present-tense sentences.',
                 A2: 'A little faster, English after every line, a few more tenses.',
                 B1: 'Normal speed, longer sentences, TCF-style announcements and voicemails.',
                 B2: 'French only (English in the subtitles), natural speed, TCF-style interviews.',
@@ -79,7 +79,7 @@
             levelLegend: '难度',
             levelHint: (level, hours) => `· 按你学过的 ${hours} 小时，推荐 ${level}`,
             levelDesc: {
-                A1: '慢速重复，每句后面有英文，句子短、以现在时为主。',
+                A1: '先听英文意思，再听两遍慢速法语、一遍正常语速。句子短，以现在时为主。',
                 A2: '慢速稍快一点，每句后面有英文，时态多一些。',
                 B1: '正常语速，句子更长，加入 TCF 风格的广播通知和语音留言。',
                 B2: '只说法语（英文只在字幕里），自然语速，加入 TCF 风格的采访。',

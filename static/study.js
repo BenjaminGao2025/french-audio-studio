@@ -94,6 +94,7 @@ function initStudyWorkbench() {
             myRecording: 'My recording', retryShadowing: 'Try again',
             feynmanSub: 'In your own words (Chinese or English): what does this sentence say, and why is it built this way? The AI only points out what you missed.',
             variationLabel: 'Also make a sentence of your own (optional)', askLabel: 'Ask a question',
+            askSave: 'Save as a card', askSaveTitle: 'Turn this answer into a grammar card: a new sentence to fill in, using the same rule', askSaving: 'Making a practice card…', askSaved: '✓ Added to review',
             feynmanPlaceholder: 'e.g. This sentence says…; aucune is already negative, so there is no pas… (Enter to check, Shift+Enter for a new line)',
             variationPlaceholder: '(Optional) Change a word and make a new French sentence of your own',
             dictateTitle: 'Say it instead (Chinese mixed with French, or English). The server transcribes it into the box above, and you can still edit it.',
@@ -206,6 +207,7 @@ function initStudyWorkbench() {
             myRecording: '我的录音', retryShadowing: '重新跟读',
             feynmanSub: '用自己的话讲（中文或英语都行）：这句话在说什么，为什么这样说？AI 只指出你漏掉的地方。',
             variationLabel: '再用它造一个自己的句子（可选）', askLabel: '有问题就问',
+            askSave: '存成卡片', askSaveTitle: '把这条回答变成语法卡：用同一条规则造一个新句子来填空', askSaving: '正在生成练习卡…', askSaved: '✓ 已加入复习',
             feynmanPlaceholder: '例：这句是说……；aucune 本身就是否定，所以没有 pas……（回车让 AI 找漏洞，Shift+回车换行）',
             variationPlaceholder: '（可选）换一个词，自己造一个新的法语句子',
             dictateTitle: '用说的（中文夹法语、英语都可以），服务器识别后填进上面的框，可以再改',
@@ -1991,6 +1993,39 @@ function initStudyWorkbench() {
             return bubble;
         }
 
+        // A tutor answer worth keeping becomes a grammar card (the same kind as in the Grammar tab)
+        function askSaveButton(question, answer) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'ask-save';
+            btn.title = T.askSaveTitle;
+            btn.textContent = T.askSave;
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                btn.disabled = true;
+                btn.textContent = T.askSaving;
+                const ctx = sentenceContextByKey.get(srsSentenceKey(sentence)) || {};
+                try {
+                    rememberNote(await srsApi('POST', '/api/ask/card', {
+                        sentence,
+                        translation_zh: ctx.translation_zh || '',
+                        translation_en: ctx.translation_en || '',
+                        question,
+                        answer,
+                        model: modelSelect.value,
+                    }));
+                    btn.textContent = T.askSaved;
+                    btn.classList.add('is-saved');
+                    refreshDueBadge();
+                } catch (err) {
+                    btn.disabled = false;
+                    btn.textContent = T.askSave;
+                    showSrsError(err);
+                }
+            });
+            return btn;
+        }
+
         askForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -2012,6 +2047,7 @@ function initStudyWorkbench() {
                 if (!res.ok) throw apiError(data);
                 pending.textContent = data.answer;
                 askHistory.push({ role: 'learner', content: question }, { role: 'tutor', content: data.answer });
+                pending.after(askSaveButton(question, data.answer));
             } catch (err) {
                 pending.textContent = err.message;
                 pending.classList.add('is-error');
