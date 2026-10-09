@@ -3071,10 +3071,13 @@ function initStudyWorkbench() {
     const prefillText = urlParams.get('text');
     // Opened from the Audio Studio history: show the saved breakdown, no new analysis
     const restoreId = urlParams.get('restore');
-    const restoreItem = restoreId && window.FrenchHistory
-        ? window.FrenchHistory.getRecords('study').find(r => r.id === restoreId)
-        : null;
-    if (restoreItem) window.FrenchHistory.onRestoreStudy(restoreItem);
+    const findRestore = () => window.FrenchHistory.getRecords('study').find(r => r.id === restoreId);
+    if (restoreId && window.FrenchHistory) {
+        const restoreItem = findRestore();
+        if (restoreItem) window.FrenchHistory.onRestoreStudy(restoreItem);
+        // Saved on another device: it arrives with the server's history
+        else window.FrenchHistory.pull().then(() => { const item = findRestore(); if (item) window.FrenchHistory.onRestoreStudy(item); });
+    }
     if (urlParams.get('login') === '1') {
         checkCurrentUser().then(() => {
             if (!localStorage.getItem(userTokenKey)) openAuthModal();

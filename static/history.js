@@ -299,6 +299,43 @@
         } catch (_) {}
     }
 
+    // Another device (or a cleared browser) only has what the server kept: merge it in,
+    // and send up records that so far exist only in this browser.
+    let pullPromise = null;
+    function pullFromBackend() {
+        const token = getAuthToken();
+        if (!token) return Promise.resolve(false);
+        if (pullPromise) return pullPromise;
+        pullPromise = (async () => {
+            try {
+                const res = await fetch('/api/history?limit=200', { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!res.ok) return false;
+                const data = await res.json();
+                const local = loadRawHistory();
+                const known = new Set(local.map(item => item.id));
+                const remote = (data.records || []).map(record => {
+                    const { user_id, created_at, ...item } = record;
+                    if (!item.timestamp) item.timestamp = Date.parse(created_at) || Date.now();
+                    if (!item.timeFormatted) item.timeFormatted = formatTime(new Date(item.timestamp));
+                    return item;
+                });
+                const added = remote.filter(item => item.id && !known.has(item.id));
+                const serverIds = new Set(remote.map(item => item.id));
+                local.filter(item => !serverIds.has(item.id)).slice(0, 50).forEach(syncToBackend);
+                if (!added.length) return false;
+                const merged = deduplicateHistoryList([...local, ...added]
+                    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)));
+                saveRawHistory(merged);
+                return true;
+            } catch (_) {
+                return false;
+            } finally {
+                pullPromise = null;
+            }
+        })();
+        return pullPromise;
+    }
+
     async function syncClearToBackend(recordType) {
         const token = getAuthToken();
         if (!token) return;
@@ -466,6 +503,18 @@
             modal.hidden = false;
             this.updateBadges();
             if (window.lucide) window.lucide.createIcons();
+            this.pull();
+        },
+
+        // Bring in records saved from other devices; redraw if anything new arrived
+        async pull() {
+            const changed = await pullFromBackend();
+            if (!changed) return false;
+            this.updateBadges();
+            const modal = document.getElementById('history-modal');
+            if (modal && !modal.hidden) this.renderList();
+            if (window.lucide) window.lucide.createIcons();
+            return true;
         },
 
         closeModal() {
@@ -774,8 +823,9 @@
             this.onRestoreTts = config.onRestoreTts || null;
             this.onRestoreStudy = config.onRestoreStudy || null;
 
-            // Trigger legacy migration and badge update
+            // Trigger legacy migration and badge update, then fetch other devices' records
             this.updateBadges();
+            this.pull();
 
             // Wire Toggle Button
             const toggleBtns = document.querySelectorAll('#history-toggle-btn, .btn-open-history');
