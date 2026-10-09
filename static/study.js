@@ -64,6 +64,9 @@ function initStudyWorkbench() {
             authTitle: 'Log in',
             authNotice: 'Once you log in, the server calls the AI models for you, review cards sync between your phone and computer, and your history is saved in the cloud.',
             email: 'Email', password: 'Password', passwordPlaceholder: 'Password (at least 6 characters)', logout: 'Log out',
+            devicesTitle: 'Signed-in devices (up to 3)', thisDevice: 'This device', signOutDevice: 'Sign out',
+            lastActive: (when) => `Last active ${when}`,
+            signedOutElsewhere: 'This device was signed out: an account can be signed in on up to 3 devices. Please log in again.',
             keyLoaded: 'Key loaded', keyLoadedDetail: 'Click to test the real connection',
             noKey: 'No key', noKeyDetail: 'Enter a key under Connection (top right), or log in to use the app directly',
             needLogin: 'Please log in first, or enter an API key under Connection.',
@@ -177,6 +180,9 @@ function initStudyWorkbench() {
             authTitle: '登录账号',
             authNotice: '登录后：由服务器调用大模型、复习卡片在手机和电脑之间同步、历史记录云端保存。',
             email: '电子邮箱', password: '密码', passwordPlaceholder: '请输入密码（至少 6 位）', logout: '退出当前账号',
+            devicesTitle: '已登录设备（最多 3 台）', thisDevice: '当前设备', signOutDevice: '退出',
+            lastActive: (when) => `最近使用 ${when}`,
+            signedOutElsewhere: '这台设备已退出登录：账号最多同时登录 3 台设备。请重新登录。',
             keyLoaded: 'Key 已加载', keyLoadedDetail: '点击测试实际连接',
             noKey: '未填写 Key', noKeyDetail: '在右上角连接设置填写 Key 或登录账号直接使用',
             needLogin: '请先登录账号，或在【连接设置】中填写 API Key。',
@@ -347,6 +353,7 @@ function initStudyWorkbench() {
     const profileEmail = document.getElementById('profile-email');
     const profileBadge = document.getElementById('profile-badge');
     const logoutBtn = document.getElementById('logout-btn');
+    const profileDeviceList = document.getElementById('profile-device-list');
 
     // DOM Elements - Query History
     const historyToggleBtn = document.getElementById('history-toggle-btn');
@@ -2667,6 +2674,7 @@ function initStudyWorkbench() {
         if (currentAuthUser) {
             if (authFormContainer) authFormContainer.hidden = true;
             if (authUserProfile) authUserProfile.hidden = false;
+            loadDevices();
         } else {
             if (authFormContainer) authFormContainer.hidden = false;
             if (authUserProfile) authUserProfile.hidden = true;
@@ -2674,6 +2682,49 @@ function initStudyWorkbench() {
         }
         if (authModal) authModal.hidden = false;
         refreshIcons();
+    }
+
+    // Signed-in devices: the account allows a few; any other one can be signed out from here
+    async function loadDevices() {
+        const token = localStorage.getItem(userTokenKey);
+        if (!profileDeviceList || !token) return;
+        try {
+            const res = await fetch('/api/auth/devices', { headers: { 'Authorization': `Bearer ${token}` } });
+            if (!res.ok) return;
+            const data = await res.json();
+            profileDeviceList.innerHTML = '';
+            data.devices.forEach((device) => {
+                const item = document.createElement('li');
+                const label = document.createElement('div');
+                const name = document.createElement('span');
+                name.textContent = device.device;
+                const meta = document.createElement('span');
+                meta.className = 'device-meta';
+                meta.textContent = device.current
+                    ? T.thisDevice
+                    : T.lastActive(new Date(device.last_seen_at + 'Z').toLocaleString());
+                label.append(name, meta);
+                item.appendChild(label);
+                if (!device.current) {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'btn btn-secondary';
+                    button.textContent = T.signOutDevice;
+                    button.addEventListener('click', async () => {
+                        button.disabled = true;
+                        await fetch(`/api/auth/devices/${encodeURIComponent(device.id)}`, {
+                            method: 'DELETE',
+                            headers: { 'Authorization': `Bearer ${token}` },
+                        }).catch(() => {});
+                        loadDevices();
+                    });
+                    item.appendChild(button);
+                }
+                profileDeviceList.appendChild(item);
+            });
+        } catch (e) {
+            console.warn('Load devices failed:', e);
+        }
     }
 
     function closeAuthModal() {
@@ -2698,8 +2749,13 @@ function initStudyWorkbench() {
                 headers: { 'Authorization': `Bearer ${token}` },
             });
             if (!res.ok) {
+                const data = await readJsonSafely(res);
                 localStorage.removeItem(userTokenKey);
                 updateAuthUI(null);
+                if (data.detail?.code === 'session_revoked') {
+                    statusMessage.className = 'status-message status-error';
+                    statusMessage.textContent = T.signedOutElsewhere;
+                }
                 return;
             }
             const user = await res.json();

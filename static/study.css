@@ -898,6 +898,41 @@
     margin-top: 6px;
 }
 
+.profile-devices h5 {
+    margin: 0 0 8px;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.device-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.device-list li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 0;
+    border-top: 1px solid var(--line);
+    font-size: 14px;
+}
+
+.device-list .device-meta {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.device-list .btn {
+    min-height: 32px;
+    padding: 0 10px;
+    font-size: 13px;
+}
+
 /* ==========================================================================
    Query History Drawer / Modal
    ========================================================================== */

@@ -263,6 +263,8 @@ def _authorization_token(authorization: str | None) -> str:
         )
 
     # Check if this token is an internal user session token
+    if auth_db.is_signed_out_token(token):
+        raise HTTPException(status_code=401, detail=SIGNED_OUT_DETAIL)
     user_payload = auth_db.verify_token(token)
     if user_payload:
         user_info = auth_db.get_user_status(user_payload["sub"])
@@ -286,6 +288,11 @@ def _authorization_token(authorization: str | None) -> str:
 
     return token
 
+
+SIGNED_OUT_DETAIL = {
+    "code": "session_revoked",
+    "message": "这台设备已退出登录：账号最多同时登录 3 台设备，可能是在别的设备上登录了。请重新登录。",
+}
 
 SESSION_COOKIE = "fas_session"
 SESSION_MAX_AGE = 90 * 24 * 3600
@@ -338,7 +345,10 @@ def _clear_session_cookie(response: Response, request: Request) -> None:
 
 
 def _require_user_id(authorization: str | None, request: Request | None = None) -> int:
-    payload = auth_db.verify_token(_session_value(authorization, request))
+    token = _session_value(authorization, request)
+    payload = auth_db.verify_token(token)
+    if not payload and auth_db.is_signed_out_token(token):
+        raise HTTPException(status_code=401, detail=SIGNED_OUT_DETAIL)
     if not payload:
         raise HTTPException(
             status_code=401,
@@ -2108,12 +2118,25 @@ def _auth_response(payload: dict, request: Request) -> JSONResponse:
     return response
 
 
+def _device_label(user_agent: str) -> str:
+    """A short, human name for the device a login came from, e.g. "Chrome · Android"."""
+    ua = user_agent or ""
+    browsers = [("Edg/", "Edge"), ("MicroMessenger", "WeChat"), ("Firefox/", "Firefox"),
+                ("CriOS", "Chrome"), ("Chrome/", "Chrome"), ("Safari/", "Safari")]
+    systems = [("iPhone", "iPhone"), ("iPad", "iPad"), ("Android", "Android"),
+               ("Windows", "Windows"), ("Mac OS X", "Mac"), ("Linux", "Linux")]
+    browser = next((name for key, name in browsers if key in ua), "")
+    system = next((name for key, name in systems if key in ua), "")
+    return " · ".join(part for part in (browser, system) if part) or "Unknown device"
+
+
 @app.post("/api/auth/register")
 async def register_account(req: AuthRequest, request: Request):
     if not auth_db.ALLOW_REGISTRATION:
         raise HTTPException(status_code=403, detail={"message": "本站暂不开放注册。"})
+    device = _device_label(request.headers.get("user-agent", ""))
     try:
-        return _auth_response(auth_db.register_user(req.email, req.password), request)
+        return _auth_response(auth_db.register_user(req.email, req.password, device), request)
     except ValueError as e:
         raise HTTPException(status_code=400, detail={"message": str(e)})
 
@@ -2121,7 +2144,8 @@ async def register_account(req: AuthRequest, request: Request):
 @app.post("/api/auth/login")
 async def login_account(req: AuthRequest, request: Request):
     try:
-        return _auth_response(auth_db.login_user(req.email, req.password), request)
+        device = _device_label(request.headers.get("user-agent", ""))
+        return _auth_response(auth_db.login_user(req.email, req.password, device), request)
     except ValueError as e:
         raise HTTPException(status_code=400, detail={"message": str(e)})
 
@@ -2141,7 +2165,10 @@ async def refresh_session(request: Request, authorization: str | None = Header(d
 
 
 @app.post("/api/auth/logout")
-async def logout_account(request: Request):
+async def logout_account(request: Request, authorization: str | None = Header(default=None)):
+    payload = auth_db.verify_token(_session_value(authorization, request))
+    if payload:
+        auth_db.end_session(int(payload["sub"]), payload["sid"])
     response = Response(status_code=204)
     _clear_session_cookie(response, request)
     return response
@@ -2153,6 +2180,22 @@ async def get_current_user(authorization: str | None = Header(default=None)):
     if not status:
         raise HTTPException(status_code=404, detail={"message": "账号不存在"})
     return status
+
+
+@app.get("/api/auth/devices")
+async def list_devices(request: Request, authorization: str | None = Header(default=None)):
+    token = _session_value(authorization, request)
+    user_id = _require_user_id(authorization, request)
+    current = (auth_db.verify_token(token) or {}).get("sid")
+    devices = [
+        {**session, "current": session["id"] == current} for session in auth_db.list_sessions(user_id)
+    ]
+    return {"devices": devices, "max_devices": auth_db.MAX_DEVICES}
+
+
+@app.delete("/api/auth/devices/{session_id}")
+async def sign_out_device(session_id: str, request: Request, authorization: str | None = Header(default=None)):
+    return {"success": auth_db.end_session(_require_user_id(authorization, request), session_id)}
 
 
 class SaveHistoryRequest(BaseModel):

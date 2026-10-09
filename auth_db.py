@@ -23,6 +23,8 @@ if len(AUTH_SECRET) < 32:
     raise RuntimeError("AUTH_SECRET must be set to a random string of at least 32 characters.")
 ALLOW_REGISTRATION = os.getenv("ALLOW_REGISTRATION", "false").strip().lower() == "true"
 TRIAL_DAYS = 60  # New customers automatically receive 2 months (60 days) free
+MAX_DEVICES = 3  # Logging in on a fourth device signs out the one used least recently
+SESSION_TOUCH_SECONDS = 600  # How often last_seen_at is refreshed, to avoid a write per request
 
 
 def _get_db_path() -> Path:
@@ -66,6 +68,14 @@ def init_db() -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_history_user ON history_records(user_id, created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_history_type ON history_records(record_type, created_at DESC);
+            CREATE TABLE IF NOT EXISTS sessions (
+                id TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                device TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                last_seen_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id, last_seen_at DESC);
             CREATE TABLE IF NOT EXISTS waitlist (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 kind TEXT NOT NULL,
@@ -101,10 +111,51 @@ def _hash_password(password: str, salt: str) -> str:
     ).hex()
 
 
-def _generate_token(user_id: int, email: str) -> str:
-    # Token valid for 90 days
+def _now_iso() -> str:
+    return datetime.datetime.utcnow().isoformat(timespec="seconds")
+
+
+def _start_session(user_id: int, device: str) -> str:
+    """Record a new signed-in device and sign out the least recently used beyond MAX_DEVICES."""
+    session_id = uuid.uuid4().hex
+    now = _now_iso()
+    with connect() as conn:
+        conn.execute(
+            "INSERT INTO sessions (id, user_id, device, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?)",
+            (session_id, user_id, (device or "")[:120], now, now),
+        )
+        # Keep the new session plus the most recently used others, up to MAX_DEVICES in all
+        conn.execute(
+            """
+            DELETE FROM sessions WHERE user_id = ? AND id != ? AND id NOT IN (
+                SELECT id FROM sessions WHERE user_id = ? AND id != ?
+                ORDER BY last_seen_at DESC, rowid DESC LIMIT ?
+            )
+            """,
+            (user_id, session_id, user_id, session_id, MAX_DEVICES - 1),
+        )
+    return session_id
+
+
+def list_sessions(user_id: int) -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT id, device, created_at, last_seen_at FROM sessions WHERE user_id = ? ORDER BY last_seen_at DESC",
+            (user_id,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def end_session(user_id: int, session_id: str) -> bool:
+    with connect() as conn:
+        cursor = conn.execute("DELETE FROM sessions WHERE id = ? AND user_id = ?", (session_id, user_id))
+        return cursor.rowcount > 0
+
+
+def _generate_token(user_id: int, email: str, session_id: str) -> str:
+    # Token valid for 90 days, and only while its session (device) still exists
     exp = (datetime.datetime.utcnow() + datetime.timedelta(days=90)).timestamp()
-    payload = {"sub": user_id, "email": email, "exp": int(exp)}
+    payload = {"sub": user_id, "email": email, "sid": session_id, "exp": int(exp)}
     payload_b64 = base64.urlsafe_b64encode(
         json.dumps(payload, separators=(",", ":")).encode("utf-8")
     ).decode("utf-8").rstrip("=")
@@ -115,6 +166,33 @@ def _generate_token(user_id: int, email: str) -> str:
 
 
 def verify_token(token: str) -> dict[str, Any] | None:
+    """The payload of a signed, unexpired token whose device is still signed in; otherwise None."""
+    payload = _signed_payload(token)
+    if not payload or not payload.get("sid"):
+        return None
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT last_seen_at FROM sessions WHERE id = ? AND user_id = ?",
+            (payload["sid"], payload["sub"]),
+        ).fetchone()
+        if not row:
+            return None
+        try:
+            idle = datetime.datetime.utcnow() - datetime.datetime.fromisoformat(row["last_seen_at"])
+        except ValueError:
+            idle = datetime.timedelta(seconds=SESSION_TOUCH_SECONDS)
+        if idle.total_seconds() >= SESSION_TOUCH_SECONDS:
+            conn.execute("UPDATE sessions SET last_seen_at = ? WHERE id = ?", (_now_iso(), payload["sid"]))
+    return payload
+
+
+def is_signed_out_token(token: str) -> bool:
+    """A genuine, unexpired token whose device was signed out (e.g. by a login on another device)."""
+    payload = _signed_payload(token)
+    return bool(payload) and verify_token(token) is None
+
+
+def _signed_payload(token: str) -> dict[str, Any] | None:
     if not token or "." not in token:
         return None
     try:
@@ -134,7 +212,7 @@ def verify_token(token: str) -> dict[str, Any] | None:
         return None
 
 
-def register_user(email: str, password: str) -> dict[str, Any]:
+def register_user(email: str, password: str, device: str = "") -> dict[str, Any]:
     clean_email = email.strip().lower()
     if not clean_email or not re.match(r"^[^@]+@[^@]+\.[^@]+$", clean_email):
         raise ValueError("请输入有效的邮箱地址。")
@@ -164,7 +242,7 @@ def register_user(email: str, password: str) -> dict[str, Any]:
     except sqlite3.IntegrityError:
         raise ValueError("该邮箱已被注册，请直接登录。")
 
-    token = _generate_token(user_id, clean_email)
+    token = _generate_token(user_id, clean_email, _start_session(user_id, device))
     return {
         "token": token,
         "user": {
@@ -178,7 +256,7 @@ def register_user(email: str, password: str) -> dict[str, Any]:
     }
 
 
-def login_user(email: str, password: str) -> dict[str, Any]:
+def login_user(email: str, password: str, device: str = "") -> dict[str, Any]:
     clean_email = email.strip().lower()
     init_db()
 
@@ -194,7 +272,7 @@ def login_user(email: str, password: str) -> dict[str, Any]:
     if not hmac.compare_digest(row["password_hash"], expected_hash):
         raise ValueError("邮箱或密码错误，请重新输入。")
 
-    token = _generate_token(row["id"], clean_email)
+    token = _generate_token(row["id"], clean_email, _start_session(row["id"], device))
     user_info = get_user_status(row["id"])
     return {"token": token, "user": user_info}
 
@@ -459,7 +537,9 @@ def _admin_cli(argv: list[str]) -> None:
                 "UPDATE users SET password_hash = ?, salt = ? WHERE id = ?",
                 (_hash_password(password, salt), salt, user_id),
             )
-            print("Password updated.")
+            # A new password signs out every device
+            conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+            print("Password updated; all devices signed out.")
         elif args.command == "set-plan":
             conn.execute("UPDATE users SET plan = ? WHERE id = ?", (args.plan, user_id))
             print(f"Plan set to {args.plan}.")

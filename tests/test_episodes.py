@@ -175,7 +175,7 @@ class JobAndApiTests(unittest.TestCase):
         self.assertEqual(ready["title"], "Episode 1 · At the test centre")
         self.assertGreater(ready["duration"], 10)
 
-        token = auth_db._generate_token(user_id, "x@example.com")
+        token = auth_db._generate_token(user_id, "x@example.com", auth_db._start_session(user_id, "test"))
         listed = self.client.get("/api/episodes", headers={"Authorization": f"Bearer {token}"}).json()
         self.assertEqual(listed["episodes"][0]["id"], episode["id"])
         audio = self.client.get(f"/episodes/{episode['id']}.mp3")
@@ -188,14 +188,14 @@ class JobAndApiTests(unittest.TestCase):
         usage = episodes._sentence_usage(user_id)
         self.assertTrue(all(count == 1 for count in usage.values()))
 
-        other = auth_db._generate_token(user_id + 999, "y@example.com")
+        other = auth_db._generate_token(user_id + 999, "y@example.com", auth_db._start_session(user_id + 999, "test"))
         self.assertFalse(self.client.delete(f"/api/episodes/{episode['id']}", headers={"Authorization": f"Bearer {other}"}).json()["success"])
         self.assertTrue(self.client.delete(f"/api/episodes/{episode['id']}", headers={"Authorization": f"Bearer {token}"}).json()["success"])
         self.assertEqual(self.client.get(f"/episodes/{episode['id']}.mp3").status_code, 404)
 
     def test_settings_are_saved_and_a_remake_replaces_the_old_episode(self):
         user_id = _user_with_material()
-        token = auth_db._generate_token(user_id, "x@example.com")
+        token = auth_db._generate_token(user_id, "x@example.com", auth_db._start_session(user_id, "test"))
         headers = {"Authorization": f"Bearer {token}"}
         old = episodes.create_episode(user_id, {"level": "A1", "minutes": 20})
         episodes.update_episode(old["id"], status="ready", title="Episode 1")
