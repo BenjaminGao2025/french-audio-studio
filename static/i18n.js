@@ -97,6 +97,13 @@
             }
             localStorage.setItem('frenchStudio.modelDefaultMigrated', '1');
         }
+        // Back to Gemini 3.8 Flash (AGY, low) as the default on 2026-10-08: Sol Thinking is too slow.
+        if (!localStorage.getItem('frenchStudio.modelDefaultMigrated2')) {
+            if (localStorage.getItem('frenchStudio.perplexityModel') === 'gpt-6.1-sol-thinking') {
+                localStorage.removeItem('frenchStudio.perplexityModel');
+            }
+            localStorage.setItem('frenchStudio.modelDefaultMigrated2', '1');
+        }
     } catch (_) {}
 
     // Audio tags cannot send the bearer token. Exchange it for the HttpOnly session cookie.

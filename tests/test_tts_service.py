@@ -44,7 +44,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
         response = self.client.get("/api/models")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["default"], "gpt-6.1-sol-thinking")
+        self.assertEqual(response.json()["default"], "gemini-3.8-flash")
         self.assertEqual(response.json()["proofreader"]["id"], "gemini-3.8-flash")
         model_ids = {item["id"] for item in response.json()["models"]}
         self.assertEqual(

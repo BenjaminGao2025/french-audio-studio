@@ -41,7 +41,7 @@ PERPLEXITY_BASE_URL = os.getenv(
     "PERPLEXITY_BASE_URL", "http://127.0.0.1:8002/v1"
 ).rstrip("/")
 AGY_BASE_URL = os.getenv("AGY_BASE_URL", "http://127.0.0.1:8645/v1").rstrip("/")
-PERPLEXITY_MODEL = os.getenv("PERPLEXITY_MODEL", "gpt-6.1-sol-thinking")
+PERPLEXITY_MODEL = os.getenv("PERPLEXITY_MODEL", "gemini-3.8-flash")
 PERPLEXITY_PROOFREAD_MODEL = os.getenv("PERPLEXITY_PROOFREAD_MODEL", "gemini-3.8-flash")
 # Quick helper tasks (e.g. fixing dictation) always use a fast model
 FAST_MODEL = os.getenv("FAST_MODEL", "gemini-3.8-flash")
@@ -58,7 +58,7 @@ TRANSFORM_MODELS = {
     "gpt-6.1-sol-thinking": {
         "label": "GPT-6.1 Sol Thinking",
         "description": "Perplexity; strongest reasoning, slower.",
-        "recommended": True,
+        "recommended": False,
     },
     "gpt-6.1-sol": {
         "label": "GPT-6.1 Sol",
@@ -82,8 +82,8 @@ TRANSFORM_MODELS = {
     },
     "gemini-3.8-flash": {
         "label": "Gemini 3.8 Flash (AGY)",
-        "description": "7840 AGY; fastest.",
-        "recommended": False,
+        "description": "7840 AGY (low thinking); fastest.",
+        "recommended": True,
     },
 }
 MODEL_LABELS = {model_id: details["label"] for model_id, details in TRANSFORM_MODELS.items()}
