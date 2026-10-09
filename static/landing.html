@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light">
+    <meta name="asset-version" content="__ASSET_VERSION__">
+    <title>1000H French · TCF Canada 输出练习</title>
+    <meta name="description" content="给中文母语者的 TCF Canada 练习工具：把你在学的法语拆成句子，每天听、说、填、讲一遍，AI 只批改，不替你想。">
+    <link rel="icon" href="/favicon.ico?v=2" sizes="any">
+    <link rel="stylesheet" href="/static/tokens.css?v=__ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/style.css?v=__ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/landing.css?v=__ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/ui.css?v=__ASSET_VERSION__">
+    <script src="https://unpkg.com/lucide@1.34.0/dist/umd/lucide.min.js" defer></script>
+    <script src="/static/i18n.js?v=__ASSET_VERSION__" defer></script>
+    <script src="/static/landing.js?v=__ASSET_VERSION__" defer></script>
+</head>
+<body class="landing" data-page-title-zh="1000H French · TCF Canada 输出练习" data-page-title-en="1000H French · Output practice for TCF Canada">
+    <header class="site-header">
+        <div class="site-inner site-header-row">
+            <a class="site-brand" href="/home">
+                <span class="brand-mark" aria-hidden="true"><i data-lucide="brain"></i></span>
+                <span>1000H French</span>
+            </a>
+            <nav class="site-nav" aria-label="Site">
+                <a href="#method"><span class="copy-zh">方法</span><span class="copy-en">Method</span></a>
+                <a href="#faq"><span class="copy-zh">常见问题</span><span class="copy-en">FAQ</span></a>
+                <a href="/for-institutions"><span class="copy-zh">机构合作</span><span class="copy-en">For schools</span></a>
+                <a href="/study"><span class="copy-zh">登录</span><span class="copy-en">Log in</span></a>
+                <button id="lang-toggle" class="btn btn-secondary lang-toggle" type="button"></button>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="site-inner hero-grid">
+                <div class="hero-copy">
+                    <p class="eyebrow"><span class="copy-zh">TCF Canada 备考 · 内测中</span><span class="copy-en">TCF Canada prep · Private beta</span></p>
+                    <h1>
+                        <span class="copy-zh">法语要练出来，<br>不是看出来。</span>
+                        <span class="copy-en">French is built by practice,<br>not by reading about it.</span>
+                    </h1>
+                    <p class="lead">
+                        <span class="copy-zh">1000H French 是给中文母语者的 TCF Canada 练习工具。把你正在学的法语拆成句子，每天听、说、填、讲一遍。AI 只负责批改和追问，不替你思考。</span>
+                        <span class="copy-en">1000H French is a TCF Canada practice tool for Chinese speakers. Break the French you are learning into sentences, then hear, say, fill in and explain each one every day. The AI corrects and asks questions; it does not think for you.</span>
+                    </p>
+                    <div class="hero-actions">
+                        <a class="btn btn-primary" href="#apply"><span class="copy-zh">申请内测</span><span class="copy-en">Join the beta</span></a>
+                        <a class="btn btn-secondary" href="#method"><span class="copy-zh">看看怎么练</span><span class="copy-en">See how it works</span></a>
+                    </div>
+                    <p class="fine-print"><span class="copy-zh">内测期间免费，按申请顺序分批邀请。手机和电脑浏览器直接打开，无需下载。</span><span class="copy-en">Free during the beta; invitations go out in batches, in order. Works in any phone or desktop browser, nothing to install.</span></p>
+                </div>
+
+                <figure class="demo-card" aria-label="Example sentence card">
+                    <figcaption><span class="copy-zh">一句话，三种练法</span><span class="copy-en">One sentence, three drills</span></figcaption>
+                    <p class="demo-sentence" lang="fr">Je vais au marché demain matin.</p>
+                    <ol class="demo-drills">
+                        <li>
+                            <span class="drill-tag"><i data-lucide="headphones" aria-hidden="true"></i><span class="copy-zh">听</span><span class="copy-en">Hear</span></span>
+                            <span><span class="copy-zh">只放音频，你说出意思</span><span class="copy-en">Audio only, you say what it means</span></span>
+                        </li>
+                        <li>
+                            <span class="drill-tag"><i data-lucide="mic" aria-hidden="true"></i><span class="copy-zh">说</span><span class="copy-en">Say</span></span>
+                            <span><span class="copy-zh">看中文“明天早上我去市场”，说出法语，当场打分</span><span class="copy-en">See “I'm going to the market tomorrow morning”, say it in French, get scored</span></span>
+                        </li>
+                        <li>
+                            <span class="drill-tag"><i data-lucide="pencil" aria-hidden="true"></i><span class="copy-zh">填</span><span class="copy-en">Fill</span></span>
+                            <span lang="fr">Je vais <span class="blank">au</span> marché demain matin.</span>
+                        </li>
+                    </ol>
+                    <p class="demo-note"><span class="copy-zh">复习时间由 FSRS 记忆算法安排：快忘的时候再出现。</span><span class="copy-en">FSRS schedules each card for just before you would forget it.</span></p>
+                </figure>
+            </div>
+        </section>
+
+        <section class="band" aria-labelledby="pain-title">
+            <div class="site-inner">
+                <h2 id="pain-title"><span class="copy-zh">为什么学了很久，还是开不了口？</span><span class="copy-en">Why months of study still don't make you speak</span></h2>
+                <div class="pain-grid">
+                    <article>
+                        <h3><span class="copy-zh">看懂了，不等于记住了</span><span class="copy-en">Understanding is not remembering</span></h3>
+                        <p><span class="copy-zh">读讲解、刷单词表，第二天就忘。记忆是靠“自己想起来”练出来的，不是靠再看一遍。</span><span class="copy-en">Reading explanations and word lists fades by the next day. Memory grows when you pull an answer out yourself, not when you look at it again.</span></p>
+                    </article>
+                    <article>
+                        <h3><span class="copy-zh">口语和写作没人批改</span><span class="copy-en">Nobody corrects your speaking and writing</span></h3>
+                        <p><span class="copy-zh">TCF 的口语和写作由考官人工评分，背下来的模板很容易被看出来。真正缺的是“说出来、写出来，再被纠正”的次数。</span><span class="copy-en">TCF speaking and writing are scored by people, and memorised templates show. What most learners lack is reps: say it, write it, get corrected.</span></p>
+                    </article>
+                    <article>
+                        <h3><span class="copy-zh">整块时间太少</span><span class="copy-en">Too little uninterrupted time</span></h3>
+                        <p><span class="copy-zh">上班、通勤、照顾家人，能坐下来学的时间不多。练习得能拆成十分钟一段，开车时也能听。</span><span class="copy-en">Work, commuting and family leave little desk time. Practice has to fit into ten-minute pieces, and into the drive.</span></p>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section id="method" class="section" aria-labelledby="method-title">
+            <div class="site-inner">
+                <h2 id="method-title"><span class="copy-zh">怎么练：先回想，再看答案</span><span class="copy-en">How it works: recall first, then check</span></h2>
+                <ol class="steps">
+                    <li>
+                        <span class="step-num">1</span>
+                        <div>
+                            <h3><span class="copy-zh">拆：用你自己的材料</span><span class="copy-en">Break down your own material</span></h3>
+                            <p><span class="copy-zh">把课文、TCF 样题、新闻贴进来，按句子和意群拆开：逐词对照、语法、发音，每句都能播放和跟读。</span><span class="copy-en">Paste in lessons, TCF samples or news. Each sentence is split into chunks with a word-by-word gloss, grammar and pronunciation, and you can play and shadow it.</span></p>
+                        </div>
+                    </li>
+                    <li>
+                        <span class="step-num">2</span>
+                        <div>
+                            <h3><span class="copy-zh">练：听、说、填三种卡</span><span class="copy-en">Drill: hear, say, fill</span></h3>
+                            <p><span class="copy-zh">学过的句子变成复习卡。先听后说，答案要自己打出来或说出来，系统按你的表现安排下次复习。</span><span class="copy-en">Sentences you study become review cards. You type or say every answer yourself, and the next review is scheduled by how you did.</span></p>
+                        </div>
+                    </li>
+                    <li>
+                        <span class="step-num">3</span>
+                        <div>
+                            <h3><span class="copy-zh">讲：费曼式自测</span><span class="copy-en">Explain it back</span></h3>
+                            <p><span class="copy-zh">用中文把一句话讲给 AI 听。AI 不先讲，只告诉你讲对了什么、漏了什么，再追问一个问题。</span><span class="copy-en">Explain a sentence to the AI in your own words. It never explains first: it tells you what you got right, what you missed, and asks one follow-up question.</span></p>
+                        </div>
+                    </li>
+                    <li>
+                        <span class="step-num">4</span>
+                        <div>
+                            <h3><span class="copy-zh">用：按 TCF 题型输出</span><span class="copy-en">Use it: TCF-style output</span></h3>
+                            <p><span class="copy-zh">口语按 TCF 三个任务练，写作按考试题型写，AI 逐句指出问题并给出修改。</span><span class="copy-en">Practise the three TCF speaking tasks and the writing tasks; the AI marks problems sentence by sentence and suggests fixes.</span></p>
+                        </div>
+                    </li>
+                </ol>
+            </div>
+        </section>
+
+        <section class="band" aria-labelledby="features-title">
+            <div class="site-inner">
+                <h2 id="features-title"><span class="copy-zh">对应 TCF Canada 四项</span><span class="copy-en">Covers all four TCF Canada skills</span></h2>
+                <div class="feature-grid">
+                    <article>
+                        <i data-lucide="car" aria-hidden="true"></i>
+                        <h3><span class="copy-zh">听力 · 开车听</span><span class="copy-en">Listening · Drive mode</span></h3>
+                        <p><span class="copy-zh">用你学过的内容和当前水平，生成 20–60 分钟的听力节目，可下载 MP3 和字幕。法国和加拿大两种口音。</span><span class="copy-en">20–60 minute listening episodes built from what you have studied, at your level. Download MP3 with subtitles. France and Canada voices.</span></p>
+                    </article>
+                    <article>
+                        <i data-lucide="book-open" aria-hidden="true"></i>
+                        <h3><span class="copy-zh">阅读 · 拆解精读</span><span class="copy-en">Reading · Close reading</span></h3>
+                        <p><span class="copy-zh">任何法语文本，按句拆开讲清结构；点任意单词查意思，收进生词本。</span><span class="copy-en">Any French text, sentence by sentence; tap a word to look it up and save it to your word book.</span></p>
+                    </article>
+                    <article>
+                        <i data-lucide="mic" aria-hidden="true"></i>
+                        <h3><span class="copy-zh">口语 · 任务练习</span><span class="copy-en">Speaking · Task practice</span></h3>
+                        <p><span class="copy-zh">按 TCF 口语三个任务练习，录音转文字后逐句批改，改好的句子可以加入复习卡。</span><span class="copy-en">Practise the three TCF speaking tasks; your recording is transcribed and corrected sentence by sentence, and fixed sentences can become review cards.</span></p>
+                    </article>
+                    <article>
+                        <i data-lucide="pen-tool" aria-hidden="true"></i>
+                        <h3><span class="copy-zh">写作 · 逐句批改</span><span class="copy-en">Writing · Line-by-line feedback</span></h3>
+                        <p><span class="copy-zh">按考试题型写，AI 标出语法和表达问题，给出改法；改好的说法一键加入复习卡。</span><span class="copy-en">Write to the exam tasks; the AI marks grammar and wording and shows a fix. Add corrected phrases to your review cards in one tap.</span></p>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <section class="section" aria-labelledby="hours-title">
+            <div class="site-inner hours">
+                <div>
+                    <h2 id="hours-title"><span class="copy-zh">1000 小时，一小时一级</span><span class="copy-en">1000 hours, one level per hour</span></h2>
+                    <p><span class="copy-zh">按法语联盟的估计，从零到 NCLC 7（约 B2）大约需要 600–800 小时的有效学习。1000H 把每一小时都记下来：听说读写分路统计，每周一个目标，不搞每日打卡，家里有事的日子不扣分。</span><span class="copy-en">Alliance Française estimates roughly 600–800 hours of real study from zero to NCLC 7 (about B2). 1000H counts every hour: listening, reading, speaking and writing are tracked separately, targets are weekly rather than daily streaks, and family days never cost you anything.</span></p>
+                </div>
+                <div class="level-meter" aria-hidden="true">
+                    <span class="level-label">Lv. 1 → 1000</span>
+                    <span class="level-track"><span class="level-fill"></span></span>
+                    <span class="level-lanes"><span>CO</span><span>CE</span><span>EO</span><span>EE</span></span>
+                </div>
+            </div>
+        </section>
+
+        <section class="band" aria-labelledby="story-title">
+            <div class="site-inner story">
+                <h2 id="story-title"><span class="copy-zh">为什么做这个</span><span class="copy-en">Why this exists</span></h2>
+                <p><span class="copy-zh">作者自己正在从 A1 开始备考 TCF Canada。这个工具一开始只给自己用：每天的学习都在里面完成，功能是在哪里卡住就补哪里。现在开放内测，想知道它对别的考生是不是一样有用。</span><span class="copy-en">The maker is preparing for TCF Canada from A1. The tool started as a personal one: every day of study happens inside it, and each feature was added where learning got stuck. The beta is to find out whether it helps other candidates too.</span></p>
+            </div>
+        </section>
+
+        <section id="faq" class="section" aria-labelledby="faq-title">
+            <div class="site-inner faq">
+                <h2 id="faq-title"><span class="copy-zh">常见问题</span><span class="copy-en">Questions</span></h2>
+                <details>
+                    <summary><span class="copy-zh">什么水平可以用？</span><span class="copy-en">What level do I need?</span></summary>
+                    <p><span class="copy-zh">从 A1 开始就能用。练习内容来自你自己贴进来的材料，难度跟着材料走；界面可以切换中文或英文。</span><span class="copy-en">You can start at A1. Practice comes from the material you paste in, so difficulty follows your material. The interface is in Chinese or English.</span></p>
+                </details>
+                <details>
+                    <summary><span class="copy-zh">和多邻国、背单词 App 有什么不同？</span><span class="copy-en">How is this different from Duolingo or flashcard apps?</span></summary>
+                    <p><span class="copy-zh">练的是整句和你自己的材料，重点在说和写的输出，并且按 TCF 题型练，而不是选择题和单词。</span><span class="copy-en">You drill whole sentences from your own material, with the weight on speaking and writing in TCF task formats, not multiple choice and single words.</span></p>
+                </details>
+                <details>
+                    <summary><span class="copy-zh">AI 的讲解和批改一定对吗？</span><span class="copy-en">Is the AI always right?</span></summary>
+                    <p><span class="copy-zh">不一定。AI 会出错，尤其在语法细节上。这是练习工具，不替代老师；重要的内容请对照教材或请老师确认。</span><span class="copy-en">No. AI makes mistakes, especially on grammar details. This is a practice tool, not a teacher; check anything important against a textbook or a teacher.</span></p>
+                </details>
+                <details>
+                    <summary><span class="copy-zh">是 TCF 官方的吗？能保证分数吗？</span><span class="copy-en">Is it official? Does it guarantee a score?</span></summary>
+                    <p><span class="copy-zh">不是官方产品，与 TCF 主办方 France Éducation international 没有任何关联，也不承诺任何分数。</span><span class="copy-en">No. It is not affiliated with France Éducation international, which runs the TCF, and it promises no score.</span></p>
+                </details>
+                <details>
+                    <summary><span class="copy-zh">我的录音会被保存吗？</span><span class="copy-en">Are my recordings stored?</span></summary>
+                    <p><span class="copy-zh">口语录音在我们的服务器上转成文字后就丢弃，不保存音频。部分跟读练习使用浏览器自带的语音识别，由浏览器厂商处理。详见<a href="/privacy">隐私说明</a>。</span><span class="copy-en">Speaking recordings are turned into text on our server and then discarded; no audio is kept. Some shadowing drills use your browser's built-in speech recognition, handled by the browser vendor. See the <a href="/privacy">privacy notes</a>.</span></p>
+                </details>
+                <details>
+                    <summary><span class="copy-zh">收费吗？</span><span class="copy-en">Does it cost anything?</span></summary>
+                    <p><span class="copy-zh">内测期间免费。以后如果收费，会提前通知，不会自动扣款。</span><span class="copy-en">It is free during the beta. If that changes you will be told in advance, and nothing is charged automatically.</span></p>
+                </details>
+            </div>
+        </section>
+
+        <section id="apply" class="band" aria-labelledby="apply-title">
+            <div class="site-inner apply">
+                <div>
+                    <h2 id="apply-title"><span class="copy-zh">申请内测</span><span class="copy-en">Join the beta</span></h2>
+                    <p><span class="copy-zh">留下联系方式和你的备考情况。开放名额时，我们会通过你留的方式发邀请。</span><span class="copy-en">Leave a way to reach you and a few words about your prep. We will send an invitation when a spot opens.</span></p>
+                </div>
+                <form class="lead-form" data-kind="learner" novalidate>
+                    <label class="field">
+                        <span><span class="copy-zh">邮箱或微信号</span><span class="copy-en">Email or WeChat ID</span> *</span>
+                        <input name="contact" type="text" required maxlength="120" autocomplete="email">
+                    </label>
+                    <div class="field-row">
+                        <label class="field">
+                            <span><span class="copy-zh">现在的水平</span><span class="copy-en">Current level</span></span>
+                            <select name="level">
+                                <option value="" data-i18n="choose">请选择</option>
+                                <option value="zero">0 / 零基础</option>
+                                <option value="A1">A1</option>
+                                <option value="A2">A2</option>
+                                <option value="B1">B1</option>
+                                <option value="B2+">B2+</option>
+                            </select>
+                        </label>
+                        <label class="field">
+                            <span><span class="copy-zh">目标</span><span class="copy-en">Target</span></span>
+                            <select name="target">
+                                <option value="" data-i18n="choose">请选择</option>
+                                <option value="NCLC5">NCLC 5</option>
+                                <option value="NCLC6">NCLC 6</option>
+                                <option value="NCLC7">NCLC 7</option>
+                                <option value="NCLC8+">NCLC 8+</option>
+                                <option value="unsure">? / 不确定</option>
+                            </select>
+                        </label>
+                        <label class="field">
+                            <span><span class="copy-zh">计划考试时间</span><span class="copy-en">Planned exam</span></span>
+                            <select name="exam">
+                                <option value="" data-i18n="choose">请选择</option>
+                                <option value="2026">2026</option>
+                                <option value="2027H1">2027 H1</option>
+                                <option value="2027H2">2027 H2</option>
+                                <option value="later">2028+</option>
+                                <option value="unsure">? / 未定</option>
+                            </select>
+                        </label>
+                    </div>
+                    <label class="field">
+                        <span><span class="copy-zh">最想解决的问题（选填）</span><span class="copy-en">What do you most want to fix? (optional)</span></span>
+                        <textarea name="note" rows="3" maxlength="1000"></textarea>
+                    </label>
+                    <label class="hp-field" aria-hidden="true">Website <input name="website" type="text" tabindex="-1" autocomplete="off"></label>
+                    <button class="btn btn-primary" type="submit"><span class="copy-zh">提交申请</span><span class="copy-en">Send</span></button>
+                    <p class="form-status" role="status" aria-live="polite"></p>
+                    <p class="fine-print"><span class="copy-zh">提交即表示你同意我们按<a href="/privacy">隐私说明</a>保存这些信息，只用于内测邀请。</span><span class="copy-en">By sending this you agree that we keep it as described in the <a href="/privacy">privacy notes</a>, only for beta invitations.</span></p>
+                </form>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="site-inner footer-row">
+            <span>© 2026 1000H French</span>
+            <nav aria-label="Footer">
+                <a href="/for-institutions"><span class="copy-zh">机构合作</span><span class="copy-en">For schools</span></a>
+                <a href="/privacy"><span class="copy-zh">隐私说明</span><span class="copy-en">Privacy</span></a>
+                <a href="/study"><span class="copy-zh">进入应用</span><span class="copy-en">Open the app</span></a>
+            </nav>
+            <p class="disclaimer"><span class="copy-zh">TCF 是 France Éducation international 的注册商标。本站为独立的练习工具，与其无任何关联。</span><span class="copy-en">TCF is a registered trademark of France Éducation international. This is an independent practice tool with no affiliation.</span></p>
+        </div>
+    </footer>
+</body>
+</html>

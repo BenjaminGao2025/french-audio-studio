@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light">
+    <meta name="asset-version" content="__ASSET_VERSION__">
+    <title>隐私说明 · 1000H French</title>
+    <link rel="icon" href="/favicon.ico?v=2" sizes="any">
+    <link rel="stylesheet" href="/static/tokens.css?v=__ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/style.css?v=__ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/landing.css?v=__ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/ui.css?v=__ASSET_VERSION__">
+    <script src="https://unpkg.com/lucide@1.34.0/dist/umd/lucide.min.js" defer></script>
+    <script src="/static/i18n.js?v=__ASSET_VERSION__" defer></script>
+    <script src="/static/landing.js?v=__ASSET_VERSION__" defer></script>
+</head>
+<body class="landing" data-page-title-zh="隐私说明 · 1000H French" data-page-title-en="Privacy · 1000H French">
+    <header class="site-header">
+        <div class="site-inner site-header-row">
+            <a class="site-brand" href="/home">
+                <span class="brand-mark" aria-hidden="true"><i data-lucide="brain"></i></span>
+                <span>1000H French</span>
+            </a>
+            <nav class="site-nav" aria-label="Site">
+                <a href="/home"><span class="copy-zh">首页</span><span class="copy-en">Home</span></a>
+                <button id="lang-toggle" class="btn btn-secondary lang-toggle" type="button"></button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="site-inner prose">
+        <h1><span class="copy-zh">隐私说明</span><span class="copy-en">Privacy notes</span></h1>
+        <p class="fine-print"><span class="copy-zh">更新于 2026 年 10 月 8 日</span><span class="copy-en">Updated 8 October 2026</span></p>
+
+        <h2><span class="copy-zh">我们保存什么</span><span class="copy-en">What we keep</span></h2>
+        <ul>
+            <li><span class="copy-zh">账号：邮箱和加密处理后的密码（不保存明文密码）。</span><span class="copy-en">Your account: email and a salted hash of your password (never the password itself).</span></li>
+            <li><span class="copy-zh">学习记录：你贴进来的文本、生成的讲解和音频、复习卡和复习结果、口语和写作的文字稿与批改、学习时长。</span><span class="copy-en">Study records: text you paste in, generated explanations and audio, review cards and results, transcripts and corrections of your speaking and writing, and study hours.</span></li>
+            <li><span class="copy-zh">内测申请和机构合作表单里填写的内容。</span><span class="copy-en">What you enter in the beta or partnership forms.</span></li>
+        </ul>
+
+        <h2><span class="copy-zh">录音</span><span class="copy-en">Recordings</span></h2>
+        <p><span class="copy-zh">口语和讲解的录音上传到我们的服务器，由服务器上的语音识别模型转成文字后即丢弃，不保存音频文件，也不发给第三方。部分跟读练习使用浏览器自带的语音识别；这时录音由浏览器厂商（例如 Chrome 由 Google）处理，适用其隐私政策。</span><span class="copy-en">Speaking and explanation recordings are sent to our server, turned into text by a speech model running there, and then discarded; no audio file is kept or sent to a third party. Some shadowing drills use your browser's built-in speech recognition, in which case the browser vendor (for Chrome, Google) processes the audio under its own policy.</span></p>
+
+        <h2><span class="copy-zh">交给第三方处理的内容</span><span class="copy-en">What third parties process</span></h2>
+        <ul>
+            <li><span class="copy-zh">生成讲解和批改时，相关文本会发送给大语言模型服务（目前主要是 Google Gemini）。</span><span class="copy-en">To write explanations and corrections, the relevant text is sent to a large language model service (currently mainly Google Gemini).</span></li>
+            <li><span class="copy-zh">生成法语音频时，文本会发送给 Microsoft 的语音合成服务。</span><span class="copy-en">To make French audio, the text is sent to Microsoft's speech synthesis service.</span></li>
+        </ul>
+        <p><span class="copy-zh">我们不出售你的数据，不投放广告，也不使用广告或跨站追踪。</span><span class="copy-en">We do not sell your data, show ads or use ad or cross-site tracking.</span></p>
+
+        <h2><span class="copy-zh">Cookie 和本地存储</span><span class="copy-en">Cookies and local storage</span></h2>
+        <p><span class="copy-zh">登录后使用一个会话 Cookie 保持登录状态。登录凭证、界面语言、所选模型等保存在你自己浏览器的本地存储里。</span><span class="copy-en">One session cookie keeps you logged in. Your login token and preferences such as interface language and model choice stay in your own browser's local storage.</span></p>
+
+        <h2><span class="copy-zh">删除和导出</span><span class="copy-en">Deleting or exporting</span></h2>
+        <p><span class="copy-zh">你可以随时要求导出或删除你的账号和全部学习记录。内测期间请通过<a href="/home#apply">申请表</a>留言，写明注册邮箱。</span><span class="copy-en">You can ask at any time for your account and all study records to be exported or deleted. During the beta, leave a message through the <a href="/home#apply">form</a> with your account email.</span></p>
+    </main>
+
+    <footer class="site-footer">
+        <div class="site-inner footer-row">
+            <span>© 2026 1000H French</span>
+            <nav aria-label="Footer">
+                <a href="/home"><span class="copy-zh">首页</span><span class="copy-en">Home</span></a>
+                <a href="/for-institutions"><span class="copy-zh">机构合作</span><span class="copy-en">For schools</span></a>
+            </nav>
+        </div>
+    </footer>
+</body>
+</html>

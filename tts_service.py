@@ -9,6 +9,7 @@ import logging
 import os
 import re
 import threading
+import time
 import uuid
 from pathlib import Path
 from typing import Any, Literal
@@ -1391,9 +1392,68 @@ async def asset_version():
     return {"version": ASSET_VERSION}
 
 
+# Hosts (e.g. the product domain) whose "/" shows the public site instead of the audio workbench
+LANDING_HOSTS = {
+    host.strip().lower() for host in os.getenv("LANDING_HOSTS", "").split(",") if host.strip()
+}
+
+
 @app.get("/")
-async def root():
-    return _html_page("index.html")
+async def root(request: Request):
+    host = request.headers.get("host", "").split(":")[0].lower()
+    return _html_page("landing.html" if host in LANDING_HOSTS else "index.html")
+
+
+@app.get("/home")
+async def landing_page():
+    return _html_page("landing.html")
+
+
+@app.get("/for-institutions")
+async def institutions_page():
+    return _html_page("for-institutions.html")
+
+
+@app.get("/privacy")
+async def privacy_page():
+    return _html_page("privacy.html")
+
+
+class WaitlistRequest(BaseModel):
+    kind: Literal["learner", "institution"] = "learner"
+    contact: str = Field(min_length=1, max_length=120)
+    org: str = Field(default="", max_length=120)
+    size: str = Field(default="", max_length=20)
+    level: str = Field(default="", max_length=20)
+    target: str = Field(default="", max_length=20)
+    exam: str = Field(default="", max_length=20)
+    note: str = Field(default="", max_length=1000)
+    lang: Literal["zh", "en"] = "zh"
+    website: str = Field(default="", max_length=200)  # honeypot: people never see it
+
+
+WAITLIST_LIMIT = 5
+WAITLIST_WINDOW_SECONDS = 3600
+_waitlist_hits: dict[str, list[float]] = {}
+
+
+@app.post("/api/waitlist")
+async def join_waitlist(req: WaitlistRequest, request: Request):
+    if req.website:
+        return {"ok": True}  # a bot filled the hidden field: pretend it worked
+    contact = req.contact.strip()
+    if not contact or (req.kind == "institution" and not req.org.strip()):
+        raise HTTPException(status_code=422, detail={"message": "请填写必填项。"})
+    ip = request.headers.get("cf-connecting-ip") or (request.client.host if request.client else "")
+    now = time.monotonic()
+    hits = [t for t in _waitlist_hits.get(ip, []) if now - t < WAITLIST_WINDOW_SECONDS]
+    if len(hits) >= WAITLIST_LIMIT:
+        raise HTTPException(status_code=429, detail={"message": "提交太频繁了，请稍后再试。"})
+    _waitlist_hits[ip] = hits + [now]
+    fields = ("org", "size", "level", "target", "exam", "note")
+    details = {name: getattr(req, name).strip() for name in fields if getattr(req, name).strip()}
+    await run_in_threadpool(auth_db.add_waitlist_entry, req.kind, contact, details, req.lang)
+    return {"ok": True}
 
 
 @app.get("/favicon.ico", include_in_schema=False)

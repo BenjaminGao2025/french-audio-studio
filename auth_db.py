@@ -66,6 +66,14 @@ def init_db() -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_history_user ON history_records(user_id, created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_history_type ON history_records(record_type, created_at DESC);
+            CREATE TABLE IF NOT EXISTS waitlist (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                kind TEXT NOT NULL,
+                contact TEXT NOT NULL,
+                details_json TEXT NOT NULL,
+                lang TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
             """
         )
         conn.commit()
@@ -385,6 +393,22 @@ def clear_history_records(user_id: int, record_type: str | None = None) -> int:
         return cursor.rowcount
 
 
+def add_waitlist_entry(kind: str, contact: str, details: dict[str, str], lang: str) -> int:
+    """Store a beta application (kind 'learner') or a partnership request (kind 'institution')."""
+    with connect() as conn:
+        cursor = conn.execute(
+            "INSERT INTO waitlist (kind, contact, details_json, lang, created_at) VALUES (?, ?, ?, ?, ?)",
+            (
+                kind,
+                contact,
+                json.dumps(details, ensure_ascii=False),
+                lang,
+                datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z",
+            ),
+        )
+        return int(cursor.lastrowid)
+
+
 def _user_id_by_email(conn: sqlite3.Connection, email: str) -> int:
     row = conn.execute(
         "SELECT id FROM users WHERE email = ?", (email.strip().lower(),)
@@ -399,6 +423,7 @@ def _admin_cli(argv: list[str]) -> None:
     python auth_db.py set-password you@example.com
     python auth_db.py set-plan you@example.com pro
     python auth_db.py claim-anonymous-history you@example.com
+    python auth_db.py list-waitlist
     """
     import argparse
     import getpass
@@ -410,7 +435,16 @@ def _admin_cli(argv: list[str]) -> None:
     plan_parser.add_argument("email")
     plan_parser.add_argument("plan", choices=["trial", "pro"])
     sub.add_parser("claim-anonymous-history").add_argument("email")
+    sub.add_parser("list-waitlist")
     args = parser.parse_args(argv)
+
+    if args.command == "list-waitlist":
+        with connect() as conn:
+            rows = conn.execute("SELECT * FROM waitlist ORDER BY id").fetchall()
+        for row in rows:
+            print(f"{row['id']}\t{row['created_at']}\t{row['kind']}\t{row['contact']}\t{row['details_json']}")
+        print(f"{len(rows)} entries.")
+        return
 
     with connect() as conn:
         user_id = _user_id_by_email(conn, args.email)
