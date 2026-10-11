@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import hashlib
+import hmac
 import io
 import json
 import logging
@@ -248,7 +249,7 @@ def _authorization_token(authorization: str | None) -> str:
             status_code=401,
             detail={
                 "code": "missing_api_key",
-                "message": "请先登录账号（新注册享 60 天免费）或在设置中填写 API Key。",
+                "message": "请先登录账号。",
             },
         )
     parts = authorization.split(" ", 1)
@@ -258,7 +259,7 @@ def _authorization_token(authorization: str | None) -> str:
             status_code=401,
             detail={
                 "code": "missing_api_key",
-                "message": "请先登录账号（新注册享 60 天免费）或在设置中填写 API Key。",
+                "message": "请先登录账号。",
             },
         )
 
@@ -286,7 +287,12 @@ def _authorization_token(authorization: str | None) -> str:
             )
         return SERVER_WEB2API_KEY
 
-    return token
+    # Security: a token that is not a valid session must never be forwarded upstream
+    # as an API key (that made every AI endpoint an anonymous proxy to the local web2api).
+    raise HTTPException(
+        status_code=401,
+        detail={"code": "login_required", "message": "请先登录账号。"},
+    )
 
 
 SIGNED_OUT_DETAIL = {
@@ -316,8 +322,13 @@ def _session_value(authorization: str | None, request: Request | None = None) ->
     return ""
 
 
+_TRUSTED_PROXY_HOSTS = {"127.0.0.1", "::1", "localhost"}
+
+
 def _cookie_secure(request: Request) -> bool:
-    forwarded = request.headers.get("x-forwarded-proto", "")
+    # Only trust X-Forwarded-Proto from the local reverse proxy (cloudflared on loopback).
+    client_host = request.client.host if request.client else ""
+    forwarded = request.headers.get("x-forwarded-proto", "") if client_host in _TRUSTED_PROXY_HOSTS else ""
     proto = (forwarded or request.url.scheme).split(",")[0].strip().lower()
     return proto == "https"
 
@@ -1294,7 +1305,12 @@ def _safe_timestamp(
     if value and re.fullmatch(r"[0-9A-Za-z_-]{1,48}", value):
         return value
     if text and voice and len(text) <= TTS_SNIPPET_MAX_CHARS:
-        h = hashlib.sha256(f"{voice}:{text.strip()}".encode("utf-8")).hexdigest()[:16]
+        # Keyed hash: still cacheable per (voice, text), but not computable without AUTH_SECRET.
+        h = hmac.new(
+            auth_db.AUTH_SECRET.encode("utf-8"),
+            f"{voice}:{text.strip()}".encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()[:32]
         return f"snip_{h}"
     return _timestamp()
 
@@ -1566,7 +1582,11 @@ async def generate_speech(
 
 
 @app.get("/files/{filename}")
-async def get_output_file(filename: str, download: bool = Query(default=False)):
+async def get_output_file(
+    request: Request, filename: str, download: bool = Query(default=False)
+):
+    # <audio src> sends the same-origin HttpOnly session cookie; API clients may use Bearer.
+    _require_user_id(request.headers.get("authorization"), request)
     return _output_file(filename, download=download)
 
 
@@ -3264,5 +3284,6 @@ def list_speak_attempts(
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Loopback only: the public entry is the Cloudflare tunnel (network_mode: host).
+    uvicorn.run(app, host=os.getenv("TTS_HOST", "127.0.0.1"), port=int(os.getenv("TTS_PORT", "8000")))
 

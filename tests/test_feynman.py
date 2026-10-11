@@ -33,7 +33,7 @@ class FeynmanTests(unittest.TestCase):
             "variation": {"ok": False, "corrected": "Aucune dispense n'est autorisée.", "note": "aucune 不和 pas 连用"},
             "follow_up": "为什么这里没有 pas？",
         }, ensure_ascii=False) + "\n```")
-        res = self.client.post("/api/feynman", json=REQUEST, headers={"Authorization": "Bearer user-key"})
+        res = self.client.post("/api/feynman", json=REQUEST, headers=testenv.session_headers())
         self.assertEqual(res.status_code, 200)
         data = res.json()
         self.assertEqual(data["verdict"], "partial")
@@ -44,7 +44,7 @@ class FeynmanTests(unittest.TestCase):
         user_message = payload["messages"][1]["content"]
         self.assertIn(REQUEST["explanation"], user_message)
         self.assertIn("aucune already means no", user_message)
-        self.assertEqual(post_chat.call_args.args[2]["Authorization"], "Bearer user-key")
+        self.assertEqual(post_chat.call_args.args[2]["Authorization"], "Bearer server-test-key")
         self.assertIn("simple English", payload["messages"][0]["content"])
 
     @patch("tts_service._post_chat", new_callable=AsyncMock)
@@ -53,7 +53,7 @@ class FeynmanTests(unittest.TestCase):
             "verdict": "weird", "got_right": "not a list", "gaps": [], "variation": {"ok": True}, "follow_up": "",
         }))
         res = self.client.post(
-            "/api/feynman", json={**REQUEST, "variation": ""}, headers={"Authorization": "Bearer k"}
+            "/api/feynman", json={**REQUEST, "variation": ""}, headers=testenv.session_headers()
         )
         data = res.json()
         self.assertEqual(data["verdict"], "partial")
@@ -63,7 +63,7 @@ class FeynmanTests(unittest.TestCase):
     @patch("tts_service._post_chat", new_callable=AsyncMock)
     def test_unparseable_output_returns_502(self, post_chat):
         post_chat.return_value = ({}, "Sorry, I cannot help.")
-        res = self.client.post("/api/feynman", json=REQUEST, headers={"Authorization": "Bearer k"})
+        res = self.client.post("/api/feynman", json=REQUEST, headers=testenv.session_headers())
         self.assertEqual(res.status_code, 502)
         self.assertEqual(res.json()["detail"]["code"], "feynman_bad_output")
 
@@ -91,7 +91,7 @@ class AskTests(unittest.TestCase):
     @patch("tts_service._post_chat", new_callable=AsyncMock)
     def test_answer_uses_sentence_and_history(self, post_chat):
         post_chat.return_value = ({}, "## Answer\n**de + la** stays **de la**. No change.\nExample: de la ville = of the city.")
-        res = self.client.post("/api/ask", json=ASK, headers={"Authorization": "Bearer k"})
+        res = self.client.post("/api/ask", json=ASK, headers=testenv.session_headers())
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json()["answer"], "Answer\nde + la stays de la. No change.\nExample: de la ville = of the city.")
 
@@ -104,7 +104,7 @@ class AskTests(unittest.TestCase):
     @patch("tts_service._post_chat", new_callable=AsyncMock)
     def test_empty_answer_returns_502(self, post_chat):
         post_chat.return_value = ({}, "<think>hmm</think>   ")
-        res = self.client.post("/api/ask", json=ASK, headers={"Authorization": "Bearer k"})
+        res = self.client.post("/api/ask", json=ASK, headers=testenv.session_headers())
         self.assertEqual(res.status_code, 502)
 
 

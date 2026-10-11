@@ -66,7 +66,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
     def test_transform_returns_editable_french(self, transform_mock):
         response = self.client.post(
             "/api/transform",
-            headers={"Authorization": "Bearer test-key"},
+            headers=testenv.session_headers(),
             json={
                 "text": "A：你好！",
                 "style": "spoken",
@@ -90,7 +90,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
                 "quality_check": "proofread",
             },
         )
-        self.assertEqual(transform_mock.await_args.args[1], "test-key")
+        self.assertEqual(transform_mock.await_args.args[1], "server-test-key")
         self.assertEqual(transform_mock.await_args.args[0].model, "gpt-6.1-sol-thinking")
         self.assertEqual(transform_mock.await_args.args[0].task_mode, "translate")
 
@@ -108,7 +108,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
     def test_connection_test_verifies_selected_model(self, transform_mock):
         response = self.client.post(
             "/api/connection/test",
-            headers={"Authorization": "Bearer test-key"},
+            headers=testenv.session_headers(),
             json={"model": "gpt-6.1-sol-thinking"},
         )
 
@@ -714,7 +714,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
     def test_analyze_returns_structured_breakdown(self, analyze_mock):
         response = self.client.post(
             "/api/analyze",
-            headers={"Authorization": "Bearer test-key"},
+            headers=testenv.session_headers(),
             json={"text": "Je vais au marché.", "model": "gpt-6.1-sol-thinking"},
         )
         self.assertEqual(response.status_code, 200)
@@ -855,7 +855,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
         }
         res = self.client.get(
             "/api/lookup?word=bonjour",
-            headers={"Authorization": "Bearer test-key"},
+            headers=testenv.session_headers(),
         )
         self.assertEqual(res.status_code, 200)
         data = res.json()

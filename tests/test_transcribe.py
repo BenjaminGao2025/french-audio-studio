@@ -54,14 +54,14 @@ class TranscribeTests(unittest.TestCase):
     def test_fix_uses_sentence_and_falls_back_on_runaway_output(self, post_chat):
         body = {"sentence": "À partir de lundi.", "context": "Exemples d'épreuves du TCF", "text": "a part or die 是固定搭配"}
         post_chat.return_value = ({}, "à partir de 是固定搭配")
-        res = self.client.post("/api/transcribe/fix", json=body, headers={"Authorization": "Bearer k"})
+        res = self.client.post("/api/transcribe/fix", json=body, headers=testenv.session_headers())
         self.assertEqual(res.json()["text"], "à partir de 是固定搭配")
         system = post_chat.call_args.args[1]["messages"][0]["content"]
         self.assertIn("À partir de lundi.", system)
         self.assertIn("Exemples d'épreuves du TCF", system)
 
         post_chat.return_value = ({}, "Here is a long essay " * 50)
-        res = self.client.post("/api/transcribe/fix", json=body, headers={"Authorization": "Bearer k"})
+        res = self.client.post("/api/transcribe/fix", json=body, headers=testenv.session_headers())
         self.assertEqual(res.json()["text"], body["text"])
 
 
