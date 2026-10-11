@@ -13,14 +13,14 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 import edge_tts
 import httpx
 
 logger = logging.getLogger("tts_service")
 from fastapi import FastAPI, Header, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
@@ -28,26 +28,23 @@ from pydantic import BaseModel, Field
 import auth_db
 import episodes
 import game
+import routers.auth
+import routers.game
+import routers.history
+import routers.srs
 import srs
 import writing
 import speaking
+from web_common import BASE_DIR, OUTPUT_DIR, SIGNED_OUT_DETAIL, STATIC_DIR, _require_user_id
 
-
-BASE_DIR = Path(__file__).resolve().parent
-STATIC_DIR = BASE_DIR / "static"
-OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", str(BASE_DIR / "outputs"))).resolve()
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-
-# Two OpenAI-compatible upstreams: the Perplexity web2api (perplexity-web-api) and the AGY (Antigravity) adapter
-PERPLEXITY_BASE_URL = os.getenv(
-    "PERPLEXITY_BASE_URL", "http://127.0.0.1:8002/v1"
-).rstrip("/")
+# Every AI call goes to the AGY (Antigravity) adapter: an OpenAI-compatible Gemini gateway.
 AGY_BASE_URL = os.getenv("AGY_BASE_URL", "http://127.0.0.1:8645/v1").rstrip("/")
-PERPLEXITY_MODEL = os.getenv("PERPLEXITY_MODEL", "gemini-3.8-flash")
-PERPLEXITY_PROOFREAD_MODEL = os.getenv("PERPLEXITY_PROOFREAD_MODEL", "gemini-3.8-flash")
-# Quick helper tasks (e.g. fixing dictation) always use a fast model
-FAST_MODEL = os.getenv("FAST_MODEL", "gemini-3.8-flash")
-PERPLEXITY_TIMEOUT_SECONDS = float(os.getenv("PERPLEXITY_TIMEOUT_SECONDS", "120"))
+AGY_MODEL = os.getenv("AGY_MODEL", "gemini-3.8-flash-low")
+# The model id clients see. Browsers may still hold an older model name (a Perplexity-era one):
+# every name is accepted, and AGY_MODEL answers it.
+DEFAULT_MODEL = "gemini-3.8-flash"
+MODEL_LABELS = {DEFAULT_MODEL: "Gemini 3.8 Flash (AGY)"}
+UPSTREAM_TIMEOUT_SECONDS = float(os.getenv("UPSTREAM_TIMEOUT_SECONDS", "120"))
 MAX_TEXT_CHARS = int(os.getenv("MAX_TEXT_CHARS", "15000"))
 TTS_SNIPPET_MAX_CHARS = 600
 ASR_MODEL_DIR = Path(
@@ -56,60 +53,11 @@ ASR_MODEL_DIR = Path(
 ASR_CPU_THREADS = int(os.getenv("ASR_CPU_THREADS", "8"))
 ASR_MAX_BYTES = 15 * 1024 * 1024
 
-TRANSFORM_MODELS = {
-    "gpt-6.1-sol-thinking": {
-        "label": "GPT-6.1 Sol Thinking",
-        "description": "Perplexity; strongest reasoning, slower.",
-        "recommended": False,
-    },
-    "gpt-6.1-sol": {
-        "label": "GPT-6.1 Sol",
-        "description": "Perplexity; strong and faster than Thinking.",
-        "recommended": False,
-    },
-    "claude-sonnet-5.5-thinking": {
-        "label": "Claude Sonnet 5.5 Thinking",
-        "description": "Perplexity; careful explanations.",
-        "recommended": False,
-    },
-    "claude-sonnet-5.5": {
-        "label": "Claude Sonnet 5.5",
-        "description": "Perplexity.",
-        "recommended": False,
-    },
-    "grok-4.7": {
-        "label": "Grok 4.7",
-        "description": "Perplexity.",
-        "recommended": False,
-    },
-    "gemini-3.8-flash": {
-        "label": "Gemini 3.8 Flash (AGY)",
-        "description": "7840 AGY (low thinking); fastest.",
-        "recommended": True,
-    },
-}
-MODEL_LABELS = {model_id: details["label"] for model_id, details in TRANSFORM_MODELS.items()}
-if PERPLEXITY_MODEL not in TRANSFORM_MODELS:
-    raise RuntimeError(f"Unsupported PERPLEXITY_MODEL: {PERPLEXITY_MODEL}")
-
-
-AGY_MODEL = os.getenv("AGY_MODEL", "gemini-3.8-flash-low")
-AGY_UPSTREAM_MODELS = {"gemini-3.8-flash": AGY_MODEL}
-# AGY_ONLY=true (default since 2026-10-11): every AI call goes to the AGY Gemini model, whatever
-# model a client asks for (old browsers may still have a Perplexity model saved). Perplexity paused.
-AGY_ONLY = os.getenv("AGY_ONLY", "true").strip().lower() in {"1", "true", "yes"}
-
 
 def _map_upstream_model(model_name: str) -> str:
-    if AGY_ONLY:
-        return AGY_MODEL
-    return AGY_UPSTREAM_MODELS.get(model_name, model_name)
+    """The upstream model for a requested name: AGY_MODEL, whatever name the client sent."""
+    return AGY_MODEL
 
-
-def _upstream_base_url(upstream_model: str) -> str:
-    if AGY_ONLY:
-        return AGY_BASE_URL
-    return AGY_BASE_URL if upstream_model in AGY_UPSTREAM_MODELS.values() else PERPLEXITY_BASE_URL
 
 SUPPORTED_VOICES = {
     "en-US-AvaNeural",
@@ -159,10 +107,6 @@ UPSTREAM_META_RE = re.compile(
     r"je traduis le texte|voici la traduction|texte traduit)\b",
     re.IGNORECASE,
 )
-# What Perplexity answers when the web session is no longer logged in
-UPSTREAM_LOGIN_RE = re.compile(r"^\s*sign (?:up|in) and repeat your request", re.IGNORECASE)
-# Perplexity adds source markers like "[1]" to answers, even between JSON tokens
-CITATION_MARKER_RE = re.compile(r" ?\[\d{1,2}\](?:\[\d{1,2}\])*")
 FRENCH_BLOCK_RE = re.compile(r"<FRENCH>\s*(.*?)\s*</FRENCH>", re.IGNORECASE | re.DOTALL)
 TRAILING_OFFER_RE = re.compile(
     r"\s+(?:si\s+tu\s+veux|si\s+vous\s+voulez),?\s+je\s+peux\b"
@@ -205,10 +149,8 @@ FRENCH_WORD_RE = re.compile(
     r"[A-Za-zÀ-ÖØ-öø-ÿŒœ]+(?:[’'-][A-Za-zÀ-ÖØ-öø-ÿŒœ]+)*"
 )
 
-TransformModel = Literal[
-    "gpt-6.1-sol-thinking", "gpt-6.1-sol", "claude-sonnet-5.5-thinking",
-    "claude-sonnet-5.5", "grok-4.7", "gemini-3.8-flash",
-]
+# Any name: one an old browser saved must never 422. The value is not forwarded upstream.
+TransformModel = Annotated[str, Field(max_length=100)]
 TaskMode = Literal["auto", "generate", "translate", "express", "polish"]
 ResolvedTaskMode = Literal["generate", "translate", "express", "polish"]
 QualityCheck = Literal["passed", "proofread"]
@@ -219,12 +161,12 @@ class TransformRequest(BaseModel):
     style: Literal["spoken", "neutral", "formal", "polished"] = "spoken"
     level: Literal["A1-A2", "B1-B2", "C1-C2"] = "B1-B2"
     locale: Literal["fr-FR", "fr-CA"] = "fr-FR"
-    model: TransformModel = PERPLEXITY_MODEL
+    model: TransformModel = DEFAULT_MODEL
     task_mode: TaskMode = "auto"
 
 
 class ConnectionTestRequest(BaseModel):
-    model: TransformModel = PERPLEXITY_MODEL
+    model: TransformModel = DEFAULT_MODEL
 
 
 class SpeechRequest(BaseModel):
@@ -234,11 +176,16 @@ class SpeechRequest(BaseModel):
 
 class AnalyzeRequest(BaseModel):
     text: str = Field(min_length=1, max_length=MAX_TEXT_CHARS)
-    model: TransformModel = PERPLEXITY_MODEL
+    model: TransformModel = DEFAULT_MODEL
 
 
 app = FastAPI(title="French Audio Studio", version="2.0.0")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+# Account, history, SRS-data and game routes live in routers/. The AI-backed routes (transform,
+# analyze, episodes, write, speak, ...) stay in this module: tests patch tts_service._post_chat and
+# friends, and a handler only sees such a patch when it looks the name up here.
+for _routes in (routers.auth, routers.history, routers.srs, routers.game):
+    app.include_router(_routes.router)
 
 
 def _normalized_text(value: str) -> str:
@@ -283,7 +230,7 @@ def _authorization_token(authorization: str | None) -> str:
                 status_code=403,
                 detail={
                     "code": "trial_expired",
-                    "message": "您的 60 天免费试用期已结束。您可以填写自定义 API Key 继续使用，或联系站长续期。",
+                    "message": "您的 60 天免费试用期已结束，请联系站长续期。",
                 },
             )
         if not SERVER_WEB2API_KEY:
@@ -291,7 +238,7 @@ def _authorization_token(authorization: str | None) -> str:
                 status_code=503,
                 detail={
                     "code": "server_key_missing",
-                    "message": "服务器尚未配置上游 API Key（WEB2API_API_KEY），请在设置中填写自己的 API Key。",
+                    "message": "服务器尚未配置上游 API Key（WEB2API_API_KEY），请联系站长。",
                 },
             )
         return SERVER_WEB2API_KEY
@@ -355,79 +302,6 @@ def _feedback_error_message(exc: Exception) -> str:
     return FEEDBACK_FAILED_MESSAGE
 
 
-SIGNED_OUT_DETAIL = {
-    "code": "session_revoked",
-    "message": "这台设备已退出登录：账号最多同时登录 3 台设备，可能是在别的设备上登录了。请重新登录。",
-}
-
-SESSION_COOKIE = "fas_session"
-SESSION_MAX_AGE = 90 * 24 * 3600
-
-
-def _bearer_value(authorization: str | None) -> str:
-    if not authorization:
-        return ""
-    parts = authorization.split(" ", 1)
-    if len(parts) == 2 and parts[0].lower() == "bearer":
-        return parts[1].strip()
-    return authorization.strip()
-
-
-def _session_value(authorization: str | None, request: Request | None = None) -> str:
-    header = _bearer_value(authorization)
-    if header:
-        return header
-    if request is not None:
-        return request.cookies.get(SESSION_COOKIE, "")
-    return ""
-
-
-_TRUSTED_PROXY_HOSTS = {"127.0.0.1", "::1", "localhost"}
-
-
-def _cookie_secure(request: Request) -> bool:
-    # Only trust X-Forwarded-Proto from the local reverse proxy (cloudflared on loopback).
-    client_host = request.client.host if request.client else ""
-    forwarded = request.headers.get("x-forwarded-proto", "") if client_host in _TRUSTED_PROXY_HOSTS else ""
-    proto = (forwarded or request.url.scheme).split(",")[0].strip().lower()
-    return proto == "https"
-
-
-def _set_session_cookie(response: Response, token: str, request: Request) -> None:
-    response.set_cookie(
-        SESSION_COOKIE,
-        token,
-        max_age=SESSION_MAX_AGE,
-        httponly=True,
-        samesite="lax",
-        secure=_cookie_secure(request),
-        path="/",
-    )
-
-
-def _clear_session_cookie(response: Response, request: Request) -> None:
-    response.delete_cookie(
-        SESSION_COOKIE,
-        path="/",
-        httponly=True,
-        samesite="lax",
-        secure=_cookie_secure(request),
-    )
-
-
-def _require_user_id(authorization: str | None, request: Request | None = None) -> int:
-    token = _session_value(authorization, request)
-    payload = auth_db.verify_token(token)
-    if not payload and auth_db.is_signed_out_token(token):
-        raise HTTPException(status_code=401, detail=SIGNED_OUT_DETAIL)
-    if not payload:
-        raise HTTPException(
-            status_code=401,
-            detail={"code": "login_required", "message": "请先登录账号。"},
-        )
-    return int(payload["sub"])
-
-
 def _clean_model_text(value: str) -> str:
     text = value.strip()
     if text.startswith("```") and text.endswith("```"):
@@ -452,7 +326,7 @@ def _parse_task_classification(value: str) -> ResolvedTaskMode:
             status_code=502,
             detail={
                 "code": "missing_task_classification",
-                "message": "Grok 未返回可验证的处理方式，请重试或手动选择一种处理方式。",
+                "message": "模型未返回可验证的处理方式，请重试或手动选择一种处理方式。",
             },
         )
     if len(matches) != 1:
@@ -460,7 +334,7 @@ def _parse_task_classification(value: str) -> ResolvedTaskMode:
             status_code=502,
             detail={
                 "code": "invalid_task_classification",
-                "message": "Grok 返回了无法识别的处理方式，请重试或手动选择一种处理方式。",
+                "message": "模型返回了无法识别的处理方式，请重试或手动选择一种处理方式。",
             },
         )
     return matches.pop()
@@ -512,7 +386,7 @@ def _generation_length_instruction(value: str) -> str:
 
 def _classification_payload(request: TransformRequest) -> dict:
     return {
-        "model": request.model,
+        "model": _map_upstream_model(request.model),
         "messages": [
             {
                 "role": "system",
@@ -546,7 +420,7 @@ def _proofread_payload(
     task_instruction = _build_messages(request, task_mode)[0]["content"]
     candidate = draft.strip() or "No usable draft is available; produce the final French."
     return {
-        "model": _map_upstream_model(PERPLEXITY_PROOFREAD_MODEL),
+        "model": _map_upstream_model(DEFAULT_MODEL),
         "messages": [
             {
                 "role": "system",
@@ -632,7 +506,7 @@ def _chat_payload(request: TransformRequest, task_mode: ResolvedTaskMode) -> dic
 
 def _upstream_error(response: httpx.Response) -> HTTPException:
     code = "upstream_error"
-    message = f"Perplexity web2api 返回 HTTP {response.status_code}。"
+    message = f"AI 服务返回 HTTP {response.status_code}。"
     try:
         payload = response.json()
         error = payload.get("error", {}) if isinstance(payload, dict) else {}
@@ -642,29 +516,16 @@ def _upstream_error(response: httpx.Response) -> HTTPException:
     except ValueError:
         pass
 
-    if response.status_code == 401 and code in {
-        "perplexity_auth_failed",
-        "upstream_auth_failed",
-    }:
+    if response.status_code == 401:
+        # The only key sent upstream is the server's own, so this is a server problem.
         return HTTPException(
             status_code=503,
-            detail={
-                "code": code,
-                "message": (
-                    "Perplexity 登录态已失效或账号当前不可用。请在 7840 更新 "
-                    "PERPLEXITY_COOKIES 后重试。"
-                ),
-            },
-        )
-    if response.status_code == 401:
-        return HTTPException(
-            status_code=401,
-            detail={"code": code, "message": "web2api API Key 不正确。"},
+            detail={"code": code, "message": "AI 服务拒绝了服务器的密钥，请联系站长。"},
         )
     if response.status_code == 429:
         return HTTPException(
             status_code=429,
-            detail={"code": code, "message": "Perplexity 请求过多，请稍后重试。"},
+            detail={"code": code, "message": "AI 服务请求过多，请稍后重试。"},
         )
     return HTTPException(
         status_code=502,
@@ -678,7 +539,7 @@ async def _post_chat(
     for upstream_attempt in range(2):
         try:
             response = await client.post(
-                f"{_upstream_base_url(str(payload.get('model')))}/chat/completions",
+                f"{AGY_BASE_URL}/chat/completions",
                 headers=headers,
                 json=payload,
             )
@@ -687,7 +548,7 @@ async def _post_chat(
                 status_code=504,
                 detail={
                     "code": "upstream_timeout",
-                    "message": "Perplexity 处理超时，请缩短文本或稍后重试。",
+                    "message": "AI 处理超时，请缩短文本或稍后重试。",
                 },
             ) from exc
         except httpx.RequestError as exc:
@@ -695,7 +556,7 @@ async def _post_chat(
                 status_code=502,
                 detail={
                     "code": "upstream_unreachable",
-                    "message": "无法连接 7840 上的 Perplexity web2api。",
+                    "message": "无法连接 AI 服务（AGY）。",
                 },
             ) from exc
         if response.status_code >= 500 and upstream_attempt == 0:
@@ -707,23 +568,15 @@ async def _post_chat(
 
     try:
         body = response.json()
-        raw_text = CITATION_MARKER_RE.sub("", str(body["choices"][0]["message"]["content"]))
+        raw_text = str(body["choices"][0]["message"]["content"])
     except (ValueError, KeyError, IndexError, TypeError) as exc:
         raise HTTPException(
             status_code=502,
             detail={
                 "code": "invalid_upstream_response",
-                "message": "Perplexity 返回了无法识别的内容。",
+                "message": "AI 服务返回了无法识别的内容。",
             },
         ) from exc
-    if UPSTREAM_LOGIN_RE.search(raw_text[:200]):
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "code": "perplexity_login_expired",
-                "message": "Perplexity 的登录已失效，请先在 7840 更新登录，或在连接设置里换用 Gemini。",
-            },
-        )
     if not raw_text.strip():
         raise HTTPException(
             status_code=502,
@@ -743,16 +596,15 @@ def _validate_model_result(
             status_code=502,
             detail={
                 "code": "empty_upstream_response",
-                "message": "Perplexity 没有返回法语文本。",
+                "message": "模型没有返回法语文本。",
             },
         )
     if _contains_non_french_script(result):
-        model_label = TRANSFORM_MODELS[request.model]["label"]
         raise HTTPException(
             status_code=502,
             detail={
                 "code": "non_french_upstream_response",
-                "message": f"{model_label} 返回了双语或非法语内容，纯法语检查未通过。",
+                "message": f"{MODEL_LABELS[DEFAULT_MODEL]} 返回了双语或非法语内容，纯法语检查未通过。",
             },
         )
     if UPSTREAM_META_RE.search(result):
@@ -760,7 +612,7 @@ def _validate_model_result(
             status_code=502,
             detail={
                 "code": "upstream_meta_response",
-                "message": "Grok 返回了内部说明而不是法语正文，已拒绝该结果。",
+                "message": "模型返回了内部说明而不是法语正文，已拒绝该结果。",
             },
         )
     requested_range = (
@@ -806,7 +658,7 @@ async def request_french_transform(
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
-    async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
+    async with httpx.AsyncClient(timeout=UPSTREAM_TIMEOUT_SECONDS) as client:
         if request.task_mode == "auto":
             local_task_mode = _infer_task_mode_locally(request.text)
             if local_task_mode:
@@ -858,7 +710,7 @@ async def request_french_transform(
             break
 
         quality_check: QualityCheck = "passed"
-        proofread_model = PERPLEXITY_PROOFREAD_MODEL
+        proofread_model = DEFAULT_MODEL
         proofread_payload = _proofread_payload(
             request, resolved_task_mode, result
         )
@@ -881,9 +733,7 @@ async def request_french_transform(
                 if result:
                     break
                 raise
-            proofread_model = str(
-                proofread_body.get("model") or PERPLEXITY_PROOFREAD_MODEL
-            )
+            proofread_model = str(proofread_body.get("model") or DEFAULT_MODEL)
             quality_check = "proofread"
             break
 
@@ -1347,7 +1197,7 @@ async def request_french_analysis(request: AnalyzeRequest, api_key: str) -> dict
         "Content-Type": "application/json",
     }
     payload = _analyze_payload(request)
-    async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
+    async with httpx.AsyncClient(timeout=UPSTREAM_TIMEOUT_SECONDS) as client:
         _, raw_text = await _post_chat(client, payload, headers)
         return _parse_analysis_json(raw_text, request.text)
 
@@ -1588,8 +1438,8 @@ async def _recover_interrupted_feedback() -> None:
 async def healthz():
     return {
         "status": "ok",
-        "model": PERPLEXITY_MODEL,
-        "proofread_model": PERPLEXITY_PROOFREAD_MODEL,
+        "model": DEFAULT_MODEL,
+        "proofread_model": DEFAULT_MODEL,
         "output_directory_ready": OUTPUT_DIR.is_dir(),
     }
 
@@ -1597,17 +1447,15 @@ async def healthz():
 @app.get("/api/models")
 async def available_models():
     return {
-        "default": PERPLEXITY_MODEL,
-        "proofreader": {
-            "id": PERPLEXITY_PROOFREAD_MODEL,
-            "label": MODEL_LABELS.get(
-                PERPLEXITY_PROOFREAD_MODEL, PERPLEXITY_PROOFREAD_MODEL
-            ),
-        },
+        "default": DEFAULT_MODEL,
+        "proofreader": {"id": DEFAULT_MODEL, "label": MODEL_LABELS[DEFAULT_MODEL]},
         "models": [
-            {"id": model_id, **details}
-            for model_id, details in TRANSFORM_MODELS.items()
-            if not AGY_ONLY or model_id in AGY_UPSTREAM_MODELS
+            {
+                "id": DEFAULT_MODEL,
+                "label": MODEL_LABELS[DEFAULT_MODEL],
+                "description": "AGY (low thinking); fastest.",
+                "recommended": True,
+            }
         ],
     }
 
@@ -1633,7 +1481,7 @@ async def test_connection(
         "connected": True,
         "requested_model": request.model,
         "model": model,
-        "label": TRANSFORM_MODELS[request.model]["label"],
+        "label": MODEL_LABELS[DEFAULT_MODEL],
         "proofread_model": proofread_model,
         "proofread_label": MODEL_LABELS.get(proofread_model, proofread_model),
         "sample": text,
@@ -1693,6 +1541,11 @@ async def study():
     return _html_page("study.html")
 
 
+@app.get("/review")
+async def review_page():
+    return _html_page("review.html")
+
+
 @app.post("/api/analyze")
 async def analyze_french(
     request: AnalyzeRequest,
@@ -1714,7 +1567,7 @@ class FeynmanRequest(BaseModel):
     grammar_points: list[FeynmanGrammarPoint] = Field(default_factory=list, max_length=5)
     explanation: str = Field(min_length=1, max_length=2000)
     variation: str = Field(default="", max_length=500)
-    model: TransformModel = PERPLEXITY_MODEL
+    model: TransformModel = DEFAULT_MODEL
 
 
 FEYNMAN_VERDICTS = {"solid", "partial", "missing"}
@@ -1820,7 +1673,7 @@ async def feynman_check(
 ):
     api_key = _authorization_token(authorization)
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
+    async with httpx.AsyncClient(timeout=UPSTREAM_TIMEOUT_SECONDS) as client:
         for attempt in range(2):
             _, raw_text = await _post_chat(client, _feynman_payload(request), headers)
             try:
@@ -1978,7 +1831,7 @@ class TranscriptFixRequest(BaseModel):
     sentence: str = Field(min_length=1, max_length=1000)
     context: str = Field(default="", max_length=4000)
     text: str = Field(min_length=1, max_length=5000)
-    model: TransformModel = PERPLEXITY_MODEL
+    model: TransformModel = DEFAULT_MODEL
 
 
 def _transcript_fix_payload(request: TranscriptFixRequest) -> dict:
@@ -2017,9 +1870,9 @@ async def fix_transcript(
 ):
     api_key = _authorization_token(authorization)
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
+    async with httpx.AsyncClient(timeout=UPSTREAM_TIMEOUT_SECONDS) as client:
         _, raw_text = await _post_chat(
-            client, _transcript_fix_payload(request.model_copy(update={"model": FAST_MODEL})), headers
+            client, _transcript_fix_payload(request), headers
         )
     fixed = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip().strip("`").strip()
     # A correction must stay close to the original; otherwise keep what was heard.
@@ -2039,7 +1892,7 @@ class AskRequest(BaseModel):
     grammar_points: list[FeynmanGrammarPoint] = Field(default_factory=list, max_length=5)
     history: list[AskTurn] = Field(default_factory=list, max_length=20)
     question: str = Field(min_length=1, max_length=1000)
-    model: TransformModel = PERPLEXITY_MODEL
+    model: TransformModel = DEFAULT_MODEL
 
 
 def _ask_payload(request: AskRequest) -> dict:
@@ -2083,7 +1936,7 @@ async def ask_tutor(
 ):
     api_key = _authorization_token(authorization)
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
+    async with httpx.AsyncClient(timeout=UPSTREAM_TIMEOUT_SECONDS) as client:
         _, raw_text = await _post_chat(client, _ask_payload(request), headers)
     answer = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip()
     answer = re.sub(r"^#+\s*", "", answer, flags=re.MULTILINE).replace("**", "")
@@ -2101,7 +1954,7 @@ class AskCardRequest(BaseModel):
     translation_en: str = Field(default="", max_length=2000)
     question: str = Field(min_length=1, max_length=1000)
     answer: str = Field(min_length=1, max_length=3000)
-    model: TransformModel = PERPLEXITY_MODEL
+    model: TransformModel = DEFAULT_MODEL
 
 
 def _ask_point_payload(request: AskCardRequest) -> dict:
@@ -2115,7 +1968,7 @@ def _ask_point_payload(request: AskCardRequest) -> dict:
         'Output valid JSON only: {"title": "...", "explanation": "...", "hook": "..."}'
     )
     return {
-        "model": _map_upstream_model(FAST_MODEL),
+        "model": _map_upstream_model(DEFAULT_MODEL),
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": "Write the grammar point."}],
         "response_format": {"type": "json_object"},
         "stream": False,
@@ -2128,7 +1981,7 @@ async def ask_to_card(request: AskCardRequest, authorization: str | None = Heade
     """A tutor answer becomes a grammar card: the rule, then a new fill-in sentence that uses it."""
     _require_user_id(authorization)
     headers = {"Authorization": f"Bearer {_authorization_token(authorization)}", "Content-Type": "application/json"}
-    async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
+    async with httpx.AsyncClient(timeout=UPSTREAM_TIMEOUT_SECONDS) as client:
         _, raw_text = await _post_chat(client, _ask_point_payload(request), headers)
     cleaned = re.sub(r"<think>[\s\S]*?</think>", "", raw_text)
     try:
@@ -2157,7 +2010,7 @@ async def ask_to_card(request: AskCardRequest, authorization: str | None = Heade
 LOOKUP_CACHE: dict[str, dict] = {}
 
 
-async def request_word_lookup(word: str, api_key: str, model: str = FAST_MODEL) -> dict:
+async def request_word_lookup(word: str, api_key: str, model: str = DEFAULT_MODEL) -> dict:
     clean_word = word.strip()
     cache_key = clean_word.lower()
     if cache_key in LOOKUP_CACHE:
@@ -2231,7 +2084,7 @@ async def request_word_lookup(word: str, api_key: str, model: str = FAST_MODEL) 
 @app.get("/api/lookup")
 async def lookup_word(
     word: str,
-    model: str = FAST_MODEL,
+    model: str = DEFAULT_MODEL,
     authorization: str | None = Header(default=None),
 ):
     clean = word.strip()
@@ -2266,387 +2119,6 @@ async def generate_tts(
     return _output_file(filename, download=download, cache_seconds=30 * 86400)
 
 
-class AuthRequest(BaseModel):
-    email: str
-    password: str
-
-
-def _auth_response(payload: dict, request: Request) -> JSONResponse:
-    response = JSONResponse(payload)
-    token = payload.get("token")
-    if isinstance(token, str) and token:
-        _set_session_cookie(response, token, request)
-    return response
-
-
-def _device_label(user_agent: str) -> str:
-    """A short, human name for the device a login came from, e.g. "Chrome · Android"."""
-    ua = user_agent or ""
-    browsers = [("Edg/", "Edge"), ("MicroMessenger", "WeChat"), ("Firefox/", "Firefox"),
-                ("CriOS", "Chrome"), ("Chrome/", "Chrome"), ("Safari/", "Safari")]
-    systems = [("iPhone", "iPhone"), ("iPad", "iPad"), ("Android", "Android"),
-               ("Windows", "Windows"), ("Mac OS X", "Mac"), ("Linux", "Linux")]
-    browser = next((name for key, name in browsers if key in ua), "")
-    system = next((name for key, name in systems if key in ua), "")
-    return " · ".join(part for part in (browser, system) if part) or "Unknown device"
-
-
-@app.post("/api/auth/register")
-async def register_account(req: AuthRequest, request: Request):
-    if not auth_db.ALLOW_REGISTRATION:
-        raise HTTPException(status_code=403, detail={"message": "本站暂不开放注册。"})
-    device = _device_label(request.headers.get("user-agent", ""))
-    try:
-        return _auth_response(auth_db.register_user(req.email, req.password, device), request)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail={"message": str(e)})
-
-
-@app.post("/api/auth/login")
-async def login_account(req: AuthRequest, request: Request):
-    try:
-        device = _device_label(request.headers.get("user-agent", ""))
-        return _auth_response(auth_db.login_user(req.email, req.password, device), request)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail={"message": str(e)})
-
-
-@app.post("/api/auth/session")
-async def refresh_session(request: Request, authorization: str | None = Header(default=None)):
-    """Turn an existing bearer token into the cookie that audio requests can carry."""
-    token = _bearer_value(authorization)
-    if not auth_db.verify_token(token):
-        raise HTTPException(
-            status_code=401,
-            detail={"code": "login_required", "message": "请先登录账号。"},
-        )
-    response = Response(status_code=204)
-    _set_session_cookie(response, token, request)
-    return response
-
-
-@app.post("/api/auth/logout")
-async def logout_account(request: Request, authorization: str | None = Header(default=None)):
-    payload = auth_db.verify_token(_session_value(authorization, request))
-    if payload:
-        auth_db.end_session(int(payload["sub"]), payload["sid"])
-    response = Response(status_code=204)
-    _clear_session_cookie(response, request)
-    return response
-
-
-@app.get("/api/auth/me")
-async def get_current_user(authorization: str | None = Header(default=None)):
-    status = auth_db.get_user_status(_require_user_id(authorization))
-    if not status:
-        raise HTTPException(status_code=404, detail={"message": "账号不存在"})
-    return status
-
-
-@app.get("/api/auth/devices")
-async def list_devices(request: Request, authorization: str | None = Header(default=None)):
-    token = _session_value(authorization, request)
-    user_id = _require_user_id(authorization, request)
-    current = (auth_db.verify_token(token) or {}).get("sid")
-    devices = [
-        {**session, "current": session["id"] == current} for session in auth_db.list_sessions(user_id)
-    ]
-    return {"devices": devices, "max_devices": auth_db.MAX_DEVICES}
-
-
-@app.delete("/api/auth/devices/{session_id}")
-async def sign_out_device(session_id: str, request: Request, authorization: str | None = Header(default=None)):
-    return {"success": auth_db.end_session(_require_user_id(authorization, request), session_id)}
-
-
-class SaveHistoryRequest(BaseModel):
-    id: str
-    type: str = "tts"
-    text: str
-    payload: dict[str, Any] = Field(default_factory=dict)
-
-
-@app.get("/api/history")
-async def list_history(
-    type: str | None = Query(default=None),
-    limit: int = Query(default=50, ge=1, le=200),
-    authorization: str | None = Header(default=None),
-):
-    user_id = _require_user_id(authorization)
-    records = auth_db.get_history_records(user_id=user_id, record_type=type, limit=limit)
-    return {"records": records, "count": len(records)}
-
-
-@app.post("/api/history")
-async def save_history(
-    req: SaveHistoryRequest,
-    authorization: str | None = Header(default=None),
-):
-    user_id = _require_user_id(authorization)
-    res = auth_db.save_history_record(
-        record_id=req.id,
-        record_type=req.type,
-        text=req.text,
-        payload=req.payload,
-        user_id=user_id,
-    )
-    return res
-
-
-@app.delete("/api/history/{record_id}")
-async def delete_history(
-    record_id: str,
-    authorization: str | None = Header(default=None),
-):
-    user_id = _require_user_id(authorization)
-    ok = auth_db.delete_history_record(record_id, user_id=user_id)
-    return {"success": ok}
-
-
-@app.delete("/api/history")
-async def clear_all_history(
-    type: str | None = Query(default=None),
-    authorization: str | None = Header(default=None),
-):
-    user_id = _require_user_id(authorization)
-    count = auth_db.clear_history_records(user_id=user_id, record_type=type)
-    return {"deleted": count}
-
-
-
-# ---------------------------------------------------------------------------
-# Spaced repetition (sentence notes + FSRS cards), per logged-in user
-# ---------------------------------------------------------------------------
-class SrsTarget(BaseModel):
-    text: str = Field(min_length=1, max_length=200)
-    mode: Literal["cloze", "recognize", "grammar"] = "cloze"
-    importance: int = Field(default=3, ge=1, le=5)
-    meta: dict[str, Any] = Field(default_factory=dict)
-
-
-class SrsNoteRequest(BaseModel):
-    sentence: str = Field(min_length=1, max_length=1000)
-    translation_zh: str = Field(default="", max_length=2000)
-    translation_en: str = Field(default="", max_length=2000)
-    extra: dict[str, Any] = Field(default_factory=dict)
-    modes: list[Literal["listen", "speak"]] = Field(default_factory=list)
-    targets: list[SrsTarget] = Field(default_factory=list, max_length=20)
-    auto_listen: bool = False
-
-
-class SrsLookupRequest(BaseModel):
-    sentences: list[str] = Field(default_factory=list, max_length=1000)
-
-
-class SrsReviewRequest(BaseModel):
-    rating: int = Field(ge=1, le=4)
-    duration_ms: int | None = Field(default=None, ge=0, le=3_600_000)
-    score: int | None = Field(default=None, ge=0, le=100)
-    answer: str | None = Field(default=None, max_length=5000)  # srs stores the first 500 chars
-    tz_offset: int = Field(default=0, ge=-840, le=840)
-
-
-class SrsImportRequest(BaseModel):
-    cards: list[dict[str, Any]] = Field(default_factory=list, max_length=5000)
-
-
-@app.get("/review")
-async def review_page():
-    return _html_page("review.html")
-
-
-@app.get("/api/srs/queue")
-def srs_queue(
-    tz_offset: int = Query(default=0, ge=-840, le=840),
-    new_limit: int = Query(default=srs.DEFAULT_NEW_LIMIT, ge=0, le=100),
-    min_importance: int = Query(default=1, ge=1, le=5),
-    modes: str = Query(default="", max_length=80),
-    authorization: str | None = Header(default=None),
-):
-    wanted = [mode for mode in modes.split(",") if mode in srs.MODES]
-    return srs.build_queue(
-        _require_user_id(authorization), tz_offset, new_limit, min_importance=min_importance, modes=wanted
-    )
-
-
-class SrsPracticeRequest(BaseModel):
-    card_ids: list[str] = Field(min_length=1, max_length=200)
-
-
-@app.post("/api/srs/practice")
-def srs_practice(req: SrsPracticeRequest, authorization: str | None = Header(default=None)):
-    return srs.practice_queue(_require_user_id(authorization), req.card_ids)
-
-
-class SrsImportanceRequest(BaseModel):
-    card_ids: list[str] = Field(min_length=1, max_length=50)
-    importance: int = Field(ge=1, le=5)
-
-
-@app.post("/api/srs/importance")
-def srs_set_importance(req: SrsImportanceRequest, authorization: str | None = Header(default=None)):
-    return {"updated": srs.set_importance(_require_user_id(authorization), req.card_ids, req.importance)}
-
-
-@app.get("/api/srs/words")
-def srs_saved_words(authorization: str | None = Header(default=None)):
-    return {"words": srs.saved_words(_require_user_id(authorization))}
-
-
-@app.post("/api/srs/notes")
-def srs_add_note(
-    req: SrsNoteRequest,
-    authorization: str | None = Header(default=None),
-):
-    user_id = _require_user_id(authorization)
-    try:
-        return srs.add_note(
-            user_id,
-            req.sentence,
-            translation_zh=req.translation_zh,
-            translation_en=req.translation_en,
-            extra=req.extra,
-            modes=req.modes,
-            targets=[t.model_dump() for t in req.targets],
-            auto_listen=req.auto_listen,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail={"message": str(exc)})
-
-
-@app.post("/api/srs/notes/lookup")
-def srs_lookup_notes(
-    req: SrsLookupRequest,
-    authorization: str | None = Header(default=None),
-):
-    return {"notes": srs.lookup_notes(_require_user_id(authorization), req.sentences)}
-
-
-@app.delete("/api/srs/notes/{note_id}")
-def srs_delete_note(note_id: str, authorization: str | None = Header(default=None)):
-    return {"success": srs.delete_note(_require_user_id(authorization), note_id)}
-
-
-@app.get("/api/srs/cards")
-def srs_list_cards(
-    q: str = Query(default="", max_length=100),
-    authorization: str | None = Header(default=None),
-):
-    return {"cards": srs.list_cards(_require_user_id(authorization), q)}
-
-
-@app.delete("/api/srs/cards/{card_id}")
-def srs_delete_card(card_id: str, authorization: str | None = Header(default=None)):
-    return {"success": srs.delete_card(_require_user_id(authorization), card_id)}
-
-
-@app.post("/api/srs/cards/{card_id}/review")
-def srs_review_card(
-    card_id: str,
-    req: SrsReviewRequest,
-    authorization: str | None = Header(default=None),
-):
-    user_id = _require_user_id(authorization)
-    try:
-        card = srs.review_card(
-            user_id, card_id, req.rating, req.duration_ms, req.score, req.answer
-        )
-    except KeyError:
-        raise HTTPException(status_code=404, detail={"message": "卡片不存在。"})
-    # Kill feed for the review page: XP, combo, first blood and the new totals
-    card["game"] = game.review_feedback(user_id, req.tz_offset)
-    return card
-
-
-# ---------------------------------------------------------------------------
-# Game: study time, XP and hero level (see game.py)
-# ---------------------------------------------------------------------------
-GameLane = Literal["course", "listening", "reading", "speaking", "writing", "review", "car"]
-
-
-class GameHeartbeat(BaseModel):
-    lane: GameLane
-    seconds: int = Field(ge=0, le=600)
-    tz_offset: int = Field(default=0, ge=-840, le=840)
-
-
-class GameLog(BaseModel):
-    lane: GameLane
-    minutes: int = Field(ge=1, le=300)
-    note: str = Field(default="", max_length=200)
-    tz_offset: int = Field(default=0, ge=-840, le=840)
-
-
-class GameDayRequest(BaseModel):
-    tz_offset: int = Field(default=0, ge=-840, le=840)
-    on: bool = True
-
-
-@app.get("/api/game/state")
-def game_state(
-    tz_offset: int = Query(default=0, ge=-840, le=840),
-    authorization: str | None = Header(default=None),
-):
-    return game.state(_require_user_id(authorization), tz_offset)
-
-
-@app.post("/api/game/heartbeat")
-def game_heartbeat(req: GameHeartbeat, authorization: str | None = Header(default=None)):
-    stored = game.record_time(_require_user_id(authorization), req.lane, req.seconds, req.tz_offset)
-    return {"stored_seconds": stored}
-
-
-@app.post("/api/game/log")
-def game_log(req: GameLog, authorization: str | None = Header(default=None)):
-    user_id = _require_user_id(authorization)
-    game.log_time(user_id, req.lane, req.minutes, req.note, req.tz_offset)
-    return game.state(user_id, req.tz_offset)
-
-
-@app.delete("/api/game/log/{log_id}")
-def game_delete_log(
-    log_id: int,
-    tz_offset: int = Query(default=0, ge=-840, le=840),
-    authorization: str | None = Header(default=None),
-):
-    user_id = _require_user_id(authorization)
-    if not game.delete_log(user_id, log_id):
-        raise HTTPException(status_code=404, detail={"message": "记录不存在。"})
-    return game.state(user_id, tz_offset)
-
-
-@app.post("/api/game/family-day")
-def game_family_day(req: GameDayRequest, authorization: str | None = Header(default=None)):
-    user_id = _require_user_id(authorization)
-    game.set_family_day(user_id, req.on, req.tz_offset)
-    return game.state(user_id, req.tz_offset)
-
-
-@app.get("/api/game/callout/{name}.mp3")
-async def game_callout(name: str):
-    """The announcer's voice for one fixed callout (no free text, so no TTS proxy)."""
-    text = game.CALLOUT_PHRASES.get(name)
-    if not text:
-        raise HTTPException(status_code=404, detail={"message": "没有这条播报。"})
-    path = OUTPUT_DIR / "callouts" / f"{name}.mp3"
-    if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_name(f"{path.name}.{uuid.uuid4().hex[:8]}.part")
-        try:
-            await edge_tts.Communicate(text, **game.CALLOUT_VOICE).save(str(tmp))
-            os.replace(tmp, path)
-        finally:
-            tmp.unlink(missing_ok=True)
-    return FileResponse(path, media_type="audio/mpeg", headers={"Cache-Control": "public, max-age=604800"})
-
-
-@app.post("/api/game/wave-cleared")
-def game_wave_cleared(req: GameDayRequest, authorization: str | None = Header(default=None)):
-    user_id = _require_user_id(authorization)
-    xp = game.wave_cleared(user_id, req.tz_offset)
-    return {"xp": xp, "state": game.state(user_id, req.tz_offset)}
-
-
 class GrammarPointIn(BaseModel):
     title: str = Field(min_length=1, max_length=300)
     explanation: str = Field(default="", max_length=1000)
@@ -2658,7 +2130,7 @@ class GrammarCardRequest(BaseModel):
     translation_zh: str = Field(default="", max_length=2000)
     translation_en: str = Field(default="", max_length=2000)
     grammar: GrammarPointIn
-    model: TransformModel = PERPLEXITY_MODEL
+    model: TransformModel = DEFAULT_MODEL
 
 
 def _grammar_exercise_payload(request: GrammarCardRequest) -> dict:
@@ -2719,7 +2191,7 @@ async def srs_add_grammar_card(
     api_key = _authorization_token(authorization)
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     exercise = None
-    async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
+    async with httpx.AsyncClient(timeout=UPSTREAM_TIMEOUT_SECONDS) as client:
         for attempt in range(2):
             _, raw_text = await _post_chat(client, _grammar_exercise_payload(request), headers)
             exercise = _parse_grammar_exercise(raw_text)
@@ -2745,7 +2217,7 @@ async def srs_add_grammar_card(
     )
 
 
-async def backfill_english(user_id: int, api_key: str, model: str = FAST_MODEL) -> dict:
+async def backfill_english(user_id: int, api_key: str, model: str = DEFAULT_MODEL) -> dict:
     """Fill in simple-English translations/meanings that older cards lack (English UI mode)."""
     missing = await run_in_threadpool(srs.missing_english, user_id)
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
@@ -2759,7 +2231,7 @@ async def backfill_english(user_id: int, api_key: str, model: str = FAST_MODEL) 
          "For each item, give the short English meaning (1–6 words) of the French word or phrase "
          "as it is used in the sentence. Use the Chinese only as a hint."),
     ]
-    async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
+    async with httpx.AsyncClient(timeout=UPSTREAM_TIMEOUT_SECONDS) as client:
         for _, items, target, instruction in jobs:
             for start in range(0, len(items), 20):
                 batch = items[start : start + 20]
@@ -2905,7 +2377,7 @@ async def _write_stories(
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     stories = []
     kinds = LEVEL_STORY_KINDS.get(level, LEVEL_STORY_KINDS["A1"])
-    async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
+    async with httpx.AsyncClient(timeout=UPSTREAM_TIMEOUT_SECONDS) as client:
         for index in range(count):
             kind = kinds[index % len(kinds)]
             payload = _story_payload(vocabulary, examples, kind, model, level, request, focus)
@@ -2942,7 +2414,7 @@ async def _read_episode_request(api_key: str, request: str) -> dict:
         "english: less if they want more French / less English; more if they need more help."
     )
     payload = {
-        "model": _map_upstream_model(FAST_MODEL),
+        "model": _map_upstream_model(DEFAULT_MODEL),
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": request[:500]}],
         "response_format": {"type": "json_object"},
         "stream": False,
@@ -3041,7 +2513,7 @@ def list_episodes_api(authorization: str | None = Header(default=None)):
 @app.post("/api/episodes")
 async def create_episode_api(
     req: EpisodeRequest | None = None,
-    model: TransformModel = Query(default=PERPLEXITY_MODEL),
+    model: TransformModel = Query(default=DEFAULT_MODEL),
     authorization: str | None = Header(default=None),
 ):
     user_id = _require_user_id(authorization)
@@ -3104,13 +2576,6 @@ async def episode_file(
         headers={"Cache-Control": "private, max-age=86400"},
     )
 
-@app.post("/api/srs/import")
-def srs_import_legacy(
-    req: SrsImportRequest,
-    authorization: str | None = Header(default=None),
-):
-    return srs.import_legacy_cards(_require_user_id(authorization), req.cards)
-
 # ---------------------------------------------------------------------------
 # Writing practice (TCF EE)
 # ---------------------------------------------------------------------------
@@ -3128,7 +2593,7 @@ async def _generate_write_feedback_1(
             return
         payload = writing.build_round1_payload(attempt, _map_upstream_model(model))
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-        async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
+        async with httpx.AsyncClient(timeout=UPSTREAM_TIMEOUT_SECONDS) as client:
             _, raw_text = await _post_chat(client, payload, headers)
         feedback = writing.parse_round1_feedback(
             raw_text, attempt["text_1"], attempt["task"], attempt["subject"]
@@ -3151,7 +2616,7 @@ async def _generate_write_feedback_2(
             return
         payload = writing.build_round2_payload(attempt, _map_upstream_model(model))
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-        async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
+        async with httpx.AsyncClient(timeout=UPSTREAM_TIMEOUT_SECONDS) as client:
             _, raw_text = await _post_chat(client, payload, headers)
         feedback = writing.parse_round2_feedback(raw_text)
         writing.set_attempt_feedback_2(attempt_id, feedback)
@@ -3185,7 +2650,7 @@ class WriteSubjectRequest(BaseModel):
     task: Literal["T1", "T2", "T3"]
     level: Literal["A1", "A2", "B1", "B2"] = "A1"
     theme: str = ""
-    model: TransformModel = FAST_MODEL
+    model: TransformModel = DEFAULT_MODEL
 
 
 @app.post("/api/write/subject")
@@ -3199,7 +2664,7 @@ async def write_new_subject(
         req.task, req.level, req.theme, _map_upstream_model(req.model)
     )
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
+    async with httpx.AsyncClient(timeout=UPSTREAM_TIMEOUT_SECONDS) as client:
         _, raw_text = await _post_chat(client, payload, headers)
     return writing.parse_new_subject(raw_text, req.task)
 
@@ -3210,7 +2675,7 @@ class WriteRound1Request(BaseModel):
     level: str = "A1"
     text: str = Field(min_length=1, max_length=10000)
     seconds: int = 0
-    model: TransformModel = PERPLEXITY_MODEL
+    model: TransformModel = DEFAULT_MODEL
 
 
 @app.post("/api/write/attempts")
@@ -3249,7 +2714,7 @@ def get_write_attempt(
 class WriteRound2Request(BaseModel):
     text: str = Field(min_length=1, max_length=10000)
     seconds: int = 0
-    model: TransformModel = PERPLEXITY_MODEL
+    model: TransformModel = DEFAULT_MODEL
 
 
 @app.post("/api/write/attempts/{attempt_id}/round2")
@@ -3300,7 +2765,7 @@ async def _generate_speak_feedback_1(
             return
         payload = speaking.build_round1_payload(attempt, _map_upstream_model(model))
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-        async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
+        async with httpx.AsyncClient(timeout=UPSTREAM_TIMEOUT_SECONDS) as client:
             _, raw_text = await _post_chat(client, payload, headers)
         duration = attempt.get("audio_duration") or attempt.get("seconds") or 0
         wpm = attempt.get("wpm") or speaking.calculate_wpm(speaking.word_count(attempt["transcript_1"]), duration)
@@ -3325,7 +2790,7 @@ async def _generate_speak_feedback_2(
             return
         payload = speaking.build_round2_payload(attempt, _map_upstream_model(model))
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-        async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
+        async with httpx.AsyncClient(timeout=UPSTREAM_TIMEOUT_SECONDS) as client:
             _, raw_text = await _post_chat(client, payload, headers)
         feedback = speaking.parse_round2_feedback(raw_text)
         speaking.set_attempt_feedback_2(attempt_id, feedback)
@@ -3359,7 +2824,7 @@ class SpeakRoleplayReplyRequest(BaseModel):
     scenario: dict[str, Any]
     history: list[dict[str, str]] = Field(default_factory=list)
     user_utterance: str = Field(min_length=1, max_length=1000)
-    model: TransformModel = FAST_MODEL
+    model: TransformModel = DEFAULT_MODEL
 
 
 @app.post("/api/speak/roleplay/reply")
@@ -3373,7 +2838,7 @@ async def speak_roleplay_reply(
         req.scenario, req.history, req.user_utterance, _map_upstream_model(req.model)
     )
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    async with httpx.AsyncClient(timeout=PERPLEXITY_TIMEOUT_SECONDS) as client:
+    async with httpx.AsyncClient(timeout=UPSTREAM_TIMEOUT_SECONDS) as client:
         _, raw_text = await _post_chat(client, payload, headers)
     reply_fr = speaking.parse_roleplay_reply(raw_text)
     return {"reply": reply_fr}
@@ -3386,7 +2851,7 @@ class SpeakRound1Request(BaseModel):
     transcript: str = Field(min_length=1, max_length=10000)
     seconds: int = 0
     audio_duration: float = 0.0
-    model: TransformModel = PERPLEXITY_MODEL
+    model: TransformModel = DEFAULT_MODEL
 
 
 @app.post("/api/speak/attempts")
@@ -3426,7 +2891,7 @@ class SpeakRound2Request(BaseModel):
     transcript: str = Field(min_length=1, max_length=10000)
     seconds: int = 0
     audio_duration: float = 0.0
-    model: TransformModel = PERPLEXITY_MODEL
+    model: TransformModel = DEFAULT_MODEL
 
 
 @app.post("/api/speak/attempts/{attempt_id}/round2")

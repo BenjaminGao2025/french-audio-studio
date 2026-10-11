@@ -88,22 +88,13 @@
         watchForNewVersion();
     }
 
-    // One-time move to the new default model (GPT-6.1 Sol Thinking, 2026-09-30):
-    // forget the old saved default so the page picks the server's. A later manual choice sticks.
+    // Forget what removed features left behind: a guest API key typed into the old
+    // connection panel (a secret) and the saved model choice.
     try {
-        if (!localStorage.getItem('frenchStudio.modelDefaultMigrated')) {
-            if (localStorage.getItem('frenchStudio.perplexityModel') === 'gemini-3.8-flash') {
-                localStorage.removeItem('frenchStudio.perplexityModel');
-            }
-            localStorage.setItem('frenchStudio.modelDefaultMigrated', '1');
-        }
-        // Back to Gemini 3.8 Flash (AGY, low) as the default on 2026-10-08: Sol Thinking is too slow.
-        if (!localStorage.getItem('frenchStudio.modelDefaultMigrated2')) {
-            if (localStorage.getItem('frenchStudio.perplexityModel') === 'gpt-6.1-sol-thinking') {
-                localStorage.removeItem('frenchStudio.perplexityModel');
-            }
-            localStorage.setItem('frenchStudio.modelDefaultMigrated2', '1');
-        }
+        ['frenchStudio.perplexityApiKey', 'frenchStudio.perplexityModel',
+         'frenchStudio.modelDefaultMigrated', 'frenchStudio.modelDefaultMigrated2']
+            .forEach((key) => localStorage.removeItem(key));
+        sessionStorage.removeItem('frenchStudio.sessionApiKey');
     } catch (_) {}
 
     // Audio tags cannot send the bearer token. Exchange it for the HttpOnly session cookie.

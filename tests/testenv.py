@@ -6,8 +6,6 @@ os.environ["OUTPUT_DIR"] = tempfile.mkdtemp(prefix="tts-tests-")
 os.environ["AUTH_SECRET"] = "test-only-secret-" + "x" * 32
 os.environ["ALLOW_REGISTRATION"] = "true"
 os.environ["WEB2API_API_KEY"] = "server-test-key"
-# Legacy routing tests cover both upstreams; AGY-only mode is tested explicitly.
-os.environ["AGY_ONLY"] = "false"
 
 
 def session_headers() -> dict:

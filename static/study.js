@@ -39,11 +39,10 @@ function initStudyWorkbench() {
             account: 'Account', login: 'Log in', trialBadgeTitle: 'Account validity',
             reviewBtn: 'Review', reviewBtnTitle: "Today's review (listen · speak · fill in)", dueBadgeTitle: 'Cards due today',
             connectionSettings: 'Connection', connectionNotVerified: 'Connection not verified yet', notVerified: 'Not verified',
-            toggleKey: 'Show or hide the API key', analysisModel: 'Analysis model',
+            analysisModel: 'Analysis model',
             modelGemini: 'Gemini 3.8 Flash (AGY) · fastest',
             recommendedSuffix: ' · recommended',
-            rememberDevice: 'Remember on this device',
-            notTested: 'Not tested yet', notTestedDetail: 'Enter a key, then test the real connection',
+            notTested: 'Not tested yet', notTestedDetail: 'Click Test connection to check the real connection',
             testConnection: 'Test connection',
             todayReviewTitle: 'You have cards to review today', startReview: 'Start review',
             inputAria: 'French text input', inputHeading: 'Enter the French text to break down and shadow',
@@ -67,11 +66,9 @@ function initStudyWorkbench() {
             devicesTitle: 'Signed-in devices (up to 3)', thisDevice: 'This device', signOutDevice: 'Sign out',
             lastActive: (when) => `Last active ${when}`,
             signedOutElsewhere: 'This device was signed out: an account can be signed in on up to 3 devices. Please log in again.',
-            keyLoaded: 'Key loaded', keyLoadedDetail: 'Click to test the real connection',
-            noKey: 'No key', noKeyDetail: 'Enter a key under Connection (top right), or log in to use the app directly',
-            needLogin: 'Please log in first, or enter an API key under Connection.',
+            needLogin: 'Please log in first.',
             connected: 'Connected', failed: 'Failed',
-            testing: 'Testing', testingDetail: 'Checking the API key / account access and the model connection...',
+            testing: 'Testing', testingDetail: 'Checking account access and the model connection...',
             connectionTestFailed: 'Connection test failed', connectionOk: 'Connection OK',
             connectionOkDetail: (label) => `${label} connected and responded normally`, connectionFailed: 'Connection failed',
             serverError: (status) => `Server error (HTTP ${status}). Please try again.`,
@@ -155,11 +152,10 @@ function initStudyWorkbench() {
             account: '账号', login: '登录', trialBadgeTitle: '账号有效期',
             reviewBtn: '复习', reviewBtnTitle: '今日复习（听 · 说 · 填）', dueBadgeTitle: '今天待复习卡片数',
             connectionSettings: '连接设置', connectionNotVerified: '连接尚未验证', notVerified: '未验证',
-            toggleKey: '显示或隐藏 API Key', analysisModel: '分析模型',
+            analysisModel: '分析模型',
             modelGemini: 'Gemini 3.8 Flash (AGY) · 极速',
             recommendedSuffix: ' · 推荐',
-            rememberDevice: '记住在此设备',
-            notTested: '尚未测试', notTestedDetail: '填写 Key 后测试实际连接',
+            notTested: '尚未测试', notTestedDetail: '点击测试实际连接',
             testConnection: '测试连接',
             todayReviewTitle: '今天有卡片要复习', startReview: '开始复习',
             inputAria: '输入法语文本', inputHeading: '输入待拆解与复述的法语文本',
@@ -183,11 +179,9 @@ function initStudyWorkbench() {
             devicesTitle: '已登录设备（最多 3 台）', thisDevice: '当前设备', signOutDevice: '退出',
             lastActive: (when) => `最近使用 ${when}`,
             signedOutElsewhere: '这台设备已退出登录：账号最多同时登录 3 台设备。请重新登录。',
-            keyLoaded: 'Key 已加载', keyLoadedDetail: '点击测试实际连接',
-            noKey: '未填写 Key', noKeyDetail: '在右上角连接设置填写 Key 或登录账号直接使用',
-            needLogin: '请先登录账号，或在【连接设置】中填写 API Key。',
+            needLogin: '请先登录账号。',
             connected: '已连接', failed: '失败',
-            testing: '正在测试', testingDetail: '正在验证 API Key / 用户权益与模型连通性...',
+            testing: '正在测试', testingDetail: '正在验证账号权益与模型连通性...',
             connectionTestFailed: '连接测试失败', connectionOk: '连接正常',
             connectionOkDetail: (label) => `${label} 连接成功并正常响应`, connectionFailed: '连接失败',
             serverError: (status) => `服务器暂时出错（HTTP ${status}），请再试一次。`,
@@ -270,15 +264,7 @@ function initStudyWorkbench() {
     I18N.apply(TEXT);
     I18N.mountToggle(document.getElementById('lang-toggle'));
 
-    // Shared localStorage keys with main workbench
-    const localKeyName = 'frenchStudio.perplexityApiKey';
-    const sessionKeyName = 'frenchStudio.sessionApiKey';
-    const modelKeyName = 'frenchStudio.perplexityModel';
-
     // DOM Elements - Connection
-    const apiKeyInput = document.getElementById('api-key');
-    const toggleKeyButton = document.getElementById('toggle-key');
-    const rememberKey = document.getElementById('remember-key');
     const modelSelect = document.getElementById('model-select');
     const testConnectionButton = document.getElementById('test-connection');
     const connectionResult = document.getElementById('connection-result');
@@ -434,30 +420,12 @@ function initStudyWorkbench() {
     window.addEventListener('load', refreshIcons);
 
     // -------------------------------------------------------------------------
-    // 1. Settings & Key Management
+    // 1. Settings & Auth Token
     // -------------------------------------------------------------------------
     function initSettings() {
-        const savedLocalKey = localStorage.getItem(localKeyName);
-        const savedSessionKey = sessionStorage.getItem(sessionKeyName);
-        if (savedLocalKey) {
-            apiKeyInput.value = savedLocalKey;
-            rememberKey.checked = true;
-        } else if (savedSessionKey) {
-            apiKeyInput.value = savedSessionKey;
-        }
-
-        const savedModel = localStorage.getItem(modelKeyName);
-        if (savedModel && Array.from(modelSelect.options).some(opt => opt.value === savedModel)) {
-            modelSelect.value = savedModel;
-        }
-
         syncModelsFromBackend();
 
-        if (apiKeyInput.value.trim()) {
-            setConnectionState('idle', T.keyLoaded, T.keyLoadedDetail);
-        } else {
-            setConnectionState('idle', T.noKey, T.noKeyDetail);
-        }
+        setConnectionState('idle', T.notTested, T.notTestedDetail);
 
         updateHistoryBadges();
         checkCurrentUser();
@@ -479,10 +447,7 @@ function initStudyWorkbench() {
                     opt.textContent = m.label + (m.recommended ? T.recommendedSuffix : '');
                     modelSelect.appendChild(opt);
                 });
-                const savedModel = localStorage.getItem(modelKeyName);
-                if (savedModel && Array.from(modelSelect.options).some(opt => opt.value === savedModel)) {
-                    modelSelect.value = savedModel;
-                } else if (data.default && Array.from(modelSelect.options).some(opt => opt.value === data.default)) {
+                if (data.default && Array.from(modelSelect.options).some(opt => opt.value === data.default)) {
                     modelSelect.value = data.default;
                 } else if (modelSelect.options.length > 0) {
                     modelSelect.selectedIndex = 0;
@@ -493,29 +458,9 @@ function initStudyWorkbench() {
         }
     }
 
-    function saveApiKey() {
-        const key = apiKeyInput.value.trim();
-        if (key) {
-            sessionStorage.setItem(sessionKeyName, key);
-        } else {
-            sessionStorage.removeItem(sessionKeyName);
-        }
-
-        if (rememberKey.checked && key) {
-            localStorage.setItem(localKeyName, key);
-        } else {
-            localStorage.removeItem(localKeyName);
-        }
-        localStorage.setItem(modelKeyName, modelSelect.value);
-    }
-
-    // A logged-in account wins: the server then uses its own upstream key, so an old
-    // manually typed key can never break requests. The manual key is for guests.
+    // The session token of the logged-in account; the server then uses its own upstream key.
     function getEffectiveAuthToken() {
-        const userToken = localStorage.getItem(userTokenKey);
-        if (userToken) return userToken;
-        const key = apiKeyInput.value.trim();
-        return key || null;
+        return localStorage.getItem(userTokenKey) || null;
     }
 
     function requireAuthToken() {
@@ -524,15 +469,7 @@ function initStudyWorkbench() {
             openAuthModal();
             throw new Error(T.needLogin);
         }
-        if (apiKeyInput.value.trim()) {
-            saveApiKey();
-        }
         return token;
-    }
-
-    // Alias for backwards compatibility
-    function requireApiKey() {
-        return requireAuthToken();
     }
 
     function setConnectionState(state, title, detail) {
@@ -3026,18 +2963,7 @@ function initStudyWorkbench() {
     // Analyze click
     analyzeButton.addEventListener('click', startAnalysis);
 
-    // Key settings
-    apiKeyInput.addEventListener('change', saveApiKey);
-    rememberKey.addEventListener('change', saveApiKey);
-    modelSelect.addEventListener('change', saveApiKey);
     testConnectionButton.addEventListener('click', testConnection);
-
-    toggleKeyButton.addEventListener('click', () => {
-        const isPwd = apiKeyInput.type === 'password';
-        apiKeyInput.type = isPwd ? 'text' : 'password';
-        toggleKeyButton.innerHTML = `<i data-lucide="${isPwd ? 'eye-off' : 'eye'}"></i>`;
-        refreshIcons();
-    });
 
     // Auth Modal Bindings
     if (userAuthBtn) userAuthBtn.addEventListener('click', openAuthModal);

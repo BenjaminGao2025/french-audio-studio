@@ -11,7 +11,6 @@
 
     const I18N = window.FrenchI18n;
     const TOKEN_KEY = 'frenchStudio.userToken';
-    const MODEL_KEY = 'frenchStudio.perplexityModel';
     const CHOICE_KEY = 'frenchStudio.listenChoice';
     const LEVELS = ['A1', 'A2', 'B1', 'B2'];
     const POLL_MS = 5000;
@@ -223,18 +222,12 @@
         try { localStorage.setItem(CHOICE_KEY, JSON.stringify(formChoice())); } catch (_) {}
     });
 
-    function modelQuery() {
-        let model = '';
-        try { model = localStorage.getItem(MODEL_KEY) || ''; } catch (_) {}
-        return model ? `?model=${encodeURIComponent(model)}` : '';
-    }
-
     els.form.addEventListener('submit', async (e) => {
         e.preventDefault();
         els.makeBtn.disabled = true;
         try {
             const { level, minutes } = formChoice();
-            await api('POST', `/api/episodes${modelQuery()}`, { level, minutes, request: els.request.value.trim() });
+            await api('POST', '/api/episodes', { level, minutes, request: els.request.value.trim() });
             els.request.value = '';
             await load();
         } catch (err) {
@@ -435,7 +428,7 @@
         const submit = form.querySelector('button[type="submit"]');
         submit.disabled = true;
         try {
-            await api('POST', `/api/episodes${modelQuery()}`, {
+            await api('POST', '/api/episodes', {
                 level: form.dataset.level,
                 minutes: (ep.settings && ep.settings.minutes) || formChoice().minutes,
                 request,

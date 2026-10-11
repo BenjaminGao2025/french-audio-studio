@@ -77,7 +77,7 @@
 
                 <details class="connection-settings">
                     <summary>
-                        <i data-lucide="key-round" aria-hidden="true"></i>
+                        <i data-lucide="plug-zap" aria-hidden="true"></i>
                         <span class="summary-label" data-i18n="connectionSettings">连接设置</span>
                         <span id="connection-summary-state" class="connection-summary-state" data-state="idle" title="连接尚未验证" data-i18n-title="connectionNotVerified">
                             <span class="connection-dot" aria-hidden="true"></span>
@@ -87,30 +87,17 @@
                     </summary>
                     <form class="connection-popover" autocomplete="off">
                         <div class="connection-field">
-                            <label for="api-key">Perplexity web2api API Key</label>
-                            <div class="password-row">
-                                <input id="api-key" type="password" autocomplete="off" spellcheck="false">
-                                <button id="toggle-key" class="icon-btn" type="button" title="显示或隐藏 API Key" aria-label="显示或隐藏 API Key" data-i18n-title="toggleKey" data-i18n-aria="toggleKey">
-                                    <i data-lucide="eye"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <div class="connection-field">
                             <label for="model-select" data-i18n="analysisModel">分析模型</label>
                             <select id="model-select">
                                 <option value="gemini-3.8-flash" selected data-i18n="modelGemini">Gemini 3.8 Flash (AGY) · 极速推荐</option>
                             </select>
                         </div>
-                        <label class="check-row" for="remember-key">
-                            <input id="remember-key" type="checkbox">
-                            <span data-i18n="rememberDevice">记住在此设备</span>
-                        </label>
                         <div class="connection-test-row">
                             <div id="connection-result" class="connection-result" data-state="idle" role="status" aria-live="polite">
                                 <span class="connection-dot" aria-hidden="true"></span>
                                 <div>
                                     <strong id="connection-result-title" data-i18n="notTested">尚未测试</strong>
-                                    <span id="connection-result-detail" data-i18n="notTestedDetail">填写 Key 后测试实际连接</span>
+                                    <span id="connection-result-detail" data-i18n="notTestedDetail">点击测试实际连接</span>
                                 </div>
                             </div>
                             <button id="test-connection" class="btn btn-test" type="button">

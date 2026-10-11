@@ -12,9 +12,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const modelSelect = document.getElementById('model-select');
     const sourceHeading = document.getElementById('source-heading');
     const taskUsed = document.getElementById('task-used');
-    const apiKeyInput = document.getElementById('api-key');
-    const rememberKey = document.getElementById('remember-key');
-    const connectionSettings = document.querySelector('.connection-settings');
     const connectionForm = document.querySelector('.connection-popover');
     const connectionSummaryState = document.getElementById('connection-summary-state');
     const connectionSummaryText = connectionSummaryState.querySelector('.connection-summary-text');
@@ -22,7 +19,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const connectionResultTitle = document.getElementById('connection-result-title');
     const connectionResultDetail = document.getElementById('connection-result-detail');
     const testConnectionButton = document.getElementById('test-connection');
-    const toggleKeyButton = document.getElementById('toggle-key');
     const clearSourceButton = document.getElementById('clear-source');
     const copyOutputButton = document.getElementById('copy-output');
     const transformButton = document.getElementById('transform-btn');
@@ -44,12 +40,11 @@ document.addEventListener('DOMContentLoaded', () => {
             navAria: 'Pages', navAudio: 'Audio Studio', navStudy: 'Study', navWrite: 'Write', navSpeak: 'Speak', navReview: 'Review', navListen: 'Listen',
             history: 'History', historyBtnTitle: 'View and restore past history',
             connectionSettings: 'Connection', connectionSummaryTitle: 'Connection not verified yet',
-            notVerified: 'Not verified', toggleKey: 'Show or hide the API key',
+            notVerified: 'Not verified',
             modelLabel: 'Model',
             modelGeminiOption: 'Gemini 3.8 Flash (AGY) · fastest',
             recommendedSuffix: ' · recommended', modelSuffixPattern: /\s*·\s*(recommended|backup)$/,
-            rememberKey: 'Remember on this device',
-            notTested: 'Not tested yet', notTestedDetail: 'Enter a key, then test the real connection',
+            notTested: 'Not tested yet', notTestedDetail: 'Click Test connection to check the real connection',
             testConnection: 'Test connection',
             taskModeLegend: 'Task',
             taskAuto: 'Auto', taskAutoTitle: 'Automatically decide whether to generate, translate, express or polish',
@@ -60,7 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
             editorAria: 'French text conversion',
             sourceHeading: 'Input', clearSource: 'Clear the input',
             sourcePlaceholder: 'Paste Chinese, English or existing French text...',
-            outputHeading: 'French result', taskPending: 'Pending', modelUsedDefault: 'Grok 4.6 · pending',
+            outputHeading: 'French result', taskPending: 'Pending', modelUsedDefault: 'Gemini 3.8 Flash · pending',
             sendToStudy: 'Send to Study', copyOutput: 'Copy the French text',
             outputPlaceholder: 'The French result appears here, and you can keep editing it...',
             controlsAria: 'Conversion settings',
@@ -101,11 +96,11 @@ document.addEventListener('DOMContentLoaded', () => {
             taskModeTitle: (label) => `Mode: ${label}`, autoPendingTitle: 'The detected mode appears after generating',
             translateNoStyle: 'Faithful translation keeps the original meaning, so no style rewrite is applied',
             translateNoLevel: 'Faithful translation keeps the original meaning, so the level is not adjusted',
-            needApiKey: 'Enter your web2api API key in Connection first.',
+            needLogin: 'Please log in first (top right of the Study page).',
             withCode: (message, code) => `${message} (${code})`,
             modelFailed: 'The model failed, or its output did not pass the quality check. Please try again.',
             requestFailed: (status) => `Request failed (HTTP ${status})`,
-            testingTitle: (label) => `Testing ${label}`, testingDetail: 'Checking the key, model access and French-only output',
+            testingTitle: (label) => `Testing ${label}`, testingDetail: 'Checking your account, model access and French-only output',
             testingStatus: (label) => `Testing the ${label} connection...`,
             connectedTitle: (label) => `${label} connected`, testSample: (sample) => `Test translation: ${sample}`,
             reviewerPassed: (label) => `, proofread by ${label}`,
@@ -123,12 +118,10 @@ document.addEventListener('DOMContentLoaded', () => {
             modeDone: (label, detail) => `Done as "${label}": the text ${detail}.`,
             requestFailedTitle: (label) => `${label} request failed`,
             actionFailed: 'Something went wrong. Please try again later.',
-            keyChanged: 'Key changed', retestConnection: 'Please test the connection again',
             modelUnverified: (label) => `${label} not verified`, modelSwitched: 'Model changed. Please test the connection.',
             needStudyText: 'Generate or enter the French text you want to study first.',
             nothingToCopy: 'There is no French text to copy.', copied: 'French text copied.',
-            keySaved: 'Key saved', clickToTest: (label) => `Click to test the real ${label} connection`,
-            noKey: 'No key yet', enterKeyToTest: 'Enter one, then test the real connection',
+            clickToTest: (label) => `Click to test the real ${label} connection`,
             importedFromStudy: 'Imported the French text from Study. Make the audio right away or edit it first.',
             restoredFromHistory: 'Text and audio restored from history.',
         },
@@ -138,12 +131,11 @@ document.addEventListener('DOMContentLoaded', () => {
             navAria: '页面切换', navAudio: '音频工作台', navStudy: '拆解与复述', navWrite: '写作', navSpeak: '口语', navReview: '今日复习', navListen: '开车听',
             history: '历史记录', historyBtnTitle: '查看并恢复过往历史记录',
             connectionSettings: '连接设置', connectionSummaryTitle: '连接尚未验证',
-            notVerified: '未验证', toggleKey: '显示或隐藏 API Key',
+            notVerified: '未验证',
             modelLabel: '转换模型',
             modelGeminiOption: 'Gemini 3.8 Flash (AGY) · 极速',
             recommendedSuffix: ' · 推荐', modelSuffixPattern: /\s*·\s*(推荐|备用)$/,
-            rememberKey: '记住在此设备',
-            notTested: '尚未测试', notTestedDetail: '填写 Key 后测试实际连接',
+            notTested: '尚未测试', notTestedDetail: '点击测试实际连接',
             testConnection: '测试连接',
             taskModeLegend: '处理方式',
             taskAuto: '智能判断', taskAutoTitle: '自动判断是生成、翻译、自然表达还是润色',
@@ -154,7 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
             editorAria: '法语文本转换',
             sourceHeading: '输入内容', clearSource: '清空原文',
             sourcePlaceholder: '粘贴中文、英文或已有法语文本...',
-            outputHeading: '法语结果', taskPending: '待判断', modelUsedDefault: 'Grok 4.6 · 待生成',
+            outputHeading: '法语结果', taskPending: '待判断', modelUsedDefault: 'Gemini 3.8 Flash · 待生成',
             sendToStudy: '发送到拆解与复述学习', copyOutput: '复制法语文本',
             outputPlaceholder: '转换后的法语会显示在这里，可继续编辑...',
             controlsAria: '转换参数',
@@ -195,11 +187,11 @@ document.addEventListener('DOMContentLoaded', () => {
             taskModeTitle: (label) => `处理方式：${label}`, autoPendingTitle: '生成后显示智能判断结果',
             translateNoStyle: '忠实翻译保持原意，不应用表达风格改写',
             translateNoLevel: '忠实翻译保持原意，不调整语言难度',
-            needApiKey: '请先在连接设置中填写 web2api API Key。',
+            needLogin: '请先登录账号（在「拆解与复述」页右上角登录）。',
             withCode: (message, code) => `${message}（${code}）`,
             modelFailed: '模型暂时失败或输出没有通过质量检查，请重试。',
             requestFailed: (status) => `请求失败（HTTP ${status}）`,
-            testingTitle: (label) => `正在测试 ${label}`, testingDetail: '正在验证 Key、模型权限和纯法语输出',
+            testingTitle: (label) => `正在测试 ${label}`, testingDetail: '正在验证账号、模型权限和纯法语输出',
             testingStatus: (label) => `正在测试 ${label} 连接...`,
             connectedTitle: (label) => `${label} 已连接`, testSample: (sample) => `测试译文：${sample}`,
             reviewerPassed: (label) => `，${label} 校对通过`,
@@ -217,12 +209,10 @@ document.addEventListener('DOMContentLoaded', () => {
             modeDone: (label, detail) => `已按“${label}”处理，${detail}。`,
             requestFailedTitle: (label) => `${label} 请求失败`,
             actionFailed: '操作失败，请稍后重试。',
-            keyChanged: 'Key 已修改', retestConnection: '请重新测试连接',
             modelUnverified: (label) => `${label} 待验证`, modelSwitched: '模型已切换，请测试连接',
             needStudyText: '请先生成或输入需要拆解复述的法语文本。',
             nothingToCopy: '当前没有可复制的法语文本。', copied: '法语文本已复制。',
-            keySaved: 'Key 已保存', clickToTest: (label) => `点击测试 ${label} 实际连接`,
-            noKey: '尚未填写 Key', enterKeyToTest: '填写后测试实际连接',
+            clickToTest: (label) => `点击测试 ${label} 实际连接`,
             importedFromStudy: '已从拆解学习台导入法语文本，可直接点击“制作音频”或进行调整。',
             restoredFromHistory: '已从历史记录恢复文本与音频。',
         },
@@ -236,9 +226,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     FrenchI18n.mountToggle(document.getElementById('lang-toggle'));
 
-    const localKeyName = 'frenchStudio.perplexityApiKey';
-    const sessionKeyName = 'frenchStudio.sessionApiKey';
-    const modelKeyName = 'frenchStudio.perplexityModel';
     const taskModeKeyName = 'frenchStudio.taskMode';
     const busyButtons = [transformButton, transformSpeechButton, speechButton];
     const taskModes = {
@@ -284,19 +271,6 @@ document.addEventListener('DOMContentLoaded', () => {
         },
     };
 
-    const savedLocalKey = localStorage.getItem(localKeyName);
-    const savedSessionKey = sessionStorage.getItem(sessionKeyName);
-    if (savedLocalKey) {
-        apiKeyInput.value = savedLocalKey;
-        rememberKey.checked = true;
-    } else if (savedSessionKey) {
-        apiKeyInput.value = savedSessionKey;
-    }
-    const savedModel = localStorage.getItem(modelKeyName);
-    if (savedModel && Array.from(modelSelect.options).some((option) => option.value === savedModel)) {
-        modelSelect.value = savedModel;
-    }
-
     async function syncModelsFromBackend() {
         if (!modelSelect) return;
         try {
@@ -311,10 +285,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     opt.textContent = m.label + (m.recommended ? T.recommendedSuffix : '');
                     modelSelect.appendChild(opt);
                 });
-                const saved = localStorage.getItem(modelKeyName);
-                if (saved && Array.from(modelSelect.options).some((opt) => opt.value === saved)) {
-                    modelSelect.value = saved;
-                } else if (data.default && Array.from(modelSelect.options).some((opt) => opt.value === data.default)) {
+                if (data.default && Array.from(modelSelect.options).some((opt) => opt.value === data.default)) {
                     modelSelect.value = data.default;
                 } else if (modelSelect.options.length > 0) {
                     modelSelect.selectedIndex = 0;
@@ -435,35 +406,12 @@ document.addEventListener('DOMContentLoaded', () => {
         setTaskResult('pending', null, mode);
     }
 
-    function saveApiKey() {
-        const key = apiKeyInput.value.trim();
-        if (key) {
-            sessionStorage.setItem(sessionKeyName, key);
-        } else {
-            sessionStorage.removeItem(sessionKeyName);
-        }
-
-        if (rememberKey.checked && key) {
-            localStorage.setItem(localKeyName, key);
-        } else {
-            localStorage.removeItem(localKeyName);
-        }
-        localStorage.setItem(modelKeyName, modelSelect.value);
-    }
-
-    // A logged-in account wins (the server supplies the upstream key); the manual key is for guests
-    function requireApiKey() {
+    // AI calls need a logged-in account; the server then supplies the upstream key
+    function requireUserToken() {
         let userToken = '';
         try { userToken = localStorage.getItem('frenchStudio.userToken') || ''; } catch (_) {}
-        if (userToken) return userToken;
-        const key = apiKeyInput.value.trim();
-        if (!key) {
-            connectionSettings.open = true;
-            apiKeyInput.focus();
-            throw new Error(T.needApiKey);
-        }
-        saveApiKey();
-        return key;
+        if (!userToken) throw new Error(T.needLogin);
+        return userToken;
     }
 
     function setBusy(isBusy, activeButton = null) {
@@ -519,7 +467,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function testConnection() {
-        const apiKey = requireApiKey();
+        const userToken = requireUserToken();
         const label = modelLabel();
         testConnectionButton.disabled = true;
         testConnectionButton.classList.add('is-loading');
@@ -530,7 +478,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await postJson(
                 '/api/connection/test',
                 { model: modelSelect.value },
-                { Authorization: `Bearer ${apiKey}` },
+                { Authorization: `Bearer ${userToken}` },
             );
             const actualLabel = result.label || modelLabel(result.model);
             setConnectionState(
@@ -614,7 +562,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!text) {
             throw new Error(T.needSourceText);
         }
-        const apiKey = requireApiKey();
+        const userToken = requireUserToken();
         const requestedTaskMode = selectedTaskMode();
         const taskConfiguration = taskModes[requestedTaskMode];
         const activeButton = withSpeech ? transformSpeechButton : transformButton;
@@ -636,7 +584,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     model: modelSelect.value,
                     task_mode: requestedTaskMode,
                 },
-                { Authorization: `Bearer ${apiKey}` },
+                { Authorization: `Bearer ${userToken}` },
             );
             outputText.value = result.text;
             const actualLabel = modelLabel(result.model || modelSelect.value);
@@ -689,14 +637,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     sourceText.addEventListener('input', () => updateCount(sourceText, sourceCount));
     outputText.addEventListener('input', () => updateCount(outputText, outputCount));
-    apiKeyInput.addEventListener('input', () => {
-        setConnectionState('idle', T.keyChanged, T.retestConnection);
-        setModelQuality('pending');
-    });
-    apiKeyInput.addEventListener('change', saveApiKey);
-    rememberKey.addEventListener('change', saveApiKey);
     modelSelect.addEventListener('change', () => {
-        saveApiKey();
         setConnectionState('idle', T.modelUnverified(modelLabel()), T.modelSwitched);
         setModelQuality('pending');
     });
@@ -707,16 +648,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
     connectionForm.addEventListener('submit', (event) => event.preventDefault());
-
-    toggleKeyButton.addEventListener('click', () => {
-        const showKey = apiKeyInput.type === 'password';
-        apiKeyInput.type = showKey ? 'text' : 'password';
-        toggleKeyButton.innerHTML = `<i data-lucide="${showKey ? 'eye-off' : 'eye'}"></i>`;
-        if (window.lucide) {
-            window.lucide.createIcons({ attrs: { 'stroke-width': 1.8 } });
-        }
-        apiKeyInput.focus();
-    });
 
     clearSourceButton.addEventListener('click', () => {
         sourceText.value = '';
@@ -771,11 +702,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateCount(outputText, outputCount);
     updateTaskModeUi();
     setModelQuality('pending');
-    if (apiKeyInput.value.trim()) {
-        setConnectionState('idle', T.keySaved, T.clickToTest(modelLabel()));
-    } else {
-        setConnectionState('idle', T.noKey, T.enterKeyToTest);
-    }
+    setConnectionState('idle', T.notTested, T.clickToTest(modelLabel()));
 
     // Support query param ?text= passed from study or elsewhere
     const urlParams = new URLSearchParams(window.location.search);

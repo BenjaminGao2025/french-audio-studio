@@ -58,7 +58,7 @@
   - 同步生成时间戳字幕文件（SRT / VTT）。
   - 支持一键导出 MP3 音频与 SRT 外挂字幕。
 - 🔒 **隐私与安全第一**：
-  - 后端无硬编码密钥，API Key 仅保存在浏览器本地（可选是否记住），通过请求头透传给后端转发。
+  - 后端无硬编码密钥；AI 接口只接受已登录账号的会话 token，上游 Key 由服务器环境变量提供，浏览器不接触。
 - 📦 **轻量可移植**：
   - 基于 FastAPI + 原生现代化前端，无重型框架依赖，启动毫秒级，附带 40 项自动化测试全绿。
 
@@ -70,7 +70,7 @@
 flowchart LR
     User[Web 浏览器 / 客户端]
     FastAPI[FastAPI 后端]
-    LLM[OpenAI 兼容 LLM / Web2API / Perplexity]
+    LLM[AGY（OpenAI 兼容 Gemini 网关）]
     EdgeTTS[Microsoft Edge-TTS 引擎]
     Storage[(音频与字幕输出 /outputs)]
 
@@ -133,13 +133,12 @@ flowchart LR
 | 变量名 | 默认值 | 描述 |
 | :--- | :--- | :--- |
 | `OUTPUT_DIR` | `./outputs` | 音频及字幕输出保存目录 |
-| `PERPLEXITY_BASE_URL` | `http://127.0.0.1:8002/v1` | OpenAI 兼容接口地址（支持 Web2API、本地网关等） |
-| `PERPLEXITY_MODEL` | `grok-4.6` | 默认法语转换大语言模型（如 grok-4.6, sonar-2） |
-| `PERPLEXITY_PROOFREAD_MODEL`| `gpt-5.6-terra` | 兜底纠错/校对模型 |
-| `PERPLEXITY_TIMEOUT_SECONDS`| `120` | LLM 请求超时时间（秒） |
+| `AGY_BASE_URL` | `http://127.0.0.1:8645/v1` | AGY（OpenAI 兼容 Gemini 网关）地址，所有 AI 调用都发往这里 |
+| `AGY_MODEL` | `gemini-3.8-flash-low` | 实际应答所有请求的模型；客户端传来的任何旧模型名都会映射到它 |
+| `UPSTREAM_TIMEOUT_SECONDS` | `120` | 单次 AI 请求超时时间（秒） |
 | `MAX_TEXT_CHARS` | `15000` | 单次输入最大字符限制 |
 | `AUTH_SECRET` | （必填） | 登录 token 签名密钥，至少 32 位随机字符，未设置时服务拒绝启动 |
-| `WEB2API_API_KEY` | （空） | 登录用户使用的上游 Key；为空时登录用户需在设置中自填 Key |
+| `WEB2API_API_KEY` | （空） | 发给上游 AGY 的 Key；为空时 AI 接口返回 503 `server_key_missing` |
 | `ALLOW_REGISTRATION` | `false` | 是否开放注册（个人使用保持关闭，账号用 `python auth_db.py` 管理） |
 
 ---
@@ -165,7 +164,7 @@ python -m unittest discover -s tests -p 'test_*.py'
 - **Intelligent French Transformation**: Auto mode, direct generation, faithful translation, natural phrasing, and French polishing.
 - **Expressive Nuance Controls**: 4 styles (spoken, neutral, formal, polished), 3 CEFR levels (A1-C2), and 2 dialects (France / Canada).
 - **High-Fidelity Neural Speech**: Multiple edge-tts neural voices with subtitle sync and one-click download.
-- **Privacy First**: Zero hardcoded secrets, client-side key storage, and full request-level security isolation.
+- **Privacy First**: Zero hardcoded secrets, server-held upstream key, and full request-level security isolation.
 - **Production-Ready**: FastAPI async backend, minimal native web interface, containerized with Docker.
 
 ---

@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 from fastapi.testclient import TestClient
 
 import tts_service
+import web_common
 
 AI_ROUTES = [
     ("post", "/api/transform", {"text": "你好", "style": "spoken", "level": "A1-A2", "locale": "fr-FR"}),
@@ -14,7 +15,7 @@ AI_ROUTES = [
     ("post", "/api/transcribe/fix", {"text": "bonjour", "sentence": "Bonjour"}),
     ("post", "/api/ask", {"sentence": "Bonjour", "question": "why"}),
     ("get", "/api/lookup?word=bonjour", None),
-    ("post", "/api/connection/test", {"model": tts_service.PERPLEXITY_MODEL}),
+    ("post", "/api/connection/test", {"model": tts_service.DEFAULT_MODEL}),
 ]
 
 
@@ -45,7 +46,7 @@ class SecurityFixTests(unittest.TestCase):
         ok = self.client.get(f"/files/{name}", headers=testenv.session_headers())
         self.assertEqual(ok.status_code, 200)
         token = testenv.session_headers()["Authorization"].split(" ", 1)[1]
-        self.client.cookies.set(tts_service.SESSION_COOKIE, token)
+        self.client.cookies.set(web_common.SESSION_COOKIE, token)
         self.assertEqual(self.client.get(f"/files/{name}").status_code, 200)
 
     def test_snippet_name_is_keyed(self):
@@ -62,8 +63,8 @@ class SecurityFixTests(unittest.TestCase):
             r.headers = {"x-forwarded-proto": proto}
             r.url.scheme = "http"
             return r
-        self.assertTrue(tts_service._cookie_secure(req("127.0.0.1", "https")))
-        self.assertFalse(tts_service._cookie_secure(req("203.0.113.9", "https")))
+        self.assertTrue(web_common._cookie_secure(req("127.0.0.1", "https")))
+        self.assertFalse(web_common._cookie_secure(req("203.0.113.9", "https")))
 
 
 if __name__ == "__main__":

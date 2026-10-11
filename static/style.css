@@ -288,19 +288,9 @@ h2 {
     line-height: 1.2;
 }
 
-.connection-field + .connection-field {
-    margin-top: 13px;
-}
-
 .connection-popover select {
     height: 38px;
     background-position: calc(100% - 15px) 16px, calc(100% - 10px) 16px;
-}
-
-.password-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 38px;
-    gap: 8px;
 }
 
 input[type="password"],
@@ -321,23 +311,6 @@ select:focus,
 textarea:focus {
     border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.12);
-}
-
-.check-row {
-    display: flex;
-    width: fit-content;
-    align-items: center;
-    gap: 8px;
-    margin-top: 12px;
-    color: var(--muted);
-    font-size: 13px;
-}
-
-.check-row input {
-    width: 16px;
-    height: 16px;
-    margin: 0;
-    accent-color: var(--primary);
 }
 
 .connection-test-row {

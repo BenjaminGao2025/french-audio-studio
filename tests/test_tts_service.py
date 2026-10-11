@@ -29,7 +29,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ok")
-        self.assertEqual(response.json()["model"], tts_service.PERPLEXITY_MODEL)
+        self.assertEqual(response.json()["model"], tts_service.DEFAULT_MODEL)
 
     def test_transform_requires_api_key(self):
         response = self.client.post(
@@ -46,11 +46,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["default"], "gemini-3.8-flash")
         self.assertEqual(response.json()["proofreader"]["id"], "gemini-3.8-flash")
-        model_ids = {item["id"] for item in response.json()["models"]}
-        self.assertEqual(
-            model_ids,
-            {"gpt-6.1-sol-thinking", "gpt-6.1-sol", "claude-sonnet-5.5-thinking", "claude-sonnet-5.5", "grok-4.7", "gemini-3.8-flash"},
-        )
+        self.assertEqual([item["id"] for item in response.json()["models"]], ["gemini-3.8-flash"])
 
     @patch(
         "tts_service.request_french_transform",
@@ -587,54 +583,54 @@ class FrenchAudioStudioTests(unittest.TestCase):
         )
         self.assertEqual(client.post.await_count, 2)
 
-    def test_chat_payload_uses_selected_model(self):
-        request = tts_service.TransformRequest(
-            text="Bonjour",
-            model="claude-sonnet-5.5-thinking",
-        )
+    def test_every_model_name_is_answered_by_agy(self):
+        # Old browsers may still send a Perplexity-era name: it is accepted, never a 422
+        for name in ("gpt-6.1-sol-thinking", "claude-sonnet-5.5-thinking", "grok-4.7", "gemini-3.8-flash", "anything"):
+            request = tts_service.TransformRequest(text="Bonjour", model=name)
+            self.assertEqual(request.model, name)
+            self.assertEqual(tts_service._chat_payload(request, "polish")["model"], tts_service.AGY_MODEL)
+            self.assertEqual(tts_service._classification_payload(request)["model"], tts_service.AGY_MODEL)
 
-        payload = tts_service._chat_payload(request, "polish")
+    @patch("tts_service._post_chat", new_callable=AsyncMock)
+    def test_old_browsers_with_legacy_model_names_get_no_422(self, post_chat):
+        post_chat.return_value = ({}, '{"sentences": []}')
+        for name in ("gpt-6.1-sol-thinking", "claude-sonnet-5.5", "grok-4.7", "grok-4.6"):
+            res = self.client.post(
+                "/api/analyze",
+                headers=testenv.session_headers(),
+                json={"text": "Bonjour.", "model": name},
+            )
+            self.assertEqual(res.status_code, 200, name)
+            self.assertEqual(post_chat.await_args.args[1]["model"], tts_service.AGY_MODEL)
 
-        self.assertEqual(payload["model"], "claude-sonnet-5.5-thinking")
+    def test_episode_route_accepts_a_legacy_model_query(self):
+        with patch("tts_service._generate_episode", new_callable=AsyncMock):
+            res = self.client.post(
+                "/api/episodes?model=gpt-6.1-sol-thinking",
+                headers=testenv.session_headers(),
+                json={},
+            )
+        self.assertEqual(res.status_code, 200)
 
-    def test_models_are_routed_to_their_upstream(self):
-        gemini = tts_service._map_upstream_model("gemini-3.8-flash")
-        self.assertEqual(tts_service._upstream_base_url(gemini), tts_service.AGY_BASE_URL)
-        sol = tts_service._map_upstream_model("gpt-6.1-sol-thinking")
-        self.assertEqual(sol, "gpt-6.1-sol-thinking")
-        self.assertEqual(tts_service._upstream_base_url(sol), tts_service.PERPLEXITY_BASE_URL)
-
-    def test_agy_only_sends_every_model_to_agy_gemini(self):
-        with patch.object(tts_service, "AGY_ONLY", True):
-            for name in ("gpt-6.1-sol-thinking", "claude-sonnet-5.5", "gemini-3.8-flash"):
-                upstream = tts_service._map_upstream_model(name)
-                self.assertEqual(upstream, tts_service.AGY_MODEL)
-                self.assertEqual(tts_service._upstream_base_url(upstream), tts_service.AGY_BASE_URL)
-            models = TestClient(tts_service.app).get("/api/models").json()["models"]
-            self.assertEqual([m["id"] for m in models], ["gemini-3.8-flash"])
-
-    def test_expired_perplexity_login_is_a_clear_error(self):
+    def test_post_chat_always_calls_agy(self):
         client = AsyncMock()
         client.post.return_value = Mock(
             status_code=200,
-            json=Mock(return_value={"choices": [{"message": {"content": "Sign up and repeat your request."}}]}),
+            json=Mock(return_value={"choices": [{"message": {"content": "Bonjour."}}]}),
+        )
+        asyncio.run(tts_service._post_chat(client, {"model": "gpt-6.1-sol-thinking"}, {}))
+        self.assertEqual(client.post.await_args.args[0], f"{tts_service.AGY_BASE_URL}/chat/completions")
+
+    def test_rejected_server_key_is_not_reported_as_a_login_problem(self):
+        client = AsyncMock()
+        client.post.return_value = Mock(
+            status_code=401,
+            json=Mock(return_value={"error": {"code": "invalid_api_key", "message": "bad key"}}),
         )
         with self.assertRaises(tts_service.HTTPException) as ctx:
-            asyncio.run(tts_service._post_chat(client, {"model": "gpt-6.1-sol-thinking"}, {}))
+            asyncio.run(tts_service._post_chat(client, {"model": "gemini-3.8-flash"}, {}))
         self.assertEqual(ctx.exception.status_code, 503)
-        self.assertEqual(ctx.exception.detail["code"], "perplexity_login_expired")
-        self.assertIn("8002", client.post.await_args.args[0])
-
-    def test_citation_markers_are_removed_from_model_replies(self):
-        # Perplexity sometimes puts "[1]" between JSON tokens, which broke parsing
-        reply = '{"sentences": [{"why": "You see. ",[1]\n "note": "ok [2][3]"}]}'
-        client = AsyncMock()
-        client.post.return_value = Mock(
-            status_code=200,
-            json=Mock(return_value={"choices": [{"message": {"content": reply}}]}),
-        )
-        _, raw_text = asyncio.run(tts_service._post_chat(client, {"model": "gpt-6.1-sol-thinking"}, {}))
-        self.assertEqual(json.loads(raw_text), {"sentences": [{"why": "You see. ", "note": "ok"}]})
+        self.assertEqual(ctx.exception.detail["code"], "invalid_api_key")
 
     def test_non_french_script_detection(self):
         self.assertTrue(tts_service._contains_non_french_script("Bonjour, \u4f60\u597d"))

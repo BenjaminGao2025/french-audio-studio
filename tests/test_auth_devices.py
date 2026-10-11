@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 import auth_db
+import routers.auth
 import tts_service
 
 PHONE_UA = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Mobile Safari/537.36"
@@ -80,10 +81,10 @@ class DeviceLimitTests(unittest.TestCase):
         self.assertEqual(caught.exception.detail["code"], "session_revoked")
 
     def test_device_labels(self):
-        self.assertEqual(tts_service._device_label(PHONE_UA), "Chrome · Android")
+        self.assertEqual(routers.auth._device_label(PHONE_UA), "Chrome · Android")
         iphone = "Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15 Version/19.0 Mobile Safari/604.1"
-        self.assertEqual(tts_service._device_label(iphone), "Safari · iPhone")
-        self.assertEqual(tts_service._device_label(""), "Unknown device")
+        self.assertEqual(routers.auth._device_label(iphone), "Safari · iPhone")
+        self.assertEqual(routers.auth._device_label(""), "Unknown device")
 
 
 if __name__ == "__main__":
