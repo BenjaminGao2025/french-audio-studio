@@ -268,6 +268,7 @@ def _authorization_token(authorization: str | None) -> str:
         raise HTTPException(status_code=401, detail=SIGNED_OUT_DETAIL)
     user_payload = auth_db.verify_token(token)
     if user_payload:
+        _rate_limit(int(user_payload["sub"]), "ai")
         user_info = auth_db.get_user_status(user_payload["sub"])
         if not user_info or not user_info.get("is_valid"):
             raise HTTPException(
@@ -293,6 +294,57 @@ def _authorization_token(authorization: str | None) -> str:
         status_code=401,
         detail={"code": "login_required", "message": "请先登录账号。"},
     )
+
+
+# ---------------------------------------------------------------------------
+# Rate limiting (in-memory, per user). One process, so a dict is enough.
+# ---------------------------------------------------------------------------
+
+RATE_LIMITS: dict[str, tuple[float, float]] = {
+    # bucket: (capacity, refill tokens per second)
+    "ai": (float(os.getenv("RATE_AI_BURST", "40")), float(os.getenv("RATE_AI_PER_MIN", "30")) / 60),
+    "speech": (float(os.getenv("RATE_SPEECH_BURST", "120")), float(os.getenv("RATE_SPEECH_PER_MIN", "60")) / 60),
+    "transcribe": (float(os.getenv("RATE_ASR_BURST", "10")), float(os.getenv("RATE_ASR_PER_MIN", "6")) / 60),
+    "episode": (float(os.getenv("RATE_EPISODE_BURST", "3")), float(os.getenv("RATE_EPISODE_PER_HOUR", "6")) / 3600),
+}
+_rate_buckets: dict[tuple[int, str], tuple[float, float]] = {}
+_rate_lock = threading.Lock()
+
+
+def _rate_limit(user_id: int, bucket: str) -> None:
+    capacity, refill = RATE_LIMITS[bucket]
+    now = time.monotonic()
+    with _rate_lock:
+        tokens, last = _rate_buckets.get((user_id, bucket), (capacity, now))
+        tokens = min(capacity, tokens + (now - last) * refill)
+        if tokens < 1:
+            wait = max(1, int((1 - tokens) / refill) + 1) if refill > 0 else 60
+            _rate_buckets[(user_id, bucket)] = (tokens, now)
+            raise HTTPException(
+                status_code=429,
+                detail={"code": "rate_limited", "message": f"操作太频繁了，请等 {wait} 秒后再试。", "retry_after": wait},
+                headers={"Retry-After": str(wait)},
+            )
+        _rate_buckets[(user_id, bucket)] = (tokens - 1, now)
+        if len(_rate_buckets) > 20000:  # drop idle entries
+            for key in [k for k, (_, t) in _rate_buckets.items() if now - t > 3600]:
+                _rate_buckets.pop(key, None)
+
+
+TRIAL_ENDED_MESSAGE = "试用已结束：AI 批改暂时不可用。请联系站长续期后再试。"
+FEEDBACK_FAILED_MESSAGE = "AI 批改暂时失败，请稍后点「重试」。"
+INTERRUPTED_MESSAGE = "服务重启，本次批改被中断，请点「重试」重新提交。"
+
+
+def _feedback_error_message(exc: Exception) -> str:
+    """Never show raw upstream errors to learners; details go to the log."""
+    if isinstance(exc, HTTPException):
+        detail = exc.detail
+        if isinstance(detail, dict) and detail.get("code") in {"trial_expired", "server_key_missing", "missing_api_key"}:
+            return TRIAL_ENDED_MESSAGE
+        if exc.status_code == 429:
+            return "AI 服务繁忙，请稍后点「重试」。"
+    return FEEDBACK_FAILED_MESSAGE
 
 
 SIGNED_OUT_DETAIL = {
@@ -1321,6 +1373,16 @@ def _validate_voice(voice: str) -> str:
     return voice
 
 
+def _snippet_cached(text: str, voice: str) -> bool:
+    try:
+        content = _normalized_text(text)
+        stamp = _safe_timestamp(None, text=content, voice=_validate_voice(voice))
+    except HTTPException:
+        return False
+    base = OUTPUT_DIR / f"TTS_{voice}_{stamp}"
+    return base.with_suffix(".mp3").exists() and base.with_suffix(".srt").exists()
+
+
 async def create_speech_files(
     text: str, voice: str, timestamp: str | None = None
 ) -> tuple[str, str]:
@@ -1379,12 +1441,28 @@ def _output_file(
     )
 
 
+CONTENT_SECURITY_POLICY = "; ".join([
+    "default-src 'self'",
+    "script-src 'self' https://unpkg.com/lucide@1.34.0/",
+    "style-src 'self' 'unsafe-inline'",  # style="" attributes in markup; scripts stay strict
+    "img-src 'self' data: blob:",
+    "media-src 'self' blob:",
+    "font-src 'self' data:",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+])
+
+
 @app.middleware("http")
 async def security_headers(request, call_next):
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "same-origin"
     response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY
     if request.url.path in {"/", "/study"}:
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
@@ -1487,6 +1565,17 @@ async def favicon():
     return Response(status_code=204)
 
 
+@app.on_event("startup")
+async def _recover_interrupted_feedback() -> None:
+    for module in (writing, speaking, episodes):
+        try:
+            count = await run_in_threadpool(module.fail_interrupted_attempts, INTERRUPTED_MESSAGE)
+            if count:
+                logger.warning("Marked %s interrupted %s attempts as failed", count, module.__name__)
+        except Exception:
+            logger.exception("Could not recover interrupted %s attempts", module.__name__)
+
+
 @app.get("/healthz")
 async def healthz():
     return {
@@ -1568,7 +1657,7 @@ async def generate_speech(
     request: SpeechRequest,
     authorization: str | None = Header(default=None),
 ):
-    _require_user_id(authorization)
+    _rate_limit(_require_user_id(authorization), "speech")
     audio_filename, srt_filename = await create_speech_files(
         request.text, request.voice
     )
@@ -1819,12 +1908,50 @@ async def transcribe_audio(
     language: str = Query(default="zh", pattern=r"^(zh|fr)$"),
     authorization: str | None = Header(default=None),
 ):
-    _require_user_id(authorization)
+    user_id = _require_user_id(authorization)
+    declared = int(request.headers.get("content-length") or 0)
+    if declared > ASR_MAX_BYTES:
+        raise HTTPException(status_code=413, detail={"message": "录音太长了，请分段说。"})
+    _rate_limit(user_id, "transcribe")
     audio = await request.body()
     if not audio:
         raise HTTPException(status_code=422, detail={"message": "没有收到录音。"})
     if len(audio) > ASR_MAX_BYTES:
         raise HTTPException(status_code=413, detail={"message": "录音太长了，请分段说。"})
+    if not _looks_like_audio(audio):
+        raise HTTPException(status_code=415, detail={"message": "录音格式不支持，请用浏览器重新录一次。"})
+    global _asr_waiting
+    if _asr_waiting >= ASR_MAX_QUEUE:
+        raise HTTPException(
+            status_code=429,
+            detail={"code": "asr_busy", "message": "识别排队的人太多了，请过几秒再试。", "retry_after": 5},
+            headers={"Retry-After": "5"},
+        )
+    _asr_waiting += 1
+    try:
+        return await _transcribe_admitted(audio, sentence, context, language)
+    finally:
+        _asr_waiting -= 1
+
+
+ASR_MAX_QUEUE = int(os.getenv("ASR_MAX_QUEUE", "4"))
+_asr_waiting = 0
+
+
+def _looks_like_audio(data: bytes) -> bool:
+    head = data[:16]
+    return (
+        head.startswith(b"\x1a\x45\xdf\xa3")          # webm / matroska
+        or head.startswith(b"OggS")
+        or (head.startswith(b"RIFF") and head[8:12] == b"WAVE")
+        or head[4:8] == b"ftyp"                         # mp4 / m4a (Safari)
+        or head.startswith(b"ID3")
+        or head.startswith(b"fLaC")
+        or (len(head) > 1 and head[0] == 0xFF and (head[1] & 0xE0) == 0xE0)  # mp3 / aac frame
+    )
+
+
+async def _transcribe_admitted(audio: bytes, sentence: str, context: str, language: str):
     try:
         if language == "zh":
             return await run_in_threadpool(_transcribe_sync, audio, sentence.strip(), context.strip())
@@ -2101,6 +2228,9 @@ async def lookup_word(
     clean = word.strip()
     if not clean:
         raise HTTPException(status_code=400, detail={"message": "请提供待查询单词"})
+    if clean.lower() in LOOKUP_CACHE:  # cached: still login-only, but free
+        _require_user_id(authorization)
+        return LOOKUP_CACHE[clean.lower()]
     api_key = _authorization_token(authorization)
     result = await request_word_lookup(clean, api_key, model=model)
     return result
@@ -2116,9 +2246,11 @@ async def generate_tts(
 ):
     # <audio> cannot send an Authorization header. Same-origin cookie is the credential.
     # Anonymous calls used to be an open Edge-TTS proxy on the public site.
-    _require_user_id(request.headers.get("authorization"), request)
+    user_id = _require_user_id(request.headers.get("authorization"), request)
     if len(text) > TTS_SNIPPET_MAX_CHARS:
         raise HTTPException(status_code=422, detail="文本过长，请使用音频工作台生成。")
+    if not _snippet_cached(text, voice):  # cache hits (prefetch, replays) are free
+        _rate_limit(user_id, "speech")
     # Snippets are cached by (voice, text) hash, so the same URL always returns the same audio.
     audio_filename, srt_filename = await create_speech_files(text, voice)
     filename = srt_filename if format == "srt" else audio_filename
@@ -2663,6 +2795,7 @@ async def srs_backfill_english(authorization: str | None = Header(default=None))
 # ---------------------------------------------------------------------------
 _episode_lock = asyncio.Lock()           # render one episode at a time
 _background_tasks: set[asyncio.Task] = set()
+_episode_users: set[int] = set()          # users with an episode currently generating
 STORY_SPEAKERS = {"A", "B", "N"}
 
 
@@ -2904,10 +3037,20 @@ async def create_episode_api(
 ):
     user_id = _require_user_id(authorization)
     req = req or EpisodeRequest()
+    if user_id in _episode_users or any(
+        ep.get("status") == "generating" for ep in await run_in_threadpool(episodes.list_episodes, user_id)
+    ):
+        raise HTTPException(
+            status_code=429,
+            detail={"code": "episode_busy", "message": "已有一期节目正在生成，请等它完成后再生成新的。"},
+        )
     try:
         api_key = _authorization_token(authorization)
-    except HTTPException:
+    except HTTPException as exc:
+        if exc.status_code == 429:
+            raise
         api_key = None  # no upstream key: build the episode without new stories
+    _rate_limit(user_id, "episode")
     if req.replace_id:
         try:
             episodes.get_episode(user_id, req.replace_id)
@@ -2916,9 +3059,11 @@ async def create_episode_api(
     level = req.level or episodes.recommended_level(game.state(user_id, 0)["hours_total"])
     settings = {"level": level, "minutes": req.minutes, "request": req.request.strip()}
     episode = await run_in_threadpool(episodes.create_episode, user_id, settings)
+    _episode_users.add(user_id)
     task = asyncio.create_task(_generate_episode(user_id, episode["id"], api_key, model, settings, req.replace_id))
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
+    task.add_done_callback(lambda _t, uid=user_id: _episode_users.discard(uid))
     return episode
 
 
@@ -2928,9 +3073,16 @@ def delete_episode_api(episode_id: str, authorization: str | None = Header(defau
 
 
 @app.get("/episodes/{episode_id}.{ext}")
-async def episode_file(episode_id: str, ext: str, download: bool = Query(default=False)):
-    # The 128-bit random id is the capability (players and downloads cannot send auth headers)
+async def episode_file(
+    request: Request, episode_id: str, ext: str, download: bool = Query(default=False)
+):
+    # <audio src> and download links send the same-origin HttpOnly session cookie.
+    user_id = _require_user_id(request.headers.get("authorization"), request)
     if not re.fullmatch(r"[0-9a-f]{32}", episode_id) or ext not in {"mp3", "srt", "lrc"}:
+        raise HTTPException(status_code=404, detail="文件不存在。")
+    try:
+        await run_in_threadpool(episodes.get_episode, user_id, episode_id)
+    except KeyError:
         raise HTTPException(status_code=404, detail="文件不存在。")
     path = episodes.episodes_dir() / f"{episode_id}.{ext}"
     if not path.is_file():
@@ -2958,6 +3110,9 @@ def srs_import_legacy(
 async def _generate_write_feedback_1(
     user_id: int, attempt_id: str, api_key: str | None, model: str
 ) -> None:
+    if not api_key:
+        writing.set_attempt_feedback_1(attempt_id, {}, error=TRIAL_ENDED_MESSAGE)
+        return
     try:
         attempt = writing.get_attempt(user_id, attempt_id)
         if not attempt:
@@ -2972,12 +3127,15 @@ async def _generate_write_feedback_1(
         writing.set_attempt_feedback_1(attempt_id, feedback)
     except Exception as exc:
         logger.warning("Writing round 1 feedback failed: %s", exc)
-        writing.set_attempt_feedback_1(attempt_id, {}, error=str(exc))
+        writing.set_attempt_feedback_1(attempt_id, {}, error=_feedback_error_message(exc))
 
 
 async def _generate_write_feedback_2(
     user_id: int, attempt_id: str, api_key: str | None, model: str
 ) -> None:
+    if not api_key:
+        writing.set_attempt_feedback_2(attempt_id, {}, error=TRIAL_ENDED_MESSAGE)
+        return
     try:
         attempt = writing.get_attempt(user_id, attempt_id)
         if not attempt:
@@ -2990,7 +3148,7 @@ async def _generate_write_feedback_2(
         writing.set_attempt_feedback_2(attempt_id, feedback)
     except Exception as exc:
         logger.warning("Writing round 2 feedback failed: %s", exc)
-        writing.set_attempt_feedback_2(attempt_id, {}, error=str(exc))
+        writing.set_attempt_feedback_2(attempt_id, {}, error=_feedback_error_message(exc))
 
 
 @app.get("/write")
@@ -3054,7 +3212,9 @@ async def create_write_attempt(
     user_id = _require_user_id(authorization)
     try:
         api_key = _authorization_token(authorization)
-    except HTTPException:
+    except HTTPException as exc:
+        if exc.status_code == 429:
+            raise
         api_key = None
     attempt = writing.create_attempt(
         user_id, req.task, req.subject, req.level, req.text.strip(), req.seconds
@@ -3092,7 +3252,9 @@ async def submit_write_round2(
     user_id = _require_user_id(authorization)
     try:
         api_key = _authorization_token(authorization)
-    except HTTPException:
+    except HTTPException as exc:
+        if exc.status_code == 429:
+            raise
         api_key = None
     attempt = writing.get_attempt(user_id, attempt_id)
     if not attempt:
@@ -3120,6 +3282,9 @@ def list_write_attempts(
 async def _generate_speak_feedback_1(
     user_id: int, attempt_id: str, api_key: str | None, model: str
 ) -> None:
+    if not api_key:
+        speaking.set_attempt_feedback_1(attempt_id, {}, error=TRIAL_ENDED_MESSAGE)
+        return
     try:
         attempt = speaking.get_attempt(user_id, attempt_id)
         if not attempt:
@@ -3136,12 +3301,15 @@ async def _generate_speak_feedback_1(
         speaking.set_attempt_feedback_1(attempt_id, feedback)
     except Exception as exc:
         logger.warning("Speaking round 1 feedback failed: %s", exc)
-        speaking.set_attempt_feedback_1(attempt_id, {}, error=str(exc))
+        speaking.set_attempt_feedback_1(attempt_id, {}, error=_feedback_error_message(exc))
 
 
 async def _generate_speak_feedback_2(
     user_id: int, attempt_id: str, api_key: str | None, model: str
 ) -> None:
+    if not api_key:
+        speaking.set_attempt_feedback_2(attempt_id, {}, error=TRIAL_ENDED_MESSAGE)
+        return
     try:
         attempt = speaking.get_attempt(user_id, attempt_id)
         if not attempt:
@@ -3154,7 +3322,7 @@ async def _generate_speak_feedback_2(
         speaking.set_attempt_feedback_2(attempt_id, feedback)
     except Exception as exc:
         logger.warning("Speaking round 2 feedback failed: %s", exc)
-        speaking.set_attempt_feedback_2(attempt_id, {}, error=str(exc))
+        speaking.set_attempt_feedback_2(attempt_id, {}, error=_feedback_error_message(exc))
 
 
 @app.get("/speak")
@@ -3220,7 +3388,9 @@ async def create_speak_attempt(
     user_id = _require_user_id(authorization)
     try:
         api_key = _authorization_token(authorization)
-    except HTTPException:
+    except HTTPException as exc:
+        if exc.status_code == 429:
+            raise
         api_key = None
     attempt = speaking.create_attempt(
         user_id, req.task, req.subject, req.level, req.transcript.strip(), req.seconds, req.audio_duration
@@ -3259,7 +3429,9 @@ async def submit_speak_round2(
     user_id = _require_user_id(authorization)
     try:
         api_key = _authorization_token(authorization)
-    except HTTPException:
+    except HTTPException as exc:
+        if exc.status_code == 429:
+            raise
         api_key = None
     attempt = speaking.get_attempt(user_id, attempt_id)
     if not attempt:

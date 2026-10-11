@@ -573,7 +573,8 @@
             }
 
             let audioSection = '';
-            if (isTts && item.audioUrl) {
+            const isLocalUrl = (u) => typeof u === 'string' && /^\/(files|tts|episodes)[/?]/.test(u);
+            if (isTts && isLocalUrl(item.audioUrl)) {
                 audioSection = `
                     <div class="history-audio-bar">
                         <button class="btn btn-secondary btn-sm btn-hist-play" data-url="${escapeHtml(item.audioUrl)}" type="button" title="${T.playTitle}">
@@ -585,7 +586,7 @@
                                 <i data-lucide="download"></i>
                                 <span>MP3</span>
                             </a>
-                            ${item.srtUrl ? `
+                            ${isLocalUrl(item.srtUrl) ? `
                             <a href="${escapeHtml(item.srtUrl)}?download=true" download="${escapeHtml(item.srtFilename || 'french_subtitles.srt')}" class="btn btn-secondary btn-sm" title="${T.downloadSrt}">
                                 <i data-lucide="file-text"></i>
                                 <span>SRT</span>

@@ -36,17 +36,17 @@ class TranscribeTests(unittest.TestCase):
         res = self.client.post(
             "/api/transcribe",
             params={"sentence": "À partir de lundi.", "context": "Exemples d'épreuves du TCF"},
-            content=b"webm-bytes",
+            content=b"\x1a\x45\xdf\xa3webm-bytes",
             headers={**_login_headers(), "Content-Type": "audio/webm"},
         )
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json()["text"], "à partir de 是固定搭配")
-        transcribe.assert_called_once_with(b"webm-bytes", "À partir de lundi.", "Exemples d'épreuves du TCF")
+        transcribe.assert_called_once_with(b"\x1a\x45\xdf\xa3webm-bytes", "À partir de lundi.", "Exemples d'épreuves du TCF")
 
     def test_missing_model_returns_503(self):
         with patch.object(tts_service, "ASR_MODEL_DIR", tts_service.BASE_DIR / "no-such-model"), \
                 patch.object(tts_service, "_asr_model", None):
-            res = self.client.post("/api/transcribe", content=b"abc", headers=_login_headers())
+            res = self.client.post("/api/transcribe", content=b"OggSabc", headers=_login_headers())
         self.assertEqual(res.status_code, 503)
         self.assertEqual(res.json()["detail"]["code"], "asr_unavailable")
 

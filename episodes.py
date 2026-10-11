@@ -185,6 +185,15 @@ def _row_payload(row: Any) -> dict[str, Any]:
     }
 
 
+def fail_interrupted_attempts(message: str) -> int:
+    """On startup no render task survives: free episodes still marked generating."""
+    with _db() as conn:
+        cur = conn.execute(
+            "UPDATE episodes SET status = 'failed', error = ? WHERE status = 'generating'", (message[:300],)
+        )
+        return cur.rowcount
+
+
 def get_episode(user_id: int, episode_id: str) -> dict[str, Any]:
     with _db() as conn:
         row = conn.execute(

@@ -2825,6 +2825,9 @@ function initStudyWorkbench() {
             refreshSrsStates(renderedSentences);
             statusMessage.className = 'status-message status-success';
             statusMessage.textContent = T.loginSuccess;
+            // Sent here from /write or /speak after a 401: go back (same-origin paths only)
+            const nextPath = new URLSearchParams(window.location.search).get('next');
+            if (nextPath && /^\/[A-Za-z]/.test(nextPath)) window.location.href = nextPath;
         } catch (err) {
             if (authErrorMsg) {
                 authErrorMsg.textContent = err.message;

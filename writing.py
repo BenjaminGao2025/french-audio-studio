@@ -355,15 +355,10 @@ def set_attempt_feedback_1(attempt_id: str, feedback: dict[str, Any], error: str
     now = _now()
     status = "failed" if error else "ready"
     with _db() as conn:
+        # Only while round 1 is pending: a late round-1 result must not clobber round 2.
         conn.execute(
-            """
-            UPDATE writing_attempts SET
-                feedback_1_json = ?,
-                status = ?,
-                error = ?,
-                updated_at = ?
-            WHERE id = ?
-            """,
+            "UPDATE writing_attempts SET feedback_1_json = ?, status = ?, error = ?, updated_at = ? "
+            "WHERE id = ? AND status = 'generating_1'",
             (json.dumps(feedback, ensure_ascii=False), status, error, now, attempt_id),
         )
 
@@ -379,10 +374,21 @@ def set_attempt_feedback_2(attempt_id: str, feedback: dict[str, Any], error: str
                 status = ?,
                 error = ?,
                 updated_at = ?
-            WHERE id = ?
+            WHERE id = ? AND status = 'generating_2'
             """,
             (json.dumps(feedback, ensure_ascii=False), status, error, now, attempt_id),
         )
+
+
+def fail_interrupted_attempts(message: str) -> int:
+    """On startup no background task survives: anything still generating is stuck forever."""
+    with _db() as conn:
+        cur = conn.execute(
+            "UPDATE writing_attempts SET status = 'failed', error = ?, updated_at = ? "
+            "WHERE status IN ('generating_1', 'generating_2')",
+            (message, _now()),
+        )
+        return cur.rowcount
 
 
 def get_attempt(user_id: int, attempt_id: str) -> dict[str, Any] | None:

@@ -5,6 +5,7 @@
 
 (function () {
     'use strict';
+    const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
     const I18N = window.FrenchI18n;
     const TOKEN_KEY = 'frenchStudio.userToken';
@@ -122,8 +123,69 @@
             body: body ? JSON.stringify(body) : undefined,
         });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.detail?.message || data.detail || `HTTP ${res.status}`);
+        if (res.status === 401) {
+            saveDraft();
+            location.href = `/study?login=1&next=${encodeURIComponent(location.pathname)}`;
+            const error = new Error(data.detail?.message || '请先登录账号。');
+            error.status = 401;
+            throw error;
+        }
+        if (!res.ok) {
+            const msg = typeof data.detail === 'string' ? data.detail : (data.detail?.message || `HTTP ${res.status}`);
+            const error = new Error(msg);
+            error.status = res.status;
+            throw error;
+        }
         return data;
+    }
+
+    // Draft survives a re-login or reload (localStorage, this device only)
+    const DRAFT_KEY = 'frenchStudio.draft.speak';
+    function saveDraft() {
+        try {
+            const value = $('transcript-input')?.value || '';
+            if (value.trim()) localStorage.setItem(DRAFT_KEY, value);
+        } catch (_) {}
+    }
+    function restoreDraft() {
+        try {
+            const input = $('transcript-input');
+            const value = localStorage.getItem(DRAFT_KEY) || '';
+            if (input && value && !input.value.trim()) {
+                input.value = value;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        } catch (_) {}
+    }
+
+    // Failed / timed-out feedback: a clear message plus a retry button (no alert, no raw errors)
+    function showFeedbackError(message, retry) {
+        $('feedback-loading').hidden = true;
+        let box = $('feedback-error');
+        if (!box) {
+            box = document.createElement('div');
+            box.id = 'feedback-error';
+            box.className = 'status-message status-error';
+            box.setAttribute('role', 'alert');
+            $('feedback-loading').insertAdjacentElement('afterend', box);
+        }
+        box.replaceChildren();
+        const text = document.createElement('span');
+        text.textContent = message + ' ';
+        box.appendChild(text);
+        if (retry) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'btn btn-secondary btn-sm';
+            button.textContent = '重试';
+            button.addEventListener('click', () => { hideFeedbackError(); retry(); });
+            box.appendChild(button);
+        }
+        box.hidden = false;
+    }
+    function hideFeedbackError() {
+        const box = $('feedback-error');
+        if (box) box.hidden = true;
     }
 
     function refreshIcons() {
@@ -270,7 +332,7 @@
                 const pill = document.createElement('div');
                 pill.className = 'question-pill';
                 pill.innerHTML = `
-                    <span>${q}</span>
+                    <span>${esc(q)}</span>
                     <button class="btn-tts" type="button" title="Écouter la question"><i data-lucide="volume-2"></i></button>
                 `;
                 pill.querySelector('.btn-tts').addEventListener('click', () => playTTS(q));
@@ -303,7 +365,7 @@
             steps.forEach(s => {
                 const div = document.createElement('div');
                 div.className = 'guide-step';
-                div.innerHTML = `<strong>${s.title}</strong><span>${s.desc}</span>`;
+                div.innerHTML = `<strong>${esc(s.title)}</strong><span>${esc(s.desc)}</span>`;
                 guide.appendChild(div);
             });
         }
@@ -415,12 +477,12 @@
         bubble.className = `turn-bubble turn-${role}`;
         if (role === 'examiner') {
             bubble.innerHTML = `
-                <span><strong>Examinateur :</strong> ${text}</span>
+                <span><strong>Examinateur :</strong> ${esc(text)}</span>
                 <button class="btn-tts" type="button" title="Écouter"><i data-lucide="volume-2"></i></button>
             `;
             bubble.querySelector('.btn-tts').addEventListener('click', () => playTTS(text));
         } else {
-            bubble.innerHTML = `<span><strong>Vous :</strong> ${text}</span>`;
+            bubble.innerHTML = `<span><strong>Vous :</strong> ${esc(text)}</span>`;
         }
         turnsDiv.appendChild(bubble);
         turnsDiv.scrollTop = turnsDiv.scrollHeight;
@@ -462,20 +524,20 @@
         // T2 or T3 specific checks
         if (currentTask === 'T2' && fb.t2_questions) {
             const li = document.createElement('li');
-            li.innerHTML = `<span class="check-icon ${fb.t2_questions.forms_ok ? 'is-done' : 'is-todo'}">${fb.t2_questions.forms_ok ? '✓' : '⚠'}</span><span><strong>Questions posées (${fb.t2_questions.count})</strong> : ${fb.t2_questions.note}</span>`;
+            li.innerHTML = `<span class="check-icon ${esc(fb.t2_questions.forms_ok ? 'is-done' : 'is-todo')}">${esc(fb.t2_questions.forms_ok ? '✓' : '⚠')}</span><span><strong>Questions posées (${esc(fb.t2_questions.count)})</strong> : ${esc(fb.t2_questions.note)}</span>`;
             checkUl.appendChild(li);
         }
         if (currentTask === 'T3' && fb.t3_structure) {
             const s = fb.t3_structure;
             const ok = s.opinion && s.arguments && s.conclusion;
             const li = document.createElement('li');
-            li.innerHTML = `<span class="check-icon ${ok ? 'is-done' : 'is-todo'}">${ok ? '✓' : '⚠'}</span><span><strong>Structure du monologue</strong> : ${s.note || 'Opinion, arguments, conclusion'}</span>`;
+            li.innerHTML = `<span class="check-icon ${esc(ok ? 'is-done' : 'is-todo')}">${esc(ok ? '✓' : '⚠')}</span><span><strong>Structure du monologue</strong> : ${esc(s.note || 'Opinion, arguments, conclusion')}</span>`;
             checkUl.appendChild(li);
         }
 
         (fb.checklist || []).forEach(item => {
             const li = document.createElement('li');
-            li.innerHTML = `<span class="check-icon ${item.covered ? 'is-done' : 'is-todo'}">${item.covered ? '✓' : '⚠'}</span><span><strong>${item.point}</strong>: ${item.note}</span>`;
+            li.innerHTML = `<span class="check-icon ${esc(item.covered ? 'is-done' : 'is-todo')}">${esc(item.covered ? '✓' : '⚠')}</span><span><strong>${esc(item.point)}</strong>: ${esc(item.note)}</span>`;
             checkUl.appendChild(li);
         });
 
@@ -491,10 +553,10 @@
                 card.className = 'error-card';
                 card.innerHTML = `
                     <div class="error-card-header">
-                        <span class="badge">${err.type}</span>
-                        <span class="error-span">${err.span}</span>
+                        <span class="badge">${esc(err.type)}</span>
+                        <span class="error-span">${esc(err.span)}</span>
                     </div>
-                    <p class="error-hint">💡 ${err.hint}</p>
+                    <p class="error-hint">💡 ${esc(err.hint)}</p>
                 `;
                 errorsDiv.appendChild(card);
             });
@@ -517,7 +579,7 @@
         fixedUl.innerHTML = '';
         (fb.fixed_errors || []).forEach(item => {
             const li = document.createElement('li');
-            li.innerHTML = `<span class="check-icon ${item.fixed ? 'is-done' : 'is-todo'}">${item.fixed ? '✓' : '⚠'}</span><span><strong>"${item.span}"</strong>: ${item.comment}</span>`;
+            li.innerHTML = `<span class="check-icon ${esc(item.fixed ? 'is-done' : 'is-todo')}">${esc(item.fixed ? '✓' : '⚠')}</span><span><strong>"${esc(item.span)}"</strong>: ${esc(item.comment)}</span>`;
             fixedUl.appendChild(li);
         });
 
@@ -528,11 +590,11 @@
             const card = document.createElement('div');
             card.className = 'sentence-correction-card';
             card.innerHTML = `
-                ${s.original !== s.corrected ? `<div class="sc-original">${s.original}</div>` : ''}
-                <div class="sc-corrected">${s.corrected}</div>
-                <div class="sc-explanation">${s.explanation}</div>
+                ${s.original !== s.corrected ? `<div class="sc-original">${esc(s.original)}</div>` : ''}
+                <div class="sc-corrected">${esc(s.corrected)}</div>
+                <div class="sc-explanation">${esc(s.explanation)}</div>
                 <div class="sc-actions">
-                    <button class="btn btn-secondary btn-sm btn-save-card" type="button" data-chunk="${encodeURIComponent(s.chunk || s.corrected)}" data-sentence="${encodeURIComponent(s.corrected)}" data-explanation="${encodeURIComponent(s.explanation)}">
+                    <button class="btn btn-secondary btn-sm btn-save-card" type="button" data-chunk="${esc(encodeURIComponent(s.chunk || s.corrected))}" data-sentence="${esc(encodeURIComponent(s.corrected))}" data-explanation="${esc(encodeURIComponent(s.explanation))}">
                         <i data-lucide="bookmark-plus"></i>
                         <span>${T.saveCard}</span>
                     </button>
@@ -548,9 +610,9 @@
             const item = document.createElement('div');
             item.className = 'structure-item';
             item.innerHTML = `
-                <div class="structure-fr">${st.french}</div>
-                <div class="structure-en">${st.english}</div>
-                <div class="structure-usage">${st.usage}</div>
+                <div class="structure-fr">${esc(st.french)}</div>
+                <div class="structure-en">${esc(st.english)}</div>
+                <div class="structure-usage">${esc(st.usage)}</div>
             `;
             structDiv.appendChild(item);
         });
@@ -566,9 +628,24 @@
     }
 
     // Polling attempt
+    const MAX_POLLS = 100; // ~5 minutes at POLL_MS
     function pollAttempt(attemptId, isRound2 = false) {
         if (pollTimer) clearInterval(pollTimer);
+        hideFeedbackError();
+        let polls = 0;
         pollTimer = setInterval(async () => {
+            polls += 1;
+            if (polls > MAX_POLLS) {
+                clearInterval(pollTimer);
+                pollTimer = null;
+                $(isRound2 ? 'btn-submit-r2' : 'btn-submit-r1').disabled = false;
+                // The job may still finish: retry resumes checking the same attempt (no duplicate submit)
+                showFeedbackError('批改时间比平时长，可能已中断。', () => {
+                    $('feedback-loading').hidden = false;
+                    pollAttempt(attemptId, isRound2);
+                });
+                return;
+            }
             try {
                 const att = await api('GET', `/api/speak/attempts/${attemptId}`);
                 currentAttempt = att;
@@ -581,9 +658,8 @@
                     } else if (att.status === 'failed') {
                         clearInterval(pollTimer);
                         pollTimer = null;
-                        $('feedback-loading').hidden = true;
-                        alert(att.error || 'Feedback generation failed.');
                         $('btn-submit-r2').disabled = false;
+                        showFeedbackError(att.error || 'AI 批改暂时失败。', submitRound2);
                     }
                 } else {
                     if (att.status === 'ready' && att.feedback_1 && Object.keys(att.feedback_1).length > 0) {
@@ -594,13 +670,18 @@
                     } else if (att.status === 'failed') {
                         clearInterval(pollTimer);
                         pollTimer = null;
-                        $('feedback-loading').hidden = true;
-                        alert(att.error || 'Feedback generation failed.');
                         $('btn-submit-r1').disabled = false;
+                        showFeedbackError(att.error || 'AI 批改暂时失败。', submitRound1);
                     }
                 }
             } catch (err) {
                 console.warn('Poll error:', err);
+                if (err.status === 401 || err.status === 404) {
+                    clearInterval(pollTimer);
+                    pollTimer = null;
+                    $(isRound2 ? 'btn-submit-r2' : 'btn-submit-r1').disabled = false;
+                    if (err.status === 404) showFeedbackError(err.message, null);
+                }
             }
         }, POLL_MS);
     }
@@ -615,6 +696,7 @@
         $('btn-submit-r1').disabled = true;
         $('feedback-panel').hidden = false;
         $('feedback-loading').hidden = false;
+        hideFeedbackError();
         $('loading-msg').textContent = T.generatingR1;
         $('r1-container').hidden = true;
         $('r2-container').hidden = true;
@@ -632,9 +714,8 @@
             elapsedSeconds = 0;
             pollAttempt(attempt.id, false);
         } catch (err) {
-            $('feedback-loading').hidden = true;
             $('btn-submit-r1').disabled = false;
-            alert(T.submitFailed + err.message);
+            showFeedbackError(T.submitFailed + err.message, submitRound1);
         }
     }
 
@@ -644,6 +725,7 @@
 
         $('btn-submit-r2').disabled = true;
         $('feedback-loading').hidden = false;
+        hideFeedbackError();
         $('loading-msg').textContent = T.generatingR2;
         $('r2-container').hidden = true;
 
@@ -657,9 +739,8 @@
             elapsedSeconds = 0;
             pollAttempt(updated.id, true);
         } catch (err) {
-            $('feedback-loading').hidden = true;
             $('btn-submit-r2').disabled = false;
-            alert(T.submitFailed + err.message);
+            showFeedbackError(T.submitFailed + err.message, submitRound2);
         }
     }
 
@@ -712,10 +793,10 @@
             const dateStr = att.created_at ? new Date(att.created_at).toLocaleDateString() : '';
             item.innerHTML = `
                 <div>
-                    <div class="past-item-title">${att.task}: ${att.subject?.title || 'Sujet'}</div>
-                    <div class="past-item-meta">${dateStr} · ${att.wpm ? `${att.wpm} WPM` : ''} · ${Math.round(att.audio_duration || att.seconds)}s</div>
+                    <div class="past-item-title">${esc(att.task)}: ${esc(att.subject?.title || 'Sujet')}</div>
+                    <div class="past-item-meta">${esc(dateStr)} · ${att.wpm ? `${esc(att.wpm)} WPM` : ''} · ${esc(Math.round(att.audio_duration || att.seconds))}s</div>
                 </div>
-                <span class="badge">${att.status}</span>
+                <span class="badge">${esc(att.status)}</span>
             `;
             item.addEventListener('click', () => {
                 currentAttempt = att;
@@ -742,6 +823,7 @@
 
     // Init
     async function init() {
+        $('transcript-input')?.addEventListener('input', () => { clearTimeout(init._draftTimer); init._draftTimer = setTimeout(saveDraft, 500); });
         I18N.apply(TEXT);
         I18N.mountToggle($('lang-toggle'));
         refreshIcons();
@@ -768,6 +850,7 @@
         } catch (err) {
             console.error('Failed to load speaking tasks:', err);
         }
+        restoreDraft();
 
         // Event listeners
         document.querySelectorAll('input[name="task"]').forEach(r => {

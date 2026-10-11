@@ -157,7 +157,7 @@ class JobAndApiTests(unittest.TestCase):
     def test_endpoints_require_login(self):
         self.assertEqual(self.client.get("/api/episodes").status_code, 401)
         self.assertEqual(self.client.post("/api/episodes").status_code, 401)
-        self.assertEqual(self.client.get("/episodes/not-an-id.mp3").status_code, 404)
+        self.assertEqual(self.client.get("/episodes/not-an-id.mp3").status_code, 401)
 
     def test_story_parser_validates_lines(self):
         self.assertEqual(tts_service._parse_story(json.dumps(STORY))["lines"][1]["speaker"], "B")
@@ -178,10 +178,12 @@ class JobAndApiTests(unittest.TestCase):
         token = auth_db._generate_token(user_id, "x@example.com", auth_db._start_session(user_id, "test"))
         listed = self.client.get("/api/episodes", headers={"Authorization": f"Bearer {token}"}).json()
         self.assertEqual(listed["episodes"][0]["id"], episode["id"])
-        audio = self.client.get(f"/episodes/{episode['id']}.mp3")
+        auth = {"Authorization": f"Bearer {token}"}
+        self.assertEqual(self.client.get(f"/episodes/{episode['id']}.mp3").status_code, 401)
+        audio = self.client.get(f"/episodes/{episode['id']}.mp3", headers=auth)
         self.assertEqual(audio.status_code, 200)
         self.assertEqual(audio.headers["content-type"], "audio/mpeg")
-        lrc = self.client.get(f"/episodes/{episode['id']}.lrc?download=true")
+        lrc = self.client.get(f"/episodes/{episode['id']}.lrc?download=true", headers=auth)
         self.assertIn("attachment", lrc.headers["content-disposition"])
 
         # the next episode prefers material that was not played yet
@@ -189,9 +191,11 @@ class JobAndApiTests(unittest.TestCase):
         self.assertTrue(all(count == 1 for count in usage.values()))
 
         other = auth_db._generate_token(user_id + 999, "y@example.com", auth_db._start_session(user_id + 999, "test"))
+        # someone else's episode is not served, even with a valid session
+        self.assertEqual(self.client.get(f"/episodes/{episode['id']}.mp3", headers={"Authorization": f"Bearer {other}"}).status_code, 404)
         self.assertFalse(self.client.delete(f"/api/episodes/{episode['id']}", headers={"Authorization": f"Bearer {other}"}).json()["success"])
         self.assertTrue(self.client.delete(f"/api/episodes/{episode['id']}", headers={"Authorization": f"Bearer {token}"}).json()["success"])
-        self.assertEqual(self.client.get(f"/episodes/{episode['id']}.mp3").status_code, 404)
+        self.assertEqual(self.client.get(f"/episodes/{episode['id']}.mp3", headers=auth).status_code, 404)
 
     def test_settings_are_saved_and_a_remake_replaces_the_old_episode(self):
         user_id = _user_with_material()
