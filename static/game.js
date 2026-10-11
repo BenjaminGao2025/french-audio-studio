@@ -431,7 +431,9 @@
                 <li>${escapeHtml(T.lanes[log.lane])} · ${log.minutes} ${T.minutes}${log.note ? ` · ${escapeHtml(log.note)}` : ''}
                     <button class="link-btn game-undo" type="button" data-log-id="${log.id}">${T.undo}</button></li>`).join('')
             : `<li class="muted">${T.nothingLogged}</li>`;
-        panel.innerHTML = `
+        const learning = state.learning;
+        const quests = learning ? `<div class="learning-quests"><strong>${EN ? 'Daily foundations' : '每日基础小关'}</strong> · +${learning.today_xp} XP<p class="game-hint">${EN ? 'Practice rewards: finish +10; a successful writing revision +15. At most three rewards per kind per day. Complete all three foundations to keep your weekday streak. XP is not a CEFR level.' : '完成练习 +10；成功订正写作 +15。每类每天最多奖励三次。三关全完成也能延续工作日连续学习。经验等级不代表语言等级。'}</p>${learning.quests.map(q => `<a href="${escapeHtml(q.href)}">${q.done ? '✓ ' : '○ '}${escapeHtml(EN ? q.en : q.zh)}</a>`).join('')}<a href="/coach">${EN ? 'My plan & weekly review' : '我的安排与每周复盘'}</a></div>` : '';
+        panel.innerHTML = `${quests}
             <div class="game-panel-grid">
                 <section>
                     <h3>${T.skillsTitle || T.lanesTitle}${week.maintenance ? ` · ${T.maintenance}` : ''}</h3>
@@ -559,7 +561,7 @@
             if (before !== undefined && now > before && now - before < 1800) pendingSeconds += now - before;
             lastPos.set(audio, now);
         };
-        document.addEventListener('play', (e) => { if (e.target instanceof HTMLMediaElement) lastPos.set(e.target, e.target.currentTime || 0); }, true);
+        document.addEventListener('play', (e) => { if (e.target instanceof HTMLMediaElement) { setLane(e.target.dataset.coach === 'listening' ? 'listening' : 'car', 3600); lastPos.set(e.target, e.target.currentTime || 0); } }, true);
         document.addEventListener('seeked', (e) => { if (e.target instanceof HTMLMediaElement) lastPos.set(e.target, e.target.currentTime || 0); }, true);
         ['timeupdate', 'pause', 'ended'].forEach(ev => document.addEventListener(ev, (e) => {
             if (e.target instanceof HTMLMediaElement) take(e.target);

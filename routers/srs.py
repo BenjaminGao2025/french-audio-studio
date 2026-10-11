@@ -7,6 +7,7 @@ from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 import game
+import coach
 import srs
 from web_common import _require_user_id
 
@@ -147,6 +148,7 @@ def srs_review_card(
         )
     except KeyError:
         raise HTTPException(status_code=404, detail={"message": "卡片不存在。"})
+    coach.record(user_id, "review", f"{coach.date_for(user_id)}:{card_id}", {"rating": req.rating}, 0)
     # Kill feed for the review page: XP, combo, first blood and the new totals
     card["game"] = game.review_feedback(user_id, req.tz_offset)
     return card

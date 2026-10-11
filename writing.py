@@ -23,6 +23,7 @@ from contextlib import contextmanager
 from typing import Any, Iterator
 
 import auth_db
+import curriculum
 
 ALLOWED_ERROR_TYPES = {
     "agreement",
@@ -272,6 +273,9 @@ SUBJECTS: dict[str, list[dict[str, Any]]] = {
 }
 
 
+TASKS.update(curriculum.training_tasks())
+SUBJECTS.update(curriculum.training_subjects())
+
 def word_count(text: str) -> int:
     """Count words following French TCF testing practice.
     Apostrophes split clitics (j'ai -> 2 words, l'arbre -> 2 words).
@@ -480,6 +484,9 @@ def build_round1_payload(attempt: dict[str, Any], model: str) -> dict[str, Any]:
         f"{TUTOR_RULES}\n"
         f"This is ROUND 1 feedback for TCF EE {task} ({task_spec['name']}).\n"
         f"Task word range: {min_w}–{max_w} words.\n"
+        f"Learner level: {attempt.get('level', 'A1')}. "
+        + ("This is scaffolded practice, NOT an exam. Use Chinese explanations, with short English alongside. Accept simple present-tense sentences. Do not demand exam length or advanced vocabulary.\n" if task_spec.get("practice") else "Keep the official task requirements.\n")
+        +
         "Requirements of the subject:\n"
         f"Subject Title: {subject.get('title', '')}\n"
         f"Prompt: {subject.get('prompt', '')}\n"
@@ -487,7 +494,7 @@ def build_round1_payload(attempt: dict[str, Any], model: str) -> dict[str, Any]:
         f"{doc_context}\n"
         "RULES FOR ROUND 1:\n"
         "1. DO NOT GIVE CORRECTIONS OR RECASTS IN ROUND 1! The learner must fix errors themselves in Round 2.\n"
-        "2. Identify up to 8 error spans (the most important ones first).\n"
+        f"2. Identify up to {task_spec.get('error_limit', 8)} error spans (the most important ones first).\n"
         "3. Allowed error types: agreement, verb form, gender, word order, spelling / accents, wrong word, missing word.\n"
         "4. For each error span, provide ONLY a short guiding hint that helps the learner spot the rule without revealing the answer.\n"
         "   GOOD hint: 'Check the plural agreement of this adjective.'\n"
@@ -580,7 +587,7 @@ def parse_round1_feedback(
     raw_errors = data.get("errors") or []
     cleaned_errors = []
     forbidden_leak = re.compile(r"(?:change\s+to|replace\s+with|should\s+be|write|say|correct\s+form\s+is)\s+['\"]?([^,.;'\"]+)", re.IGNORECASE)
-    for err in raw_errors[:8]:
+    for err in raw_errors[:task_spec.get("error_limit", 8)]:
         span = str(err.get("span") or "").strip()
         etype = str(err.get("type") or "wrong word").lower()
         if etype not in ALLOWED_ERROR_TYPES:
@@ -619,7 +626,9 @@ def build_round2_payload(attempt: dict[str, Any], model: str) -> dict[str, Any]:
 
     system = (
         f"{TUTOR_RULES}\n"
-        f"This is ROUND 2 feedback for TCF EE {task} ({task_spec['name']}).\n"
+        f"This is ROUND 2 feedback for {task} ({task_spec['name']}). Learner level: {attempt.get('level', 'A1')}.\n"
+        + ("Beginner practice: Chinese explanations with short English alongside. Keep corrections within the learner level; do not expand the text to exam length.\n" if task_spec.get("practice") else "")
+        +
         "The learner read Round 1 error hints and has revised their text.\n"
         f"Original text (Round 1):\n{text_1}\n\n"
         f"Round 1 errors to check:\n{errors_summary or '(none)'}\n\n"
@@ -736,6 +745,10 @@ def build_new_subject_payload(
     system = (
         "You create authentic TCF Canada Expression Écrite test subjects.\n"
         f"Generate a brand new subject for {task} ({task_spec['name']}) {prompt_theme}.\n"
+        f"Learner level: {level}. Use vocabulary and grammar appropriate to this level.\n"
+        f"Target length: {task_spec['min_words']}–{task_spec['max_words']} words.\n"
+        + ("This is beginner PRACTICE, not an exam. Prompt and requirements in Chinese with simple French. Include stems (3 French sentence starters with blanks) and words (5 French words with Chinese meanings).\n" if task_spec.get("practice") else "")
+        +
         f"{extra_req}\n"
         "Return ONLY valid JSON with keys:\n"
         '{\n'
@@ -776,6 +789,8 @@ def parse_new_subject(raw_text: str, task: str) -> dict[str, Any]:
         "task": task,
         "title": str(data.get("title") or "Sujet d'entraînement"),
         "prompt": str(data.get("prompt") or ""),
+        "stems": [str(x)[:200] for x in data.get("stems", [])[:3]],
+        "words": [str(x)[:200] for x in data.get("words", [])[:5]],
         "requirements": [str(r) for r in data.get("requirements") or []],
         "doc1": str(data.get("doc1") or ""),
         "doc2": str(data.get("doc2") or ""),

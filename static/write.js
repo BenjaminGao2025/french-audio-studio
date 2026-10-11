@@ -8,6 +8,7 @@
     const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
     const I18N = window.FrenchI18n;
+    const EN = I18N.lang() === 'en';
     const TOKEN_KEY = 'frenchStudio.userToken';
     const POLL_MS = 3000;
 
@@ -87,7 +88,7 @@
             noPast: '暂无历史练习记录。',
             generatingR1: '正在生成第一轮自查与提示…（通常 30–50 秒）',
             generatingR2: '正在核对修改并生成精选结构…',
-            aiGeneratingSubject: 'AI 正在生成全新真题题干…',
+            aiGeneratingSubject: 'AI 正在生成适合当前阶段的新题…',
             subjectGenFailed: '生成题目失败：',
             submitFailed: '提交失败：',
             cardSaveFailed: '加入卡片失败：',
@@ -129,18 +130,22 @@
     const DRAFT_KEY = 'frenchStudio.draft.write';
     function saveDraft() {
         try {
-            const value = $('write-input')?.value || '';
-            if (value.trim()) localStorage.setItem(DRAFT_KEY, value);
+            const text = $('write-input')?.value || '';
+            localStorage.setItem(DRAFT_KEY + '.' + currentTask, JSON.stringify({ text, subject: currentSubject, level: $('exam-level')?.value }));
+            localStorage.setItem(DRAFT_KEY + '.stage', currentTask);
         } catch (_) {}
     }
     function restoreDraft() {
         try {
-            const input = $('write-input');
-            const value = localStorage.getItem(DRAFT_KEY) || '';
-            if (input && value && !input.value.trim()) {
-                input.value = value;
-                input.dispatchEvent(new Event('input', { bubbles: true }));
+            const draft = JSON.parse(localStorage.getItem(DRAFT_KEY + '.' + currentTask) || 'null');
+            if (draft && draft.text) {
+                $('write-input').value = draft.text;
+                if (draft.subject) { currentSubject = draft.subject; renderSubject(true); }
+                if (draft.level) $('exam-level').value = draft.level;
+            } else if (currentTask === 'T1') {
+                $('write-input').value = localStorage.getItem(DRAFT_KEY) || '';
             }
+            updateWordCount();
         } catch (_) {}
     }
 
@@ -182,7 +187,7 @@
 
     // State
     let tasksData = null;
-    let currentTask = 'T1';
+    let currentTask = 'P0';
     let currentSubjectIndex = 0;
     let currentSubject = null;
     let currentAttempt = null;
@@ -277,21 +282,24 @@
 
     function startElapsedTracker() {
         if (elapsedTimer) clearInterval(elapsedTimer);
-        elapsedTimer = setInterval(() => { elapsedSeconds++; }, 1000);
+        elapsedTimer = setInterval(() => { if (!document.hidden && document.hasFocus()) elapsedSeconds++; }, 1000);
     }
 
     // Subject Rendering
-    function renderSubject() {
+    function renderSubject(preserve = false) {
         const subjects = tasksData?.subjects?.[currentTask] || [];
-        if (!subjects.length) return;
-        currentSubject = subjects[currentSubjectIndex % subjects.length];
+        if (!preserve) {
+            if (!subjects.length) return;
+            currentSubject = subjects[currentSubjectIndex % subjects.length];
+        }
+        syncStage();
 
-        $('subject-title').textContent = currentSubject.title || '';
-        $('subject-prompt').textContent = currentSubject.prompt || '';
+        $('subject-title').textContent = (EN ? currentSubject.title_en || currentSubject.title : currentSubject.title) || '';
+        $('subject-prompt').textContent = (EN ? currentSubject.prompt_en || currentSubject.prompt : currentSubject.prompt) || '';
 
         const reqUl = $('subject-requirements');
         reqUl.innerHTML = '';
-        (currentSubject.requirements || []).forEach(req => {
+        (EN ? currentSubject.requirements_en || currentSubject.requirements || [] : currentSubject.requirements || []).forEach(req => {
             const li = document.createElement('li');
             li.textContent = req;
             reqUl.appendChild(li);
@@ -307,11 +315,34 @@
             t3Docs.hidden = true;
         }
 
+        const stems = currentSubject.stems || [];
+        $('writing-scaffold').hidden = !currentTask.startsWith('P');
+        $('writing-scaffold').open = currentTask === 'P0';
+        $('writing-scaffold-content').innerHTML = `<p>${(currentSubject.words || []).map(esc).join(' · ')}</p>${stems.map(x => `<p lang="fr">${esc(x)}</p>`).join('')}`;
         resetTimer();
         updateWordCount();
     }
 
+    function syncStage() {
+        const practice = currentTask.startsWith('P');
+        $('write-mode').value = practice ? 'practice' : 'exam';
+        $('practice-stage-label').hidden = !practice;
+        $('exam-task-row').hidden = practice;
+        $('exam-level-label').hidden = practice;
+        if (practice) $('practice-stage').value = currentTask;
+        document.querySelectorAll('input[name="task"]').forEach(r => { r.checked = r.value === currentTask; });
+        $('btn-timer-toggle').hidden = practice;
+        $('btn-timer-reset').hidden = practice;
+        $('timer-display').hidden = practice;
+        $('level-badge').textContent = tasksData?.tasks?.[currentTask]?.[EN ? 'name_en' : 'name'] || currentTask;
+        $('practice-note').textContent = practice
+            ? (EN ? 'Practice targets, not exam requirements. Try your own ideas; focus on a few useful corrections.' : '这是练习目标，不是考试字数要求。写自己的意思，每次重点改少量问题。')
+            : (EN ? 'Official task lengths. The level changes feedback guidance, not exam requirements.' : '使用正式考试任务字数。水平只调整批改提示，不降低考试要求。');
+    }
+
     function selectTask(task) {
+        saveDraft();
+        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
         currentTask = task;
         currentSubjectIndex = 0;
         currentAttempt = null;
@@ -322,6 +353,7 @@
         $('btn-submit-r1').hidden = false;
         $('btn-submit-r2').hidden = true;
         renderSubject();
+        restoreDraft();
     }
 
     // Feedback Rendering
@@ -480,6 +512,7 @@
                         pollTimer = null;
                         renderRound2Feedback(att.feedback_2);
                         loadPastAttempts();
+                        if (window.FrenchGame) window.FrenchGame.refresh();
                     } else if (att.status === 'failed') {
                         clearInterval(pollTimer);
                         pollTimer = null;
@@ -492,6 +525,7 @@
                         pollTimer = null;
                         renderRound1Feedback(att.feedback_1);
                         loadPastAttempts();
+                        if (window.FrenchGame) window.FrenchGame.refresh();
                     } else if (att.status === 'failed') {
                         clearInterval(pollTimer);
                         pollTimer = null;
@@ -530,7 +564,7 @@
             const attempt = await api('POST', '/api/write/attempts', {
                 task: currentTask,
                 subject: currentSubject,
-                level: tasksData?.recommended_level || 'A1',
+                level: tasksData?.tasks?.[currentTask]?.level || $('exam-level').value,
                 text,
                 seconds: elapsedSeconds,
             });
@@ -626,6 +660,7 @@
                 currentTask = att.task;
                 currentSubject = att.subject;
                 $('write-input').value = att.text_2 || att.text_1 || '';
+                renderSubject(true);
                 updateWordCount();
                 if (att.feedback_2 && Object.keys(att.feedback_2).length > 0) {
                     renderRound2Feedback(att.feedback_2);
@@ -660,14 +695,11 @@
 
         try {
             tasksData = await api('GET', '/api/write/tasks');
-            if (tasksData.recommended_task) {
-                currentTask = tasksData.recommended_task;
-                const radio = document.querySelector(`input[name="task"][value="${currentTask}"]`);
-                if (radio) radio.checked = true;
-            }
-            if (tasksData.recommended_level) {
-                $('level-badge').textContent = T.levelBadge(tasksData.recommended_level);
-            }
+            const query = new URLSearchParams(location.search);
+            const wanted = query.get('task') || localStorage.getItem(DRAFT_KEY + '.stage') || tasksData.practice_default || 'P0';
+            currentTask = tasksData.tasks[wanted] ? wanted : 'P0';
+            const theme = query.get('theme');
+            if (theme) currentSubjectIndex = Math.max(0, (tasksData.subjects[currentTask] || []).findIndex(x => x.theme === theme));
             renderSubject();
             renderPastAttempts(tasksData.attempts || []);
         } catch (err) {
@@ -675,12 +707,22 @@
         }
         restoreDraft();
 
+        $('write-mode').addEventListener('change', e => selectTask(e.target.value === 'practice' ? $('practice-stage').value : 'T1'));
+        $('practice-stage').addEventListener('change', e => selectTask(e.target.value));
         // Event listeners
         document.querySelectorAll('input[name="task"]').forEach(r => {
             r.addEventListener('change', (e) => selectTask(e.target.value));
         });
 
         $('btn-next-subject').addEventListener('click', () => {
+            saveDraft();
+            if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+            currentAttempt = null;
+            $('feedback-panel').hidden = true;
+            $('btn-submit-r1').hidden = false;
+            $('btn-submit-r1').disabled = false;
+            $('btn-submit-r2').hidden = true;
+            $('write-input').value = '';
             currentSubjectIndex++;
             renderSubject();
         });
@@ -693,7 +735,7 @@
             try {
                 const newSub = await api('POST', '/api/write/subject', {
                     task: currentTask,
-                    level: tasksData?.recommended_level || 'A1',
+                    level: tasksData?.tasks?.[currentTask]?.level || $('exam-level').value,
                 });
                 tasksData.subjects[currentTask].unshift(newSub);
                 currentSubjectIndex = 0;

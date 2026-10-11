@@ -1,0 +1,43 @@
+.coach-main { max-width: 1080px; margin: 0 auto; padding: 24px 20px 64px; }
+.coach-main section, .mini-listening { margin-bottom: 24px; }
+.coach-fields { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 16px; margin: 16px 0; }
+.coach-fields label, .coach-form-label { display: flex; flex-direction: column; gap: 8px; }
+.coach-fields input, .coach-fields select, .coach-main textarea, .coach-form-label input { width: 100%; min-width: 0; }
+.coach-main fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.coach-main legend { font-size: 20px; font-weight: 600; margin-bottom: 16px; }
+.coach-main .coach-actions, .mini-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; align-items: center; }
+.coach-days { display: flex; flex-wrap: wrap; gap: 16px; margin: 16px 0; }
+.coach-days label { display: inline-flex; align-items: center; gap: 6px; }
+.coach-days input { width: auto; }
+.coach-task { display: grid; grid-template-columns: 90px 1fr auto; gap: 16px; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.coach-task small, .coach-task time { color: var(--muted); }
+.coach-task .coach-task-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.coach-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; }
+.coach-main .editor-panel { padding: 24px; }
+.coach-task.is-done .coach-task-title::before { content: '✓ '; color: var(--success); }
+.coach-metrics { display: flex; flex-wrap: wrap; gap: 16px 32px; margin: 16px 0; }
+.coach-metrics strong { display: block; font-size: 24px; color: var(--ink); }
+.coach-metrics span { font-size: 14px; color: var(--muted); }
+.coach-milestones { line-height: 1.8; padding-left: 22px; }
+.practice-scaffold { margin: 16px 0; padding: 16px 0; border-block: 1px solid var(--line); }
+.practice-scaffold summary { cursor: pointer; color: var(--primary); }
+.mini-listening { padding: 24px; }
+.mini-listening audio { width: 100%; margin: 16px 0; }
+.mini-question { border: 0; padding: 16px 0; border-bottom: 1px solid var(--line); margin: 0; }
+.mini-question legend { font-weight: 600; }
+.mini-question label { display: block; padding: 8px 0; cursor: pointer; }
+.mini-question input { width: auto; margin-right: 8px; }
+.mini-lines p { margin: 12px 0; }
+.mini-lines small { display: block; color: var(--muted); }
+.coach-notice { position: fixed; bottom: 20px; right: 20px; max-width: min(420px,calc(100vw - 40px)); padding: 16px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); z-index: 100; box-shadow: 0 4px 20px #0002; }
+.coach-notice button { float: right; margin-left: 8px; }
+.learning-quests { padding: 16px 0; border-bottom: 1px solid var(--line); margin-bottom: 16px; }
+.learning-quests a { display: inline-block; margin: 8px 16px 0 0; color: var(--primary); }
+[hidden] { display: none !important; }
+@media(max-width:600px) { .coach-main { padding: 20px 12px 48px; } .coach-main .editor-panel, .mini-listening { padding: 16px; } .coach-task { grid-template-columns: 1fr; gap: 8px; } .coach-fields { grid-template-columns: 1fr; } }
+/* The shared audio editor has a fixed height; a coach worksheet grows with its content. */
+.coach-main .editor-panel { height: auto; overflow: visible; display: block; }
+.coach-main .editor-panel textarea { min-height: 96px; resize: vertical; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); padding: 12px; background: var(--surface); }
+.coach-main input:not([type=checkbox]), .coach-main select, .coach-fields select { min-height: 42px; padding: 8px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface); }
+.coach-main h2 { margin: 0 0 12px; }
+.coach-main .coach-text { margin: 16px 0; }

@@ -17,6 +17,8 @@
     <script src="/static/game.js?v=__ASSET_VERSION__" defer></script>
     <script src="/static/playback.js?v=__ASSET_VERSION__" defer></script>
     <script src="/static/write.js?v=__ASSET_VERSION__" defer></script>
+<link rel="stylesheet" href="/static/coach.css?v=__ASSET_VERSION__">
+<script src="/static/coach-reminders.js?v=__ASSET_VERSION__" defer></script>
 </head>
 <body>
     <div class="app-shell">
@@ -31,6 +33,7 @@
             </div>
 
             <nav class="nav-tabs" aria-label="页面切换" data-i18n-aria="navAria">
+                <a href="/coach" class="nav-tab"><span class="copy-zh">学习教练</span><span class="copy-en">Coach</span></a>
                 <a href="/" class="nav-tab">
                     <i data-lucide="headphones" aria-hidden="true"></i>
                     <span data-i18n="navAudio">音频工作台</span>
@@ -66,8 +69,8 @@
             <div class="page-intro">
                 <h1 data-i18n="heading">写作练习</h1>
                 <p>
-                    <span class="copy-zh">TCF Canada 写作（EE）专项：结构自查与两轮订正。</span>
-                    <span class="copy-en">TCF Canada writing (EE): task checklist and two-round guided feedback.</span>
+                    <span class="copy-zh">从三句话开始，逐步练到 TCF 写作；先尝试，再订正。</span>
+                    <span class="copy-en">From three sentences to TCF writing: try it, get hints, then revise.</span>
                 </p>
             </div>
 
@@ -84,7 +87,15 @@
                         <h2 data-i18n="taskSelectTitle">选择任务与题目</h2>
                         <span id="level-badge" class="badge"></span>
                     </div>
-                    <div class="task-selector-row">
+                    <div class="coach-fields">
+                        <label><span class="copy-zh">练习模式</span><span class="copy-en">Practice mode</span>
+                            <select id="write-mode"><option value="practice">分级练习 / Guided practice</option><option value="exam">TCF 考试任务 / Exam tasks</option></select></label>
+                        <label id="practice-stage-label"><span class="copy-zh">当前阶段</span><span class="copy-en">Stage</span>
+                            <select id="practice-stage"><option value="P0">A1 起步 · 三句话 / Three sentences</option><option value="P1">A1 巩固 · 20–40 词 / Short message</option><option value="P2">A2 · 40–80 词 / Everyday writing</option></select></label>
+                        <label id="exam-level-label" hidden><span class="copy-zh">批改提示水平</span><span class="copy-en">Feedback level</span><select id="exam-level"><option>A1</option><option>A2</option><option>B1</option><option>B2</option></select></label>
+                    </div>
+                    <p class="muted" id="practice-note"></p>
+                    <div class="task-selector-row" id="exam-task-row" hidden>
                         <div class="segmented-control task-segments">
                             <label>
                                 <input type="radio" name="task" value="T1" checked>
@@ -101,6 +112,7 @@
                         </div>
                     </div>
 
+                    <details id="writing-scaffold" class="practice-scaffold"><summary><span class="copy-zh">需要一点帮助？句型与词库</span><span class="copy-en">Need help? Starters and words</span></summary><div id="writing-scaffold-content"></div></details>
                     <div id="subject-card" class="subject-card">
                         <div class="subject-header">
                             <h3 id="subject-title"></h3>

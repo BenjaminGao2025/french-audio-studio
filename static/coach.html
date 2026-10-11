@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light">
+    <meta name="asset-version" content="__ASSET_VERSION__">
+    <title>学习教练 - 1000H French</title>
+    <link rel="icon" href="/favicon.ico?v=2" sizes="any">
+    <link rel="stylesheet" href="/static/tokens.css?v=__ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/style.css?v=__ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/game.css?v=__ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/write.css?v=__ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/ui.css?v=__ASSET_VERSION__">
+    <script src="https://unpkg.com/lucide@1.34.0/dist/umd/lucide.min.js" defer></script>
+    <script src="/static/i18n.js?v=__ASSET_VERSION__" defer></script>
+    <script src="/static/game.js?v=__ASSET_VERSION__" defer></script>
+    <script src="/static/playback.js?v=__ASSET_VERSION__" defer></script>
+    <script src="/static/coach.js?v=__ASSET_VERSION__" defer></script>
+<link rel="stylesheet" href="/static/coach.css?v=__ASSET_VERSION__">
+<script src="/static/coach-reminders.js?v=__ASSET_VERSION__" defer></script>
+</head>
+<body>
+    <div class="app-shell">
+        <header class="topbar">
+            <div class="brand-block">
+                <div class="brand-mark" aria-hidden="true">
+                    <i data-lucide="pen-tool"></i>
+                </div>
+                <div>
+                    <p class="product-label">1000H French</p>
+                </div>
+            </div>
+
+            <nav class="nav-tabs" aria-label="页面切换" data-i18n-aria="navAria">
+                <a href="/coach" class="nav-tab active"><span class="copy-zh">学习教练</span><span class="copy-en">Coach</span></a>
+                <a href="/" class="nav-tab">
+                    <i data-lucide="headphones" aria-hidden="true"></i>
+                    <span data-i18n="navAudio">音频工作台</span>
+                </a>
+                <a href="/study" class="nav-tab">
+                    <i data-lucide="sparkles" aria-hidden="true"></i>
+                    <span data-i18n="navStudy">拆解与复述</span>
+                </a>
+                <a href="/write" class="nav-tab">
+                    <i data-lucide="pen-tool" aria-hidden="true"></i>
+                    <span data-i18n="navWrite">写作</span>
+                </a>
+                <a href="/speak" class="nav-tab">
+                    <i data-lucide="mic" aria-hidden="true"></i>
+                    <span data-i18n="navSpeak">口语</span>
+                </a>
+                <a href="/review" class="nav-tab">
+                    <i data-lucide="brain" aria-hidden="true"></i>
+                    <span data-i18n="navReview">今日复习</span>
+                </a>
+                <a href="/listen" class="nav-tab">
+                    <i data-lucide="car" aria-hidden="true"></i>
+                    <span data-i18n="navListen">开车听</span>
+                </a>
+            </nav>
+
+            <div class="topbar-actions">
+                <button id="lang-toggle" class="btn btn-secondary lang-toggle" type="button"></button>
+            </div>
+        </header>
+
+        <main class="coach-main">
+            <div class="page-intro"><h1><span class="copy-zh">学习教练</span><span class="copy-en">Your learning coach</span></h1><p class="muted"><span class="copy-zh">从你的目标和生活安排出发，每天完成一点，每周调整一次。</span><span class="copy-en">A plan that fits your goal and your life. Daily practice, weekly reflection.</span></p></div>
+            <p id="coach-status" role="status" aria-live="polite"></p>
+            <section id="coach-login" class="editor-panel" hidden><a class="btn btn-primary" href="/study?login=1">登录并开始 / Sign in to start</a></section>
+            <section id="coach-onboarding" class="editor-panel" hidden>
+                <form id="coach-form">
+                    <p id="coach-step" class="muted"></p>
+                    <fieldset data-step="0"><legend>你想达到什么目标？ / Your goal</legend>
+                        <div class="coach-fields">
+                            <label>考试 / Exam<select name="exam"><option>TCF Canada</option><option>TEF Canada</option><option>General French</option></select></label>
+                            <label>目标 / Goal<input name="target" value="四项 NCLC 7" required maxlength="150"></label>
+                            <label>最晚拿到成绩的日期 / Results deadline<input name="deadline" type="date" value="2027-05-31" required></label>
+                        </div>
+                        <p class="muted">TCF 专项题型已接入；TEF 和通用目标目前安排基础能力练习。 / TCF tasks are integrated; TEF and general goals use foundation practice.</p>
+                        <div class="coach-fields" id="coach-levels"></div>
+                        <label class="coach-form-label">学过什么？有测评或老师的判断吗？ / Previous learning or assessment<textarea name="experience" rows="2" maxlength="2000" placeholder="还不清楚也没关系 / It is fine not to know yet"></textarea></label>
+                    </fieldset>
+                    <fieldset data-step="1" hidden><legend>哪些时间真的能用来学习？ / Your availability</legend>
+                        <div class="coach-fields">
+                            <label>工作日每天分钟数 / Weekday minutes<input name="weekday_minutes" type="number" min="0" max="360" value="60" required></label>
+                            <label>工作日开始时间 / Weekday start<input name="weekday_start" type="time" value="19:00" required></label>
+                            <label>周末每天分钟数 / Weekend minutes<input name="weekend_minutes" type="number" min="0" max="360" value="60" required></label>
+                            <label>周末开始时间 / Weekend start<input name="weekend_start" type="time" value="09:00" required></label>
+                            <label>时区 / Timezone<input name="timezone" value="America/Vancouver" required></label>
+                        </div>
+                        <div class="coach-days" id="coach-days"></div>
+                        <p class="muted">先填一个能坚持的学习时段。任务合计不会超过这些分钟数。 / Choose one realistic daily window; tasks stay within it.</p>
+                    </fieldset>
+                    <fieldset data-step="2" hidden><legend>还有什么需要教练知道？ / What else should the coach know?</legend>
+                        <label class="coach-form-label">难点、家庭安排、偏好或其他限制 / Difficulties, family schedule, preferences<textarea name="constraints" rows="4" maxlength="3000" placeholder="例如：听力较难；希望先有中文提示；五月家里会忙。 / For example: listening is hard; I need Chinese hints; May will be busy."></textarea></label>
+                        <label class="coach-days"><input type="checkbox" name="reminder">开启站内学习提醒 / Remind me while the site is open</label>
+                        <p class="muted">网页打开且可见时提醒；关闭网页后不会发送通知。 / Reminders work while the site is open and visible.</p>
+                    </fieldset>
+                    <div class="coach-actions"><button type="button" class="btn btn-secondary" id="coach-back">上一步 / Back</button><button type="button" class="btn btn-primary" id="coach-next">下一步 / Next</button><button type="submit" class="btn btn-primary" id="coach-save" hidden>生成我的计划 / Build my plan</button></div>
+                </form>
+            </section>
+            <div id="coach-dashboard" hidden>
+                <section class="editor-panel"><h2>今天的安排 / Today</h2><p class="muted" id="coach-today-context"></p><div id="coach-tasks"></div><div class="coach-actions"><button class="btn btn-secondary" id="coach-edit">调整目标与时间 / Edit goal and time</button><a class="btn btn-secondary" href="/listen?challenge=1#mini-listening">每周听力小挑战 / Weekly listening check</a></div></section>
+                <section class="editor-panel"><h2>接下来七天 / Next seven days</h2><div id="coach-week"></div></section>
+                <section class="editor-panel"><h2>你的学习路线 / Your route</h2><div class="coach-metrics" id="coach-metrics"></div><p id="coach-plan-source" class="muted"></p><div id="coach-plan" class="coach-text"></div><p id="coach-caution" class="muted"></p><ol id="coach-milestones" class="coach-milestones"></ol><p class="muted">这些是检查点，不会按日期自动升级。经验值表示投入，不能证明 NCLC 或 CEFR 等级。 / These are checkpoints, not automatic promotions. XP is not a language qualification.</p>
+                <div id="coach-questions"></div><label class="coach-form-label">回答教练，或补充情况 / Reply or add context<textarea id="coach-reply" rows="3" maxlength="3000"></textarea></label><div class="coach-actions"><button class="btn btn-secondary" id="coach-replan">让教练更新安排 / Update with the coach</button></div></section>
+                <section class="editor-panel"><h2>每周复盘 / Weekly review</h2><p id="coach-review-due" class="muted"></p><div id="coach-evidence" class="coach-text"></div><label class="coach-form-label">这周什么太难？哪些时间没能用上？ / What was hard? Which time slots did not work?<textarea id="coach-reflection" rows="3" maxlength="3000"></textarea></label><div class="coach-actions"><button class="btn btn-primary" id="coach-review">复盘这一周 / Review my week</button></div><div id="coach-last-review" class="coach-text"></div><p class="muted">复盘给出建议；用“调整目标与时间”或“更新安排”采纳调整。 / Review first; apply changes using Edit or Update above.</p></section>
+            </div>
+        </main>
+    </div>
+</body></html>

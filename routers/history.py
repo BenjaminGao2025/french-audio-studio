@@ -7,6 +7,7 @@ from fastapi import APIRouter, Header, Query
 from pydantic import BaseModel, Field
 
 import auth_db
+import coach
 from web_common import _require_user_id
 
 router = APIRouter()
@@ -43,6 +44,8 @@ async def save_history(
         payload=req.payload,
         user_id=user_id,
     )
+    if req.type == "study":
+        coach.record(user_id, "read", req.id, {"source": "sentence_analysis"}, 0)
     return res
 
 

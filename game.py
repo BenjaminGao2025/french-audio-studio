@@ -26,6 +26,7 @@ import datetime
 from typing import Any
 
 import auth_db
+import coach
 import srs
 
 
@@ -351,6 +352,8 @@ def state(user_id: int, tz_offset: int, now=None) -> dict[str, Any]:
     xp = sum(_day_minutes_xp(m) for m in minutes_by_day.values())
     xp += sum(event["xp"] for event in reviews)
     xp += WAVE_CLEARED_XP * len(wave_days)
+    learning = coach.progress(user_id, today)
+    xp += learning["xp"]
     xp = int(round(xp))
 
     today_reviews = [event for event in reviews if event["day"] == today]
@@ -362,6 +365,7 @@ def state(user_id: int, tz_offset: int, now=None) -> dict[str, Any]:
             combo_now = 0
     total_minutes = sum(minutes_by_day.values())
     active_days = {day for day, minutes in minutes_by_day.items() if minutes >= STREAK_MIN}
+    active_days.update(datetime.date.fromisoformat(d) for d in learning["completed_days"])
     family_today = today in family_days
     weekend = today.weekday() >= 5
     maintenance = week_target(today) != WEEK_TARGET_MIN
@@ -372,10 +376,25 @@ def state(user_id: int, tz_offset: int, now=None) -> dict[str, Any]:
     else:
         day_target = WEEKEND_TARGET_MIN if weekend else WEEKDAY_TARGET_MIN
 
+    # An explicit coach plan replaces the legacy fixed 24-hour week for this user.
+    stored_plan = coach.get_profile(user_id)
+    lane_targets = dict(LANE_WEEK_TARGETS)
+    planned_week = week_target(today)
+    if stored_plan:
+        profile = stored_plan['profile']
+        planned_week = sum(coach.budget(profile, week_start + datetime.timedelta(days=i)) for i in range(7))
+        day_target = 0 if family_today else coach.budget(profile, today)
+        maintenance = False
+        weights = stored_plan['plan'].get('task_weights', coach.DEFAULT_WEIGHTS)
+        total_weight = sum(weights.values())
+        lane_targets = {lane: 0 for lane in LANES}
+        for kind, lane in {'listen':'listening','write':'writing','speak':'speaking','read':'reading','review':'review'}.items():
+            lane_targets[lane] = round(planned_week * weights.get(kind,1) / total_weight)
+
     skills = {}
     for skill_key, skill_lanes in TCF_SKILL_LANES.items():
         done = sum(week_lanes[lane] * LANE_WEIGHTS.get(lane, 1) for lane in skill_lanes)
-        target = 0 if maintenance else sum(LANE_WEEK_TARGETS[lane] * LANE_WEIGHTS.get(lane, 1) for lane in skill_lanes)
+        target = 0 if maintenance else sum(lane_targets[lane] * LANE_WEIGHTS.get(lane, 1) for lane in skill_lanes)
         skills[skill_key] = {
             "minutes": round(done),
             "target": round(target),
@@ -402,6 +421,7 @@ def state(user_id: int, tz_offset: int, now=None) -> dict[str, Any]:
         **level_for(xp),
         "xp": xp,
         "max_level": MAX_LEVEL,
+        "learning": learning,
         "hours_total": round(total_minutes / 60, 1),
         "today": {
             "day": today.isoformat(),
@@ -423,10 +443,10 @@ def state(user_id: int, tz_offset: int, now=None) -> dict[str, Any]:
             "start": week_start.isoformat(),
             "end": week_end.isoformat(),
             "minutes": round(week_effective),
-            "target": week_target(today),
+            "target": planned_week,
             "maintenance": maintenance,
             "by_lane": {lane: round(value) for lane, value in week_lanes.items()},
-            "lane_targets": dict(LANE_WEEK_TARGETS),
+            "lane_targets": lane_targets,
             "lane_weights": {lane: LANE_WEIGHTS.get(lane, 1) for lane in LANES},
             "skills": skills,
             "focus_skill": focus_skill,

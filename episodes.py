@@ -36,6 +36,7 @@ import edge_tts
 import numpy as np
 
 import auth_db
+import curriculum
 import srs
 
 SAMPLE_RATE = 24000
@@ -537,3 +538,34 @@ def episode_number(user_id: int) -> int:
 
 def clean_title(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()[:120]
+
+
+def material_for_level(material, level):
+    """Conservative structural filter for beginner history, not a CEFR classifier.
+    Short clauses with complex conjunctions are excluded too. Standalone build-up
+    steps are eligible; advanced original sentences never silently pass through.
+    """
+    if level not in ('A1', 'A2'):
+        return material
+    limit = 7 if level == 'A1' else 12
+    complex_words = re.compile(r"\b(dont|lequel|laquelle|cependant|néanmoins|quoique|puisque|lorsque)\b", re.I)
+    # Beginner history must also use familiar everyday vocabulary. This is
+    # intentionally conservative: skipped material remains available at higher levels.
+    known = set(re.findall(r"[a-zà-ÿœ]+", ' '.join(line[0] for lesson in curriculum.LESSONS for line in lesson['lines']).lower()))
+    known.update("je tu il elle on nous vous ils elles le la les un une des de du au aux en à et ou avec pour sans dans sur sous chez ce cette ces mon ma mes ton ta tes son sa ses notre votre leur leurs suis es est sommes êtes sont ai as a avons avez ont vais vas va allons allez vont peux peut pouvons pouvez peuvent veux veut voulons voulez veulent bonjour salut merci oui non pas plus très bien grand petite petits petites beau belle bon bonne jour demain aujourd hui soir matin heure heures ici là nom m appelle français anglais chinois canadien canada france paris aime manger boire prendre aller faire voir venir parler lire écrire livre eau thé lait pain chien chat ami amie amis travail école travaillez heureux heureuse ans deux trois quatre cinq six sept huit neuf dix lundi mardi mercredi jeudi vendredi samedi dimanche mois année maison appartement ville petit café famille libre apprendre parle travaille étudie étudiant étudiante".split())
+    def fits(text):
+        words = re.findall(r"[a-zà-ÿœ]+", text.lower())
+        simple = level != 'A1' or sum(w not in known for w in words) <= 1
+        return simple and 2 <= len(text.split()) <= limit and not complex_words.search(text) and not any(p in text for p in (';', ':'))
+    result=[]
+    for original in material:
+        item=dict(original)
+        steps=[step for step in item.get('build_up',[]) if fits(step.get('fr',''))]
+        if not fits(item['sentence']):
+            if not steps: continue
+            item['sentence']=steps[-1]['fr']
+            item['en']=steps[-1].get('en','')
+            item['key']=srs.sentence_key(item['sentence'])
+        item['build_up']=steps
+        result.append(item)
+    return result

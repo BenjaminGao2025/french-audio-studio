@@ -26,7 +26,7 @@
             introTitle: 'A French episode made from what you studied',
             introDesc: 'First the sentences you studied, then long sentences built step by step, then new dialogues and stories that use your words, and finally French only once more. France and Canada voices take turns.',
             levelLegend: 'Level',
-            levelHint: (level, hours) => `· ${level} fits your ${hours} h of study`,
+            levelHint: (level, hours) => `· Suggested starting level: ${level} · adjust to what you understand`,
             levelDesc: {
                 A1: 'The English meaning first, then the French slowly twice and once at normal speed. Short present-tense sentences.',
                 A2: 'A little faster, English after every line, a few more tenses.',
@@ -68,7 +68,7 @@
         },
         zh: {
             pageTitle: '开车听 - 1000H French',
-            heading: '开车听',
+            heading: '听力练习',
             navAria: '页面切换', navAudio: '音频工作台', navStudy: '拆解与复述', navWrite: '写作', navSpeak: '口语', navReview: '今日复习', navListen: '开车听',
             loginTitle: '请先登录',
             loginDesc: '节目是用你学过的内容生成的，需要先登录。',
@@ -76,7 +76,7 @@
             introTitle: '用你学过的内容，做一集法语节目',
             introDesc: '先复习你拆解过的句子，再一层层搭长句，然后是用你学过的词新编的对话和故事，最后纯法语再听一遍。法国和加拿大口音交替。',
             levelLegend: '难度',
-            levelHint: (level, hours) => `· 按你学过的 ${hours} 小时，推荐 ${level}`,
+            levelHint: (level, hours) => `· 起步建议 ${level}，请按实际听懂程度调整`,
             levelDesc: {
                 A1: '先听英文意思，再听两遍慢速法语、一遍正常语速。句子短，以现在时为主。',
                 A2: '慢速稍快一点，每句后面有英文，时态多一些。',
