@@ -1,0 +1,28 @@
+name: Test and Auto-Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  test-and-deploy:
+    name: Run Tests and Update Live Production
+    runs-on: [self-hosted, tts, deploy]
+    steps:
+      - name: Update Server Code to Latest Main
+        run: |
+          cd /home/mgacai/projects/notion-mcp-terminal/TTS
+          git fetch origin main
+          git reset --hard origin/main
+
+      - name: Run Unit Tests
+        run: |
+          cd /home/mgacai/projects/notion-mcp-terminal/TTS
+          docker run --rm -v "$PWD":/src -w /src --entrypoint python deploygrow-tts:latest -m unittest discover -s tests
+
+      - name: Build and Restart Production Container
+        run: |
+          cd /home/mgacai/projects/notion-mcp-terminal/TTS
+          docker compose up -d --build
