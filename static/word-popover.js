@@ -382,6 +382,7 @@
      *   localLookup(lower, word, context) the page's own data for a word, or null
      *   remember(lower, item)             called with every looked-up entry
      *   wordSelector                      CSS selector of clickable words (clicks on them never close the popover)
+     *   contextFor(element)               {sentence, sentence_cn} around a selected phrase, for saving it
      *   saving: { isSaved(item), toggle(item), entries(token), setImportance(entries, level) }
      *                                     optional "add to review" star and importance stars
      */
@@ -632,6 +633,44 @@
             if (rect.width === 0 && rect.height === 0) return;
             show(selected, { getBoundingClientRect: () => rect });
         });
+
+        // Drag-selecting two or more French words (mouse, or a long press on a phone) opens the
+        // popover for the phrase: it is spoken and can be saved for review like a single word.
+        const isFrenchNode = (node) => {
+            const el = node && (node.nodeType === 1 ? node : node.parentElement);
+            const region = el && el.closest('[lang]');
+            return Boolean(region && /^fr(?:-|$)/i.test(region.lang) && !pop.contains(region));
+        };
+        let mouseHeld = false;
+        let selectionTimer = null;
+        let lastPhrase = '';
+        function showSelectedPhrase() {
+            const selection = root.getSelection();
+            const selected = selection ? selection.toString().replace(/\s+/g, ' ').trim() : '';
+            if (!selected || !selected.includes(' ')) { lastPhrase = ''; return; }
+            if (selected === lastPhrase || selection.rangeCount === 0) return;
+            if (document.activeElement && document.activeElement.matches('input, textarea, [contenteditable="true"]')) return;
+            const range = selection.getRangeAt(0);
+            if (!isFrenchNode(range.startContainer) || !isFrenchNode(range.endContainer)) return;
+            const rect = range.getBoundingClientRect();
+            if (rect.width === 0 && rect.height === 0) return;
+            lastPhrase = selected;
+            const anchor = range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement;
+            const context = options.contextFor ? options.contextFor(anchor) || {} : {};
+            show(selected, { getBoundingClientRect: () => rect }, context);
+        }
+        const scheduleSelection = (delay) => {
+            clearTimeout(selectionTimer);
+            selectionTimer = setTimeout(showSelectedPhrase, delay);
+        };
+        document.addEventListener('mousedown', (e) => { if (e.button === 0) mouseHeld = true; });
+        document.addEventListener('mouseup', () => {
+            if (!mouseHeld) return;
+            mouseHeld = false;
+            scheduleSelection(0);
+        });
+        // Touch selections have no mouseup: wait until the selection handles settle
+        document.addEventListener('selectionchange', () => { if (!mouseHeld) scheduleSelection(600); });
         document.addEventListener('mousedown', (e) => {
             if (isOpen() && !pop.contains(e.target) && !(wordSelector && e.target.closest(wordSelector))) close();
         });

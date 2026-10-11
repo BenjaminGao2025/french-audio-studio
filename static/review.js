@@ -412,6 +412,11 @@
         speak: (text) => playFrench(text, 1, { once: true }),
         getAuthToken: () => getToken(),
         wordSelector: '.fr-word',
+        contextFor(element) {
+            const row = element && element.closest('[data-sentence]');
+            const card = session.current;
+            return { sentence: row ? row.dataset.sentence : (card && card.note ? card.note.sentence : '') };
+        },
         localLookup(lower) {
             const card = session.current;
             const meta = (card && card.target_meta) || {};

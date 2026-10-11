@@ -2018,7 +2018,8 @@ async def request_word_lookup(word: str, api_key: str, model: str = DEFAULT_MODE
 
     prompt = (
         "You are an expert French pedagogical lexicographer for learners.\n"
-        "Provide accurate linguistic details for the given French word in valid JSON format ONLY.\n"
+        "Provide accurate linguistic details for the given French word or short phrase in valid JSON format ONLY.\n"
+        "For a phrase, explain it as a whole (its meaning as a unit), not word by word.\n"
         "Schema:\n"
         "{\n"
         '  "token": "...",\n'

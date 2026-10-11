@@ -377,6 +377,14 @@ function initStudyWorkbench() {
         speak: (text) => playFrenchSpeech(text, null, { once: true }),
         getAuthToken: () => getEffectiveAuthToken(),
         wordSelector: '.interactive-word, .diff-word, .token-word',
+        contextFor(element) {
+            const card = element && element.closest('.sentence-card');
+            if (!card) return {};
+            return {
+                sentence: card.querySelector('.sentence-french-text')?.textContent || '',
+                sentence_cn: card.querySelector('.translation-cn')?.textContent || '',
+            };
+        },
         localLookup(lower, word, context) {
             // A word that belongs to a fixed expression of this sentence shows the expression
             const phrase = context.sentence ? phraseByWord.get(`${srsSentenceKey(context.sentence)}::${lower}`) : null;
