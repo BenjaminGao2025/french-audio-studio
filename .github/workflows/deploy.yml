@@ -9,7 +9,7 @@ on:
 jobs:
   test-and-deploy:
     name: Run Tests and Update Live Production
-    runs-on: [self-hosted, tts, deploy]
+    runs-on: self-hosted
     steps:
       - name: Update Server Code to Latest Main
         run: |
