@@ -604,6 +604,15 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertEqual(sol, "gpt-6.1-sol-thinking")
         self.assertEqual(tts_service._upstream_base_url(sol), tts_service.PERPLEXITY_BASE_URL)
 
+    def test_agy_only_sends_every_model_to_agy_gemini(self):
+        with patch.object(tts_service, "AGY_ONLY", True):
+            for name in ("gpt-6.1-sol-thinking", "claude-sonnet-5.5", "gemini-3.8-flash"):
+                upstream = tts_service._map_upstream_model(name)
+                self.assertEqual(upstream, tts_service.AGY_MODEL)
+                self.assertEqual(tts_service._upstream_base_url(upstream), tts_service.AGY_BASE_URL)
+            models = TestClient(tts_service.app).get("/api/models").json()["models"]
+            self.assertEqual([m["id"] for m in models], ["gemini-3.8-flash"])
+
     def test_expired_perplexity_login_is_a_clear_error(self):
         client = AsyncMock()
         client.post.return_value = Mock(

@@ -93,14 +93,22 @@ if PERPLEXITY_MODEL not in TRANSFORM_MODELS:
     raise RuntimeError(f"Unsupported PERPLEXITY_MODEL: {PERPLEXITY_MODEL}")
 
 
-AGY_UPSTREAM_MODELS = {"gemini-3.8-flash": "gemini-3.8-flash-low"}
+AGY_MODEL = os.getenv("AGY_MODEL", "gemini-3.8-flash-low")
+AGY_UPSTREAM_MODELS = {"gemini-3.8-flash": AGY_MODEL}
+# AGY_ONLY=true (default since 2026-10-11): every AI call goes to the AGY Gemini model, whatever
+# model a client asks for (old browsers may still have a Perplexity model saved). Perplexity paused.
+AGY_ONLY = os.getenv("AGY_ONLY", "true").strip().lower() in {"1", "true", "yes"}
 
 
 def _map_upstream_model(model_name: str) -> str:
+    if AGY_ONLY:
+        return AGY_MODEL
     return AGY_UPSTREAM_MODELS.get(model_name, model_name)
 
 
 def _upstream_base_url(upstream_model: str) -> str:
+    if AGY_ONLY:
+        return AGY_BASE_URL
     return AGY_BASE_URL if upstream_model in AGY_UPSTREAM_MODELS.values() else PERPLEXITY_BASE_URL
 
 SUPPORTED_VOICES = {
@@ -1599,6 +1607,7 @@ async def available_models():
         "models": [
             {"id": model_id, **details}
             for model_id, details in TRANSFORM_MODELS.items()
+            if not AGY_ONLY or model_id in AGY_UPSTREAM_MODELS
         ],
     }
 
