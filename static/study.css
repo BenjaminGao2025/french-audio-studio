@@ -2427,6 +2427,8 @@ a.nav-deck-btn {
 .gloss-en {
     color: var(--primary);
     font-size: var(--text-sm);
+    /* A drag across the French words selects only the French line */
+    user-select: none;
 }
 
 .gloss-order-note {

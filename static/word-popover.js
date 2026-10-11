@@ -636,22 +636,43 @@
 
         // Drag-selecting two or more French words (mouse, or a long press on a phone) opens the
         // popover for the phrase: it is spoken and can be saved for review like a single word.
-        const isFrenchNode = (node) => {
+        const frenchRegionOf = (node) => {
             const el = node && (node.nodeType === 1 ? node : node.parentElement);
             const region = el && el.closest('[lang]');
-            return Boolean(region && /^fr(?:-|$)/i.test(region.lang) && !pop.contains(region));
+            return region && /^fr(?:-|$)/i.test(region.lang) && !pop.contains(region) ? region : null;
         };
+        const isFrenchNode = (node) => Boolean(frenchRegionOf(node));
+        // Only the French text of a selection: a drag across the word-by-word gloss also
+        // covers the English line under each word, which must not be read or saved.
+        function frenchTextOf(range) {
+            const rootNode = range.commonAncestorContainer;
+            if (rootNode.nodeType === 3) return isFrenchNode(rootNode) ? range.toString() : '';
+            const walker = document.createTreeWalker(rootNode, NodeFilter.SHOW_TEXT);
+            let text = '';
+            let lastRegion = null;
+            for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+                const region = frenchRegionOf(node);
+                if (!region || !range.intersectsNode(node)) continue;
+                let piece = node.textContent;
+                if (node === range.endContainer) piece = piece.slice(0, range.endOffset);
+                if (node === range.startContainer) piece = piece.slice(range.startOffset);
+                // Separate French words that sit in different elements (one per gloss column)
+                if (lastRegion && region !== lastRegion && !region.contains(lastRegion) && !lastRegion.contains(region)) text += ' ';
+                text += piece;
+                lastRegion = region;
+            }
+            return text;
+        }
         let mouseHeld = false;
         let selectionTimer = null;
         let lastPhrase = '';
         function showSelectedPhrase() {
             const selection = root.getSelection();
-            const selected = selection ? selection.toString().replace(/\s+/g, ' ').trim() : '';
+            const range = selection && selection.rangeCount > 0 && !selection.isCollapsed ? selection.getRangeAt(0) : null;
+            const selected = range ? frenchTextOf(range).replace(/\s+/g, ' ').trim() : '';
             if (!selected || !selected.includes(' ')) { lastPhrase = ''; return; }
-            if (selected === lastPhrase || selection.rangeCount === 0) return;
+            if (selected === lastPhrase) return;
             if (document.activeElement && document.activeElement.matches('input, textarea, [contenteditable="true"]')) return;
-            const range = selection.getRangeAt(0);
-            if (!isFrenchNode(range.startContainer) || !isFrenchNode(range.endContainer)) return;
             const rect = range.getBoundingClientRect();
             if (rect.width === 0 && rect.height === 0) return;
             lastPhrase = selected;
