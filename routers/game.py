@@ -6,6 +6,7 @@ import uuid
 from typing import Literal
 
 import edge_tts
+import edge_compat  # noqa: F401  (Microsoft moved the synthesis host; must load before use)
 from fastapi import APIRouter, Header, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field

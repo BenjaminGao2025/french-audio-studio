@@ -33,6 +33,7 @@ from typing import Any, Awaitable, Callable, Iterator
 
 import av
 import edge_tts
+import edge_compat  # noqa: F401  (Microsoft moved the synthesis host; must load before use)
 import numpy as np
 
 import auth_db

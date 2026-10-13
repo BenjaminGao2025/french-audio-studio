@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Annotated, Any, Literal
 
 import edge_tts
+import edge_compat  # noqa: F401  (Microsoft moved the synthesis host; must load before use)
 import httpx
 
 logger = logging.getLogger("tts_service")
