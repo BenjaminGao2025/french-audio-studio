@@ -137,6 +137,8 @@ function initStudyWorkbench() {
             partOfPhrase: (word, phrase) => `“${word}” is part of the fixed expression “${phrase}” here: learn it as a whole.`,
             emptyInput: 'Please enter the French text you want to break down first.',
             analyzing: 'Analysing...',
+            cancelAnalysis: 'Cancel', cancelAnalysisTitle: 'Stop the analysis and keep editing (Esc)',
+            analysisCancelled: 'Analysis cancelled. Your text is still here; edit it and press Enter when ready.',
             analyzingStatus: 'The AI is splitting the text into sentences, chunks and collocations and analysing them. Please wait...',
             analyzeFailed: 'Analysis request failed',
             analyzingProgress: (done, total) => `The AI is analysing your text: ${done} of ${total} parts done…`,
@@ -250,6 +252,8 @@ function initStudyWorkbench() {
             partOfPhrase: (word, phrase) => `「${word}」在这句里是固定搭配「${phrase}」的一部分，要整体理解。`,
             emptyInput: '请先输入需要拆解或学习的法语文本。',
             analyzing: '正在智能拆解与精析...',
+            cancelAnalysis: '取消', cancelAnalysisTitle: '停止分析，继续编辑 (Esc)',
+            analysisCancelled: '已取消分析，文本仍保留，可继续编辑，改好后按 Enter 重新开始。',
             analyzingStatus: '正在调用 LLM 进行全句切分与意群搭配深度三列解析，请稍候...',
             analyzeFailed: '分析请求失败',
             analyzingProgress: (done, total) => `AI 正在逐段解析：已完成 ${done} / ${total} 段…`,
@@ -2860,8 +2864,9 @@ function initStudyWorkbench() {
         return parts.length ? parts : [text];
     }
 
-    async function analyzePart(text, token, model) {
+    async function analyzePart(text, token, model, signal) {
         const res = await fetch('/api/analyze', {
+            signal,
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -2876,7 +2881,28 @@ function initStudyWorkbench() {
         return data.sentences || [];
     }
 
+    // Enter can start an analysis by accident: a Cancel button (and Esc) stops it.
+    let analysisController = null;
+    let cancelAnalysisButton = null;
+    function showCancelButton(show) {
+        if (!cancelAnalysisButton) {
+            cancelAnalysisButton = document.createElement('button');
+            cancelAnalysisButton.id = 'cancel-analysis-btn';
+            cancelAnalysisButton.type = 'button';
+            cancelAnalysisButton.className = 'btn btn-secondary';
+            cancelAnalysisButton.textContent = T.cancelAnalysis;
+            cancelAnalysisButton.title = T.cancelAnalysisTitle;
+            cancelAnalysisButton.addEventListener('click', cancelAnalysis);
+            analyzeButton.before(cancelAnalysisButton);
+        }
+        cancelAnalysisButton.hidden = !show;
+    }
+    function cancelAnalysis() {
+        if (analysisController) analysisController.abort();
+    }
+
     async function startAnalysis() {
+        if (analysisController) return;
         const text = frenchInput.value.trim();
         if (!text) {
             statusMessage.textContent = T.emptyInput;
@@ -2892,6 +2918,9 @@ function initStudyWorkbench() {
             analyzeButton.classList.add('is-loading');
             analyzeButton.disabled = true;
             analyzeButtonLabel.textContent = T.analyzing;
+            analysisController = new AbortController();
+            const { signal } = analysisController;
+            showCancelButton(true);
             statusMessage.className = 'status-message status-working';
             statusMessage.textContent = T.analyzingStatus;
 
@@ -2903,14 +2932,15 @@ function initStudyWorkbench() {
             let done = 0;
             if (parts.length > 1) statusMessage.textContent = T.analyzingProgress(0, parts.length);
             const worker = async () => {
-                while (next < parts.length) {
+                while (next < parts.length && !signal.aborted) {
                     const index = next++;
-                    results[index] = await analyzePart(parts[index], token, model);
+                    results[index] = await analyzePart(parts[index], token, model, signal);
                     done += 1;
                     if (parts.length > 1) statusMessage.textContent = T.analyzingProgress(done, parts.length);
                 }
             };
             await Promise.all([worker(), worker()]);
+            if (signal.aborted) throw new DOMException('cancelled', 'AbortError');
             const sentences = results.flat();
 
             renderStudyDeck(sentences);
@@ -2920,9 +2950,18 @@ function initStudyWorkbench() {
             statusMessage.className = 'status-message status-success';
             statusMessage.textContent = T.analyzeDone;
         } catch (err) {
-            statusMessage.className = 'status-message status-error';
-            statusMessage.textContent = `${T.analyzeError}${err.message}`;
+            if (analysisController && analysisController.signal.aborted) {
+                // Nothing partial is rendered or saved; the text stays as typed
+                statusMessage.className = 'status-message';
+                statusMessage.textContent = T.analysisCancelled;
+                frenchInput.focus();
+            } else {
+                statusMessage.className = 'status-message status-error';
+                statusMessage.textContent = `${T.analyzeError}${err.message}`;
+            }
         } finally {
+            analysisController = null;
+            showCancelButton(false);
             analyzeButton.classList.remove('is-loading');
             analyzeButton.disabled = false;
             analyzeButtonLabel.textContent = T.analyze;
@@ -2939,6 +2978,13 @@ function initStudyWorkbench() {
         if (isPlainEnter(e)) {
             e.preventDefault();
             if (!analyzeButton.disabled) startAnalysis();
+        }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && analysisController) {
+            e.preventDefault();
+            cancelAnalysis();
         }
     });
 
