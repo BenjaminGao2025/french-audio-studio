@@ -377,10 +377,14 @@ function initStudyWorkbench() {
         onError: (err) => showSrsError(err),
     });
 
+    // Also tapped like a title word: the word-by-word gloss, and a highlighted step chunk
+    // (outside blind mode, where a tap on it reveals it instead)
+    const GLOSS_TAP_SELECTOR = '.gloss-fr, .buildup-steps-list:not(.is-blind-mode) .buildup-new-token';
+
     const wordPopover = window.FrenchWordPopover.create({
         speak: (text) => playFrenchSpeech(text, null, { once: true }),
         getAuthToken: () => getEffectiveAuthToken(),
-        wordSelector: '.interactive-word, .diff-word, .token-word',
+        wordSelector: `.interactive-word, .diff-word, .token-word, ${GLOSS_TAP_SELECTOR}`,
         contextFor(element) {
             const card = element && element.closest('.sentence-card');
             if (!card) return {};
@@ -2124,6 +2128,18 @@ function initStudyWorkbench() {
                 });
                 return;
             }
+            const glossWord = e.target.closest(GLOSS_TAP_SELECTOR);
+            if (glossWord) {
+                if (String(window.getSelection && window.getSelection()).trim()) return;
+                e.stopPropagation();
+                const word = glossWord.matches('.buildup-new-token') ? chunkSpeechText(glossWord.textContent) : glossWord.textContent.trim();
+                // The popover takes up to 40 characters; a longer chunk is just read aloud
+                if (word.length > 40) { playFrenchSpeech(word, null, { once: true }); return; }
+                showPopoverForElement(word, glossWord, {
+                    sentence: targetSentence,
+                    sentence_cn: transCn
+                });
+            }
         });
 
         card.addEventListener('keydown', (e) => {
@@ -2580,19 +2596,8 @@ function initStudyWorkbench() {
                 });
             }
 
-            // Normal mode: tap a highlighted chunk to hear just that chunk (a tap may play audio on iOS)
-            if (stepsList) {
-                stepsList.addEventListener('click', (e) => {
-                    if (stepsList.classList.contains('is-blind-mode')) return;
-                    if (String(window.getSelection && window.getSelection()).trim()) return;
-                    const chunk = e.target.closest('.buildup-new-token');
-                    if (!chunk) return;
-                    const text = chunkSpeechText(chunk.textContent);
-                    if (text) playFrenchSpeech(text, null, { once: true });
-                });
-            }
-
-            // Click individual cloze token to reveal/re-mask
+            // Click individual cloze token to reveal/re-mask (outside blind mode a chunk opens
+            // the word popover instead, via the card click delegation)
             if (stepsList) {
                 stepsList.addEventListener('click', (e) => {
                     if (!stepsList.classList.contains('is-blind-mode')) return;

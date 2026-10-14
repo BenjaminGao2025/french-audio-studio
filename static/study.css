@@ -2422,6 +2422,16 @@ a.nav-deck-btn {
     color: var(--ink);
     font-size: var(--text-base);
     font-weight: 600;
+    /* A tap opens the word popover, like a word in the sentence title */
+    cursor: pointer;
+    border-radius: 3px;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.gloss-fr:hover,
+.gloss-fr.is-active-word {
+    background: rgba(var(--primary-rgb), 0.1);
+    color: var(--primary);
 }
 
 .gloss-en {
@@ -2831,7 +2841,7 @@ a.nav-deck-btn {
 }
 
 /* Steps on a phone: the French line selects like normal text (WebKit needs the prefix),
-   and a highlighted chunk is a tap target that reads itself */
+   and a highlighted chunk is a tap target that opens the word popover (study.js) */
 .buildup-steps-list:not(.is-blind-mode) .buildup-fr-text,
 .buildup-steps-list:not(.is-blind-mode) .buildup-new-token {
     -webkit-user-select: text;
@@ -2841,6 +2851,11 @@ a.nav-deck-btn {
 .buildup-steps-list:not(.is-blind-mode) .buildup-new-token {
     cursor: pointer;
     padding: 1px 0;
+    transition: background 0.15s ease;
+}
+.buildup-steps-list:not(.is-blind-mode) .buildup-new-token:hover,
+.buildup-steps-list:not(.is-blind-mode) .buildup-new-token.is-active-word {
+    background: rgba(var(--primary-rgb), 0.18);
 }
 
 /* Per-step Repeat: an icon-only copy of the shared Repeat switch (playback.js), next to Listen */
