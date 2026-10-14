@@ -1509,6 +1509,7 @@ function initStudyWorkbench() {
                                                 <i data-lucide="volume-2"></i>
                                                 <span>${T.pronounce}</span>
                                             </button>
+                                            ${window.FrenchPlayback ? window.FrenchPlayback.toggleHtml('btn-step-repeat') : ''}
                                             <button class="btn-buildup-record" type="button" title="${T.buildupRecordTitle}" data-sentence="${escapeHtml(step.fr)}">
                                                 <i data-lucide="mic"></i>
                                                 <span class="record-btn-text">${T.shadowScore}</span>
@@ -2579,6 +2580,18 @@ function initStudyWorkbench() {
                 });
             }
 
+            // Normal mode: tap a highlighted chunk to hear just that chunk (a tap may play audio on iOS)
+            if (stepsList) {
+                stepsList.addEventListener('click', (e) => {
+                    if (stepsList.classList.contains('is-blind-mode')) return;
+                    if (String(window.getSelection && window.getSelection()).trim()) return;
+                    const chunk = e.target.closest('.buildup-new-token');
+                    if (!chunk) return;
+                    const text = chunkSpeechText(chunk.textContent);
+                    if (text) playFrenchSpeech(text, null, { once: true });
+                });
+            }
+
             // Click individual cloze token to reveal/re-mask
             if (stepsList) {
                 stepsList.addEventListener('click', (e) => {
@@ -2600,6 +2613,13 @@ function initStudyWorkbench() {
         }
     }
     window.renderStudyDeck = renderStudyDeck;
+
+
+    // What a highlighted chunk should sound like: its words, without the punctuation around it
+    function chunkSpeechText(text) {
+        return (text || '').replace(/\s+/g, ' ').replace(/^[\s«"“(]+|[\s.,;:!?…»"”)]+$/g, '').trim();
+    }
+    window.chunkSpeechText = chunkSpeechText;
 
     function escapeHtml(str) {
         if (!str) return '';

@@ -28,6 +28,7 @@
             timeNote: (h, minutes) => `${h}:${String(minutes).padStart(2, '0')}`,
             decimalNote: 'French uses a comma as the decimal point',
             numberNote: (n, isYear) => `${n}${isYear ? ' (a year is read the same way)' : ''}`,
+            speakSelection: 'Hear', speakSelectionTitle: 'Read the selected French aloud',
         },
         zh: {
             baseForm: '原形: ', contextWord: '语境词汇', readAs: '读作：',
@@ -42,6 +43,7 @@
             timeNote: (h, minutes) => `${h} 点${minutes ? ' ' + minutes + ' 分' : ''}`,
             decimalNote: '法语用逗号表示小数点',
             numberNote: (n, isYear) => `${n}${isYear ? '（作年份时也这样读）' : ''}`,
+            speakSelection: '朗读', speakSelectionTitle: '朗读选中的法语',
         },
     };
     const T = TEXT[EN ? 'en' : 'zh'];
@@ -666,6 +668,59 @@
         let mouseHeld = false;
         let selectionTimer = null;
         let lastPhrase = '';
+        // Phones: iOS only plays audio from a tap, and the selection keeps changing while the
+        // handles are dragged. So a touch selection shows a small "Hear" chip under it; the tap
+        // on the chip speaks exactly the final selection (and opens the popover for it).
+        let lastPointerType = '';
+        document.addEventListener('pointerdown', (e) => { lastPointerType = e.pointerType || ''; }, true);
+        document.addEventListener('touchstart', () => { lastPointerType = 'touch'; }, { capture: true, passive: true });
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'selection-speak-chip';
+        chip.hidden = true;
+        chip.title = T.speakSelectionTitle;
+        chip.setAttribute('aria-label', T.speakSelectionTitle);
+        chip.textContent = `🔊 ${T.speakSelection}`;
+        document.body.appendChild(chip);
+        let chipPhrase = null;
+        const hideChip = () => { chip.hidden = true; chipPhrase = null; };
+        function selectedFrench() {
+            const selection = root.getSelection();
+            const range = selection && selection.rangeCount > 0 && !selection.isCollapsed ? selection.getRangeAt(0) : null;
+            if (!range) return null;
+            const text = frenchTextOf(range).replace(/\s+/g, ' ').trim();
+            if (!text || !/[a-zA-ZÀ-ÿ0-9]/.test(text)) return null;
+            const rect = range.getBoundingClientRect();
+            if (rect.width === 0 && rect.height === 0) return null;
+            return { text, rect, range };
+        }
+        function showSpeakChip() {
+            const found = selectedFrench();
+            if (!found || (document.activeElement && document.activeElement.matches('input, textarea, [contenteditable="true"]'))) { hideChip(); return; }
+            const anchor = found.range.startContainer.nodeType === 1 ? found.range.startContainer : found.range.startContainer.parentElement;
+            chipPhrase = { text: found.text, rect: found.rect, context: options.contextFor ? options.contextFor(anchor) || {} : {} };
+            chip.hidden = false;
+            // Below the selection: iOS puts its Copy menu above it
+            const width = chip.offsetWidth || 80;
+            const left = Math.max(8, Math.min(root.innerWidth - width - 8, found.rect.left + found.rect.width / 2 - width / 2));
+            const below = found.rect.bottom + 34 + 44 < root.innerHeight;
+            chip.style.left = `${left}px`;
+            chip.style.top = `${below ? found.rect.bottom + 34 : Math.max(8, found.rect.top - 44 - 34)}px`;
+        }
+        // Keep the selection while tapping the chip
+        chip.addEventListener('pointerdown', (e) => e.preventDefault());
+        chip.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); });
+        chip.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const phrase = chipPhrase;
+            hideChip();
+            if (!phrase) return;
+            lastPhrase = phrase.text;
+            const rect = phrase.rect;
+            show(phrase.text, { getBoundingClientRect: () => rect }, phrase.context);
+        });
+        root.addEventListener('scroll', () => { if (!chip.hidden && chipPhrase) showSpeakChip(); }, { passive: true });
         function showSelectedPhrase() {
             const selection = root.getSelection();
             const range = selection && selection.rangeCount > 0 && !selection.isCollapsed ? selection.getRangeAt(0) : null;
@@ -690,8 +745,16 @@
             mouseHeld = false;
             scheduleSelection(0);
         });
-        // Touch selections have no mouseup: wait until the selection handles settle
-        document.addEventListener('selectionchange', () => { if (!mouseHeld) scheduleSelection(600); });
+        // Touch selections have no mouseup: offer the "Hear" chip once the handles settle
+        document.addEventListener('selectionchange', () => {
+            if (lastPointerType === 'touch') {
+                clearTimeout(selectionTimer);
+                if (root.getSelection().isCollapsed) { hideChip(); return; }
+                selectionTimer = setTimeout(showSpeakChip, 250);
+                return;
+            }
+            if (!mouseHeld) scheduleSelection(600);
+        });
         document.addEventListener('mousedown', (e) => {
             if (isOpen() && !pop.contains(e.target) && !(wordSelector && e.target.closest(wordSelector))) close();
         });
