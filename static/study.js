@@ -131,6 +131,8 @@ function initStudyWorkbench() {
             micUnavailable: 'Cannot access the microphone: ', shadowAgain: '🎙 Try again',
             diffWordTitle: (score) => `Similarity: ${score} / 100 · click for the meaning and pronunciation`,
             noClearSpeech: 'No clear speech detected. Please try again.',
+            scoreTranscribing: 'Checking…', scoreNotScored: 'Not scored', scoreFailed: 'Could not score this recording: ',
+            scoreNoAudio: 'No sound was recorded. Check that the microphone is allowed, then try again.',
             daysLeftShort: (n) => `${n} days left`, planPro: 'No expiry', daysLeft: (n) => `Valid for ${n} more days`,
             operationFailed: 'Something went wrong', loginSuccess: 'Logged in. Welcome back!', loggedOut: 'Logged out.',
             wordTitleSuffix: ' · click for the meaning and pronunciation',
@@ -246,6 +248,8 @@ function initStudyWorkbench() {
             micUnavailable: '无法调用麦克风：', shadowAgain: '🎙 再次跟读',
             diffWordTitle: (score) => `相似度得分: ${score} / 100 · 点击查看释义与单读发音`,
             noClearSpeech: '未检测到清晰发音，请重试。',
+            scoreTranscribing: '识别中…', scoreNotScored: '未评分', scoreFailed: '这次录音没法打分：',
+            scoreNoAudio: '没有录到声音，请确认已允许使用麦克风，再试一次。',
             daysLeftShort: (n) => `剩 ${n} 天`, planPro: '长期有效', daysLeft: (n) => `有效期剩 ${n} 天`,
             operationFailed: '操作失败', loginSuccess: '登录成功！欢迎回来。', loggedOut: '已退出登录。',
             wordTitleSuffix: ' · 点击查看释义与单读发音',
@@ -2287,6 +2291,7 @@ function initStudyWorkbench() {
             let isRecording = false;
             let recognition = null;
             let recognitionTranscript = '';
+            let stopResolve = null;  // resolves with the recorded blob once the recorder has stopped
 
             let isModelPlaying = false;
             let isUserPlaying = false;
@@ -2428,8 +2433,11 @@ function initStudyWorkbench() {
                     mediaRecorder.ondataavailable = (e) => {
                         if (e.data.size > 0) audioChunks.push(e.data);
                     };
+                    const recorderForStop = mediaRecorder;
                     mediaRecorder.onstop = () => {
-                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        // Safari records audio/mp4, Chrome audio/webm: keep the real type
+                        const audioBlob = new Blob(audioChunks, { type: recorderForStop.mimeType || 'audio/webm' });
+                        if (stopResolve) { stopResolve(audioBlob); stopResolve = null; }
                         if (userAudioUrl) URL.revokeObjectURL(userAudioUrl);
                         userAudioUrl = URL.createObjectURL(audioBlob);
                         if (playUserBtn) playUserBtn.disabled = false;
@@ -2481,8 +2489,12 @@ function initStudyWorkbench() {
                     recordBtnText.textContent = T.shadowAgain;
                 }
 
+                const stopped = new Promise(resolve => { stopResolve = resolve; });
                 if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                     mediaRecorder.stop();
+                } else if (stopResolve) {
+                    stopResolve(null);
+                    stopResolve = null;
                 }
 
                 if (recognition) {
@@ -2491,13 +2503,70 @@ function initStudyWorkbench() {
                     } catch (e) {}
                 }
 
-                setTimeout(() => {
-                    evaluateAndDisplay();
-                }, 500);
+                finishAndScore(stopped);
             }
 
-            function evaluateAndDisplay() {
-                const evaluation = evaluateFrenchPronunciation(sentenceText, recognitionTranscript);
+            // The browser's speech recognition gives nothing on iPhone Safari (it cannot share the
+            // microphone with the recorder): then the recording itself is transcribed on the server.
+            // Without a transcript there is no score, only a clear message (never a fake 0).
+            async function finishAndScore(stopped) {
+                const blob = await Promise.race([stopped, new Promise(resolve => setTimeout(() => resolve(null), 3000))]);
+                await new Promise(resolve => setTimeout(resolve, 500));  // late recognition results
+                let transcript = recognitionTranscript.trim();
+                if (!transcript) {
+                    if (!blob || blob.size < 1000) {
+                        showScoreError(T.scoreNoAudio);
+                        return;
+                    }
+                    recordBtn.disabled = true;
+                    if (recordBtnText) recordBtnText.textContent = T.scoreTranscribing;
+                    try {
+                        const token = getEffectiveAuthToken();
+                        if (!token) {
+                            openAuthModal();
+                            throw new Error(T.dictationLogin);
+                        }
+                        const res = await fetch('/api/transcribe?language=fr', {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': blob.type || 'application/octet-stream' },
+                            body: blob,
+                        });
+                        const data = await readJsonSafely(res);
+                        if (!res.ok) throw new Error(data.detail?.message || T.transcribeFailed(res.status));
+                        transcript = (data.text || '').trim();
+                    } catch (err) {
+                        showScoreError(`${T.scoreFailed}${err.message}`);
+                        return;
+                    } finally {
+                        recordBtn.disabled = false;
+                        if (recordBtnText) recordBtnText.textContent = T.shadowAgain;
+                    }
+                    if (!transcript) {
+                        showScoreError(T.noClearSpeech);
+                        return;
+                    }
+                }
+                evaluateAndDisplay(transcript);
+            }
+
+            function showScoreError(message) {
+                if (scorePill) {
+                    scorePill.textContent = '—';
+                    scorePill.className = `score-number-pill ${isCompact ? 'sm' : ''}`;
+                }
+                if (scoreRatingText) scoreRatingText.textContent = T.scoreNotScored;
+                if (metricAcc) metricAcc.textContent = '--%';
+                if (metricComp) metricComp.textContent = '--%';
+                if (diffBox) {
+                    diffBox.innerHTML = '';
+                    diffBox.textContent = message;
+                }
+                scoreCard.hidden = false;
+                refreshIcons();
+            }
+
+            function evaluateAndDisplay(transcript) {
+                const evaluation = evaluateFrenchPronunciation(sentenceText, transcript);
 
                 if (scorePill) {
                     scorePill.textContent = `${evaluation.overallScore}`;
@@ -2520,7 +2589,7 @@ function initStudyWorkbench() {
                             diffBox.appendChild(document.createTextNode(' '));
                         });
                     } else {
-                        diffBox.textContent = recognitionTranscript || T.noClearSpeech;
+                        diffBox.textContent = transcript || T.noClearSpeech;
                     }
                 }
 
