@@ -1315,6 +1315,8 @@ CONTENT_SECURITY_POLICY = "; ".join([
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
+    "worker-src 'self'",  # /sw.js (installable app)
+    "manifest-src 'self'",
 ])
 
 
@@ -1344,8 +1346,32 @@ def _asset_version() -> str:
 ASSET_VERSION = _asset_version()
 
 
+# Installable app (iPhone "Add to Home Screen"): manifest, icons, safe areas, service worker
+PWA_HEAD = (
+    '<link rel="manifest" href="/manifest.webmanifest">\n'
+    '<meta name="theme-color" content="#f5f7fb" media="(prefers-color-scheme: light)">\n'
+    '<meta name="theme-color" content="#141a23" media="(prefers-color-scheme: dark)">\n'
+    '<meta name="apple-mobile-web-app-capable" content="yes">\n'
+    '<meta name="mobile-web-app-capable" content="yes">\n'
+    '<meta name="apple-mobile-web-app-title" content="1000H French">\n'
+    '<meta name="apple-mobile-web-app-status-bar-style" content="default">\n'
+    '<link rel="apple-touch-icon" sizes="180x180" href="/static/pwa/apple-touch-icon.png">\n'
+    '<link rel="stylesheet" href="/static/pwa.css?v=__ASSET_VERSION__">\n'
+    '<script src="/static/pwa-register.js?v=__ASSET_VERSION__" defer></script>\n'
+)
+
+
+def _with_pwa(html: str) -> str:
+    html = html.replace(
+        'content="width=device-width, initial-scale=1.0"',
+        'content="width=device-width, initial-scale=1.0, viewport-fit=cover"',
+        1,
+    )
+    return html.replace("</head>", PWA_HEAD + "</head>", 1)
+
+
 def _html_page(name: str) -> HTMLResponse:
-    html = (STATIC_DIR / name).read_text(encoding="utf-8")
+    html = _with_pwa((STATIC_DIR / name).read_text(encoding="utf-8"))
     return HTMLResponse(
         html.replace("__ASSET_VERSION__", ASSET_VERSION),
         headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
@@ -1425,6 +1451,26 @@ async def join_waitlist(req: WaitlistRequest, request: Request):
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
     return Response(status_code=204)
+
+
+@app.get("/sw.js", include_in_schema=False)
+async def service_worker():
+    # At the site root so it can control every page; the version makes each deploy a new worker
+    source = (STATIC_DIR / "sw.js").read_text(encoding="utf-8").replace("__ASSET_VERSION__", ASSET_VERSION)
+    return Response(
+        source,
+        media_type="text/javascript",
+        headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"},
+    )
+
+
+@app.get("/manifest.webmanifest", include_in_schema=False)
+async def web_manifest():
+    return FileResponse(
+        STATIC_DIR / "pwa" / "manifest.webmanifest",
+        media_type="application/manifest+json",
+        headers={"Cache-Control": "no-cache"},
+    )
 
 
 @app.on_event("startup")
