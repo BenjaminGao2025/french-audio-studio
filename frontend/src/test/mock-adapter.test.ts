@@ -101,3 +101,23 @@ it("has no tutor or human-score adapter and no tutor to-do", async () => {
   const { todos } = await mock.today.get();
   expect(todos.some((t) => /tutor/i.test(t.text))).toBe(false);
 });
+it("has no course lane, block or hours anywhere in the mock data", async () => {
+  const state = await mock.game.state();
+  const ledger = await mock.hours.ledger();
+  const phase = await mock.phase.get();
+  const { blocks } = await mock.today.get();
+  expect(JSON.stringify([state, ledger, phase, blocks])).not.toMatch(/course|textbook/i);
+  expect(ledger.lanes.map((l) => l.lane)).toEqual([
+    "listening",
+    "reading",
+    "speaking",
+    "writing",
+    "review",
+    "car",
+  ]);
+  const sum = (o: Record<string, number>) => Object.values(o).reduce((a, b) => a + b, 0);
+  expect(sum(phase.lane_targets)).toBe(phase.week_target_min);
+  expect(sum(state.week.lane_targets)).toBe(state.week.target);
+  expect(ledger.lanes.reduce((a, l) => a + l.active, 0)).toBeCloseTo(ledger.active_hours);
+  expect(ledger.lanes.reduce((a, l) => a + l.manual, 0)).toBeCloseTo(ledger.manual_hours);
+});

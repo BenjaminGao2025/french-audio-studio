@@ -31,8 +31,11 @@ NEW_CARDS_PER_DAY = 10
 SHADOW_SENTENCES = 8
 
 # Block kinds whose page and backend exist in this build (journal = /api/homework, speaking =
-# /api/speak). Listening, reading and checkpoint blocks join the plan when their backends land.
-ENABLED_KINDS = frozenset({"warmup", "journal", "review", "writing", "speaking", "course", "minimal"})
+# /api/speak, shadowing = /api/shadow/sentences, intensive = the /study sentence breakdown).
+# Listening, reading and checkpoint blocks join the plan when their backends land.
+ENABLED_KINDS = frozenset(
+    {"warmup", "journal", "review", "writing", "speaking", "intensive", "shadowing", "minimal"}
+)
 
 PHASE_A = {"id": "A", "name": "Phase A (0–300h)", "hours_from": 0, "hours_to": 300}
 PHASE_MAINTENANCE = {"id": "maintenance", "name": "Maintenance (5 h/week)", "hours_from": 480, "hours_to": 585}
@@ -54,7 +57,11 @@ REVIEW = Slot("review", "review", "Review queue", 10, "/cards", "review", "10:00
 LISTENING = Slot("main1", "listening", "Main block 1 · Listening 3-step", 60, "/listening", "listening", "10:10")
 READING = Slot("main1", "reading", "Main block 1 · Intensive reading", 60, "/reading", "reading", "10:10")
 WRITING = Slot("main2", "writing", "Main block 2 · Writing T1 practice", 40, "/writing", "writing", "11:15")
-COURSE = Slot("main2", "course", "Main block 2 · Course or textbook (log the time)", 40, "/hours", "course", "11:15")
+# Tuesday and Thursday 11:15 alternate between the two practices that replaced the old course
+# block. /reading is the block page (Finish/Skip, reading timer); it opens the /study sentence
+# breakdown, since the /api/reading passages backend does not exist yet.
+INTENSIVE = Slot("main2", "intensive", "Main block 2 · Intensive reading (sentence breakdown)", 40, "/reading", "reading", "11:15")
+SHADOWING = Slot("main2", "shadowing", "Main block 2 · Shadowing", 40, "/shadow", "speaking", "11:15")
 WEEKLY_REVIEW = Slot("main2", "review", "Main block 2 · Weekly review", 40, "/cards?new_limit=0", "review", "11:15")
 WRAPUP = Slot("wrapup", "minimal", "Wrap-up", 5, "/wrapup", "review", "11:55")
 AI_SPEAKING = Slot("main1", "speaking", "Main block 1 · AI speaking practice", 60, "/speaking", "speaking", "10:00")
@@ -64,9 +71,9 @@ SUNDAY_REVIEW = Slot("main1", "review", "Weekly review · due cards", 90, "/card
 # PRD 6.1 and appendix C (phase A), Monday = 0.
 WEEK_TEMPLATE: dict[int, tuple[Slot, ...]] = {
     0: (WARMUP, JOURNAL, REVIEW, LISTENING, WRITING, WRAPUP),
-    1: (WARMUP, JOURNAL, REVIEW, READING, COURSE, WRAPUP),
+    1: (WARMUP, JOURNAL, REVIEW, READING, INTENSIVE, WRAPUP),
     2: (WARMUP, JOURNAL, REVIEW, LISTENING, WRITING, WRAPUP),
-    3: (WARMUP, JOURNAL, REVIEW, READING, COURSE, WRAPUP),
+    3: (WARMUP, JOURNAL, REVIEW, READING, SHADOWING, WRAPUP),
     4: (WARMUP, JOURNAL, REVIEW, LISTENING, WEEKLY_REVIEW, WRAPUP),
     5: (AI_SPEAKING, AI_WRITING, WRAPUP),
     6: (SUNDAY_REVIEW, WRAPUP),
@@ -98,6 +105,23 @@ def _retire_tutor_rows(conn: sqlite3.Connection) -> None:
         "UPDATE day_blocks SET kind = ?, title = ?, route = ?, lane = ? WHERE route = '/tutor'",
         (AI_SPEAKING.kind, AI_SPEAKING.title, AI_SPEAKING.route, AI_SPEAKING.lane),
     )
+
+
+def _retire_course_rows(conn: sqlite3.Connection) -> None:
+    """Course blocks written before the course track was removed become reading or shadowing.
+
+    Tuesday's becomes intensive reading and Thursday's shadowing, as in the template; planned_min,
+    status and timing are kept. Any other day (never planned) gets intensive reading. Only the
+    /hours course block is touched: the old tutor block also had kind 'course' (route /tutor) and
+    belongs to _retire_tutor_rows. Logged course minutes in study_time are not touched (see
+    game.RETIRED_LANES).
+    """
+    for row in conn.execute("SELECT id, day FROM day_blocks WHERE kind = 'course' AND route = '/hours'").fetchall():
+        slot = SHADOWING if datetime.date.fromisoformat(row["day"]).weekday() == 3 else INTENSIVE
+        conn.execute(
+            "UPDATE day_blocks SET kind = ?, title = ?, route = ?, lane = ? WHERE id = ?",
+            (slot.kind, slot.title, slot.route, slot.lane, row["id"]),
+        )
 
 
 def init_db() -> None:
@@ -158,6 +182,7 @@ def init_db() -> None:
             """
         )
         _retire_tutor_rows(conn)
+        _retire_course_rows(conn)
     _initialized_db_paths.add(db_path)
 
 
@@ -402,14 +427,16 @@ def _hours(seconds: float) -> float:
     return round(seconds / 3600, 2)
 
 
+def _bucket(row: sqlite3.Row) -> str:
+    # Car-lane time is input whoever logged it; it never counts toward the 1000 hours.
+    return "input" if row["lane"] == "car" else ("manual" if row["source"] == "manual" else "active")
+
+
 def _by_lane(rows: list[sqlite3.Row]) -> dict[str, dict[str, int]]:
     out = {lane: {"active": 0, "manual": 0, "input": 0} for lane in game.LANES}
     for row in rows:
-        if row["lane"] not in out:
-            continue
-        # Car-lane time is input whoever logged it; it never counts toward the 1000 hours.
-        bucket = "input" if row["lane"] == "car" else ("manual" if row["source"] == "manual" else "active")
-        out[row["lane"]][bucket] += row["seconds"]
+        if row["lane"] in out:
+            out[row["lane"]][_bucket(row)] += row["seconds"]
     return out
 
 
@@ -419,14 +446,18 @@ def ledger(user_id: int, tz_offset: int = 0, now: datetime.datetime | None = Non
     week_start, week_end = game.week_bounds(day)
     sql = "SELECT lane, source, COALESCE(SUM(seconds), 0) AS seconds FROM study_time WHERE user_id = ?"
     with _connect() as conn:
-        total = _by_lane(conn.execute(sql + " GROUP BY lane, source", (user_id,)).fetchall())
+        total_rows = conn.execute(sql + " GROUP BY lane, source", (user_id,)).fetchall()
         week = _by_lane(
             conn.execute(
                 sql + " AND day BETWEEN ? AND ? GROUP BY lane, source",
                 (user_id, week_start.isoformat(), week_end.isoformat()),
             ).fetchall()
         )
+    total = _by_lane(total_rows)
     sums = {key: sum(lane[key] for lane in total.values()) for key in ("active", "manual", "input")}
+    for row in total_rows:  # hours logged under a retired lane have no table row but still count
+        if row["lane"] in game.RETIRED_LANES:
+            sums[_bucket(row)] += row["seconds"]
     milestone, to_go = _next_milestone((sums["active"] + sums["manual"]) / 3600)
     return {
         "active_hours": _hours(sums["active"]),

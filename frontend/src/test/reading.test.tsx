@@ -84,3 +84,16 @@ it("opens all answers and reaches full progress at the last sentence", async () 
     "1",
   );
 });
+it("offers the legacy sentence breakdown as the way into an intensive-reading block", () => {
+  const Component = Route.options.component;
+  if (!Component) throw new Error("Missing reading page");
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <Component />
+    </QueryClientProvider>,
+  );
+  expect(screen.getByRole("link", { name: "Open the sentence breakdown" })).toHaveAttribute(
+    "href",
+    "/study",
+  );
+});

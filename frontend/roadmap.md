@@ -24,7 +24,7 @@
 - B4 Today: API-driven plan, time-based greeting, minimal-day (20-min) toggle, todos, fallback/material indicators
 - B5 blocks: journal (5 steps, MediaRecorder, archive link), listening (blind-play gate), writing (timer + auto-submit + rubric), reading (multi-open answers, add-to-cards), speaking (T2 prep→record), wrapup (4 questions)
 - B6 cards: keyboard 1–4/space, API interval labels, cloze answers
-- B7 hours ledger: 7 backend lanes, Active/Manual/Input columns, manual log/delete, family-day toggle
+- B7 hours ledger: backend lanes (6 after the course lane was removed), Active/Manual/Input columns, manual log/delete, family-day toggle
 - B8 decisions: Week 8 report vs Week 16 empty state, decision form, export link
 - B9 items bank: summary cards + filtered table
 - B10 episodes / shadow / retell / me pages (responsive, /m phone-frame routes deleted)

@@ -1,6 +1,6 @@
 // TypeScript types mirroring the FastAPI pydantic models (see lovable-fix-prompt.md C4/C5).
 
-export type Lane = "course" | "listening" | "reading" | "speaking" | "writing" | "review" | "car";
+export type Lane = "listening" | "reading" | "speaking" | "writing" | "review" | "car";
 export type Skill = "listening" | "reading" | "writing" | "speaking";
 
 export interface UserStatus {
@@ -216,7 +216,8 @@ export type BlockKind =
   | "reading"
   | "writing"
   | "speaking"
-  | "course"
+  | "intensive"
+  | "shadowing"
   | "checkpoint"
   | "minimal";
 export type BlockStatus = "planned" | "active" | "done" | "skipped";

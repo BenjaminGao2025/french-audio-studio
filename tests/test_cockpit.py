@@ -18,7 +18,7 @@ PDT = 420  # JavaScript getTimezoneOffset() in Vancouver summer time
 CEST = -120
 
 # Study days used below (PLAN_START, 2026-10-05, is a Monday)
-MON, TUE, FRI, SAT, SUN = "2026-10-19", "2026-10-20", "2026-10-23", "2026-10-24", "2026-10-25"
+MON, TUE, THU, FRI, SAT, SUN = "2026-10-19", "2026-10-20", "2026-10-22", "2026-10-23", "2026-10-24", "2026-10-25"
 
 
 def _new_user() -> tuple[int, dict]:
@@ -76,10 +76,49 @@ class TodayPlanTests(unittest.TestCase):
 
     def test_other_weekdays(self):
         tue = cockpit.today(self.user_id, PDT, now=_at(TUE))
-        self.assertEqual(_kinds(tue), ["warmup", "journal", "review", "course", "minimal"])
-        self.assertEqual(tue["blocks"][3]["route"], "/hours")
+        self.assertEqual(_kinds(tue), ["warmup", "journal", "review", "intensive", "minimal"])
+        self.assertEqual(tue["blocks"][3]["route"], "/reading")
+        thu = cockpit.today(self.user_id, PDT, now=_at(THU))
+        self.assertEqual(_kinds(thu), ["warmup", "journal", "review", "shadowing", "minimal"])
+        self.assertEqual(thu["blocks"][3]["route"], "/shadow")
         fri = cockpit.today(self.user_id, PDT, now=_at(FRI))
         self.assertEqual(_kinds(fri), ["warmup", "journal", "review", "review", "minimal"])
+
+    def test_tuesday_and_thursday_alternate_intensive_reading_and_shadowing(self):
+        tue = cockpit.today(self.user_id, PDT, now=_at(TUE))["blocks"][3]
+        thu = cockpit.today(self.user_id, PDT, now=_at(THU))["blocks"][3]
+        self.assertEqual(
+            (tue["title"], tue["lane"], tue["planned_min"], tue["start_time"]),
+            ("Main block 2 · Intensive reading (sentence breakdown)", "reading", 40, "11:15"),
+        )
+        self.assertEqual(
+            (thu["title"], thu["lane"], thu["planned_min"], thu["start_time"]),
+            ("Main block 2 · Shadowing", "speaking", 40, "11:15"),
+        )
+
+    def test_no_course_block_anywhere_in_the_template(self):
+        every = [s for slots in cockpit.WEEK_TEMPLATE.values() for s in slots] + list(cockpit.MINIMAL_TEMPLATE)
+        self.assertFalse([s for s in every if s.kind == "course" or s.lane == "course" or s.route == "/hours"])
+        self.assertNotIn("course", cockpit.ENABLED_KINDS)
+
+    def test_the_swap_keeps_the_weekly_planned_minutes(self):
+        # Before: Tue and Thu 11:15 were two 40-minute course blocks, so the plan was 770 minutes
+        # (kinds enabled today) and 1070 with every kind. Intensive reading and shadowing replace
+        # them one for one.
+        def minutes(kinds):
+            return sum(s.planned_min for slots in cockpit.WEEK_TEMPLATE.values() for s in slots if s.kind in kinds)
+
+        everything = {s.kind for slots in cockpit.WEEK_TEMPLATE.values() for s in slots}
+        self.assertEqual(minutes(cockpit.ENABLED_KINDS), 770)
+        self.assertEqual(minutes(everything), 1070)
+        by_lane: dict[str, int] = {}
+        for slots in cockpit.WEEK_TEMPLATE.values():
+            for s in slots:
+                by_lane[s.lane] = by_lane.get(s.lane, 0) + s.planned_min
+        self.assertEqual(
+            by_lane,
+            {"review": 265, "speaking": 325, "listening": 180, "reading": 160, "writing": 140},
+        )
 
     def test_weekend_templates(self):
         sat = cockpit.today(self.user_id, PDT, now=_at(SAT))
@@ -177,7 +216,7 @@ class TodayPlanTests(unittest.TestCase):
 
     def test_next_milestone_counts_active_and_manual_hours_but_not_the_car(self):
         _add_time(self.user_id, "review", 60 * 30, MON)
-        _add_time(self.user_id, "course", 60 * 5, MON, source="manual")
+        _add_time(self.user_id, "reading", 60 * 5, MON, source="manual")
         _add_time(self.user_id, "car", 60 * 400, MON)
         plan = cockpit.today(self.user_id, PDT, now=_at(TUE))
         self.assertEqual(plan["next_milestone"], {"hours": 100, "hours_to_go": 65.0})
@@ -364,9 +403,28 @@ class HoursLedgerTests(unittest.TestCase):
         self.assertEqual(ledger["hours_to_go"], 96.5)
 
     def test_manual_only_user(self):
-        _add_time(self.user_id, "course", 180, MON, source="manual")
+        _add_time(self.user_id, "reading", 180, MON, source="manual")
         ledger = cockpit.ledger(self.user_id, PDT, now=_at(MON))
         self.assertEqual((ledger["active_hours"], ledger["manual_hours"]), (0, 3.0))
+
+    def test_ledger_has_no_course_row_and_new_targets_for_reading_and_speaking(self):
+        rows = {r["lane"]: r for r in cockpit.ledger(self.user_id, PDT, now=_at(MON))["lanes"]}
+        self.assertEqual(list(rows), ["listening", "reading", "speaking", "writing", "review", "car"])
+        self.assertEqual((rows["reading"]["week_target"], rows["speaking"]["week_target"]), (4.0, 5.5))
+        self.assertEqual(cockpit.phase()["lane_targets"], game.LANE_WEEK_TARGETS)
+        self.assertNotIn("course", cockpit.phase()["lane_targets"])
+
+    def test_old_course_hours_still_count_in_the_totals_but_have_no_lane_row(self):
+        _add_time(self.user_id, "course", 120, MON, source="manual")
+        _add_time(self.user_id, "course", 60, MON)  # auto time
+        _add_time(self.user_id, "review", 60, MON)
+        ledger = cockpit.ledger(self.user_id, PDT, now=_at(MON))
+        self.assertEqual((ledger["active_hours"], ledger["manual_hours"]), (2.0, 2.0))
+        self.assertEqual(ledger["hours_to_go"], 96.0)
+        self.assertNotIn("course", [r["lane"] for r in ledger["lanes"]])
+        self.assertTrue(all(r["active"] == r["manual"] == 0 for r in ledger["lanes"] if r["lane"] != "review"))
+        plan = cockpit.today(self.user_id, PDT, now=_at(TUE))
+        self.assertEqual(plan["next_milestone"], {"hours": 100, "hours_to_go": 96.0})
 
     def test_lanes_show_this_week_in_hours_but_totals_show_everything(self):
         _add_time(self.user_id, "listening", 120, MON)  # this week (Mon 19 - Sun 25 Oct)
@@ -456,18 +514,103 @@ class RetiredTutorRowsTests(unittest.TestCase):
             conn.execute(
                 """
                 INSERT INTO day_blocks (id, user_id, day, position, slot, kind, title, route, lane, start_time, planned_min, status)
-                VALUES ('old-tutor', ?, ?, 9, 'main1', 'course', 'Tutor lesson (log it afterwards)', '/tutor', 'speaking', '10:00', 120, 'skipped')
+                VALUES (?, ?, ?, 9, 'main1', 'course', 'Tutor lesson (log it afterwards)', '/tutor', 'speaking', '10:00', 120, 'skipped')
                 """,
-                (self.user_id, MON),
+                (f"old-tutor-{self.user_id}", self.user_id, MON),
             )
             cockpit._retire_tutor_rows(conn)
             cockpit._retire_tutor_rows(conn)  # idempotent
-            row = conn.execute("SELECT * FROM day_blocks WHERE id = 'old-tutor'").fetchone()
+            row = conn.execute("SELECT * FROM day_blocks WHERE id = ?", (f"old-tutor-{self.user_id}",)).fetchone()
         self.assertEqual(
             (row["kind"], row["route"], row["lane"], row["planned_min"], row["status"]),
             ("speaking", "/speaking", "speaking", 120, "skipped"),
         )
         self.assertEqual(row["title"], "Main block 1 · AI speaking practice")
+
+
+class RetiredCourseRowsTests(unittest.TestCase):
+    """Course blocks written before the course track was removed must not reach Today."""
+
+    def setUp(self):
+        self.user_id, _ = _new_user()
+
+    def _id(self, name):
+        return f"{name}-{self.user_id}"  # day_blocks.id is global and the test database is shared
+
+    def _old_course_block(self, conn, name, day, position, status="planned", planned_min=40, actual_sec=0):
+        conn.execute(
+            """
+            INSERT INTO day_blocks (id, user_id, day, position, slot, kind, title, route, lane, start_time, planned_min, status, actual_sec)
+            VALUES (?, ?, ?, ?, 'main2', 'course', 'Main block 2 · Course or textbook (log the time)', '/hours', 'course', '11:15', ?, ?, ?)
+            """,
+            (self._id(name), self.user_id, day, position, planned_min, status, actual_sec),
+        )
+
+    def _block(self, conn, name):
+        return conn.execute("SELECT * FROM day_blocks WHERE id = ?", (self._id(name),)).fetchone()
+
+    def test_tuesday_becomes_intensive_reading_and_thursday_shadowing_keeping_minutes_and_status(self):
+        cockpit.today(self.user_id, PDT, now=_at(MON))  # make sure the tables exist
+        with cockpit._connect() as conn:
+            self._old_course_block(conn, "old-tue", TUE, 4, status="planned", planned_min=40)
+            self._old_course_block(conn, "old-thu", THU, 4, status="skipped", planned_min=55)
+            self._old_course_block(conn, "old-done", "2026-10-13", 4, status="done", planned_min=40, actual_sec=2100)
+            cockpit._retire_course_rows(conn)
+            cockpit._retire_course_rows(conn)  # idempotent
+            tue, thu, done = (self._block(conn, b) for b in ("old-tue", "old-thu", "old-done"))
+            left = conn.execute(
+                "SELECT COUNT(*) FROM day_blocks WHERE user_id = ? AND (kind = 'course' OR lane = 'course')", (self.user_id,)
+            ).fetchone()[0]
+        self.assertEqual(
+            (tue["kind"], tue["route"], tue["lane"], tue["planned_min"], tue["status"], tue["slot"]),
+            ("intensive", "/reading", "reading", 40, "planned", "main2"),
+        )
+        self.assertEqual(tue["title"], "Main block 2 · Intensive reading (sentence breakdown)")
+        self.assertEqual(
+            (thu["kind"], thu["route"], thu["lane"], thu["planned_min"], thu["status"]),
+            ("shadowing", "/shadow", "speaking", 55, "skipped"),
+        )
+        self.assertEqual(thu["title"], "Main block 2 · Shadowing")
+        self.assertEqual((done["kind"], done["status"], done["actual_sec"]), ("intensive", "done", 2100))  # a Tuesday
+        self.assertEqual(left, 0)
+
+    def test_it_runs_on_startup_and_today_shows_the_new_blocks(self):
+        cockpit.today(self.user_id, PDT, now=_at(TUE))
+        with cockpit._connect() as conn:
+            conn.execute("DELETE FROM day_blocks WHERE user_id = ? AND day = ? AND slot = 'main2'", (self.user_id, TUE))
+            self._old_course_block(conn, "old-tue", TUE, 9, status="active")
+        cockpit._initialized_db_paths.discard(str(auth_db._get_db_path()))  # a fresh process
+        plan = cockpit.today(self.user_id, PDT, now=_at(TUE))
+        block = next(b for b in plan["blocks"] if b["id"] == self._id("old-tue"))
+        self.assertEqual((block["kind"], block["route"], block["lane"], block["status"]), ("intensive", "/reading", "reading", "active"))
+        self.assertNotIn("course", _kinds(plan))
+        self.assertEqual(len(plan["blocks"]), 5)  # nothing was added or duplicated
+
+    def test_the_old_tutor_block_is_left_to_the_tutor_migration(self):
+        cockpit.today(self.user_id, PDT, now=_at(MON))
+        with cockpit._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO day_blocks (id, user_id, day, position, slot, kind, title, route, lane, start_time, planned_min, status)
+                VALUES (?, ?, ?, 9, 'main1', 'course', 'Tutor lesson (log it afterwards)', '/tutor', 'speaking', '10:00', 120, 'planned')
+                """,
+                (self._id("old-tutor"), self.user_id, SAT),
+            )
+            cockpit._retire_course_rows(conn)
+            untouched = self._block(conn, "old-tutor")
+            cockpit._retire_tutor_rows(conn)
+            cockpit._retire_course_rows(conn)
+            row = self._block(conn, "old-tutor")
+        self.assertEqual((untouched["kind"], untouched["route"]), ("course", "/tutor"))
+        self.assertEqual((row["kind"], row["route"], row["planned_min"]), ("speaking", "/speaking", 120))
+
+    def test_logged_course_minutes_are_not_rewritten(self):
+        _add_time(self.user_id, "course", 45, MON, source="manual")
+        cockpit.today(self.user_id, PDT, now=_at(MON))
+        with cockpit._connect() as conn:
+            cockpit._retire_course_rows(conn)
+            rows = conn.execute("SELECT lane, source, seconds FROM study_time WHERE user_id = ?", (self.user_id,)).fetchall()
+        self.assertEqual([(r["lane"], r["source"], r["seconds"]) for r in rows], [("course", "manual", 2700)])
 
 
 class GameLogDayTests(unittest.TestCase):
