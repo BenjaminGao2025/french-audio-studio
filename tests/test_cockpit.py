@@ -52,16 +52,17 @@ class TodayPlanTests(unittest.TestCase):
         plan = cockpit.today(self.user_id, PDT, now=_at(MON))
         self.assertEqual(plan["day"], MON)
         self.assertFalse(plan["minimal"])
-        self.assertEqual(_kinds(plan), ["warmup", "review", "writing", "minimal"])
-        self.assertEqual([b["position"] for b in plan["blocks"]], [1, 2, 3, 4])
+        self.assertEqual(_kinds(plan), ["warmup", "journal", "review", "writing", "minimal"])
+        self.assertEqual([b["position"] for b in plan["blocks"]], [1, 2, 3, 4, 5])
         self.assertEqual(
             [b["route"] for b in plan["blocks"]],
-            ["/cards?modes=speak,listen&new_limit=0", "/cards", "/writing", "/wrapup"],
+            ["/cards?modes=speak,listen&new_limit=0", "/journal", "/cards", "/writing", "/wrapup"],
         )
         self.assertTrue(all(b["status"] == "planned" and b["actual_sec"] == 0 for b in plan["blocks"]))
         self.assertEqual(plan["blocks"][0]["start_time"], "09:00")
         self.assertEqual(plan["blocks"][0]["lane"], "review")
-        self.assertEqual(plan["blocks"][2]["lane"], "writing")
+        self.assertEqual(plan["blocks"][1]["lane"], "speaking")
+        self.assertEqual(plan["blocks"][3]["lane"], "writing")
         self.assertEqual(plan["blocks"][0]["material_ids"], [])
 
     def test_header_fields_are_honest(self):
@@ -75,10 +76,10 @@ class TodayPlanTests(unittest.TestCase):
 
     def test_other_weekdays(self):
         tue = cockpit.today(self.user_id, PDT, now=_at(TUE))
-        self.assertEqual(_kinds(tue), ["warmup", "review", "course", "minimal"])
-        self.assertEqual(tue["blocks"][2]["route"], "/hours")
+        self.assertEqual(_kinds(tue), ["warmup", "journal", "review", "course", "minimal"])
+        self.assertEqual(tue["blocks"][3]["route"], "/hours")
         fri = cockpit.today(self.user_id, PDT, now=_at(FRI))
-        self.assertEqual(_kinds(fri), ["warmup", "review", "review", "minimal"])
+        self.assertEqual(_kinds(fri), ["warmup", "journal", "review", "review", "minimal"])
 
     def test_weekend_templates(self):
         sat = cockpit.today(self.user_id, PDT, now=_at(SAT))
@@ -96,7 +97,8 @@ class TodayPlanTests(unittest.TestCase):
                         {s.kind for s in cockpit._template(datetime.date.fromisoformat(day), minimal)}
                         <= cockpit.ENABLED_KINDS
                     )
-        for kind in ("journal", "listening", "reading", "checkpoint"):
+        self.assertIn("journal", cockpit.ENABLED_KINDS)
+        for kind in ("listening", "reading", "checkpoint"):
             self.assertNotIn(kind, cockpit.ENABLED_KINDS)
 
     def test_loading_twice_does_not_duplicate_the_plan(self):
@@ -107,7 +109,7 @@ class TodayPlanTests(unittest.TestCase):
             count = conn.execute(
                 "SELECT COUNT(*) FROM day_blocks WHERE user_id = ? AND day = ?", (self.user_id, MON)
             ).fetchone()[0]
-        self.assertEqual(count, 4)
+        self.assertEqual(count, 5)
 
     def test_simultaneous_loads_create_one_plan(self):
         errors, results = [], []
@@ -125,7 +127,7 @@ class TodayPlanTests(unittest.TestCase):
             t.join()
         self.assertEqual(errors, [])
         self.assertEqual(len({tuple(ids) for ids in results}), 1)
-        self.assertEqual(len(results[0]), 4)
+        self.assertEqual(len(results[0]), 5)
 
     def test_day_boundary_follows_the_timezone_offset(self):
         # The same instant is Monday evening in Vancouver and Tuesday morning in Paris.
@@ -146,7 +148,7 @@ class TodayPlanTests(unittest.TestCase):
     def test_maintenance_period_defaults_to_the_minimal_day(self):
         plan = cockpit.today(self.user_id, 0, now=datetime.datetime(2027, 6, 15, 12, 0, tzinfo=UTC))
         self.assertTrue(plan["minimal"])
-        self.assertEqual(_kinds(plan), ["review", "minimal"])
+        self.assertEqual(_kinds(plan), ["review", "journal", "minimal"])
         self.assertEqual(plan["phase"]["id"], "maintenance")
         self.assertEqual(plan["phase"]["week_target_min"], game.MAINTENANCE_WEEK_TARGET_MIN)
 
@@ -160,7 +162,7 @@ class TodayPlanTests(unittest.TestCase):
         _add_time(self.user_id, "car", 120, MON)  # input, not active
         _add_time(self.user_id, "review", 99, SAT)  # another day
         after = cockpit.today(self.user_id, PDT, now=_at(TUE))
-        self.assertEqual(after["yesterday"], {"blocks_done": 2, "blocks_total": 4, "active_minutes": 45})
+        self.assertEqual(after["yesterday"], {"blocks_done": 2, "blocks_total": 5, "active_minutes": 45})
 
     def test_first_day_has_an_empty_yesterday(self):
         plan = cockpit.today(self.user_id, PDT, now=_at(MON))
@@ -276,9 +278,9 @@ class MinimalDayTests(unittest.TestCase):
     def test_switching_on_replaces_the_planned_blocks(self):
         plan = cockpit.set_minimal(self.user_id, True, PDT, now=self.now)
         self.assertTrue(plan["minimal"])
-        self.assertEqual(_kinds(plan), ["review", "minimal"])
+        self.assertEqual(_kinds(plan), ["review", "journal", "minimal"])
         self.assertEqual(plan["blocks"][0]["title"], "Review 10 cards")
-        self.assertEqual(self._positions(), [1, 2])
+        self.assertEqual(self._positions(), [1, 2, 3])
 
     def test_switching_to_the_same_state_keeps_the_blocks(self):
         on = cockpit.set_minimal(self.user_id, True, PDT, now=self.now)
@@ -292,18 +294,18 @@ class MinimalDayTests(unittest.TestCase):
         warmup = self.plan["blocks"][0]
         cockpit.finish_block(self.user_id, warmup["id"])
         on = cockpit.set_minimal(self.user_id, True, PDT, now=self.now)
-        self.assertEqual(_kinds(on), ["warmup", "review", "minimal"])
+        self.assertEqual(_kinds(on), ["warmup", "review", "journal", "minimal"])
         off = cockpit.set_minimal(self.user_id, False, PDT, now=self.now)
-        self.assertEqual(_kinds(off), ["warmup", "review", "writing", "minimal"])
+        self.assertEqual(_kinds(off), ["warmup", "journal", "review", "writing", "minimal"])
         on_again = cockpit.set_minimal(self.user_id, True, PDT, now=self.now)
-        self.assertEqual(_kinds(on_again), ["warmup", "review", "minimal"])
+        self.assertEqual(_kinds(on_again), ["warmup", "review", "journal", "minimal"])
         for plan in (on, off, on_again):
             self.assertEqual(plan["blocks"][0]["id"], warmup["id"])
             self.assertEqual(plan["blocks"][0]["status"], "done")
-        self.assertEqual(self._positions(), [1, 2, 3])
+        self.assertEqual(self._positions(), [1, 2, 3, 4])
 
     def test_a_finished_wrapup_is_not_added_again(self):
-        wrapup = self.plan["blocks"][3]
+        wrapup = self.plan["blocks"][-1]
         cockpit.finish_block(self.user_id, wrapup["id"])
         on = cockpit.set_minimal(self.user_id, True, PDT, now=self.now)
         self.assertEqual(_kinds(on).count("minimal"), 1)
@@ -319,7 +321,7 @@ class MinimalDayTests(unittest.TestCase):
     def test_switching_before_the_first_load_creates_the_plan(self):
         user, _ = _new_user()
         plan = cockpit.set_minimal(user, True, PDT, now=self.now)
-        self.assertEqual(_kinds(plan), ["review", "minimal"])
+        self.assertEqual(_kinds(plan), ["review", "journal", "minimal"])
 
     def test_the_choice_is_remembered_for_the_day(self):
         cockpit.set_minimal(self.user_id, True, PDT, now=self.now)

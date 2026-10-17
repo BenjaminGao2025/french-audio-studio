@@ -112,12 +112,17 @@ export interface Journal {
   id: string;
   native_text: string;
   french?: string | undefined;
+  /** Empty for entries prepared before the server split text into parts. */
   parts: { source: string; french: string }[];
   recordings: JournalRecording[];
+  /** "" until the reference audio exists. */
+  reference_url?: string | undefined;
   reflection?: string | undefined;
-  recalled?: boolean | undefined;
+  /** The server stores 0/1. */
+  recalled?: boolean | number | undefined;
   status: string;
   complete: boolean;
+  day?: string | undefined;
   created_at?: string | undefined;
   [k: string]: unknown;
 }

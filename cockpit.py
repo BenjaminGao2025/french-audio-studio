@@ -30,9 +30,9 @@ MILESTONES = (100, 300, 500, 750, 1000)
 NEW_CARDS_PER_DAY = 10
 SHADOW_SENTENCES = 8
 
-# Block kinds whose page and backend exist in this build. journal (homework), listening,
+# Block kinds whose page and backend exist in this build (journal = /api/homework). Listening,
 # reading and checkpoint blocks join the plan when their backends land.
-ENABLED_KINDS = frozenset({"warmup", "review", "writing", "course", "minimal"})
+ENABLED_KINDS = frozenset({"warmup", "journal", "review", "writing", "course", "minimal"})
 
 PHASE_A = {"id": "A", "name": "Phase A (0–300h)", "hours_from": 0, "hours_to": 300}
 PHASE_MAINTENANCE = {"id": "maintenance", "name": "Maintenance (5 h/week)", "hours_from": 480, "hours_to": 585}

@@ -2,13 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Download, EyeOff, Plus, Volume2 } from "lucide-react";
-import { BlockShell, Chip } from "@/components/fr/kit";
+import { BlockShell } from "@/components/fr/kit";
 import { btn, errorMessage, meta } from "@/components/fr/kit-utils";
 import { cn } from "@/lib/utils";
 import { api } from "@/api";
 import { Skeleton } from "@/components/fr/states";
 import { AudioButton, Recorder } from "@/components/fr/widgets";
-import type { Journal, ReciteResult } from "@/api/types";
+import type { Journal } from "@/api/types";
 
 export const Route = createFileRoute("/journal")({
   validateSearch: (s: Record<string, unknown>) => ({
@@ -37,7 +37,7 @@ function JournalPage() {
   const [cur, setCur] = useState(0);
   const [native, setNative] = useState("");
   const [journal, setJournal] = useState<Journal | null>(null);
-  const [recite, setRecite] = useState<ReciteResult | null>(null);
+  const [recalled, setRecalled] = useState(false);
   const [added, setAdded] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,15 +55,30 @@ function JournalPage() {
     setMaxStep((m) => Math.max(m, next));
   };
 
-  const parts = journal?.parts ?? [];
+  // Older entries have French but no parts: fall back to its paragraphs.
+  const parts = journal?.parts.length
+    ? journal.parts
+    : (journal?.french ?? "")
+        .split(/\n\s*\n/)
+        .filter((french) => french.trim())
+        .map((french) => ({ source: "", french }));
+  const hasFirst = !!journal?.recordings.some((r) => r.kind === "first");
+  const hasFinal = !!journal?.recordings.some((r) => r.kind === "final");
   const newWords = analysis.data?.sentences.flatMap((s) => s.words).slice(0, 6) ?? [];
 
   const createAndPrepare = () => {
     if (native.trim().length < 5) return;
     setBusy(true);
     setError(null);
-    void api.homework
-      .create(native.trim())
+    // A failed prepare (slow AI, 503) keeps the entry, so a retry does not create another one.
+    const entry =
+      journal && journal.native_text === native.trim()
+        ? Promise.resolve(journal)
+        : api.homework.create(native.trim()).then((j) => {
+            setJournal(j);
+            return j;
+          });
+    void entry
       .then((j) => api.homework.prepare(j.id))
       .then((j) => {
         setJournal(j);
@@ -73,11 +88,31 @@ function JournalPage() {
       .finally(() => setBusy(false));
   };
 
+  const upload = (kind: "first" | "final", blob: Blob, then?: () => void) => {
+    if (!journal) return;
+    setBusy(true);
+    setError(null);
+    void api.homework
+      .uploadRecording(journal.id, kind, blob)
+      .then((j) => {
+        setJournal(j);
+        then?.();
+      })
+      .catch((e: unknown) => setError(errorMessage(e)))
+      .finally(() => setBusy(false));
+  };
+
+  const errorAlert = error && (
+    <p role="alert" className="mt-3 text-sm text-destructive">
+      {error}
+    </p>
+  );
+
   return (
     <BlockShell
       kicker="Journal · 45 min"
       title="“Say what I want to say” journal"
-      progress={(step + (recite ? 1 : 0)) / 5}
+      progress={(step + (saved ? 1 : 0)) / 5}
       blockId={block}
       lane="speaking"
       finishDisabled={!saved}
@@ -123,11 +158,7 @@ function JournalPage() {
                 className="mt-4 h-64 w-full resize-none rounded-lg border border-input bg-background p-4 text-lg outline-none focus:ring-2 focus:ring-ring"
                 placeholder="今天…"
               />
-              {error && (
-                <p role="alert" className="mt-3 text-sm text-destructive">
-                  {error}
-                </p>
-              )}
+              {errorAlert}
               <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
                 <span>{native.trim().length} characters · aim for 50–100</span>
                 <button
@@ -147,7 +178,10 @@ function JournalPage() {
                 Your thought in simple A2 French. Listen once to each sentence.
               </p>
               <div className="mt-4">
-                <AudioButton url={api.homework.referenceUrl(journal.id)} label="Listen once" />
+                <AudioButton
+                  url={journal.reference_url ? api.homework.referenceUrl(journal.id) : null}
+                  label="Listen once"
+                />
               </div>
               <div className="mt-6 space-y-5">
                 {parts.map((p, i) => (
@@ -197,101 +231,76 @@ function JournalPage() {
                 ))}
               </div>
               <div className="mt-10">
-                <Recorder
-                  onDone={(blob, dur) => {
-                    setBusy(true);
-                    void api.homework
-                      .uploadRecording(journal.id, "first", blob, dur)
-                      .then(() => go(4))
-                      .finally(() => setBusy(false));
-                  }}
-                />
+                {hasFirst ? (
+                  <button className={btn.primary} onClick={() => go(4)}>
+                    First recording saved · continue →
+                  </button>
+                ) : (
+                  <Recorder
+                    maxSeconds={180}
+                    onDone={(blob) => upload("first", blob, () => go(4))}
+                  />
+                )}
               </div>
               <p className="mt-3 text-sm text-muted-foreground">Shadow the full text and record</p>
+              {errorAlert}
             </div>
           )}
 
           {step === 4 && journal && (
             <div className="flex h-full flex-col items-center justify-center text-center">
-              {!recite ? (
-                <>
-                  <div className="flex flex-col items-center text-muted-foreground">
-                    <EyeOff className="h-8 w-8" />
-                    <p className="mt-3">Text hidden. Recite from memory.</p>
-                  </div>
-                  <div className="mt-10">
-                    <Recorder
-                      onDone={(blob) => {
-                        setBusy(true);
-                        void api.homework
-                          .recite(journal.id, blob)
-                          .then(setRecite)
-                          .finally(() => setBusy(false));
-                      }}
-                    />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <ul className="w-full max-w-xl space-y-2 text-left">
-                    {recite.sentences.map((s, i) => (
-                      <li
-                        key={i}
-                        className="flex items-center justify-between rounded-lg border border-border px-4 py-3"
-                      >
-                        <span className="fr text-lg">{s.text}</span>
-                        {s.passed ? (
-                          <Chip tone="accent">
-                            <Check className="h-3 w-3" /> memorised
-                          </Chip>
-                        ) : (
-                          <Chip>not yet</Chip>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="mt-4 text-sm text-muted-foreground">
-                    {recite.passed_count} of {recite.total} memorised
-                    {recite.new_speak_cards > 0 &&
-                      ` — ${recite.new_speak_cards} speak card(s) created for the rest`}
-                  </p>
-                  <textarea
-                    value={reflection}
-                    onChange={(e) => setReflection(e.target.value)}
-                    placeholder="Quick reflection (what was hard?)…"
-                    className="mt-6 h-20 w-full max-w-xl resize-none rounded-lg border border-input bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-                  />
-                  <div className="mt-4 flex gap-3">
-                    <Recorder
-                      onDone={(blob, dur) =>
-                        void api.homework.uploadRecording(journal.id, "final", blob, dur)
-                      }
-                    />
-                    <button
-                      className={btn.primary}
-                      disabled={saved || busy || reflection.trim().length < 3}
-                      onClick={() => {
-                        setBusy(true);
-                        void api.homework
-                          .finish(
-                            journal.id,
-                            reflection.trim(),
-                            recite.passed_count === recite.total,
-                          )
-                          .then(() => setSaved(true))
-                          .finally(() => setBusy(false));
-                      }}
-                    >
-                      {saved ? "Saved ✓" : "Finish journal"}
-                    </button>
-                  </div>
-                  <a
-                    href={api.homework.archiveUrl(journal.id)}
-                    className="mt-4 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                  >
-                    <Download className="h-3 w-3" /> Download archive (.zip)
-                  </a>
-                </>
+              <div className="flex flex-col items-center text-muted-foreground">
+                <EyeOff className="h-8 w-8" />
+                <p className="mt-3">Text hidden. Recite from memory and record it.</p>
+              </div>
+              <div className="mt-8 flex items-center gap-3">
+                <Recorder maxSeconds={180} onDone={(blob) => upload("final", blob)} />
+                {hasFinal && (
+                  <span className="inline-flex items-center gap-1 text-sm text-muted-foreground">
+                    <Check className="h-4 w-4" /> Final recording saved
+                  </span>
+                )}
+              </div>
+              <label className="mt-6 flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={recalled}
+                  onChange={(e) => setRecalled(e.target.checked)}
+                />
+                I said it without looking at the text
+              </label>
+              <textarea
+                value={reflection}
+                onChange={(e) => setReflection(e.target.value)}
+                placeholder="Quick reflection (what was hard?)…"
+                className="mt-4 h-20 w-full max-w-xl resize-none rounded-lg border border-input bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              />
+              <button
+                className={cn(btn.primary, "mt-4")}
+                disabled={saved || busy || !hasFinal || reflection.trim().length < 3}
+                onClick={() => {
+                  setBusy(true);
+                  setError(null);
+                  void api.homework
+                    .finish(journal.id, reflection.trim(), recalled)
+                    .then((j) => {
+                      setJournal(j);
+                      setSaved(true);
+                    })
+                    .catch((e: unknown) => setError(errorMessage(e)))
+                    .finally(() => setBusy(false));
+                }}
+              >
+                {saved ? "Saved ✓" : "Finish journal"}
+              </button>
+              {errorAlert}
+              {saved && (
+                <a
+                  href={api.homework.archiveUrl(journal.id)}
+                  className="mt-4 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <Download className="h-3 w-3" /> Download archive (.zip)
+                </a>
               )}
             </div>
           )}

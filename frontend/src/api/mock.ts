@@ -280,6 +280,7 @@ const journal: T.Journal = {
     { source: "我和家人去了农贸市场。", french: "Je suis allé au marché avec ma famille." },
   ],
   recordings: [],
+  reference_url: "/api/homework/j1/reference",
   status: "prepared",
   complete: false,
   created_at: "2026-10-12T16:00:00Z",

@@ -117,3 +117,15 @@ it("sends the timezone when toggling the minimal day (the server picks the study
     tz_offset: 420,
   });
 });
+it("uploads a homework recording as a raw audio body with kind in the query", async () => {
+  const fetcher = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}"));
+  const audio = new Blob(["x".repeat(200)], { type: "audio/webm;codecs=opus" });
+  await real.homework.uploadRecording("j1", "first", audio);
+  const url = new URL(String(fetcher.mock.calls[0]?.[0]));
+  expect(url.pathname).toBe("/api/homework/j1/recordings");
+  expect(url.searchParams.get("kind")).toBe("first");
+  const init = fetcher.mock.calls[0]?.[1];
+  expect(init?.method).toBe("POST");
+  expect(init?.body).toBe(audio);
+  expect(init?.headers).toMatchObject({ "Content-Type": "audio/webm;codecs=opus" });
+});

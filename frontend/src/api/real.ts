@@ -133,19 +133,20 @@ export const real = {
     referenceUrl: (id: string) => `/api/homework/${id}/reference`,
     practice: (id: string, beat_id: string, seconds: number) =>
       request<void>(`/api/homework/${id}/practice`, { method: "POST", body: { beat_id, seconds } }),
-    uploadRecording: (id: string, kind: "first" | "final", audio: Blob, duration: number) => {
-      const form = new FormData();
-      form.set("kind", kind);
-      form.set("duration", String(duration));
-      form.set("audio", audio, `recording.${audio.type.includes("mp4") ? "mp4" : "webm"}`);
-      return request<T.Journal>(`/api/homework/${id}/recordings`, { method: "POST", form });
-    },
+    // Raw audio body (audio/webm or audio/mp4); the server measures the duration itself.
+    uploadRecording: (id: string, kind: "first" | "final", audio: Blob) =>
+      request<T.Journal>(`/api/homework/${id}/recordings`, {
+        method: "POST",
+        raw: audio,
+        query: { kind },
+      }),
     finish: (id: string, reflection: string, recalled: boolean) =>
       request<T.Journal>(`/api/homework/${id}/finish`, {
         method: "POST",
         body: { reflection, recalled },
       }),
     archiveUrl: (id: string) => `/api/homework/${id}/archive`,
+    // Not on the FastAPI backend yet: answers 404, which the UI shows as "not available".
     recite: (id: string, audio: Blob) => {
       const form = new FormData();
       form.set("audio", audio, "recite.webm");

@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { AppShell, Ring } from "@/components/fr/kit";
-import { btn, meta } from "@/components/fr/kit-utils";
+import { btn, errorMessage, meta } from "@/components/fr/kit-utils";
 import { api } from "@/api";
 import { Recorder } from "@/components/fr/widgets";
 import { Skeleton, DataView, EmptyState } from "@/components/fr/states";
@@ -20,6 +20,7 @@ function Retell() {
     .sort((a, b) => String(b["created_at"] ?? "").localeCompare(String(a["created_at"] ?? "")))[0];
   const [result, setResult] = useState<ReciteResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <AppShell>
@@ -64,16 +65,25 @@ function Retell() {
                   </Link>
                 </>
               ) : (
-                <Recorder
-                  onDone={(blob) => {
-                    if (!latest) return;
-                    setBusy(true);
-                    void api.homework
-                      .recite(latest.id, blob)
-                      .then(setResult)
-                      .finally(() => setBusy(false));
-                  }}
-                />
+                <>
+                  <Recorder
+                    onDone={(blob) => {
+                      if (!latest) return;
+                      setBusy(true);
+                      setError(null);
+                      void api.homework
+                        .recite(latest.id, blob)
+                        .then(setResult)
+                        .catch((e: unknown) => setError(errorMessage(e)))
+                        .finally(() => setBusy(false));
+                    }}
+                  />
+                  {error && (
+                    <p role="alert" className="mt-3 text-sm text-destructive">
+                      {error}
+                    </p>
+                  )}
+                </>
               )
             }
           </DataView>
