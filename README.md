@@ -143,6 +143,21 @@ flowchart LR
 
 ---
 
+## 🧭 今日驾驶舱前端（/app）
+
+React 单页应用的源码在 `frontend/`，构建产物提交在 `static/app/`，由 FastAPI 在 `/app` 提供（`routers/app_shell.py`）。Docker 镜像没有 Node 阶段，所以**改了前端源码就要在同一次提交里重新构建**：
+
+```bash
+cd frontend
+npm ci && npm run check   # 类型检查 + lint + 测试 + 构建到 ../static/app
+npm run dev               # 用 mock 数据开发
+npm run dev:api           # 代理到 127.0.0.1:8000 的真实后端
+```
+
+站点的 CSP 不允许内联脚本；`tests/test_app_shell.py` 检查构建出的 `index.html` 只含带 `src` 的脚本、引用的资源都存在。后端还没有的功能（日记、听力、阅读等）在页面上显示"此功能的后端尚未上线"。
+
+---
+
 ## 🧪 运行测试
 
 项目内置完整的单元测试套件（覆盖端点认证、降级机制、音视频输出校验与容错处理）：

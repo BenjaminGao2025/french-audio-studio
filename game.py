@@ -207,15 +207,20 @@ def record_time(user_id: int, lane: str, seconds: int, tz_offset: int, now=None)
     return seconds
 
 
-def log_time(user_id: int, lane: str, minutes: int, note: str, tz_offset: int, now=None) -> int:
-    """Study done outside the app (teacher class, course book...). Returns the log id."""
+def log_time(
+    user_id: int, lane: str, minutes: int, note: str, tz_offset: int, now=None, day: str | None = None
+) -> int:
+    """Study done outside the app (teacher class, course book...). Returns the log id.
+
+    `day` books the time on a past study day (an ISO date); by default it is today's.
+    """
     lane = _check_lane(lane)
     minutes = max(1, min(int(minutes), 300))
     now = now or _now()
     with _connect() as conn:
         cursor = conn.execute(
             "INSERT INTO study_time (user_id, day, lane, source, seconds, note, created_at) VALUES (?, ?, ?, 'manual', ?, ?, ?)",
-            (user_id, local_day(now, tz_offset).isoformat(), lane, minutes * 60, (note or "")[:200], srs._iso(now)),
+            (user_id, day or local_day(now, tz_offset).isoformat(), lane, minutes * 60, (note or "")[:200], srs._iso(now)),
         )
         conn.commit()
         return int(cursor.lastrowid)
