@@ -31,6 +31,7 @@ import episodes
 import game
 import routers.app_shell
 import routers.auth
+import routers.cockpit
 import routers.game
 import routers.history
 import routers.srs
@@ -189,7 +190,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 # Account, history, SRS-data and game routes live in routers/. The AI-backed routes (transform,
 # analyze, episodes, write, speak, ...) stay in this module: tests patch tts_service._post_chat and
 # friends, and a handler only sees such a patch when it looks the name up here.
-for _routes in (routers.auth, routers.history, routers.srs, routers.game, routers.app_shell):
+for _routes in (routers.auth, routers.history, routers.srs, routers.game, routers.cockpit, routers.app_shell):
     app.include_router(_routes.router)
 
 

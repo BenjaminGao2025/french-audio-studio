@@ -1,5 +1,5 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   X,
   Sun,
@@ -189,6 +189,11 @@ export function useBlockFlow(blockId?: string, fallbackNext = "/") {
   const navigate = useNavigate();
   const today = useToday();
   const actions = useBlockActions();
+  const startBlock = actions.start.mutate;
+  // The server times a block from start to finish, so opening its page starts it (planned only).
+  useEffect(() => {
+    if (blockId) startBlock(blockId);
+  }, [blockId, startBlock]);
   const destination = () => {
     // Opened from the sidebar, not from a plan block: do not jump into the plan.
     if (!blockId) return "/";

@@ -108,3 +108,12 @@ it("unwraps the episodes envelope", async () => {
   const list = await real.episodes.list();
   expect(list).toEqual([expect.objectContaining({ id: "e", level: "B1", minutes: 30 })]);
 });
+it("sends the timezone when toggling the minimal day (the server picks the study day from it)", async () => {
+  vi.spyOn(Date.prototype, "getTimezoneOffset").mockReturnValue(420);
+  const fetcher = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}"));
+  await real.today.minimal(true);
+  expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual({
+    on: true,
+    tz_offset: 420,
+  });
+});

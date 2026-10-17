@@ -8,7 +8,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY journal.py coach.py curriculum.py auth_db.py episodes.py game.py speaking.py srs.py web_common.py writing.py edge_compat.py ./
+COPY journal.py coach.py cockpit.py curriculum.py auth_db.py episodes.py game.py speaking.py srs.py web_common.py writing.py edge_compat.py ./
 COPY tts_service.py .
 COPY routers /app/routers
 COPY static /app/static

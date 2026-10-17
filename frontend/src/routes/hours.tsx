@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
-import { AppShell, Bar, Chip } from "@/components/fr/kit";
+import { AppShell, Bar, BlockControls, Chip } from "@/components/fr/kit";
 import { btn, meta } from "@/components/fr/kit-utils";
 import { cn } from "@/lib/utils";
 import { useGameState, useHoursLedger, useLogTime } from "@/api/hooks";
@@ -11,6 +11,9 @@ import { fmtHours } from "@/lib/format";
 import type { Lane } from "@/api/types";
 
 export const Route = createFileRoute("/hours")({
+  // Optional key, so plain links such as <Link to="/hours"> need no search prop.
+  validateSearch: (s: Record<string, unknown>): { block?: string } =>
+    typeof s["block"] === "string" ? { block: s["block"] } : {},
   head: () =>
     meta("Hours & milestones", "Active, manual and input hours by lane, with milestones to 1000h."),
   component: Hours,
@@ -27,6 +30,7 @@ const laneLabels: Record<Lane, string> = {
 };
 
 function Hours() {
+  const { block } = Route.useSearch();
   const ledger = useHoursLedger();
   const game = useGameState();
   const logTime = useLogTime();
@@ -36,6 +40,11 @@ function Hours() {
 
   return (
     <AppShell>
+      {block && (
+        <header className="flex flex-wrap justify-end gap-2 border-b border-border px-4 py-5">
+          <BlockControls blockId={block} />
+        </header>
+      )}
       <div className="mx-auto max-w-5xl px-4 py-10 md:px-10">
         <h1 className="fr text-4xl">Hours & milestones</h1>
         <DataView query={ledger} skeletonLines={8}>

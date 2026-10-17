@@ -1,18 +1,22 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { Download } from "lucide-react";
-import { AppShell, Chip } from "@/components/fr/kit";
+import { AppShell, BlockControls, Chip } from "@/components/fr/kit";
 import { btn, meta } from "@/components/fr/kit-utils";
 import { useTodos, useTutorSessions } from "@/api/hooks";
 import { DataView, EmptyState } from "@/components/fr/states";
 import { api } from "@/api";
 
 export const Route = createFileRoute("/tutor")({
+  // Optional key, so plain links such as <Link to="/hours"> need no search prop.
+  validateSearch: (s: Record<string, unknown>): { block?: string } =>
+    typeof s["block"] === "string" ? { block: s["block"] } : {},
   head: () => meta("Tutor & course", "Tutor sessions, todos and manual lesson logging."),
   component: Tutor,
 });
 
 function Tutor() {
+  const { block } = Route.useSearch();
   const todos = useTodos();
   const sessions = useTutorSessions();
   const [day, setDay] = useState(() => new Date().toISOString().slice(0, 10));
@@ -25,6 +29,11 @@ function Tutor() {
 
   return (
     <AppShell>
+      {block && (
+        <header className="flex flex-wrap justify-end gap-2 border-b border-border px-4 py-5">
+          <BlockControls blockId={block} />
+        </header>
+      )}
       <div className="mx-auto max-w-3xl space-y-6 px-4 py-10 md:px-10">
         <h1 className="fr text-4xl">Tutor & course</h1>
 

@@ -267,7 +267,10 @@ export const real = {
     skipBlock: (id: string, reason: T.SkipReason) =>
       request<T.Block>(`/api/today/blocks/${id}/skip`, { method: "POST", body: { reason } }),
     minimal: (on: boolean) =>
-      request<T.Today>("/api/today/minimal", { method: "POST", body: { on } }),
+      request<T.Today>("/api/today/minimal", {
+        method: "POST",
+        body: { on, tz_offset: tzOffset() },
+      }),
   },
   hours: {
     ledger: () => request<T.HoursLedger>("/api/hours/ledger", { query: { tz_offset: tzOffset() } }),

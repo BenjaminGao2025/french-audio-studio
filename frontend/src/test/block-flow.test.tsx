@@ -15,7 +15,7 @@ import { withBlock } from "@/components/fr/kit-utils";
 import { api } from "@/api";
 vi.mock("@/api", () => ({
   api: {
-    today: { get: vi.fn(), finishBlock: vi.fn(), skipBlock: vi.fn() },
+    today: { get: vi.fn(), startBlock: vi.fn(), finishBlock: vi.fn(), skipBlock: vi.fn() },
     game: { heartbeat: vi.fn() },
   },
 }));
@@ -35,6 +35,9 @@ async function mount({
   vi.mocked(api.today.get).mockResolvedValue({ blocks } as Awaited<
     ReturnType<typeof api.today.get>
   >);
+  vi.mocked(api.today.startBlock).mockResolvedValue(
+    {} as Awaited<ReturnType<typeof api.today.startBlock>>,
+  );
   vi.mocked(api.today.finishBlock).mockResolvedValue(
     {} as Awaited<ReturnType<typeof api.today.finishBlock>>,
   );
@@ -142,4 +145,14 @@ it("skipping without a block also goes home", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Too hard" }));
   await waitFor(() => expect(router.state.location.pathname).toBe("/"));
   expect(api.today.skipBlock).not.toHaveBeenCalled();
+});
+
+it("starts the block when its page opens, and not when there is no block", async () => {
+  await mount();
+  await waitFor(() => expect(api.today.startBlock).toHaveBeenCalledWith("b2"));
+  cleanup();
+  vi.clearAllMocks();
+  await mount({ withBlockId: false });
+  await screen.findByRole("button", { name: "Finish block" });
+  expect(api.today.startBlock).not.toHaveBeenCalled();
 });
