@@ -172,7 +172,7 @@ function Hours() {
               required
               maxLength={200}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-              placeholder="Note (required) — e.g. tutor lesson with Marie"
+              placeholder="Note (required) — e.g. textbook chapter 4"
             />
             <button className={btn.primary} disabled={logTime.isPending || !note.trim()}>
               Add
@@ -227,8 +227,8 @@ function Hours() {
               toward 1000h.
             </li>
             <li>
-              • <b>Manual hours</b> — tutor lessons, external course, textbook self-study, logged by
-              hand with a required note. Weight 1.0. Counts toward 1000h (cap 6h/week).
+              • <b>Manual hours</b> — external course, textbook self-study, logged by hand with a
+              required note. Weight 1.0. Counts toward 1000h (cap 6h/week).
             </li>
             <li>
               • <b>Input hours</b> — passive playback of episodes/audio (car lane, background

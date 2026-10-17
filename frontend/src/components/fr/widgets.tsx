@@ -244,22 +244,12 @@ export function SkipReasonSelect({
 
 // ---- RubricPanel ----
 
-export function RubricPanel({
-  rubric,
-  attemptType,
-  attemptId,
-}: {
-  rubric: Rubric;
-  attemptType?: "writing" | "speaking";
-  attemptId?: string;
-}) {
-  const [score, setScore] = useState("");
-  const [sent, setSent] = useState(false);
+export function RubricPanel({ rubric }: { rubric: Rubric }) {
   return (
     <div className="panel space-y-4 p-6">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold">Estimated score</h3>
-        {rubric.calibration !== "calibrated" && <Chip tone="warn">Not calibrated</Chip>}
+        <Chip>AI estimate</Chip>
       </div>
       <div className="text-3xl font-semibold tabular-nums">
         {rubric.score_low}–{rubric.score_high}
@@ -281,31 +271,6 @@ export function RubricPanel({
           </li>
         ))}
       </ul>
-      {attemptType && attemptId && !sent && (
-        <form
-          className="flex items-center gap-2 border-t border-border pt-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const n = Number(score);
-            if (!Number.isFinite(n)) return;
-            void api.humanScores
-              .add({ attempt_type: attemptType, attempt_id: attemptId, grader: "tutor", score: n })
-              .then(() => setSent(true));
-          }}
-        >
-          <input
-            value={score}
-            onChange={(e) => setScore(e.target.value)}
-            placeholder="Tutor score"
-            className="w-28 rounded-lg border border-border bg-background px-3 py-1.5 text-sm"
-            inputMode="decimal"
-          />
-          <button className={btn.ghost} type="submit">
-            Enter tutor score
-          </button>
-        </form>
-      )}
-      {sent && <p className="text-xs text-muted-foreground">Tutor score saved.</p>}
     </div>
   );
 }

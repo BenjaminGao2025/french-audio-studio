@@ -28,7 +28,7 @@
 - B8 decisions: Week 8 report vs Week 16 empty state, decision form, export link
 - B9 items bank: summary cards + filtered table
 - B10 episodes / shadow / retell / me pages (responsive, /m phone-frame routes deleted)
-- C login + settings (locale, theme, palette, phase, account, logout) + tutor page
+- C login + settings (locale, theme, palette, phase, account, logout)
 - D i18n: zh-CN default dictionary, useT(), Settings toggle
 - E theme: ink-blue default + sage preset + dark mode, Settings toggles
 - Verified: tsgo, eslint, vitest, `build`, `build:static` all pass; 18 pages smoke-tested in browser, 0 console errors

@@ -293,7 +293,7 @@ function RubricLoader({ attemptId }: { attemptId: string }) {
               <span className="text-muted-foreground">{d.evidence ?? ""}</span>
             </div>
           ))}
-          <RubricPanel rubric={r} attemptType="speaking" attemptId={attemptId} />
+          <RubricPanel rubric={r} />
         </div>
       )}
     </DataView>

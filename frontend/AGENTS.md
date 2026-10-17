@@ -10,3 +10,4 @@
 
 - Block lifecycle is shared through useBlockFlow; Today appends block ids and destinations are computed before mutations. Why: cache refresh must not determine the next block.
 - Listening counts only successful AudioButton playback; writing submissions use a per-session ref guard outside timer state updates. Why: failed audio and StrictMode must not create false activity or duplicate submissions.
+- There is no human tutor or course teacher: scores are AI estimates, and the app has no tutor-session, human-score or calibration screens. The old `tutor_sessions` table is left in the database, unused. Why: the user studies with AI only, so those screens would be dead ends.

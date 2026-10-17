@@ -83,8 +83,14 @@ class TodayPlanTests(unittest.TestCase):
 
     def test_weekend_templates(self):
         sat = cockpit.today(self.user_id, PDT, now=_at(SAT))
-        self.assertEqual([b["route"] for b in sat["blocks"]], ["/tutor", "/wrapup"])
-        self.assertEqual(sat["blocks"][0]["planned_min"], 120)
+        self.assertEqual([b["route"] for b in sat["blocks"]], ["/speaking", "/writing", "/wrapup"])
+        self.assertEqual(_kinds(sat), ["speaking", "writing", "minimal"])
+        self.assertEqual([b["lane"] for b in sat["blocks"]], ["speaking", "writing", "review"])
+        self.assertEqual([b["planned_min"] for b in sat["blocks"][:2]], [60, 60])  # the old 2 h block, now AI practice
+        self.assertEqual(
+            [b["title"] for b in sat["blocks"][:2]],
+            ["Main block 1 · AI speaking practice", "Main block 2 · AI writing correction"],
+        )
         sun = cockpit.today(self.user_id, PDT, now=_at(SUN))
         self.assertEqual([b["route"] for b in sun["blocks"]], ["/cards", "/wrapup"])
 
@@ -98,6 +104,7 @@ class TodayPlanTests(unittest.TestCase):
                         <= cockpit.ENABLED_KINDS
                     )
         self.assertIn("journal", cockpit.ENABLED_KINDS)
+        self.assertIn("speaking", cockpit.ENABLED_KINDS)
         for kind in ("listening", "reading", "checkpoint"):
             self.assertNotIn(kind, cockpit.ENABLED_KINDS)
 
@@ -182,10 +189,9 @@ class TodayPlanTests(unittest.TestCase):
 
     def test_today_lists_only_open_todos(self):
         todos = cockpit.today(self.user_id, PDT, now=_at(MON))["todos"]
-        self.assertEqual([t["done"] for t in todos], [False, False])
+        self.assertEqual([t["done"] for t in todos], [False])
         cockpit.complete_todo(self.user_id, todos[0]["id"])
-        after = cockpit.today(self.user_id, PDT, now=_at(MON))["todos"]
-        self.assertEqual([t["id"] for t in after], [todos[1]["id"]])
+        self.assertEqual(cockpit.today(self.user_id, PDT, now=_at(MON))["todos"], [])
 
 
 class BlockLifecycleTests(unittest.TestCase):
@@ -398,10 +404,9 @@ class TodoTests(unittest.TestCase):
         first = cockpit.list_todos(self.user_id)
         second = cockpit.list_todos(self.user_id)
         self.assertEqual(first, second)
-        self.assertEqual([t["due"] for t in first], ["2026-11-01", "2026-11-29"])
+        self.assertEqual([t["due"] for t in first], ["2026-11-29"])
         self.assertTrue(all(set(t) == {"id", "text", "due", "done"} and t["done"] is False for t in first))
-        self.assertIn("外教", first[0]["text"])
-        self.assertIn("分级", first[1]["text"])
+        self.assertIn("分级", first[0]["text"])
 
     def test_seeding_is_per_user(self):
         other, _ = _new_user()
@@ -412,8 +417,8 @@ class TodoTests(unittest.TestCase):
         cockpit.complete_todo(self.user_id, todo["id"])
         cockpit.complete_todo(self.user_id, todo["id"])
         after = cockpit.list_todos(self.user_id)
-        self.assertEqual([t["done"] for t in after], [True, False])
-        self.assertEqual(len(after), 2)  # seeding does not bring a finished todo back
+        self.assertEqual([t["done"] for t in after], [True])
+        self.assertEqual(len(after), 1)  # seeding does not bring a finished todo back
 
     def test_another_users_todo_is_not_found(self):
         other, _ = _new_user()
@@ -422,6 +427,47 @@ class TodoTests(unittest.TestCase):
         with self.assertRaises(KeyError):
             cockpit.complete_todo(other, todo["id"])
         self.assertFalse(cockpit.list_todos(self.user_id)[0]["done"])
+
+
+class RetiredTutorRowsTests(unittest.TestCase):
+    """Rows written before the tutor block was removed must not reach Today."""
+
+    def setUp(self):
+        self.user_id, _ = _new_user()
+
+    def test_the_tutor_todo_is_no_longer_seeded(self):
+        cockpit.list_todos(self.user_id)
+        with cockpit._connect() as conn:
+            kinds = [r["kind"] for r in conn.execute("SELECT kind FROM todos WHERE user_id = ?", (self.user_id,))]
+        self.assertEqual(kinds, ["placement"])
+
+    def test_an_old_tutor_todo_is_deleted(self):
+        with cockpit._connect() as conn:
+            conn.execute(
+                "INSERT INTO todos (id, user_id, title, due, kind) VALUES (?, ?, 'old', '2026-11-01', 'tutor')",
+                (f"seed-tutor-{self.user_id}", self.user_id),
+            )
+            cockpit._retire_tutor_rows(conn)
+        self.assertEqual([t["due"] for t in cockpit.list_todos(self.user_id)], ["2026-11-29"])
+
+    def test_an_old_tutor_block_becomes_ai_speaking_practice_with_its_minutes(self):
+        cockpit.today(self.user_id, PDT, now=_at(MON))
+        with cockpit._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO day_blocks (id, user_id, day, position, slot, kind, title, route, lane, start_time, planned_min, status)
+                VALUES ('old-tutor', ?, ?, 9, 'main1', 'course', 'Tutor lesson (log it afterwards)', '/tutor', 'speaking', '10:00', 120, 'skipped')
+                """,
+                (self.user_id, MON),
+            )
+            cockpit._retire_tutor_rows(conn)
+            cockpit._retire_tutor_rows(conn)  # idempotent
+            row = conn.execute("SELECT * FROM day_blocks WHERE id = 'old-tutor'").fetchone()
+        self.assertEqual(
+            (row["kind"], row["route"], row["lane"], row["planned_min"], row["status"]),
+            ("speaking", "/speaking", "speaking", 120, "skipped"),
+        )
+        self.assertEqual(row["title"], "Main block 1 · AI speaking practice")
 
 
 class GameLogDayTests(unittest.TestCase):
@@ -456,8 +502,6 @@ class HttpApiTests(unittest.TestCase):
             ("post", f"/api/todos/{some_id}/done", None),
             ("post", "/api/daily-reviews", {"day": MON, "hard": "x"}),
             ("get", f"/api/daily-reviews?day={MON}", None),
-            ("get", "/api/tutor/sessions", None),
-            ("post", "/api/tutor/sessions", {"day": MON, "minutes": 30}),
             ("get", "/api/phase", None),
             ("get", "/api/shadow/sentences", None),
         ]
@@ -545,11 +589,11 @@ class HttpApiTests(unittest.TestCase):
     # --- todos ---
     def test_todos_over_http(self):
         todos = self.client.get("/api/todos", headers=self.headers).json()
-        self.assertEqual(len(todos), 2)
+        self.assertEqual(len(todos), 1)
+        _, other = _new_user()
+        self.assertEqual(self.client.post(f"/api/todos/{todos[0]['id']}/done", headers=other).status_code, 404)
         self.assertEqual(self.client.post(f"/api/todos/{todos[0]['id']}/done", headers=self.headers).status_code, 200)
         self.assertTrue(self.client.get("/api/todos", headers=self.headers).json()[0]["done"])
-        _, other = _new_user()
-        self.assertEqual(self.client.post(f"/api/todos/{todos[1]['id']}/done", headers=other).status_code, 404)
 
     # --- daily review ---
     def _review(self, **fields):
@@ -593,67 +637,12 @@ class HttpApiTests(unittest.TestCase):
         got = self.client.get("/api/daily-reviews", params={"day": MON}, headers=other).json()
         self.assertEqual(got["hard"], "")
 
-    # --- tutor ---
-    def _session(self, **fields):
-        body = {"day": MON, "minutes": 60} | fields
-        return self.client.post("/api/tutor/sessions", json=body, headers=self.headers)
-
-    def test_tutor_minutes_are_bounded(self):
-        for minutes in (0, 301, -5):
-            with self.subTest(minutes=minutes):
-                self.assertEqual(self._session(minutes=minutes).status_code, 422)
-        self.assertEqual(self._session(minutes=1).status_code, 200)
-        self.assertEqual(self._session(minutes=300).status_code, 200)
-
-    def test_tutor_session_adds_manual_speaking_time(self):
-        before = cockpit.ledger(self.user_id, PDT, now=_at(MON))
-        res = self._session(minutes=90, tutor="Marie · italki", topics="Passé composé", homework="Write 5 sentences", cost=24.5)
-        self.assertEqual(res.status_code, 200)
-        body = res.json()
-        self.assertEqual(
-            {k: body[k] for k in ("day", "minutes", "tutor", "topics", "homework", "cost")},
-            {"day": MON, "minutes": 90, "tutor": "Marie · italki", "topics": "Passé composé", "homework": "Write 5 sentences", "cost": 24.5},
-        )
-        after = cockpit.ledger(self.user_id, PDT, now=_at(MON))
-        self.assertEqual(after["manual_hours"] - before["manual_hours"], 1.5)
-        self.assertEqual(after["active_hours"], before["active_hours"])
-        speaking = next(r for r in after["lanes"] if r["lane"] == "speaking")
-        self.assertEqual(speaking["manual"], 1.5)
-        with game._connect() as conn:
-            row = conn.execute(
-                "SELECT lane, source, day FROM study_time WHERE user_id = ?", (self.user_id,)
-            ).fetchone()
-        self.assertEqual((row["lane"], row["source"], row["day"]), ("speaking", "manual", MON))
-
-    def test_tutor_time_is_booked_on_the_lesson_day_not_today(self):
-        self._session(day="2026-10-12", minutes=60)
-        with game._connect() as conn:
-            day = conn.execute("SELECT day FROM study_time WHERE user_id = ?", (self.user_id,)).fetchone()[0]
-        self.assertEqual(day, "2026-10-12")
-
-    def test_tutor_session_links_to_its_study_time_row(self):
-        session_id = self._session(minutes=45).json()["id"]
-        with cockpit._connect() as conn:
-            link = conn.execute("SELECT study_time_id FROM tutor_sessions WHERE id = ?", (session_id,)).fetchone()[0]
-            seconds = conn.execute("SELECT seconds FROM study_time WHERE id = ?", (link,)).fetchone()[0]
-        self.assertEqual(seconds, 45 * 60)
-
-    def test_tutor_optional_fields_are_left_out(self):
-        body = self._session(minutes=30).json()
-        self.assertEqual(set(body), {"id", "day", "minutes"})
-
-    def test_tutor_validation(self):
-        self.assertEqual(self._session(day="soon").status_code, 422)
-        self.assertEqual(self._session(cost=-1).status_code, 422)
-        self.assertEqual(self._session(topics="x" * 501).status_code, 422)
-
-    def test_tutor_sessions_list_newest_day_first_and_are_private(self):
-        self._session(day="2026-10-10", minutes=30)
-        self._session(day="2026-10-17", minutes=45)
-        listing = self.client.get("/api/tutor/sessions", headers=self.headers).json()
-        self.assertEqual([s["day"] for s in listing], ["2026-10-17", "2026-10-10"])
-        _, other = _new_user()
-        self.assertEqual(self.client.get("/api/tutor/sessions", headers=other).json(), [])
+    # --- retired tutor feature ---
+    def test_tutor_session_routes_are_gone(self):
+        for method in ("get", "post"):
+            with self.subTest(method=method):
+                res = getattr(self.client, method)("/api/tutor/sessions", headers=self.headers)
+                self.assertEqual(res.status_code, 404)
 
     # --- phase ---
     def test_phase_is_read_only_and_mirrors_game_targets(self):

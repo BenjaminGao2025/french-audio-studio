@@ -130,7 +130,7 @@ function CheckpointCard({ cp, refetch }: { cp: Checkpoint; refetch: () => void }
               <p>No data yet — this checkpoint opens at week 16.</p>
               <p className="mt-2">
                 Rule: if unseen-item scores are below A2 in any skill, the exam date moves. Required
-                actions: full mock exam, tutor sign-off, and a go/no-go decision recorded here.
+                actions: full mock exam and a go/no-go decision recorded here.
               </p>
             </div>
           ) : (
@@ -158,20 +158,6 @@ function CheckpointCard({ cp, refetch }: { cp: Checkpoint; refetch: () => void }
               </li>
             ))}
           </ul>
-
-          <div className="mt-5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            AI–human gap
-          </div>
-          <p className="mt-1 text-sm">
-            {report.ai_human_gap != null
-              ? `Mean gap ${report.ai_human_gap} pts`
-              : "Uncalibrated — no paired tutor scores yet."}
-          </p>
-
-          <div className="mt-5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Tutor
-          </div>
-          <p className="mt-1 text-sm">{report.tutor_status}</p>
 
           <div className="mt-5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
             Recommendation

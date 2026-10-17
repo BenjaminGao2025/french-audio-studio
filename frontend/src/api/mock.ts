@@ -134,7 +134,6 @@ const minimalBlocks: T.Block[] = [
 
 let minimal = false;
 let todos: T.Todo[] = [
-  { id: "t1", text: "Choose a tutor", due: "2026-11-01", done: false },
   { id: "t2", text: "Book the placement test", due: "2026-11-29", done: false },
 ];
 
@@ -167,7 +166,7 @@ const gameState: T.GameState = {
     weekend: true,
     by_lane: { ...zeroLanes(), speaking: 45, review: 20, listening: 30 },
     logs: [
-      { id: "log1", lane: "speaking", minutes: 30, note: "Tutor lesson with Marie" },
+      { id: "log1", lane: "speaking", minutes: 30, note: "AI speaking practice" },
       { id: "log2", lane: "course", minutes: 45, note: "Textbook ch. 4" },
     ],
     kills: 12,
@@ -437,10 +436,9 @@ const week8: T.Checkpoint = {
       { skill: "writing", series: [38, 41, 44, 47], last: 47 },
       { skill: "speaking", series: [35, 39, 44, 50], last: 50 },
     ],
-    tutor_status: "No tutor yet — due Nov 1",
     recommendation:
       "Keep the current plan. Listening is on track; add one extra writing task per week.",
-    risks: ["Writing volume below target", "No tutor sessions logged"],
+    risks: ["Writing volume below target"],
   },
 };
 
@@ -452,18 +450,6 @@ const week16: T.Checkpoint = {
 };
 
 let checkpoints: T.Checkpoint[] = [week8, week16];
-
-let tutorSessions: T.TutorSession[] = [
-  {
-    id: "ts1",
-    day: "2026-10-12",
-    minutes: 30,
-    tutor: "Marie (italki)",
-    topics: "Introduce yourself",
-    homework: "Record T1 answer",
-    cost: 18,
-  },
-];
 
 let episodes: T.Episode[] = [
   { id: "ep1", title: "Un samedi au marché", level: "A2", minutes: 20, created_at: "2026-10-15" },
@@ -484,7 +470,6 @@ const rubric: T.Rubric = {
   score_high: 11,
   confidence: "low",
   hard_fail: null,
-  calibration: "uncalibrated",
   prompt_version: "rubric_ee_v1",
 };
 
@@ -809,10 +794,6 @@ export const mock: Api = {
     audioUrl: (id) => `/episodes/${id}.mp3`,
     lrcUrl: (id) => `/episodes/${id}.lrc`,
   },
-  humanScores: {
-    add: () => delay(undefined),
-    calibration: () => delay({ samples: 0, mean_gap: 0, direction: "none", state: "uncalibrated" }),
-  },
   today: {
     get: () => delay(structuredClone(todayPayload())),
     startBlock: (id) => {
@@ -861,14 +842,6 @@ export const mock: Api = {
     done: (id) => {
       todos = todos.map((t) => (t.id === id ? { ...t, done: true } : t));
       return delay(undefined);
-    },
-  },
-  tutor: {
-    sessions: () => delay(structuredClone(tutorSessions)),
-    addSession: (body) => {
-      const s = { id: uid(), ...body };
-      tutorSessions = [s, ...tutorSessions];
-      return delay(s);
     },
   },
   reviews: {

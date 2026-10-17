@@ -3,7 +3,6 @@ import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { Route as HoursRoute } from "@/routes/hours";
-import { Route as TutorRoute } from "@/routes/tutor";
 
 let search: { block?: string } = {};
 vi.mock("@tanstack/react-router", async (original) => ({
@@ -16,7 +15,7 @@ vi.mock("@/components/fr/kit", () => ({
   Bar: () => null,
   BlockControls: ({ blockId }: { blockId: string }) => <p>controls for {blockId}</p>,
 }));
-vi.mock("@/api", () => ({ api: { game: {}, tutor: {}, todos: {} } }));
+vi.mock("@/api", () => ({ api: { game: {}, todos: {} } }));
 vi.mock("@/api/hooks", () => ({
   useGameState: () => ({ data: undefined }),
   useHoursLedger: () => ({
@@ -34,23 +33,13 @@ vi.mock("@/api/hooks", () => ({
     data: undefined,
     refetch: () => {},
   }),
-  useTutorSessions: () => ({
-    isPending: true,
-    isError: false,
-    error: null,
-    data: undefined,
-    refetch: () => {},
-  }),
 }));
 
 afterEach(cleanup);
 
-// A plan block can point at /hours (course) or /tutor (tutor lesson): without Finish/Skip
-// controls those blocks could never be completed.
-const pages = [
-  ["hours", HoursRoute],
-  ["tutor", TutorRoute],
-] as const;
+// A plan block can point at /hours (course or textbook time): without Finish/Skip
+// controls that block could never be completed.
+const pages = [["hours", HoursRoute]] as const;
 
 it.each(pages)("%s shows the block controls only when opened from a plan block", (_name, route) => {
   const Component = route.options.component;

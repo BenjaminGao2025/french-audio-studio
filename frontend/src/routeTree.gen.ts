@@ -24,7 +24,6 @@ import { Route as RetellRouteImport } from './routes/retell'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ShadowRouteImport } from './routes/shadow'
 import { Route as SpeakingRouteImport } from './routes/speaking'
-import { Route as TutorRouteImport } from './routes/tutor'
 import { Route as WrapupRouteImport } from './routes/wrapup'
 import { Route as WritingRouteImport } from './routes/writing'
 
@@ -103,11 +102,6 @@ const SpeakingRoute = SpeakingRouteImport.update({
   path: '/speaking',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TutorRoute = TutorRouteImport.update({
-  id: '/tutor',
-  path: '/tutor',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const WrapupRoute = WrapupRouteImport.update({
   id: '/wrapup',
   path: '/wrapup',
@@ -135,7 +129,6 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/shadow': typeof ShadowRoute
   '/speaking': typeof SpeakingRoute
-  '/tutor': typeof TutorRoute
   '/wrapup': typeof WrapupRoute
   '/writing': typeof WritingRoute
 }
@@ -155,7 +148,6 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/shadow': typeof ShadowRoute
   '/speaking': typeof SpeakingRoute
-  '/tutor': typeof TutorRoute
   '/wrapup': typeof WrapupRoute
   '/writing': typeof WritingRoute
 }
@@ -176,7 +168,6 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/shadow': typeof ShadowRoute
   '/speaking': typeof SpeakingRoute
-  '/tutor': typeof TutorRoute
   '/wrapup': typeof WrapupRoute
   '/writing': typeof WritingRoute
 }
@@ -198,7 +189,6 @@ export interface FileRouteTypes {
     | '/settings'
     | '/shadow'
     | '/speaking'
-    | '/tutor'
     | '/wrapup'
     | '/writing'
   fileRoutesByTo: FileRoutesByTo
@@ -218,7 +208,6 @@ export interface FileRouteTypes {
     | '/settings'
     | '/shadow'
     | '/speaking'
-    | '/tutor'
     | '/wrapup'
     | '/writing'
   id:
@@ -238,7 +227,6 @@ export interface FileRouteTypes {
     | '/settings'
     | '/shadow'
     | '/speaking'
-    | '/tutor'
     | '/wrapup'
     | '/writing'
   fileRoutesById: FileRoutesById
@@ -259,7 +247,6 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   ShadowRoute: typeof ShadowRoute
   SpeakingRoute: typeof SpeakingRoute
-  TutorRoute: typeof TutorRoute
   WrapupRoute: typeof WrapupRoute
   WritingRoute: typeof WritingRoute
 }
@@ -371,13 +358,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SpeakingRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/tutor': {
-      id: '/tutor'
-      path: '/tutor'
-      fullPath: '/tutor'
-      preLoaderRoute: typeof TutorRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/wrapup': {
       id: '/wrapup'
       path: '/wrapup'
@@ -411,7 +391,6 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   ShadowRoute: ShadowRoute,
   SpeakingRoute: SpeakingRoute,
-  TutorRoute: TutorRoute,
   WrapupRoute: WrapupRoute,
   WritingRoute: WritingRoute,
 }

@@ -22,7 +22,6 @@ vi.mock("@/api", () => ({
       round2: vi.fn(),
       rubric: vi.fn(),
     },
-    humanScores: { calibration: vi.fn() },
   },
 }));
 // The backend generates feedback in the background: the attempt starts as "pending".
