@@ -245,18 +245,6 @@ export const real = {
     audioUrl: (id: string) => `/episodes/${id}.mp3`,
     lrcUrl: (id: string) => `/episodes/${id}.lrc`,
   },
-  humanScores: {
-    add: (body: {
-      attempt_type: "writing" | "speaking";
-      attempt_id: string;
-      grader: string;
-      dims?: unknown;
-      score: number;
-      note?: string | undefined;
-    }) => request<void>("/api/human-scores", { method: "POST", body }),
-    calibration: (type: "writing" | "speaking") =>
-      request<T.Calibration>("/api/calibration", { query: { type } }),
-  },
 
   // ---- New endpoints (C5) ----
   today: {
@@ -279,17 +267,6 @@ export const real = {
   todos: {
     list: () => request<T.Todo[]>("/api/todos"),
     done: (id: string) => request<void>(`/api/todos/${id}/done`, { method: "POST" }),
-  },
-  tutor: {
-    sessions: () => request<T.TutorSession[]>("/api/tutor/sessions"),
-    addSession: (body: {
-      day: string;
-      minutes: number;
-      tutor?: string | undefined;
-      topics?: string | undefined;
-      homework?: string | undefined;
-      cost?: number | undefined;
-    }) => request<T.TutorSession>("/api/tutor/sessions", { method: "POST", body }),
   },
   reviews: {
     add: (body: T.DailyReview) => request<void>("/api/daily-reviews", { method: "POST", body }),

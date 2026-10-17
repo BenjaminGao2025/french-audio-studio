@@ -1,4 +1,4 @@
-"""Cockpit routes: today's plan, hours ledger, to-dos, daily review, tutor sessions (see cockpit.py)."""
+"""Cockpit routes: today's plan, hours ledger, to-dos, daily review (see cockpit.py)."""
 from __future__ import annotations
 
 import datetime
@@ -38,16 +38,6 @@ class DailyReviewRequest(BaseModel):
         if not any(v.strip() for v in (self.hard, self.solved, self.unsolved, self.tomorrow)):
             raise ValueError("请至少回答一个问题。")
         return self
-
-
-class TutorSessionRequest(BaseModel):
-    day: datetime.date
-    minutes: int = Field(ge=1, le=300)
-    tutor: str | None = Field(default=None, max_length=100)
-    topics: str | None = Field(default=None, max_length=500)
-    homework: str | None = Field(default=None, max_length=500)
-    cost: float | None = Field(default=None, ge=0, le=100000)
-    tz_offset: int = Field(default=0, ge=-840, le=840)
 
 
 @router.get("/api/today")
@@ -119,21 +109,6 @@ def get_daily_review(
     request: Request, day: datetime.date, authorization: str | None = Header(default=None)
 ):
     return cockpit.get_review(_require_user_id(authorization, request), day.isoformat())
-
-
-@router.get("/api/tutor/sessions")
-def list_tutor_sessions(request: Request, authorization: str | None = Header(default=None)):
-    return cockpit.list_tutor_sessions(_require_user_id(authorization, request))
-
-
-@router.post("/api/tutor/sessions")
-def add_tutor_session(
-    req: TutorSessionRequest, request: Request, authorization: str | None = Header(default=None)
-):
-    return cockpit.add_tutor_session(
-        _require_user_id(authorization, request),
-        req.day.isoformat(), req.minutes, req.tutor, req.topics, req.homework, req.cost, req.tz_offset,
-    )
 
 
 @router.get("/api/phase")

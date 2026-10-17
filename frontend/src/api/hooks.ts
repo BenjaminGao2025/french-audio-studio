@@ -13,7 +13,6 @@ export const qk = {
   itemsSummary: ["items-summary"] as const,
   items: (skill?: string | undefined, pool?: string) => ["items", skill ?? "", pool ?? ""] as const,
   episodes: ["episodes"] as const,
-  tutorSessions: ["tutor-sessions"] as const,
   listeningGate: ["listening-gate"] as const,
   phase: ["phase"] as const,
   me: ["me"] as const,
@@ -43,8 +42,6 @@ export const useEpisodes = () =>
     // An episode renders for minutes in the background; keep the list fresh meanwhile.
     refetchInterval: (q) => (q.state.data?.some((e) => e.status === "generating") ? 5000 : false),
   });
-export const useTutorSessions = () =>
-  useQuery({ queryKey: qk.tutorSessions, queryFn: () => api.tutor.sessions() });
 export const useListeningGate = () =>
   useQuery({ queryKey: qk.listeningGate, queryFn: () => api.listening.gate() });
 export const usePhase = () => useQuery({ queryKey: qk.phase, queryFn: () => api.phase.get() });

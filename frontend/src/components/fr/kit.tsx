@@ -12,7 +12,6 @@ import {
   Headphones,
   Layers,
   User,
-  GraduationCap,
   Settings,
   MoreHorizontal,
 } from "lucide-react";
@@ -141,7 +140,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           {item("/reading", t("intensiveReading"), BookOpen)}
           {item("/speaking", t("speakingExam"), Mic)}
           {item("/writing", t("writingExam"), LayoutGrid)}
-          {item("/tutor", t("tutor"), GraduationCap)}
           {item("/episodes", t("listen"), Headphones)}
         </nav>
         <div className="mt-8 mb-2 px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">

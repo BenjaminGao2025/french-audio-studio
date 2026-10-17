@@ -245,10 +245,6 @@ function Round2({ attempt }: { attempt: Attempt }) {
     queryKey: ["write-rubric", attempt.id],
     queryFn: () => api.write.rubric(attempt.id),
   });
-  const calibQ = useQuery({
-    queryKey: ["calibration", "writing"],
-    queryFn: () => api.humanScores.calibration("writing"),
-  });
   const fb = attempt.feedback2;
   if (attempt.status === "pending") {
     return (
@@ -275,28 +271,10 @@ function Round2({ attempt }: { attempt: Attempt }) {
             </ul>
           </div>
         )}
-        <DataView query={calibQ} skeletonLines={2} quiet>
-          {(c) =>
-            c.samples >= 1 ? (
-              <div className="panel p-6">
-                <div className="text-xs text-muted-foreground">
-                  AI vs tutor · {c.samples} paired samples
-                </div>
-                <p className="mt-2 text-sm">
-                  Mean gap: {c.mean_gap} pts ({c.direction})
-                </p>
-              </div>
-            ) : (
-              <div className="rounded-xl border border-dashed border-border p-6 text-sm text-muted-foreground">
-                AI vs tutor chart appears after your tutor scores at least one attempt.
-              </div>
-            )
-          }
-        </DataView>
       </div>
       <aside>
         <DataView query={rubricQ} skeletonLines={4} quiet>
-          {(r) => <RubricPanel rubric={r} attemptType="writing" attemptId={attempt.id} />}
+          {(r) => <RubricPanel rubric={r} />}
         </DataView>
       </aside>
     </div>

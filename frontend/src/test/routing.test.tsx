@@ -19,7 +19,6 @@ it.each([
   "/settings",
   "/shadow",
   "/speaking",
-  "/tutor",
   "/wrapup",
   "/writing",
 ])("matches %s", (path) => {
@@ -27,4 +26,9 @@ it.each([
   const matches = router.matchRoutes(path);
   expect(matches.at(-1)?.routeId).not.toBe(rootRouteId);
   expect(matches.at(-1)?.pathname).toBe(path);
+});
+
+it("has no /tutor page any more", () => {
+  const router = createRouter({ routeTree, context: { queryClient: new QueryClient() } });
+  expect(router.matchRoutes("/tutor").at(-1)?.routeId).toBe(rootRouteId);
 });

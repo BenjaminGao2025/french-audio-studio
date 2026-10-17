@@ -1,12 +1,12 @@
 """
-French Audio Studio - the daily cockpit (PRD M1, M2, M10).
+French Audio Studio - the daily cockpit (PRD M1, M2).
 
   * Today's plan: blocks from a weekly template with a planned -> active -> done/skipped
     lifecycle, and a 20-minute "minimal" day. A block kind is only planned once its page and
     backend exist (ENABLED_KINDS), so a day never contains a dead end.
   * The hours ledger: active hours (auto time), manual hours (logged by hand) and input hours
     (the car lane). Only active + manual count toward the 1000 hours (PRD 8.1).
-  * To-dos, the four-question daily review and tutor sessions (tutor time is manual speaking time).
+  * To-dos and the four-question daily review.
 
 Nothing here calls an AI model. It shares users.db with game.py and srs.py and reads their
 study_time and srs tables. Targets still come from game.py's constants (24 h/week); the PRD's
@@ -30,9 +30,9 @@ MILESTONES = (100, 300, 500, 750, 1000)
 NEW_CARDS_PER_DAY = 10
 SHADOW_SENTENCES = 8
 
-# Block kinds whose page and backend exist in this build (journal = /api/homework). Listening,
-# reading and checkpoint blocks join the plan when their backends land.
-ENABLED_KINDS = frozenset({"warmup", "journal", "review", "writing", "course", "minimal"})
+# Block kinds whose page and backend exist in this build (journal = /api/homework, speaking =
+# /api/speak). Listening, reading and checkpoint blocks join the plan when their backends land.
+ENABLED_KINDS = frozenset({"warmup", "journal", "review", "writing", "speaking", "course", "minimal"})
 
 PHASE_A = {"id": "A", "name": "Phase A (0–300h)", "hours_from": 0, "hours_to": 300}
 PHASE_MAINTENANCE = {"id": "maintenance", "name": "Maintenance (5 h/week)", "hours_from": 480, "hours_to": 585}
@@ -57,7 +57,8 @@ WRITING = Slot("main2", "writing", "Main block 2 · Writing T1 practice", 40, "/
 COURSE = Slot("main2", "course", "Main block 2 · Course or textbook (log the time)", 40, "/hours", "course", "11:15")
 WEEKLY_REVIEW = Slot("main2", "review", "Main block 2 · Weekly review", 40, "/cards?new_limit=0", "review", "11:15")
 WRAPUP = Slot("wrapup", "minimal", "Wrap-up", 5, "/wrapup", "review", "11:55")
-TUTOR = Slot("main1", "course", "Tutor lesson (log it afterwards)", 120, "/tutor", "speaking", "10:00")
+AI_SPEAKING = Slot("main1", "speaking", "Main block 1 · AI speaking practice", 60, "/speaking", "speaking", "10:00")
+AI_WRITING = Slot("main2", "writing", "Main block 2 · AI writing correction", 60, "/writing", "writing", "11:00")
 SUNDAY_REVIEW = Slot("main1", "review", "Weekly review · due cards", 90, "/cards", "review", "10:00")
 
 # PRD 6.1 and appendix C (phase A), Monday = 0.
@@ -67,7 +68,7 @@ WEEK_TEMPLATE: dict[int, tuple[Slot, ...]] = {
     2: (WARMUP, JOURNAL, REVIEW, LISTENING, WRITING, WRAPUP),
     3: (WARMUP, JOURNAL, REVIEW, READING, COURSE, WRAPUP),
     4: (WARMUP, JOURNAL, REVIEW, LISTENING, WEEKLY_REVIEW, WRAPUP),
-    5: (TUTOR, WRAPUP),
+    5: (AI_SPEAKING, AI_WRITING, WRAPUP),
     6: (SUNDAY_REVIEW, WRAPUP),
 }
 # PRD 6.3: ten cards, one listening item, a short journal.
@@ -80,11 +81,23 @@ MINIMAL_TEMPLATE: tuple[Slot, ...] = (
 
 # PRD 13.2 #11: shown at the top of Today until done. id is deterministic, so seeding is idempotent.
 SEED_TODOS = (
-    ("tutor", "选定外教 · Choose a tutor", "2026-11-01"),
     ("placement", "完成分级测试 · Take the placement test", "2026-11-29"),
 )
 
 _initialized_db_paths: set[str] = set()
+
+
+def _retire_tutor_rows(conn: sqlite3.Connection) -> None:
+    """Rows written before the tutor block was removed must not leave a dead end in Today.
+
+    The seeded tutor to-do is deleted and an old tutor block becomes the AI speaking practice
+    block (same planned minutes). The tutor_sessions table is left in place, unused.
+    """
+    conn.execute("DELETE FROM todos WHERE kind = 'tutor'")
+    conn.execute(
+        "UPDATE day_blocks SET kind = ?, title = ?, route = ?, lane = ? WHERE route = '/tutor'",
+        (AI_SPEAKING.kind, AI_SPEAKING.title, AI_SPEAKING.route, AI_SPEAKING.lane),
+    )
 
 
 def init_db() -> None:
@@ -142,21 +155,9 @@ def init_db() -> None:
                 kind TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_todos_user ON todos(user_id);
-            CREATE TABLE IF NOT EXISTS tutor_sessions (
-                id TEXT PRIMARY KEY,
-                user_id INTEGER NOT NULL,
-                day TEXT NOT NULL,
-                minutes INTEGER NOT NULL,
-                tutor TEXT,
-                topics TEXT,
-                homework TEXT,
-                cost REAL,
-                study_time_id INTEGER,
-                created_at TEXT NOT NULL
-            );
-            CREATE INDEX IF NOT EXISTS idx_tutor_sessions_user ON tutor_sessions(user_id, day DESC);
             """
         )
+        _retire_tutor_rows(conn)
     _initialized_db_paths.add(db_path)
 
 
@@ -510,53 +511,6 @@ def get_review(user_id: int, day: str) -> dict[str, Any]:
     with _connect() as conn:
         row = conn.execute("SELECT * FROM daily_reviews WHERE user_id = ? AND day = ?", (user_id, day)).fetchone()
     return _review(day, row)
-
-
-# ---------------------------------------------------------------------------
-# Tutor sessions
-# ---------------------------------------------------------------------------
-def _tutor_session(row: sqlite3.Row) -> dict[str, Any]:
-    session = {"id": row["id"], "day": row["day"], "minutes": row["minutes"]}
-    for key in ("tutor", "topics", "homework", "cost"):
-        if row[key] is not None:
-            session[key] = row[key]
-    return session
-
-
-def add_tutor_session(
-    user_id: int,
-    day: str,
-    minutes: int,
-    tutor: str | None = None,
-    topics: str | None = None,
-    homework: str | None = None,
-    cost: float | None = None,
-    tz_offset: int = 0,
-    now: datetime.datetime | None = None,
-) -> dict[str, Any]:
-    """Log a lesson. PRD M10: tutor time is manual speaking time, booked on the lesson's day."""
-    now = now or _now()
-    note = " · ".join(part for part in ("Tutor", tutor, topics) if part)
-    study_time_id = game.log_time(user_id, "speaking", minutes, note, tz_offset, now=now, day=day)
-    session_id = uuid.uuid4().hex
-    with _connect() as conn:
-        conn.execute(
-            """
-            INSERT INTO tutor_sessions (id, user_id, day, minutes, tutor, topics, homework, cost, study_time_id, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (session_id, user_id, day, minutes, tutor, topics, homework, cost, study_time_id, srs._iso(now)),
-        )
-        row = conn.execute("SELECT * FROM tutor_sessions WHERE id = ?", (session_id,)).fetchone()
-    return _tutor_session(row)
-
-
-def list_tutor_sessions(user_id: int) -> list[dict[str, Any]]:
-    with _connect() as conn:
-        rows = conn.execute(
-            "SELECT * FROM tutor_sessions WHERE user_id = ? ORDER BY day DESC, created_at DESC", (user_id,)
-        ).fetchall()
-    return [_tutor_session(r) for r in rows]
 
 
 # ---------------------------------------------------------------------------

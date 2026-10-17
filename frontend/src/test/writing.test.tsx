@@ -16,7 +16,6 @@ vi.mock("@/components/fr/widgets", () => ({ RubricPanel: () => null }));
 vi.mock("@/api", () => ({
   api: {
     write: { tasks: vi.fn(), attempt: vi.fn(), round2: vi.fn(), rubric: vi.fn() },
-    humanScores: { calibration: vi.fn() },
   },
 }));
 beforeEach(() => {
@@ -32,12 +31,6 @@ beforeEach(() => {
     feedback2: { corrected_text: "Corrected French", sentences: [], structures: [] },
   } as Awaited<ReturnType<typeof api.write.round2>>);
   vi.mocked(api.write.rubric).mockResolvedValue({} as Awaited<ReturnType<typeof api.write.rubric>>);
-  vi.mocked(api.humanScores.calibration).mockResolvedValue({
-    samples: 0,
-    mean_gap: 0,
-    direction: "none",
-    state: "uncalibrated",
-  });
 });
 afterEach(() => {
   cleanup();

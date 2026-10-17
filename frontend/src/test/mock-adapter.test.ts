@@ -32,7 +32,6 @@ it("resolves every promise-returning adapter function with representative argume
     "today.finishBlock": ["b2"],
     "today.skipBlock": ["b2", "too_hard"],
     "today.minimal": [false],
-    "tutor.addSession": [{ date: "2026-10-17", minutes: 0, tutor: "test", focus: "test" }],
     "reviews.add": [{ day: "2026-10-17", hard: "", solved: "", unsolved: "", tomorrow: "" }],
     "items.list": [{}],
     "checkpoints.decide": ["cp8", "continue", "test"],
@@ -95,4 +94,10 @@ it("gives T2 two minutes preparation", async () => {
       (t) => (t as { task: string }).task === "T2",
     )?.["prep_seconds"],
   ).toBe(120);
+});
+it("has no tutor or human-score adapter and no tutor to-do", async () => {
+  expect(Object.keys(mock)).not.toContain("tutor");
+  expect(Object.keys(mock)).not.toContain("humanScores");
+  const { todos } = await mock.today.get();
+  expect(todos.some((t) => /tutor/i.test(t.text))).toBe(false);
 });

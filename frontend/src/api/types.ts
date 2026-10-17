@@ -329,7 +329,6 @@ export interface Rubric {
   score_high: number;
   confidence: "low" | "medium" | "high";
   hard_fail: null | "word_count" | "off_topic" | "order";
-  calibration: "uncalibrated" | "calibrating" | "calibrated";
   prompt_version?: string | undefined;
 }
 
@@ -371,23 +370,11 @@ export interface Checkpoint {
     active_hours: number;
     process_metrics: Record<string, number | string>;
     skills: { skill: Skill; series: number[]; last: number }[];
-    ai_human_gap?: number | undefined;
-    tutor_status: string;
     recommendation: string;
     risks: string[];
   };
   decision?: string | undefined;
   decision_note?: string | undefined;
-}
-
-export interface TutorSession {
-  id: string;
-  day: string;
-  minutes: number;
-  tutor?: string | undefined;
-  topics?: string | undefined;
-  homework?: string | undefined;
-  cost?: number | undefined;
 }
 
 export interface Phase {
@@ -397,13 +384,6 @@ export interface Phase {
   lane_targets: Record<Lane, number>;
   new_cards_per_day: number;
   gates: unknown;
-}
-
-export interface Calibration {
-  samples: number;
-  mean_gap: number;
-  direction: string;
-  state: "uncalibrated" | "calibrating" | "calibrated";
 }
 
 export interface ShadowSentence {
