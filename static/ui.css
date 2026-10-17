@@ -147,3 +147,122 @@ textarea::placeholder, input::placeholder { color: var(--placeholder); }
 .review-settings .new-limit-control select { height: 30px; min-height: 0; border: 0; background: transparent; color: var(--ink); font-weight: 700; padding: 0 6px; cursor: pointer; }
 .review-settings .new-limit-control select:focus-visible { outline-offset: 0; }
 
+
+/* Compact, keyboard-accessible appearance control shared by all pages. */
+.theme-select {
+    width: auto;
+    max-width: 120px;
+    height: 38px;
+    min-height: 38px;
+    padding: 0 6px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-size: var(--text-sm);
+    cursor: pointer;
+}
+.theme-select:hover { border-color: var(--line-strong); }
+/* No bright celebration flash during night-time review. */
+:root[data-theme="dark"] .game-flash { display: none; }
+:root[data-theme="dark"] ::selection { background: var(--primary-line); color: var(--ink); }
+.topbar { padding-block: 12px; }
+:root[data-theme="dark"] .game-banner {
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--line-strong);
+}
+:root[data-theme="dark"] .game-banner.is-level span { color: var(--muted); }
+:root[data-theme="dark"] .game-banner.is-error strong { color: var(--danger); }
+
+
+/* Header: one row of square icon controls (theme + language match their neighbours) */
+.topbar-actions, .site-nav { flex-wrap: nowrap; }
+.topbar-actions > *, .site-nav > .theme-select, .site-nav > .lang-toggle { flex-shrink: 0; }
+.topbar-actions .theme-select, .site-nav .theme-select {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 38px;
+    min-width: 38px;
+    max-width: 38px;
+    height: 38px;
+    padding: 0;
+    color: transparent;
+    text-indent: -999px;
+    background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%23334155' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 8a2.83 2.83 0 0 0 4 4 4 4 0 1 1-4-4'/%3E%3Cpath d='M12 2v2'/%3E%3Cpath d='M12 20v2'/%3E%3Cpath d='m4.9 4.9 1.4 1.4'/%3E%3Cpath d='m17.7 17.7 1.4 1.4'/%3E%3Cpath d='M2 12h2'/%3E%3Cpath d='M20 12h2'/%3E%3Cpath d='m6.3 17.7-1.4 1.4'/%3E%3Cpath d='m19.1 4.9-1.4 1.4'/%3E%3C/svg%3E") center / 18px no-repeat;
+}
+:root[data-theme="dark"] .topbar-actions .theme-select,
+:root[data-theme="dark"] .site-nav .theme-select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%23e2e8f0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 8a2.83 2.83 0 0 0 4 4 4 4 0 1 1-4-4'/%3E%3Cpath d='M12 2v2'/%3E%3Cpath d='M12 20v2'/%3E%3Cpath d='m4.9 4.9 1.4 1.4'/%3E%3Cpath d='m17.7 17.7 1.4 1.4'/%3E%3Cpath d='M2 12h2'/%3E%3Cpath d='M20 12h2'/%3E%3Cpath d='m6.3 17.7-1.4 1.4'/%3E%3Cpath d='m19.1 4.9-1.4 1.4'/%3E%3C/svg%3E");
+}
+.theme-select:hover { background-color: var(--surface-muted); }
+.theme-select option { color: var(--ink); background: var(--surface); text-indent: 0; }
+.topbar-actions .lang-toggle, .site-nav .lang-toggle {
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    min-height: 38px;
+    padding: 0;
+    justify-content: center;
+    font-size: 13px;
+}
+@media (max-width: 1100px) {
+    .topbar-actions { gap: var(--space-2); }
+}
+@media (max-width: 640px) {
+    .topbar-actions { width: 100%; margin-left: 0; }
+    .topbar-actions .lang-toggle { min-width: 38px; padding: 0; }
+}
+@media (max-width: 400px) {
+    .topbar-actions .nav-deck-btn > [data-i18n="reviewBtn"] { display: none; }
+}
+
+/* Daily navigation, specialist practice, then preferences. */
+.header-organized { justify-content: space-between; }
+.header-organized .nav-tabs { overflow: visible; width: auto; order: initial; flex: 1; justify-content: center; }
+.header-organized .nav-tab { flex: initial; font-size: 14px; padding: 9px 12px; white-space: nowrap; }
+.header-organized .nav-tabs > .nav-tab > svg { display: none; }
+.header-organized .topbar-actions { width: auto; margin-left: 0; }
+.header-disclosure { position: relative; }
+.header-disclosure > summary { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px; padding: 8px 12px; border-radius: var(--radius-sm); color: var(--muted); font-size: 14px; font-weight: 600; cursor: pointer; list-style: none; }
+.header-disclosure > summary::-webkit-details-marker { display: none; }
+.header-disclosure > summary::after { content: '⌄'; }
+.header-disclosure > summary:hover, .header-disclosure[open] > summary { background: var(--surface-muted); color: var(--ink); }
+.header-disclosure > summary.active { background: var(--primary-soft); color: var(--primary); }
+.header-menu { position: absolute; top: calc(100% + 8px); right: 0; width: 260px; max-width: calc(100vw - 32px); padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-overlay); z-index: 1000; max-height: calc(100dvh - 160px); overflow-y: auto; }
+.practice-menu .header-menu { width: 220px; }
+.practice-menu .nav-tab { display: flex; justify-content: flex-start; gap: 12px; width: 100%; min-height: 44px; }
+.preference-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; font-size: 14px; color: var(--muted); }
+.preference-row .theme-select { appearance: auto; width: 130px; min-width: 0; max-width: 130px; padding: 0 8px; color: var(--ink); text-indent: 0; background: var(--surface-subtle); }
+:root[data-theme="dark"] .preference-row .theme-select { background-image: none; }
+.preference-row #user-auth-btn { width: auto; max-width: 150px; padding: 0 8px; }
+.preference-row #user-auth-status-text { display: inline; overflow: hidden; text-overflow: ellipsis; }
+.preferences-menu .connection-settings { width: 100%; border-top: 1px solid var(--line); padding-top: 8px; }
+.preferences-menu .connection-settings > summary { width: 100%; justify-content: flex-start; padding: 8px; }
+.preferences-menu .connection-settings .summary-label { display: inline; }
+.preferences-menu .connection-popover { position: static; width: 100%; min-width: 0; margin-top: 8px; padding: 8px; border: 0; box-shadow: none; }
+.preferences-menu .connection-test-row { flex-wrap: wrap; }
+.preferences-menu .connection-field select { max-width: 100%; }
+.page-intro-actions { display: flex; gap: 8px; margin-top: 12px; }
+.game-hud { justify-content: flex-start; padding-top: 10px; }
+.game-hud > .hud-hero { order: 2; margin-left: auto; min-height: 38px; }
+.game-hud > .hud-today { order: 1; }
+.game-hud > .hud-week, .game-hud > .hud-streak, .game-hud > .hud-focus,
+.game-hud > .hud-spacer, .game-hud > .hud-log, .hud-hero > .hud-xp { display: none !important; }
+.game-progress-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding-bottom: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+@media (max-width: 800px) {
+    .header-organized { flex-wrap: wrap; gap: 8px; }
+    .header-organized .nav-tabs { order: 3; width: 100%; flex: auto; justify-content: space-between; }
+    .header-organized .nav-tab { padding: 9px 8px; font-size: 13px; }
+    .header-organized .practice-menu > summary { padding: 9px 8px; font-size: 13px; }
+    .header-organized .brand-block .product-label { font-size: 14px; }
+    .header-organized .nav-tabs #open-deck-btn [data-i18n="reviewBtn"] { display: inline; }
+    .game-hud { flex-wrap: nowrap; gap: 8px; }
+    .hud-hero { gap: 6px; padding: 4px; }
+    .hud-progress-label { font-size: 12px; }
+}
+.game-progress-summary > :not([hidden]) { display: inline-flex; }
+.game-progress-summary .hud-focus span { display: inline; }
+.game-hud .hud-today > span { display: inline; }
+.game-hud .hud-today::after { content: none; }

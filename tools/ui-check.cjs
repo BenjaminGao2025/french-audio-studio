@@ -22,12 +22,12 @@ const card = { id: 'ui-fixture', note_id: 'fixture', mode: 'recognize', state: '
   try {
     for (const width of [1440, 390]) for (const lang of ['zh', 'en']) {
       const context = await browser.newContext({ viewport: { width, height: 1050 }, reducedMotion: 'reduce' });
-      await context.addInitScript(({lang}) => localStorage.setItem('frenchStudio.uiLang', lang), {lang});
+      await context.addInitScript(({lang, theme}) => { localStorage.setItem('frenchStudio.uiLang', lang); if (theme) localStorage.setItem('frenchStudio.theme', theme); }, {lang, theme: process.env.UI_THEME});
       await context.route('http://localhost:8000/**', async route => {
         const url = new URL(route.request().url());
         const path = url.pathname;
-        if (!process.env.UI_LIVE && pages[path]) return route.fulfill({ contentType: 'text/html', body: fs.readFileSync(root + pages[path], 'utf8').replaceAll('__ASSET_VERSION__', 'ui-preview') });
-        if (!process.env.UI_LIVE && path.startsWith('/static/') && (path.endsWith('.css') || path.endsWith('/study.js'))) return route.fulfill({ contentType: path.endsWith('.css') ? 'text/css' : 'application/javascript', body: fs.readFileSync(root + path.split('/').pop(), 'utf8') });
+        if (!process.env.UI_LIVE && pages[path]) return route.fulfill({ contentType: 'text/html', body: fs.readFileSync(root + pages[path], 'utf8').replace('__PERSONAL_PRACTICE__',fs.readFileSync(root+'personal-practice.html','utf8')).replaceAll('__ASSET_VERSION__', 'ui-preview') });
+        if (!process.env.UI_LIVE && path.startsWith('/static/') && (path.endsWith('.css') || path.endsWith('.js'))) return route.fulfill({ contentType: path.endsWith('.css') ? 'text/css' : 'application/javascript', body: fs.readFileSync(root + path.split('/').pop(), 'utf8') });
         // Keep generation, audio prefetch and all writes away from the real service.
         if (path === '/tts' || route.request().method() !== 'GET') return route.fulfill({ status: 403, json: { detail: 'UI audit: side effects blocked' } });
         if (path === '/api/auth/me') return route.fulfill({ json: { email: 'preview@example.com', plan: 'pro', days_left: 30 } });
@@ -73,7 +73,8 @@ const card = { id: 'ui-fixture', note_id: 'fixture', mode: 'recognize', state: '
         }
         if (path === '/study') {
           const reviewLabel = page.locator('#open-deck-btn [data-i18n="reviewBtn"]');
-          assert(await reviewLabel.isVisible(), 'Study review button label must be visible');
+          assert(await page.locator('#open-deck-btn').isVisible(), 'Study review control must be visible');
+          if(width>400)assert(await reviewLabel.isVisible(), 'Study review button label must be visible');
           assert.equal(await page.locator('#open-deck-btn').getAttribute('href'), '/review');
           // The due-card banner only appears for users with review cards.
           // Verify its rendered text/background pair, including inherited span color.
@@ -110,7 +111,7 @@ const card = { id: 'ui-fixture', note_id: 'fixture', mode: 'recognize', state: '
       await page.locator('#reveal-btn').click();
       assert(await page.locator('#grade-row').isVisible());
       await check(`${width}/${lang}/review/answer`);
-      await page.screenshot({ path: `/tmp/tts-ui-review-${width}-${lang}.png`, fullPage: true });
+      await page.screenshot({ path: `/tmp/tts-ui-review-${width}-${lang}-${process.env.UI_THEME || "light"}.png`, fullPage: true });
       await page.goto('http://localhost:8000/listen');
       await page.locator('#make-episode-btn').waitFor({ state: 'visible' });
       await check(`${width}/${lang}/listen/signed-in`);

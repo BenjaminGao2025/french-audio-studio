@@ -17,6 +17,7 @@
     const TEXT = {
         en: {
             baseForm: 'base form: ', contextWord: 'Word in context', readAs: 'Read as: ',
+            back: 'Back to ', lemmaLookup: word => `Look up ${word} and hear it`,
             lookingUpMeaning: 'Looking up the meaning...', lookupFailed: 'Lookup failed', noDefinition: 'Could not get the meaning',
             partOfPhrase: (word, phrase) => `“${word}” is part of the fixed expression “${phrase}” here: learn it as a whole.`,
             popoverStarTitle: 'Add to review (shortcut S)', popoverSaved: 'In review (click to remove)',
@@ -31,6 +32,7 @@
         },
         zh: {
             baseForm: '原形: ', contextWord: '语境词汇', readAs: '读作：',
+            back: '返回 ', lemmaLookup: word => `查 ${word} 的释义和发音`,
             lookingUpMeaning: '正在查询字义...', lookupFailed: '查词失败', noDefinition: '暂无法获取释义',
             partOfPhrase: (word, phrase) => `「${word}」在这句里是固定搭配「${phrase}」的一部分，要整体理解。`,
             popoverStarTitle: '加入复习 (快捷键 S)', popoverSaved: '已加入复习（点击移除）',
@@ -332,6 +334,7 @@
     function popoverMarkup() {
         return `
         <div class="popover-arrow" aria-hidden="true"></div>
+        <button class="popover-back" type="button" hidden></button>
         <div class="popover-header">
             <div class="popover-main-info">
                 <div class="popover-word-row">
@@ -400,6 +403,7 @@
         document.body.appendChild(pop);
         const q = (sel) => pop.querySelector(sel);
         const els = {
+            back: q('.popover-back'),
             word: q('.popover-word'), star: q('.btn-popover-star-icon'), speak: q('.btn-popover-speak-inline'),
             phonetic: q('.popover-phonetic'), pos: q('.popover-pos'), lemma: q('.popover-lemma'),
             close: q('.popover-close-btn'), loading: q('.popover-loading'), content: q('.popover-content'),
@@ -410,10 +414,15 @@
         let currentCard = null;
         let activeEl = null;
         let target = null;
+        const trail = [];
+        let lookupGeneration = 0;
 
         const isOpen = () => !pop.hidden;
 
         function close() {
+            lookupGeneration++;
+            trail.length = 0;
+            els.back.hidden = true;
             pop.hidden = true;
             pop.style.display = 'none';
             els.loading.hidden = true;
@@ -474,16 +483,60 @@
             els.star.title = saved ? T.popoverSaved : T.popoverStarTitle;
         }
 
+        // Reuse the same word buttons throughout the popup, including phrase titles.
+        function appendFrenchWords(container, text, lemma = false) {
+            for (const piece of text.split(/(\p{L}+(?:['’\-]\p{L}+)*)/u)) {
+                if (!piece) continue;
+                if (!/^\p{L}/u.test(piece)) { container.append(document.createTextNode(piece)); continue; }
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'popover-lookup-word';
+                button.lang = 'fr';
+                button.dataset.lookupWord = piece;
+                if (lemma) button.dataset.lemmaWord = piece;
+                button.textContent = piece;
+                button.title = T.lemmaLookup(piece);
+                button.setAttribute('aria-label', button.title);
+                container.append(button);
+            }
+        }
+
+        function renderFrenchWords(container, text) {
+            container.replaceChildren();
+            appendFrenchWords(container, text);
+        }
+
+        // Definitions mix French with English/Chinese. Link quoted references to the
+        // entry, not arbitrary English text that happens to resemble a French word.
+        function linkFrenchReferences(container, item) {
+            const references = new Set([item.token, item.lemma].filter(Boolean)
+                .flatMap(text => [text, ...text.split(/\s+/)]).map(text => text.toLowerCase()));
+            const text = container.textContent;
+            container.replaceChildren();
+            let offset = 0;
+            for (const match of text.matchAll(/[“「«"']([^“”「」«»"'\n]+)[”」»"']/gu)) {
+                if (!references.has(match[1].trim().toLowerCase())) continue;
+                container.append(document.createTextNode(text.slice(offset, match.index + 1)));
+                appendFrenchWords(container, match[1]);
+                offset = match.index + match[0].length - 1;
+            }
+            container.append(document.createTextNode(text.slice(offset)));
+        }
+
         function render(item) {
             currentCard = item;
-            els.word.textContent = item.token;
+            renderFrenchWords(els.word, item.token);
             const phonetic = formatFriendlyPhonetic(item.phonetic || '');
             els.phonetic.textContent = phonetic;
             els.phonetic.hidden = !phonetic;
             els.pos.textContent = item.pos || '';
             els.pos.hidden = !item.pos;
             const showLemma = item.lemma && item.lemma.toLowerCase() !== item.token.toLowerCase();
-            els.lemma.textContent = showLemma ? `${T.baseForm}${item.lemma}` : '';
+            els.lemma.replaceChildren();
+            if (showLemma) {
+                els.lemma.append(document.createTextNode(T.baseForm));
+                appendFrenchWords(els.lemma, item.lemma, true);
+            }
             els.lemma.hidden = !showLemma;
             if (EN) {
                 els.cn.textContent = pick(item.explanation_cn, item.explanation_en) || T.contextWord;
@@ -495,6 +548,8 @@
                 els.cn.textContent = item.explanation_en || T.contextWord;
                 els.en.textContent = '';
             }
+            linkFrenchReferences(els.cn, item);
+            linkFrenchReferences(els.en, item);
             els.loading.hidden = true;
             els.loading.style.display = 'none';
             els.content.hidden = false;
@@ -510,12 +565,17 @@
             if (options.remember) options.remember(lower, item);
         }
 
-        async function show(rawWord, element, context = {}) {
+        async function show(rawWord, element, context = {}, navigation = {}) {
             if (!element) return;
             const word = (rawWord || '').replace(/^[^\wÀ-ÿ]+|[^\wÀ-ÿ]+$/g, '').trim();
             if (!word || word.length > 40 || (!/[a-zA-ZÀ-ÿ]/.test(word) && !frenchNumberReading(word))) return;
             const rect = element.getBoundingClientRect();
             if (!rect || (rect.width === 0 && rect.height === 0)) return;
+
+            const requestId = ++lookupGeneration;
+            if (navigation.nested && currentCard) trail.push({ item: currentCard, target });
+            else trail.length = 0;
+            updateBack();
 
             target = element;
             pop.hidden = false;
@@ -545,11 +605,14 @@
             speak((word.endsWith("'") || word.endsWith('’')) ? (BASIC_FRENCH_WORDS[lower]?.lemma || word) : word);
 
             // 1. The page's own data (sentence analysis, fixed expressions, the card being reviewed)
-            const local = options.localLookup ? options.localLookup(lower, word, context) : null;
+            // A nested word must resolve individually, rather than being redirected back to
+            // the surrounding sentence's fixed expression (e.g. venir -> viens de).
+            const local = !navigation.nested && options.localLookup ? options.localLookup(lower, word, context) : null;
             if (local) { render(withContext(Object.assign({ token: word }, local))); return; }
 
             // 2. Already looked up, or in the built-in A1 dictionary
-            const known = lookupCache.get(lower) || (elided && lookupCache.get(elided))
+            const cached = lookupCache.get(lower);
+            const known = (navigation.nested && cached?.token?.toLowerCase() !== lower ? null : cached) || (elided && lookupCache.get(elided))
                 || BASIC_FRENCH_WORDS[lower] || (elided && BASIC_FRENCH_WORDS[elided]);
             if (known) {
                 const item = withContext(Object.assign({}, known, { token: word }));
@@ -560,7 +623,7 @@
 
             // 3. Server lookup
             currentCard = withContext({ token: word, lemma: word, pos: '', phonetic: '', explanation_cn: '', explanation_en: '' });
-            els.word.textContent = word;
+            renderFrenchWords(els.word, word);
             els.phonetic.textContent = '';
             els.pos.hidden = true;
             els.lemma.hidden = true;
@@ -578,9 +641,9 @@
                 if (!res.ok) throw new Error(data.detail?.message || T.lookupFailed);
                 const item = withContext(data);
                 remember(lower, item);
-                if (isOpen() && els.word.textContent === word) render(item);
+                if (requestId === lookupGeneration && isOpen()) render(item);
             } catch (err) {
-                if (isOpen() && els.word.textContent === word) {
+                if (requestId === lookupGeneration && isOpen()) {
                     els.loading.hidden = true;
                     els.loading.style.display = 'none';
                     els.content.hidden = false;
@@ -595,6 +658,32 @@
         function replay() {
             if (currentCard && currentCard.token) speak(currentCard.speech || currentCard.token);
         }
+
+        function updateBack() {
+            const previous = trail[trail.length - 1];
+            els.back.hidden = !previous;
+            els.back.textContent = previous ? `← ${T.back}${previous.item.token}` : '';
+        }
+
+        pop.addEventListener('click', e => {
+            const button = e.target.closest('[data-lookup-word]');
+            if (!button || !currentCard || !target) return;
+            e.stopPropagation();
+            if (button.dataset.lookupWord.toLowerCase() === currentCard.token.toLowerCase()) { replay(); return; }
+            show(button.dataset.lookupWord, target, {
+                sentence: currentCard.sentence || '', sentence_cn: currentCard.sentence_cn || '',
+            }, { nested: true });
+        });
+        els.back.addEventListener('click', e => {
+            e.stopPropagation();
+            const previous = trail.pop();
+            if (!previous) return;
+            lookupGeneration++;
+            target = previous.target;
+            updateBack();
+            render(previous.item);
+            replay();
+        });
 
         els.close.addEventListener('click', close);
         els.speak.addEventListener('click', (e) => { e.stopPropagation(); replay(); });

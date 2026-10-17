@@ -1,0 +1,16 @@
+/* Home-screen app on iPhone: keep content clear of the notch and the home bar.
+   The pages use viewport-fit=cover, so the safe-area insets are real numbers. */
+body {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+}
+@media (display-mode: standalone) {
+    body {
+        padding-top: env(safe-area-inset-top, 0px);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+}
+.coach-notice {
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    right: calc(20px + env(safe-area-inset-right, 0px));
+}

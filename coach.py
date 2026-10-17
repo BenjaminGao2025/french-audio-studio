@@ -15,9 +15,9 @@ import auth_db
 import curriculum
 
 KINDS = ('listen', 'write', 'speak', 'review', 'read')
-LINKS = {'listen': '/listen#mini-listening', 'write': '/write', 'speak': '/speak', 'review': '/review', 'read': '/study'}
-LABELS = {'listen': ('听懂一小段', 'Understand a short clip'), 'write': ('写一段并订正', 'Write and revise'), 'speak': ('完成一次口语练习', 'Complete a speaking attempt'), 'review': ('复习到期卡片', 'Review due cards'), 'read': ('拆解一个短句', 'Study a short sentence')}
-DEFAULT_WEIGHTS = {'listen': 3, 'write': 2, 'speak': 2, 'review': 1, 'read': 2}
+LINKS = {'listen': '/listen#mini-listening', 'write': '/write', 'speak': '/study?mode=personal', 'review': '/review', 'read': '/study'}
+LABELS = {'listen': ('听懂一小段', 'Understand a short clip'), 'write': ('写一段并订正', 'Write and revise'), 'speak': ('练自己想说的话并存档', 'Practise your own words and save recordings'), 'review': ('复习到期卡片', 'Review due cards'), 'read': ('拆解一个短句', 'Study a short sentence')}
+DEFAULT_WEIGHTS = {'listen': 3, 'write': 2, 'speak': 4, 'review': 1, 'read': 2}
 
 @contextmanager
 def db():
@@ -214,7 +214,14 @@ def dashboard(user_id):
         task['done']=task['verified'] or task['self_reported']
     planned=sum(len(json.loads(r['tasks_json'])) for r in snapshots)
     actual=sum(any(e['day']==r['day'] and e['kind']==t['kind'] for e in records) for r in snapshots for t in json.loads(r['tasks_json']))
-    report=dict(planned_tasks=planned, verified_tasks=actual, planned_days=len(snapshots), self_reports=sum(r['kind']=='self' for r in records), weekly=evidence['weekly'])
+    homework_evidence={'archived':0,'recordings':0,'practice_minutes':0}
+    with db() as c:
+        if c.execute("SELECT 1 FROM sqlite_master WHERE name='speaking_journals'").fetchone():
+            start=(day-dt.timedelta(days=6)).isoformat()
+            j=c.execute("SELECT count(*),sum(practice_seconds) FROM speaking_journals WHERE user_id=? AND day BETWEEN ? AND ? AND status='complete'",(user_id,start,day.isoformat())).fetchone()
+            r=c.execute('SELECT count(*) FROM journal_recordings r JOIN speaking_journals j ON r.journal_id=j.id WHERE j.user_id=? AND j.day BETWEEN ? AND ?',(user_id,start,day.isoformat())).fetchone()
+            homework_evidence={'archived':j[0],'recordings':r[0],'practice_minutes':round((j[1] or 0)/60,1)}
+    report=dict(homework=homework_evidence,planned_tasks=planned, verified_tasks=actual, planned_days=len(snapshots), self_reports=sum(r['kind']=='self' for r in records), weekly=evidence['weekly'])
     result=dict(day=day.isoformat(), setup=bool(stored), tasks=tasks, schedule=schedule, progress=evidence, weekly_report=report,
                 last_review=json.loads(review['review_json']) if review else None,
                 review_due=not review or (now()-dt.datetime.fromisoformat(review['created_at'])).days>=7)
@@ -281,3 +288,9 @@ def answer_check(user_id,check_id,answers):
     if not updated: return get_check(user_id,check_id)['result']
     record(user_id,'challenge' if check['challenge'] else 'listen',check_id,result,20 if score==len(correct) else 5)
     return result
+
+
+def timezone_offset(user_id):
+    stored=get_profile(user_id)
+    zone=ZoneInfo((stored or {}).get('profile',{}).get('timezone','America/Vancouver'))
+    return -int(now().astimezone(zone).utcoffset().total_seconds()/60)

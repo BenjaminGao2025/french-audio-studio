@@ -48,8 +48,9 @@
     function mountToggle(button) {
         if (!button) return;
         const current = lang();
-        button.textContent = current === 'en' ? '中文' : 'EN';
+        button.textContent = current === 'en' ? '中' : 'EN';
         button.title = current === 'en' ? '切换到中文界面' : 'Switch to English';
+        button.setAttribute('aria-label', button.title);
         button.addEventListener('click', () => setLang(current === 'en' ? 'zh' : 'en'));
     }
 

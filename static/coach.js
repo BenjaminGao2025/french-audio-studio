@@ -57,6 +57,7 @@
         const w=data.weekly_report;
         $('coach-evidence').textContent=say(`最近 7 天：已生成安排 ${w.planned_days} 天，共 ${w.planned_tasks} 项；系统验证 ${w.verified_tasks} 项，另有 ${w.self_reports} 项手动确认。\n听力 ${w.weekly.listen} 次 · 写作 ${w.weekly.write} 次 · 成功订正 ${w.weekly.revision} 次 · 口语 ${w.weekly.speak} 次。`, `Last 7 days: ${w.planned_tasks} tasks scheduled across ${w.planned_days} days; ${w.verified_tasks} verified and ${w.self_reports} self-reported.\nListening ${w.weekly.listen} · Writing ${w.weekly.write} · Successful revisions ${w.weekly.revision} · Speaking ${w.weekly.speak}.`);
         if(data.progress.suggest_a1) $('coach-evidence').textContent += say('\n你在至少三个不同短练习中，不看文字答对了全部题目，可以试试 A1 连贯听。','\nYou answered three different short clips correctly without text hints. Try connected A1 listening.');
+        if(w.homework) $('coach-evidence').textContent += say(`\n个人表达作业：存档 ${w.homework.archived} 份、录音 ${w.homework.recordings} 段；已交作业中的开口活动估算 ${w.homework.practice_minutes} 分钟。`, `\nPersonal practice: ${w.homework.archived} archives, ${w.homework.recordings} recordings; ${w.homework.practice_minutes} estimated speaking minutes in completed entries.`);
         $('coach-review-due').textContent=data.review_due?say('可以做一次复盘。之后每 7 天提醒一次。','Time for a reflection. We remind you every 7 days.'):say('本周已复盘，你也可以随时再检查。','You have reviewed recently; you can reflect again any time.');
         $('coach-last-review').textContent=data.last_review?`${data.last_review.date}\n${data.last_review.advice}`:'';
         $('coach-status').textContent=data.notice||'';

@@ -34,7 +34,7 @@ function initStudyWorkbench() {
     const TEXT = {
         en: {
             pageTitle: 'French Breakdown & Shadowing - 1000H French',
-            heading: 'French Breakdown & Shadowing',
+            heading: 'Study & speaking practice',
             navAria: 'Pages', navAudio: 'Audio Studio', navStudy: 'Study', navWrite: 'Write', navSpeak: 'Speak', navReview: 'Review', navListen: 'Listen',
             account: 'Account', login: 'Log in', trialBadgeTitle: 'Account validity',
             reviewBtn: 'Review', reviewBtnTitle: "Today's review (listen · speak · fill in)", dueBadgeTitle: 'Cards due today',
@@ -108,7 +108,7 @@ function initStudyWorkbench() {
             modeSwitchAria: 'Study mode',
             modeNormal: 'Show all', modeNormalTitle: 'Show the full French of every step',
             modeBlind: 'Test me', modeBlindTitle: 'Hide the new words of each step, so you say them from memory',
-            buildupHint: 'Build the sentence one piece at a time: listen to each step, then say it yourself.',
+            buildupHint: 'Tap any French word to hear it. Listen to each step, then say it yourself.',
             blindTipStrong: 'Feynman challenge', blindTipText: ': the new words of each step are hidden. Look at the meaning and say the French from memory!',
             revealAll: 'Reveal all', hideAgain: 'Hide again',
             fwBadge: 'Function words',
@@ -131,12 +131,16 @@ function initStudyWorkbench() {
             micUnavailable: 'Cannot access the microphone: ', shadowAgain: '🎙 Try again',
             diffWordTitle: (score) => `Similarity: ${score} / 100 · click for the meaning and pronunciation`,
             noClearSpeech: 'No clear speech detected. Please try again.',
+            scoreTranscribing: 'Checking…', scoreNotScored: 'Not scored', scoreFailed: 'Could not score this recording: ',
+            scoreNoAudio: 'No sound was recorded. Check that the microphone is allowed, then try again.',
             daysLeftShort: (n) => `${n} days left`, planPro: 'No expiry', daysLeft: (n) => `Valid for ${n} more days`,
             operationFailed: 'Something went wrong', loginSuccess: 'Logged in. Welcome back!', loggedOut: 'Logged out.',
             wordTitleSuffix: ' · click for the meaning and pronunciation',
             partOfPhrase: (word, phrase) => `“${word}” is part of the fixed expression “${phrase}” here: learn it as a whole.`,
             emptyInput: 'Please enter the French text you want to break down first.',
             analyzing: 'Analysing...',
+            cancelAnalysis: 'Cancel', cancelAnalysisTitle: 'Stop the analysis and keep editing (Esc)',
+            analysisCancelled: 'Analysis cancelled. Your text is still here; edit it and press Enter when ready.',
             analyzingStatus: 'The AI is splitting the text into sentences, chunks and collocations and analysing them. Please wait...',
             analyzeFailed: 'Analysis request failed',
             analyzingProgress: (done, total) => `The AI is analysing your text: ${done} of ${total} parts done…`,
@@ -147,7 +151,7 @@ function initStudyWorkbench() {
         },
         zh: {
             pageTitle: '法语拆解与跟读复述 - 1000H French',
-            heading: '法语拆解与跟读复述',
+            heading: '学习与开口练习',
             navAria: '页面切换', navAudio: '音频工作台', navStudy: '拆解与复述', navWrite: '写作', navSpeak: '口语', navReview: '今日复习', navListen: '开车听',
             account: '账号', login: '登录', trialBadgeTitle: '账号有效期',
             reviewBtn: '复习', reviewBtnTitle: '今日复习（听 · 说 · 填）', dueBadgeTitle: '今天待复习卡片数',
@@ -221,7 +225,7 @@ function initStudyWorkbench() {
             modeSwitchAria: '学习模式切换',
             modeNormal: '全部显示', modeNormalTitle: '显示每一步完整的法语',
             modeBlind: '考考我', modeBlindTitle: '遮住每一步新加的词，凭记忆说出来',
-            buildupHint: '一块一块把句子搭起来：每一步先听，再自己说一遍。',
+            buildupHint: '点任意法语单词可以听发音。每一步先听，再自己说一遍。',
             blindTipStrong: '费曼认知挑战', blindTipText: '：递进关键词已遮挡。看着释义，凭借脑内记忆说出这句法语！',
             revealAll: '一键揭晓', hideAgain: '重新遮挡',
             fwBadge: '基础虚词',
@@ -244,12 +248,16 @@ function initStudyWorkbench() {
             micUnavailable: '无法调用麦克风：', shadowAgain: '🎙 再次跟读',
             diffWordTitle: (score) => `相似度得分: ${score} / 100 · 点击查看释义与单读发音`,
             noClearSpeech: '未检测到清晰发音，请重试。',
+            scoreTranscribing: '识别中…', scoreNotScored: '未评分', scoreFailed: '这次录音没法打分：',
+            scoreNoAudio: '没有录到声音，请确认已允许使用麦克风，再试一次。',
             daysLeftShort: (n) => `剩 ${n} 天`, planPro: '长期有效', daysLeft: (n) => `有效期剩 ${n} 天`,
             operationFailed: '操作失败', loginSuccess: '登录成功！欢迎回来。', loggedOut: '已退出登录。',
             wordTitleSuffix: ' · 点击查看释义与单读发音',
             partOfPhrase: (word, phrase) => `「${word}」在这句里是固定搭配「${phrase}」的一部分，要整体理解。`,
             emptyInput: '请先输入需要拆解或学习的法语文本。',
             analyzing: '正在智能拆解与精析...',
+            cancelAnalysis: '取消', cancelAnalysisTitle: '停止分析，继续编辑 (Esc)',
+            analysisCancelled: '已取消分析，文本仍保留，可继续编辑，改好后按 Enter 重新开始。',
             analyzingStatus: '正在调用 LLM 进行全句切分与意群搭配深度三列解析，请稍候...',
             analyzeFailed: '分析请求失败',
             analyzingProgress: (done, total) => `AI 正在逐段解析：已完成 ${done} / ${total} 段…`,
@@ -373,10 +381,14 @@ function initStudyWorkbench() {
         onError: (err) => showSrsError(err),
     });
 
+    // Also tapped like a title word: the word-by-word gloss, and a highlighted step chunk
+    // (outside blind mode, where a tap on it reveals it instead)
+    const GLOSS_TAP_SELECTOR = '.gloss-fr, .buildup-steps-list:not(.is-blind-mode) .buildup-new-token';
+
     const wordPopover = window.FrenchWordPopover.create({
         speak: (text) => playFrenchSpeech(text, null, { once: true }),
         getAuthToken: () => getEffectiveAuthToken(),
-        wordSelector: '.interactive-word, .diff-word, .token-word',
+        wordSelector: `.interactive-word, .diff-word, .token-word, ${GLOSS_TAP_SELECTOR}`,
         contextFor(element) {
             const card = element && element.closest('.sentence-card');
             if (!card) return {};
@@ -1091,7 +1103,7 @@ function initStudyWorkbench() {
 
     function highlightBuildupDiff(currentFr, prevFr) {
         if (!currentFr) return '';
-        if (!prevFr) return escapeHtml(currentFr);
+        if (!prevFr) return renderInteractiveWordsHtml(currentFr);
 
         const normalizeToken = (w) => w.toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
 
@@ -1108,7 +1120,7 @@ function initStudyWorkbench() {
         });
 
         if (currWords.length === 0 || prevWords.length === 0) {
-            return escapeHtml(currentFr);
+            return renderInteractiveWordsHtml(currentFr);
         }
 
         const m = prevWords.length;
@@ -1165,7 +1177,7 @@ function initStudyWorkbench() {
                 result += '</mark>';
                 inMark = false;
             }
-            result += escapeHtml(piece);
+            result += renderInteractiveWordsHtml(piece);
         }
         if (inMark) {
             result += '</mark>';
@@ -1505,6 +1517,7 @@ function initStudyWorkbench() {
                                                 <i data-lucide="volume-2"></i>
                                                 <span>${T.pronounce}</span>
                                             </button>
+                                            ${window.FrenchPlayback ? window.FrenchPlayback.toggleHtml('btn-step-repeat') : ''}
                                             <button class="btn-buildup-record" type="button" title="${T.buildupRecordTitle}" data-sentence="${escapeHtml(step.fr)}">
                                                 <i data-lucide="mic"></i>
                                                 <span class="record-btn-text">${T.shadowScore}</span>
@@ -2091,7 +2104,7 @@ function initStudyWorkbench() {
             };
             head.addEventListener('click', (e) => {
                 if (e.target.closest('button:not(.sentence-toggle), a')) return;
-                if (card.classList.contains('is-open') && e.target.closest('.interactive-word')) return;
+                if (e.target.closest('.interactive-word')) return;
                 if (String(window.getSelection && window.getSelection()).trim()) return;
                 setOpen(!card.classList.contains('is-open'));
             });
@@ -2119,6 +2132,18 @@ function initStudyWorkbench() {
                 });
                 return;
             }
+            const glossWord = e.target.closest(GLOSS_TAP_SELECTOR);
+            if (glossWord) {
+                if (String(window.getSelection && window.getSelection()).trim()) return;
+                e.stopPropagation();
+                const word = glossWord.matches('.buildup-new-token') ? chunkSpeechText(glossWord.textContent) : glossWord.textContent.trim();
+                // The popover takes up to 40 characters; a longer chunk is just read aloud
+                if (word.length > 40) { playFrenchSpeech(word, null, { once: true }); return; }
+                showPopoverForElement(word, glossWord, {
+                    sentence: targetSentence,
+                    sentence_cn: transCn
+                });
+            }
         });
 
         card.addEventListener('keydown', (e) => {
@@ -2127,6 +2152,7 @@ function initStudyWorkbench() {
                 if (interactiveWord) {
                     e.preventDefault();
                     e.stopPropagation();
+                    if (interactiveWord.closest('.buildup-steps-list.is-blind-mode')) { interactiveWord.click(); return; }
                     const word = interactiveWord.dataset.word || interactiveWord.dataset.token || interactiveWord.textContent.trim();
                     showPopoverForElement(word, interactiveWord, {
                         sentence: targetSentence,
@@ -2266,6 +2292,7 @@ function initStudyWorkbench() {
             let isRecording = false;
             let recognition = null;
             let recognitionTranscript = '';
+            let stopResolve = null;  // resolves with the recorded blob once the recorder has stopped
 
             let isModelPlaying = false;
             let isUserPlaying = false;
@@ -2407,8 +2434,11 @@ function initStudyWorkbench() {
                     mediaRecorder.ondataavailable = (e) => {
                         if (e.data.size > 0) audioChunks.push(e.data);
                     };
+                    const recorderForStop = mediaRecorder;
                     mediaRecorder.onstop = () => {
-                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        // Safari records audio/mp4, Chrome audio/webm: keep the real type
+                        const audioBlob = new Blob(audioChunks, { type: recorderForStop.mimeType || 'audio/webm' });
+                        if (stopResolve) { stopResolve(audioBlob); stopResolve = null; }
                         if (userAudioUrl) URL.revokeObjectURL(userAudioUrl);
                         userAudioUrl = URL.createObjectURL(audioBlob);
                         if (playUserBtn) playUserBtn.disabled = false;
@@ -2460,8 +2490,12 @@ function initStudyWorkbench() {
                     recordBtnText.textContent = T.shadowAgain;
                 }
 
+                const stopped = new Promise(resolve => { stopResolve = resolve; });
                 if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                     mediaRecorder.stop();
+                } else if (stopResolve) {
+                    stopResolve(null);
+                    stopResolve = null;
                 }
 
                 if (recognition) {
@@ -2470,13 +2504,70 @@ function initStudyWorkbench() {
                     } catch (e) {}
                 }
 
-                setTimeout(() => {
-                    evaluateAndDisplay();
-                }, 500);
+                finishAndScore(stopped);
             }
 
-            function evaluateAndDisplay() {
-                const evaluation = evaluateFrenchPronunciation(sentenceText, recognitionTranscript);
+            // The browser's speech recognition gives nothing on iPhone Safari (it cannot share the
+            // microphone with the recorder): then the recording itself is transcribed on the server.
+            // Without a transcript there is no score, only a clear message (never a fake 0).
+            async function finishAndScore(stopped) {
+                const blob = await Promise.race([stopped, new Promise(resolve => setTimeout(() => resolve(null), 3000))]);
+                await new Promise(resolve => setTimeout(resolve, 500));  // late recognition results
+                let transcript = recognitionTranscript.trim();
+                if (!transcript) {
+                    if (!blob || blob.size < 1000) {
+                        showScoreError(T.scoreNoAudio);
+                        return;
+                    }
+                    recordBtn.disabled = true;
+                    if (recordBtnText) recordBtnText.textContent = T.scoreTranscribing;
+                    try {
+                        const token = getEffectiveAuthToken();
+                        if (!token) {
+                            openAuthModal();
+                            throw new Error(T.dictationLogin);
+                        }
+                        const res = await fetch('/api/transcribe?language=fr', {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': blob.type || 'application/octet-stream' },
+                            body: blob,
+                        });
+                        const data = await readJsonSafely(res);
+                        if (!res.ok) throw new Error(data.detail?.message || T.transcribeFailed(res.status));
+                        transcript = (data.text || '').trim();
+                    } catch (err) {
+                        showScoreError(`${T.scoreFailed}${err.message}`);
+                        return;
+                    } finally {
+                        recordBtn.disabled = false;
+                        if (recordBtnText) recordBtnText.textContent = T.shadowAgain;
+                    }
+                    if (!transcript) {
+                        showScoreError(T.noClearSpeech);
+                        return;
+                    }
+                }
+                evaluateAndDisplay(transcript);
+            }
+
+            function showScoreError(message) {
+                if (scorePill) {
+                    scorePill.textContent = '—';
+                    scorePill.className = `score-number-pill ${isCompact ? 'sm' : ''}`;
+                }
+                if (scoreRatingText) scoreRatingText.textContent = T.scoreNotScored;
+                if (metricAcc) metricAcc.textContent = '--%';
+                if (metricComp) metricComp.textContent = '--%';
+                if (diffBox) {
+                    diffBox.innerHTML = '';
+                    diffBox.textContent = message;
+                }
+                scoreCard.hidden = false;
+                refreshIcons();
+            }
+
+            function evaluateAndDisplay(transcript) {
+                const evaluation = evaluateFrenchPronunciation(sentenceText, transcript);
 
                 if (scorePill) {
                     scorePill.textContent = `${evaluation.overallScore}`;
@@ -2499,7 +2590,7 @@ function initStudyWorkbench() {
                             diffBox.appendChild(document.createTextNode(' '));
                         });
                     } else {
-                        diffBox.textContent = recognitionTranscript || T.noClearSpeech;
+                        diffBox.textContent = transcript || T.noClearSpeech;
                     }
                 }
 
@@ -2575,19 +2666,22 @@ function initStudyWorkbench() {
                 });
             }
 
-            // Click individual cloze token to reveal/re-mask
+            // Click individual cloze token to reveal/re-mask (outside blind mode a chunk opens
+            // the word popover instead, via the card click delegation)
             if (stepsList) {
                 stepsList.addEventListener('click', (e) => {
                     if (!stepsList.classList.contains('is-blind-mode')) return;
 
                     const token = e.target.closest('.buildup-new-token');
                     if (token) {
+                        e.stopPropagation();
                         token.classList.toggle('revealed');
                         return;
                     }
 
                     const firstRowText = e.target.closest('.buildup-step-row:first-child .buildup-fr-text');
                     if (firstRowText) {
+                        e.stopPropagation();
                         const firstRow = firstRowText.closest('.buildup-step-row');
                         if (firstRow) firstRow.classList.toggle('step-revealed');
                     }
@@ -2596,6 +2690,13 @@ function initStudyWorkbench() {
         }
     }
     window.renderStudyDeck = renderStudyDeck;
+
+
+    // What a highlighted chunk should sound like: its words, without the punctuation around it
+    function chunkSpeechText(text) {
+        return (text || '').replace(/\s+/g, ' ').replace(/^[\s«"“(]+|[\s.,;:!?…»"”)]+$/g, '').trim();
+    }
+    window.chunkSpeechText = chunkSpeechText;
 
     function escapeHtml(str) {
         if (!str) return '';
@@ -2860,8 +2961,9 @@ function initStudyWorkbench() {
         return parts.length ? parts : [text];
     }
 
-    async function analyzePart(text, token, model) {
+    async function analyzePart(text, token, model, signal) {
         const res = await fetch('/api/analyze', {
+            signal,
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -2876,7 +2978,28 @@ function initStudyWorkbench() {
         return data.sentences || [];
     }
 
+    // Enter can start an analysis by accident: a Cancel button (and Esc) stops it.
+    let analysisController = null;
+    let cancelAnalysisButton = null;
+    function showCancelButton(show) {
+        if (!cancelAnalysisButton) {
+            cancelAnalysisButton = document.createElement('button');
+            cancelAnalysisButton.id = 'cancel-analysis-btn';
+            cancelAnalysisButton.type = 'button';
+            cancelAnalysisButton.className = 'btn btn-secondary';
+            cancelAnalysisButton.textContent = T.cancelAnalysis;
+            cancelAnalysisButton.title = T.cancelAnalysisTitle;
+            cancelAnalysisButton.addEventListener('click', cancelAnalysis);
+            analyzeButton.before(cancelAnalysisButton);
+        }
+        cancelAnalysisButton.hidden = !show;
+    }
+    function cancelAnalysis() {
+        if (analysisController) analysisController.abort();
+    }
+
     async function startAnalysis() {
+        if (analysisController) return;
         const text = frenchInput.value.trim();
         if (!text) {
             statusMessage.textContent = T.emptyInput;
@@ -2892,6 +3015,9 @@ function initStudyWorkbench() {
             analyzeButton.classList.add('is-loading');
             analyzeButton.disabled = true;
             analyzeButtonLabel.textContent = T.analyzing;
+            analysisController = new AbortController();
+            const { signal } = analysisController;
+            showCancelButton(true);
             statusMessage.className = 'status-message status-working';
             statusMessage.textContent = T.analyzingStatus;
 
@@ -2903,14 +3029,15 @@ function initStudyWorkbench() {
             let done = 0;
             if (parts.length > 1) statusMessage.textContent = T.analyzingProgress(0, parts.length);
             const worker = async () => {
-                while (next < parts.length) {
+                while (next < parts.length && !signal.aborted) {
                     const index = next++;
-                    results[index] = await analyzePart(parts[index], token, model);
+                    results[index] = await analyzePart(parts[index], token, model, signal);
                     done += 1;
                     if (parts.length > 1) statusMessage.textContent = T.analyzingProgress(done, parts.length);
                 }
             };
             await Promise.all([worker(), worker()]);
+            if (signal.aborted) throw new DOMException('cancelled', 'AbortError');
             const sentences = results.flat();
 
             renderStudyDeck(sentences);
@@ -2920,9 +3047,18 @@ function initStudyWorkbench() {
             statusMessage.className = 'status-message status-success';
             statusMessage.textContent = T.analyzeDone;
         } catch (err) {
-            statusMessage.className = 'status-message status-error';
-            statusMessage.textContent = `${T.analyzeError}${err.message}`;
+            if (analysisController && analysisController.signal.aborted) {
+                // Nothing partial is rendered or saved; the text stays as typed
+                statusMessage.className = 'status-message';
+                statusMessage.textContent = T.analysisCancelled;
+                frenchInput.focus();
+            } else {
+                statusMessage.className = 'status-message status-error';
+                statusMessage.textContent = `${T.analyzeError}${err.message}`;
+            }
         } finally {
+            analysisController = null;
+            showCancelButton(false);
             analyzeButton.classList.remove('is-loading');
             analyzeButton.disabled = false;
             analyzeButtonLabel.textContent = T.analyze;
@@ -2939,6 +3075,13 @@ function initStudyWorkbench() {
         if (isPlainEnter(e)) {
             e.preventDefault();
             if (!analyzeButton.disabled) startAnalysis();
+        }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && analysisController) {
+            e.preventDefault();
+            cancelAnalysis();
         }
     });
 
@@ -3057,6 +3200,14 @@ function initStudyWorkbench() {
             });
         }
     });
+
+    // Personal expression can use the existing analysis without leaving this page.
+    window.FrenchStudy = { studyText(text) {
+        stopAllAudio();
+        frenchInput.value = text;
+        frenchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        return startAnalysis();
+    } };
 
     // Check prefilled URL query param `?text=...`
     window.renderStudyDeck = renderStudyDeck;

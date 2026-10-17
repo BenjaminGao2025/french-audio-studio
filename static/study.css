@@ -498,7 +498,7 @@
 }
 
 .breakdown-table tr:hover td {
-    background: rgba(238, 241, 237, 0.4);
+    background: var(--surface-subtle);
 }
 
 .token-cell {
@@ -2283,10 +2283,7 @@ a.nav-deck-btn {
     line-height: 1.5;
 }
 
-/* Closed: a click anywhere on the line opens it; the words work once it is open */
-.sentence-card:not(.is-open) .interactive-word {
-    pointer-events: none;
-}
+/* Words always pronounce; the arrow and empty heading space open/close the card. */
 
 .sentence-translation {
     margin: 2px 0 0;
@@ -2422,6 +2419,16 @@ a.nav-deck-btn {
     color: var(--ink);
     font-size: var(--text-base);
     font-weight: 600;
+    /* A tap opens the word popover, like a word in the sentence title */
+    cursor: pointer;
+    border-radius: 3px;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.gloss-fr:hover,
+.gloss-fr.is-active-word {
+    background: rgba(var(--primary-rgb), 0.1);
+    color: var(--primary);
 }
 
 .gloss-en {
@@ -2828,4 +2835,47 @@ a.nav-deck-btn {
     .ask-row .btn-ask > span {
         display: none;
     }
+}
+
+/* Steps on a phone: the French line selects like normal text (WebKit needs the prefix),
+   and a highlighted chunk is a tap target that opens the word popover (study.js) */
+.buildup-steps-list:not(.is-blind-mode) .buildup-fr-text,
+.buildup-steps-list:not(.is-blind-mode) .buildup-new-token {
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: default;
+}
+.buildup-steps-list:not(.is-blind-mode) .buildup-new-token {
+    cursor: pointer;
+    padding: 1px 0;
+    transition: background 0.15s ease;
+}
+.buildup-steps-list:not(.is-blind-mode) .buildup-new-token:hover,
+.buildup-steps-list:not(.is-blind-mode) .buildup-new-token.is-active-word {
+    background: rgba(var(--primary-rgb), 0.18);
+}
+
+/* Per-step Repeat: an icon-only copy of the shared Repeat switch (playback.js), next to Listen */
+.btn-repeat-toggle.btn-step-repeat {
+    width: 30px;
+    min-width: 30px;
+    height: 26px;
+    min-height: 26px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 999px;
+    flex-shrink: 0;
+}
+.btn-repeat-toggle.btn-step-repeat > span { display: none; }
+.btn-repeat-toggle.btn-step-repeat svg { width: 14px; height: 14px; }
+@media (pointer: coarse) {
+    .btn-repeat-toggle.btn-step-repeat { width: 38px; min-width: 38px; height: 32px; min-height: 32px; }
+}
+
+/* Step words use the same single-tap pronunciation as the sentence heading. */
+.buildup-fr-text .interactive-word { touch-action: manipulation; }
+.is-blind-mode .buildup-fr-text .interactive-word {
+    color: inherit !important;
+    background: transparent !important;
+    text-shadow: inherit;
 }
