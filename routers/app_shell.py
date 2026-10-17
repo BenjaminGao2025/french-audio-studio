@@ -32,8 +32,12 @@ async def app_shell(path: str = ""):
     # A last segment with a dot (or anything under assets/) is a file: serve it or 404, never
     # the shell, so a missing chunk is a real 404 instead of HTML served as JavaScript.
     if path.startswith("assets/") or "." in PurePosixPath(path).name:
-        target = (APP_DIR / path).resolve()
-        if not target.is_relative_to(APP_DIR) or not target.is_file():
+        try:
+            target = (APP_DIR / path).resolve()
+            found = target.is_relative_to(APP_DIR) and target.is_file()
+        except (OSError, ValueError):  # NUL byte, name too long
+            found = False
+        if not found:
             raise HTTPException(status_code=404, detail="文件不存在。")
         headers = {"Cache-Control": IMMUTABLE} if path.startswith("assets/") else {}
         return FileResponse(target, media_type=MEDIA_TYPES.get(target.suffix), headers=headers)

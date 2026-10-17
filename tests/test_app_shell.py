@@ -127,6 +127,12 @@ class AppShellTests(unittest.TestCase):
                 self.assertEqual(res.status_code, 404)
                 self.assertNotIn("import", res.text)
 
+    def test_unusable_file_names_are_404_not_500(self):
+        client = TestClient(tts_service.app, raise_server_exceptions=False)
+        for path in ("/app/assets/%00.js", "/app/x%00.png", "/app/assets/" + "a" * 5000 + ".js"):
+            with self.subTest(path=path[:40]):
+                self.assertEqual(client.get(path).status_code, 404)
+
     def test_no_external_fonts_in_build(self):
         for path in APP_DIR.rglob("*"):
             if path.is_file() and path.suffix in {".html", ".css", ".js"}:
