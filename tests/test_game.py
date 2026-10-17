@@ -53,6 +53,15 @@ class LevelCurveTests(unittest.TestCase):
         self.assertEqual(game.LANE_WEEK_TARGETS["review"], 150)
         self.assertEqual(game.WEEK_TARGET_MIN, 1440)
 
+    def test_the_course_target_moved_into_reading_and_speaking(self):
+        # The old 180 min/week course target is now 90 min of intensive reading and 90 of shadowing.
+        self.assertNotIn("course", game.LANE_WEEK_TARGETS)
+        self.assertNotIn("course", game.LANES)
+        self.assertEqual(game.LANE_WEEK_TARGETS["reading"], 150 + 90)
+        self.assertEqual(game.LANE_WEEK_TARGETS["speaking"], 240 + 90)
+        self.assertEqual(tuple(game.LANES), ("listening", "reading", "speaking", "writing", "review", "car"))
+        self.assertEqual(game.WEEK_TARGET_MIN, 1440)  # the weekly total did not change
+
 
 
 class StudyTimeTests(unittest.TestCase):
@@ -61,13 +70,13 @@ class StudyTimeTests(unittest.TestCase):
 
     def test_minutes_beyond_five_hours_earn_half_xp(self):
         now = _at("2026-10-06", 10)  # a Tuesday
-        game.log_time(self.user_id, "course", 200, "", PDT, now)
+        game.log_time(self.user_id, "reading", 200, "", PDT, now)
         game.log_time(self.user_id, "listening", 200, "", PDT, now)
         state = game.state(self.user_id, PDT, now)
         self.assertEqual(state["today"]["minutes"], 400)
         self.assertEqual(state["xp"], 300 + 50)
         self.assertEqual(state["today"]["target"], 240)
-        self.assertEqual(state["week"]["by_lane"]["course"], 200)
+        self.assertEqual(state["week"]["by_lane"]["reading"], 200)
 
     def test_tcf_skills_grouping_and_furthest_behind(self):
         now = _at("2026-10-06", 10)  # a Tuesday
@@ -75,24 +84,31 @@ class StudyTimeTests(unittest.TestCase):
         week = st["week"]
         skills = week["skills"]
         self.assertEqual(skills["CO"]["target"], 510)  # listening (210) + car*0.5 (300)
-        self.assertEqual(skills["CE"]["target"], 150)  # reading (150)
+        self.assertEqual(skills["CE"]["target"], 240)  # reading (150 + 90 intensive reading)
         self.assertEqual(skills["EE"]["target"], 210)  # writing (210)
-        self.assertEqual(skills["EO"]["target"], 240)  # speaking (240)
-        self.assertEqual(skills["shared"]["target"], 330)  # course (180) + review (150)
+        self.assertEqual(skills["EO"]["target"], 330)  # speaking (240 + 90 shadowing)
+        self.assertEqual(skills["shared"]["target"], 150)  # review (150)
         total_target = sum(s["target"] for s in skills.values())
         self.assertEqual(total_target, 1440)
         self.assertEqual(week["focus_skill"]["skill"], "CO")
         self.assertEqual(week["focus_skill"]["link"], "/listen")
 
-        # Log some listening time: 200 min listening -> EO becomes furthest behind (target 240 vs EE 210)
+        # Log some listening time: 200 min listening -> EO becomes furthest behind (target 330 vs CE 240)
         game.log_time(self.user_id, "listening", 200, "", PDT, now)
         st = game.state(self.user_id, PDT, now)
         week = st["week"]
         self.assertEqual(week["focus_skill"]["skill"], "EO")
         self.assertEqual(week["focus_skill"]["link"], "/speak")
 
-        # Log speaking time: 240 min speaking -> EE becomes furthest behind
+        # Log speaking time: 240 min speaking -> CE becomes furthest behind (target 240 vs EE 210)
         game.log_time(self.user_id, "speaking", 240, "", PDT, now)
+        st = game.state(self.user_id, PDT, now)
+        week = st["week"]
+        self.assertEqual(week["focus_skill"]["skill"], "CE")
+        self.assertEqual(week["focus_skill"]["link"], "/study")
+
+        # Log reading time: 240 min reading -> EE becomes furthest behind
+        game.log_time(self.user_id, "reading", 240, "", PDT, now)
         st = game.state(self.user_id, PDT, now)
         week = st["week"]
         self.assertEqual(week["focus_skill"]["skill"], "EE")
@@ -120,7 +136,7 @@ class StudyTimeTests(unittest.TestCase):
     def test_weekday_streak_skips_weekends_and_family_days(self):
         # Thu, Fri active; Sat/Sun off; Mon family day; Tue (today) not studied yet
         for day in ("2026-10-08", "2026-10-09"):
-            game.log_time(self.user_id, "course", 60, "", PDT, _at(day, 10))
+            game.log_time(self.user_id, "reading", 60, "", PDT, _at(day, 10))
         game.set_family_day(self.user_id, True, PDT, _at("2026-10-12", 10))
         state = game.state(self.user_id, PDT, _at("2026-10-13", 10))
         self.assertEqual(state["streak_days"], 2)
@@ -139,6 +155,45 @@ class StudyTimeTests(unittest.TestCase):
         self.assertEqual(game.wave_cleared(self.user_id, PDT, now), game.WAVE_CLEARED_XP)
         self.assertEqual(game.wave_cleared(self.user_id, PDT, now), 0)
         self.assertEqual(game.state(self.user_id, PDT, now)["xp"], game.WAVE_CLEARED_XP)
+
+
+class RetiredCourseLaneTests(unittest.TestCase):
+    """Time logged under the old course lane stays in history but belongs to no lane or target."""
+
+    def setUp(self):
+        self.user_id, _ = _new_user()
+        self.now = _at("2026-10-06", 10)  # a Tuesday
+        with game._connect() as conn:
+            for source, minutes in (("manual", 90), ("auto", 30)):
+                conn.execute(
+                    "INSERT INTO study_time (user_id, day, lane, source, seconds, note, created_at) VALUES (?, ?, 'course', ?, ?, 'old', ?)",
+                    (self.user_id, "2026-10-06", source, minutes * 60, "2026-10-06T00:00:00+00:00"),
+                )
+
+    def test_new_course_time_cannot_be_logged(self):
+        with self.assertRaises(ValueError):
+            game.log_time(self.user_id, "course", 30, "", PDT, self.now)
+        with self.assertRaises(ValueError):
+            game.record_time(self.user_id, "course", 60, PDT, self.now)
+
+    def test_old_course_minutes_still_count_as_study_but_not_toward_a_lane(self):
+        state = game.state(self.user_id, PDT, self.now)
+        self.assertEqual(state["today"]["minutes"], 120)
+        self.assertEqual(state["hours_total"], 2.0)
+        self.assertEqual(state["xp"], 120)
+        self.assertEqual(state["week"]["minutes"], 120)
+        self.assertNotIn("course", state["today"]["by_lane"])
+        self.assertNotIn("course", state["week"]["by_lane"])
+        self.assertNotIn("course", state["week"]["lane_targets"])
+        self.assertEqual(sum(state["week"]["by_lane"].values()), 0)
+        self.assertEqual(sum(s["minutes"] for s in state["week"]["skills"].values()), 0)
+        self.assertEqual(sum(s["target"] for s in state["week"]["skills"].values()), 1440)
+
+    def test_an_old_manual_course_log_is_still_listed_so_it_can_be_deleted(self):
+        logs = game.state(self.user_id, PDT, self.now)["today"]["logs"]
+        self.assertEqual([(log["lane"], log["minutes"]) for log in logs], [("course", 90)])
+        self.assertTrue(game.delete_log(self.user_id, logs[0]["id"]))
+        self.assertEqual(game.state(self.user_id, PDT, self.now)["today"]["logs"], [])
 
 
 class ReviewFeedbackTests(unittest.TestCase):
@@ -195,6 +250,11 @@ class GameApiTests(unittest.TestCase):
         self.assertEqual(res.json()["today"]["minutes"], 1)
         bad = self.client.post("/api/game/log", headers=self.headers, json={"lane": "dota", "minutes": 5})
         self.assertEqual(bad.status_code, 422)
+
+    def test_the_course_lane_is_rejected(self):
+        log = self.client.post("/api/game/log", headers=self.headers, json={"lane": "course", "minutes": 5})
+        beat = self.client.post("/api/game/heartbeat", headers=self.headers, json={"lane": "course", "seconds": 60})
+        self.assertEqual((log.status_code, beat.status_code), (422, 422))
 
     def test_callouts_are_fixed_lines_generated_once(self):
         self.assertEqual(self.client.get("/api/game/callout/hello.mp3").status_code, 404)

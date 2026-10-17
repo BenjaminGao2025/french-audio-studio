@@ -7,7 +7,7 @@ const delay = <V>(v: V, ms = 120): Promise<V> => new Promise((r) => setTimeout((
 const uid = () => Math.random().toString(36).slice(2, 10);
 const todayStr = () => new Date().toISOString().slice(0, 10);
 
-const lanes: T.Lane[] = ["course", "listening", "reading", "speaking", "writing", "review", "car"];
+const lanes: T.Lane[] = ["listening", "reading", "speaking", "writing", "review", "car"];
 const zeroLanes = () => Object.fromEntries(lanes.map((l) => [l, 0])) as Record<T.Lane, number>;
 
 // ---- mutable mock state ----
@@ -167,7 +167,7 @@ const gameState: T.GameState = {
     by_lane: { ...zeroLanes(), speaking: 45, review: 20, listening: 30 },
     logs: [
       { id: "log1", lane: "speaking", minutes: 30, note: "AI speaking practice" },
-      { id: "log2", lane: "course", minutes: 45, note: "Textbook ch. 4" },
+      { id: "log2", lane: "reading", minutes: 45, note: "Printed article" },
     ],
     kills: 12,
     deaths: 3,
@@ -189,20 +189,17 @@ const gameState: T.GameState = {
       speaking: 140,
       review: 90,
       writing: 60,
-      reading: 80,
-      course: 50,
+      reading: 130,
     },
     lane_targets: {
-      course: 120,
       listening: 240,
-      reading: 120,
-      speaking: 180,
+      reading: 180,
+      speaking: 240,
       writing: 120,
       review: 120,
       car: 60,
     },
     lane_weights: {
-      course: 1,
       listening: 1,
       reading: 1,
       speaking: 1,
@@ -823,10 +820,9 @@ export const mock: Api = {
         manual_hours: 3.5,
         input_hours: 6,
         lanes: [
-          { lane: "course", active: 1, manual: 2.5, input: 0, week_target: 2 },
           { lane: "listening", active: 8, manual: 0, input: 6, week_target: 4 },
-          { lane: "reading", active: 5, manual: 0, input: 0, week_target: 2 },
-          { lane: "speaking", active: 9, manual: 1, input: 0, week_target: 3 },
+          { lane: "reading", active: 6, manual: 2.5, input: 0, week_target: 3 },
+          { lane: "speaking", active: 9, manual: 1, input: 0, week_target: 4 },
           { lane: "writing", active: 4.5, manual: 0, input: 0, week_target: 2 },
           { lane: "review", active: 7, manual: 0, input: 0, week_target: 2 },
           { lane: "car", active: 0, manual: 0, input: 6, week_target: 1 },
@@ -902,10 +898,9 @@ export const mock: Api = {
         name: "Phase A (0–300h)",
         week_target_min: 960,
         lane_targets: {
-          course: 120,
           listening: 240,
-          reading: 120,
-          speaking: 180,
+          reading: 180,
+          speaking: 240,
           writing: 120,
           review: 120,
           car: 60,

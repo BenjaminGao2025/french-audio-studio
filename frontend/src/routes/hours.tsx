@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
-import { AppShell, Bar, BlockControls, Chip } from "@/components/fr/kit";
+import { AppShell, Bar, Chip } from "@/components/fr/kit";
 import { btn, meta } from "@/components/fr/kit-utils";
 import { cn } from "@/lib/utils";
 import { useGameState, useHoursLedger, useLogTime } from "@/api/hooks";
@@ -11,16 +11,12 @@ import { fmtHours } from "@/lib/format";
 import type { Lane } from "@/api/types";
 
 export const Route = createFileRoute("/hours")({
-  // Optional key, so plain links such as <Link to="/hours"> need no search prop.
-  validateSearch: (s: Record<string, unknown>): { block?: string } =>
-    typeof s["block"] === "string" ? { block: s["block"] } : {},
   head: () =>
     meta("Hours & milestones", "Active, manual and input hours by lane, with milestones to 1000h."),
   component: Hours,
 });
 
 const laneLabels: Record<Lane, string> = {
-  course: "Course",
   listening: "Listening",
   reading: "Reading",
   speaking: "Speaking",
@@ -30,7 +26,6 @@ const laneLabels: Record<Lane, string> = {
 };
 
 function Hours() {
-  const { block } = Route.useSearch();
   const ledger = useHoursLedger();
   const game = useGameState();
   const logTime = useLogTime();
@@ -40,11 +35,6 @@ function Hours() {
 
   return (
     <AppShell>
-      {block && (
-        <header className="flex flex-wrap justify-end gap-2 border-b border-border px-4 py-5">
-          <BlockControls blockId={block} />
-        </header>
-      )}
       <div className="mx-auto max-w-5xl px-4 py-10 md:px-10">
         <h1 className="fr text-4xl">Hours & milestones</h1>
         <DataView query={ledger} skeletonLines={8}>
@@ -172,7 +162,7 @@ function Hours() {
               required
               maxLength={200}
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-              placeholder="Note (required) — e.g. textbook chapter 4"
+              placeholder="Note (required) — e.g. read a printed article"
             />
             <button className={btn.primary} disabled={logTime.isPending || !note.trim()}>
               Add
@@ -197,7 +187,7 @@ function Hours() {
             <ul className="mt-4 divide-y divide-border text-sm">
               {(game.data?.today.logs ?? []).map((log) => (
                 <li key={log.id} className="flex items-center gap-3 py-2.5">
-                  <Chip>{laneLabels[log.lane]}</Chip>
+                  <Chip>{laneLabels[log.lane] ?? log.lane}</Chip>
                   <span className="tabular-nums">{log.minutes} min</span>
                   <span className="flex-1 truncate text-muted-foreground">{log.note}</span>
                   <button
@@ -227,8 +217,8 @@ function Hours() {
               toward 1000h.
             </li>
             <li>
-              • <b>Manual hours</b> — external course, textbook self-study, logged by hand with a
-              required note. Weight 1.0. Counts toward 1000h (cap 6h/week).
+              • <b>Manual hours</b> — study done outside the app, logged by hand with a required
+              note. Weight 1.0. Counts toward 1000h (cap 6h/week).
             </li>
             <li>
               • <b>Input hours</b> — passive playback of episodes/audio (car lane, background

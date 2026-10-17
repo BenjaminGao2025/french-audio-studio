@@ -36,6 +36,14 @@ function EntryPanel({ onPassage }: { onPassage: (id: string) => void }) {
   return (
     <div className="panel mx-auto max-w-2xl p-8">
       <h2 className="text-lg font-semibold">Start a reading</h2>
+      <p className="mt-2 text-sm text-muted-foreground">
+        Paste a text in the study page for the sentence-by-sentence breakdown (grammar, words,
+        simple English). Your reading time is counted there; come back here and press Finish when
+        you are done.
+      </p>
+      <a href="/study" className={`${btn.primary} mt-4`}>
+        Open the sentence breakdown
+      </a>
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}

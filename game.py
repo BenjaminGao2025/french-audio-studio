@@ -31,23 +31,25 @@ import srs
 
 
 LANE_WEEK_TARGETS = {  # raw minutes per week (24 effective hours in total)
-    "course": 180,       # weekday mornings, as in the plan
     "listening": 210,
-    "reading": 150,
-    "speaking": 240,     # incl. 2 h with the teacher + a weekend hour
+    "reading": 240,      # incl. 90 min of intensive reading (sentence breakdown)
+    "speaking": 330,     # incl. 90 min of shadowing
     "writing": 210,      # TCF EE practice (increased from 120)
     "review": 150,       # cards (decreased from 240, sum stays 1440 min)
     "car": 600,          # car and walk listening: 10 h heard = 5 effective hours
 }
 LANE_WEIGHTS = {"car": 0.5}
 LANES = tuple(LANE_WEEK_TARGETS)
+# Study time logged under a lane that no longer has a track. The rows stay in study_time, so the
+# hours, XP and streak they earned are kept, but they belong to no lane or weekly target.
+RETIRED_LANES = frozenset({"course"})
 
 TCF_SKILL_LANES = {
     "CO": ("listening", "car"),
     "CE": ("reading",),
     "EE": ("writing",),
     "EO": ("speaking",),
-    "shared": ("course", "review"),
+    "shared": ("review",),
 }
 TCF_SKILL_LINKS = {
     "CO": "/listen",
@@ -210,7 +212,7 @@ def record_time(user_id: int, lane: str, seconds: int, tz_offset: int, now=None)
 def log_time(
     user_id: int, lane: str, minutes: int, note: str, tz_offset: int, now=None, day: str | None = None
 ) -> int:
-    """Study done outside the app (teacher class, course book...). Returns the log id.
+    """Study done outside the app, logged by hand. Returns the log id.
 
     `day` books the time on a past study day (an ISO date); by default it is today's.
     """
@@ -342,12 +344,14 @@ def state(user_id: int, tz_offset: int, now=None) -> dict[str, Any]:
         effective = minutes * LANE_WEIGHTS.get(row["lane"], 1)
         minutes_by_day[day] = minutes_by_day.get(day, 0.0) + effective
         if day == today:
-            today_lanes[row["lane"]] += minutes
+            if row["lane"] in today_lanes:
+                today_lanes[row["lane"]] += minutes
             today_effective += effective
             if row["source"] == "manual":
                 logs_today.append({"id": row["id"], "lane": row["lane"], "minutes": round(minutes), "note": row["note"]})
         if week_start <= day <= week_end:
-            week_lanes[row["lane"]] += minutes
+            if row["lane"] in week_lanes:
+                week_lanes[row["lane"]] += minutes
             week_effective += effective
 
     family_days = {datetime.date.fromisoformat(r["day"]) for r in event_rows if r["kind"] == "family_day"}

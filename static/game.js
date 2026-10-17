@@ -13,7 +13,7 @@
     const EN = I18N.lang() === 'en';
     const TOKEN_KEY = 'frenchStudio.userToken';
     const MUTE_KEY = 'frenchStudio.gameMuted';
-    const LANES = ['course', 'listening', 'reading', 'speaking', 'writing', 'review', 'car'];
+    const LANES = ['listening', 'reading', 'speaking', 'writing', 'review', 'car'];
     // Pages whose time counts automatically; anything else can be logged by hand.
     // /listen counts the audio actually played (car/walk listening, worth half).
     const PAGE_LANES = { '/study': 'reading', '/write': 'writing', '/speak': 'speaking', '/review': 'review', '/listen': 'car' };
@@ -38,7 +38,7 @@
                 CE: 'CE · Reading',
                 EE: 'EE · Writing',
                 EO: 'EO · Speaking',
-                shared: 'Shared · Course & Cards',
+                shared: 'Shared · Cards',
             },
             focusSkill: {
                 CO: 'Focus: CO (Listening)',
@@ -46,12 +46,11 @@
                 EE: 'Focus: EE (Writing)',
                 EO: 'Focus: EO (Speaking)',
             },
-            lanes: { course: 'Course', listening: 'Listening', reading: 'Reading', speaking: 'Speaking', writing: 'Writing', review: 'Review', car: 'Car / walk' },
+            lanes: { listening: 'Listening', reading: 'Reading', speaking: 'Speaking', writing: 'Writing', review: 'Review', car: 'Car / walk' },
             halfNote: 'Car and walk listening counts half: your eyes and mind are on the road.',
             quickTitle: 'Log study you did outside the app',
             presets: [
                 { lane: 'speaking', minutes: 60, label: 'Teacher class · 1 h' },
-                { lane: 'course', minutes: 60, label: 'Course book · 1 h' },
                 { lane: 'listening', minutes: 30, label: 'Listening · 30 min' },
                 { lane: 'reading', minutes: 30, label: 'Reading · 30 min' },
                 { lane: 'writing', minutes: 30, label: 'Writing · 30 min' },
@@ -79,7 +78,7 @@
                 CE: 'CE · 阅读理解',
                 EE: 'EE · 书面表达',
                 EO: 'EO · 口语表达',
-                shared: '公共 · 课程与卡片',
+                shared: '公共 · 卡片',
             },
             focusSkill: {
                 CO: '补短板: CO 听力',
@@ -87,12 +86,11 @@
                 EE: '补短板: EE 写作',
                 EO: '补短板: EO 口语',
             },
-            lanes: { course: '主课', listening: '听力', reading: '阅读', speaking: '口语', writing: '写作', review: '复习', car: '开车·快走听' },
+            lanes: { listening: '听力', reading: '阅读', speaking: '口语', writing: '写作', review: '复习', car: '开车·快走听' },
             halfNote: '开车和快走时听按一半计时：注意力主要在路上。',
             quickTitle: '记录在 App 之外的学习',
             presets: [
                 { lane: 'speaking', minutes: 60, label: '老师课 · 1 小时' },
-                { lane: 'course', minutes: 60, label: '主课教材 · 1 小时' },
                 { lane: 'listening', minutes: 30, label: '听力 · 30 分钟' },
                 { lane: 'reading', minutes: 30, label: '阅读 · 30 分钟' },
                 { lane: 'writing', minutes: 30, label: '写作 · 30 分钟' },
@@ -386,7 +384,7 @@
         { key: 'CE', lanes: ['reading'], link: '/study' },
         { key: 'EE', lanes: ['writing'], link: '/write' },
         { key: 'EO', lanes: ['speaking'], link: '/speak' },
-        { key: 'shared', lanes: ['course', 'review'], link: null },
+        { key: 'shared', lanes: ['review'], link: null },
     ];
 
     function renderPanel() {
