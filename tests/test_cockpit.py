@@ -4,6 +4,7 @@ import datetime
 import threading
 import unittest
 import uuid
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -18,7 +19,9 @@ PDT = 420  # JavaScript getTimezoneOffset() in Vancouver summer time
 CEST = -120
 
 # Study days used below (PLAN_START, 2026-10-05, is a Monday)
-MON, TUE, THU, FRI, SAT, SUN = "2026-10-19", "2026-10-20", "2026-10-22", "2026-10-23", "2026-10-24", "2026-10-25"
+MON, TUE, WED, THU, FRI, SAT, SUN = (
+    "2026-10-19", "2026-10-20", "2026-10-21", "2026-10-22", "2026-10-23", "2026-10-24", "2026-10-25"
+)
 
 
 def _new_user() -> tuple[int, dict]:
@@ -52,16 +55,18 @@ class TodayPlanTests(unittest.TestCase):
         plan = cockpit.today(self.user_id, PDT, now=_at(MON))
         self.assertEqual(plan["day"], MON)
         self.assertFalse(plan["minimal"])
-        self.assertEqual(_kinds(plan), ["warmup", "journal", "review", "writing", "minimal"])
+        self.assertEqual(_kinds(plan), ["warmup", "journal", "shadowing", "writing", "minimal"])
         self.assertEqual([b["position"] for b in plan["blocks"]], [1, 2, 3, 4, 5])
         self.assertEqual(
             [b["route"] for b in plan["blocks"]],
-            ["/cards?modes=speak,listen&new_limit=0", "/journal", "/cards", "/writing", "/wrapup"],
+            ["/cards", "/journal", "/shadow", "/writing", "/wrapup"],
         )
+        self.assertEqual([b["planned_min"] for b in plan["blocks"]], [10, 30, 10, 40, 5])
         self.assertTrue(all(b["status"] == "planned" and b["actual_sec"] == 0 for b in plan["blocks"]))
         self.assertEqual(plan["blocks"][0]["start_time"], "09:00")
         self.assertEqual(plan["blocks"][0]["lane"], "review")
         self.assertEqual(plan["blocks"][1]["lane"], "speaking")
+        self.assertEqual(plan["blocks"][2]["lane"], "speaking")
         self.assertEqual(plan["blocks"][3]["lane"], "writing")
         self.assertEqual(plan["blocks"][0]["material_ids"], [])
 
@@ -76,13 +81,19 @@ class TodayPlanTests(unittest.TestCase):
 
     def test_other_weekdays(self):
         tue = cockpit.today(self.user_id, PDT, now=_at(TUE))
-        self.assertEqual(_kinds(tue), ["warmup", "journal", "review", "intensive", "minimal"])
+        self.assertEqual(_kinds(tue), ["warmup", "journal", "shadowing", "intensive", "minimal"])
         self.assertEqual(tue["blocks"][3]["route"], "/reading")
+        wed = cockpit.today(self.user_id, PDT, now=_at(WED))
+        self.assertEqual(_kinds(wed), ["warmup", "journal", "shadowing", "writing", "intensive", "minimal"])
+        self.assertEqual([b["planned_min"] for b in wed["blocks"][3:5]], [20, 20])
+        self.assertEqual([b["start_time"] for b in wed["blocks"][3:5]], ["11:15", "11:35"])
         thu = cockpit.today(self.user_id, PDT, now=_at(THU))
-        self.assertEqual(_kinds(thu), ["warmup", "journal", "review", "shadowing", "minimal"])
-        self.assertEqual(thu["blocks"][3]["route"], "/shadow")
+        self.assertEqual(_kinds(thu), ["warmup", "journal", "shadowing", "shadowing", "minimal"])
+        self.assertEqual([b["route"] for b in thu["blocks"][2:4]], ["/shadow", "/shadow"])
+        self.assertEqual([b["planned_min"] for b in thu["blocks"][2:4]], [10, 40])
         fri = cockpit.today(self.user_id, PDT, now=_at(FRI))
-        self.assertEqual(_kinds(fri), ["warmup", "journal", "review", "review", "minimal"])
+        self.assertEqual(_kinds(fri), ["warmup", "journal", "shadowing", "intensive", "minimal"])
+        self.assertEqual(fri["blocks"][3]["planned_min"], 40)
 
     def test_tuesday_and_thursday_alternate_intensive_reading_and_shadowing(self):
         tue = cockpit.today(self.user_id, PDT, now=_at(TUE))["blocks"][3]
@@ -101,24 +112,28 @@ class TodayPlanTests(unittest.TestCase):
         self.assertFalse([s for s in every if s.kind == "course" or s.lane == "course" or s.route == "/hours"])
         self.assertNotIn("course", cockpit.ENABLED_KINDS)
 
-    def test_the_swap_keeps_the_weekly_planned_minutes(self):
-        # Before: Tue and Thu 11:15 were two 40-minute course blocks, so the plan was 770 minutes
-        # (kinds enabled today) and 1070 with every kind. Intensive reading and shadowing replace
-        # them one for one.
-        def minutes(kinds):
-            return sum(s.planned_min for slots in cockpit.WEEK_TEMPLATE.values() for s in slots if s.kind in kinds)
-
-        everything = {s.kind for slots in cockpit.WEEK_TEMPLATE.values() for s in slots}
-        self.assertEqual(minutes(cockpit.ENABLED_KINDS), 770)
-        self.assertEqual(minutes(everything), 1070)
+    def test_the_template_adds_up_to_the_16_hour_week(self):
+        # PRD appendix C: 160 minutes on a weekday, 120 on Saturday, 40 on Sunday, 960 in the week.
+        # The 5-minute wrap-up is not study time. Listening and reading blocks are in the template
+        # even though their kinds are not enabled yet (see ENABLED_KINDS).
         by_lane: dict[str, int] = {}
-        for slots in cockpit.WEEK_TEMPLATE.values():
-            for s in slots:
+        for weekday, slots in cockpit.WEEK_TEMPLATE.items():
+            study = [s for s in slots if s.slot != "wrapup"]
+            self.assertEqual(sum(s.planned_min for s in study), game.DAY_TARGET_MIN[weekday], f"weekday {weekday}")
+            for s in study:
                 by_lane[s.lane] = by_lane.get(s.lane, 0) + s.planned_min
         self.assertEqual(
             by_lane,
-            {"review": 265, "speaking": 325, "listening": 180, "reading": 160, "writing": 140},
+            {"review": 90, "speaking": 300, "listening": 210, "reading": 240, "writing": 120},
         )
+        self.assertEqual(by_lane, {lane: m for lane, m in game.LANE_WEEK_TARGETS.items() if m})
+        self.assertEqual(sum(by_lane.values()), game.WEEK_TARGET_MIN)
+        self.assertEqual(game.WEEK_TARGET_MIN, 960)
+
+    def test_every_slot_of_a_day_has_its_own_key(self):
+        for weekday, slots in cockpit.WEEK_TEMPLATE.items():
+            keys = [s.slot for s in slots]
+            self.assertEqual(len(keys), len(set(keys)), f"weekday {weekday}")
 
     def test_weekend_templates(self):
         sat = cockpit.today(self.user_id, PDT, now=_at(SAT))
@@ -132,6 +147,7 @@ class TodayPlanTests(unittest.TestCase):
         )
         sun = cockpit.today(self.user_id, PDT, now=_at(SUN))
         self.assertEqual([b["route"] for b in sun["blocks"]], ["/cards", "/wrapup"])
+        self.assertEqual(sun["blocks"][0]["planned_min"], 40)
 
     def test_no_day_ever_contains_a_disabled_kind(self):
         for offset in range(7):
@@ -341,7 +357,7 @@ class MinimalDayTests(unittest.TestCase):
         on = cockpit.set_minimal(self.user_id, True, PDT, now=self.now)
         self.assertEqual(_kinds(on), ["warmup", "review", "journal", "minimal"])
         off = cockpit.set_minimal(self.user_id, False, PDT, now=self.now)
-        self.assertEqual(_kinds(off), ["warmup", "journal", "review", "writing", "minimal"])
+        self.assertEqual(_kinds(off), ["warmup", "journal", "shadowing", "writing", "minimal"])
         on_again = cockpit.set_minimal(self.user_id, True, PDT, now=self.now)
         self.assertEqual(_kinds(on_again), ["warmup", "review", "journal", "minimal"])
         for plan in (on, off, on_again):
@@ -410,9 +426,31 @@ class HoursLedgerTests(unittest.TestCase):
     def test_ledger_has_no_course_row_and_new_targets_for_reading_and_speaking(self):
         rows = {r["lane"]: r for r in cockpit.ledger(self.user_id, PDT, now=_at(MON))["lanes"]}
         self.assertEqual(list(rows), ["listening", "reading", "speaking", "writing", "review", "car"])
-        self.assertEqual((rows["reading"]["week_target"], rows["speaking"]["week_target"]), (4.0, 5.5))
-        self.assertEqual(cockpit.phase()["lane_targets"], game.LANE_WEEK_TARGETS)
-        self.assertNotIn("course", cockpit.phase()["lane_targets"])
+        self.assertEqual((rows["reading"]["week_target"], rows["speaking"]["week_target"]), (4.0, 5.0))
+        with patch.object(cockpit, "_now", return_value=_at(MON)):
+            self.assertEqual(cockpit.phase()["lane_targets"], game.LANE_WEEK_TARGETS)
+            self.assertNotIn("course", cockpit.phase()["lane_targets"])
+
+    def test_ledger_week_targets_are_the_16_hour_split_in_hours(self):
+        ledger = cockpit.ledger(self.user_id, PDT, now=_at(MON))
+        targets = {r["lane"]: r["week_target"] for r in ledger["lanes"]}
+        self.assertEqual(
+            targets, {"listening": 3.5, "reading": 4.0, "speaking": 5.0, "writing": 2.0, "review": 1.5, "car": 0.0}
+        )
+        self.assertEqual(sum(targets.values()), 16.0)
+
+    def test_maintenance_ledger_and_phase_scale_the_split_to_five_hours(self):
+        june = datetime.datetime(2027, 6, 15, 19, 0, tzinfo=UTC)
+        ledger = cockpit.ledger(self.user_id, 0, now=june)
+        minutes = {r["lane"]: round(r["week_target"] * 60) for r in ledger["lanes"]}
+        self.assertEqual(sum(minutes.values()), game.MAINTENANCE_WEEK_TARGET_MIN)
+        self.assertEqual(minutes, game.lane_week_targets(datetime.date(2027, 6, 15)))
+        with patch.object(cockpit, "_now", return_value=june):
+            phase = cockpit.phase()
+        self.assertEqual(phase["id"], "maintenance")
+        self.assertEqual(phase["week_target_min"], 300)
+        self.assertEqual(sum(phase["lane_targets"].values()), phase["week_target_min"])
+        self.assertEqual(phase["lane_targets"], minutes)
 
     def test_old_course_hours_still_count_in_the_totals_but_have_no_lane_row(self):
         _add_time(self.user_id, "course", 120, MON, source="manual")
@@ -435,10 +473,10 @@ class HoursLedgerTests(unittest.TestCase):
         self.assertEqual(row["week_target"], 3.5)  # 210 minutes
         self.assertEqual(ledger["active_hours"], 12.0)
 
-    def test_car_lane_row_reports_input_and_its_target(self):
+    def test_car_lane_row_reports_input_and_has_no_target(self):
         _add_time(self.user_id, "car", 90, MON)
         row = next(r for r in cockpit.ledger(self.user_id, PDT, now=_at(MON))["lanes"] if r["lane"] == "car")
-        self.assertEqual((row["active"], row["manual"], row["input"], row["week_target"]), (0, 0, 1.5, 10.0))
+        self.assertEqual((row["active"], row["manual"], row["input"], row["week_target"]), (0, 0, 1.5, 0))
 
     def test_after_the_last_milestone_nothing_is_left(self):
         _add_time(self.user_id, "review", 60 * 1001, MON)
@@ -789,7 +827,8 @@ class HttpApiTests(unittest.TestCase):
 
     # --- phase ---
     def test_phase_is_read_only_and_mirrors_game_targets(self):
-        body = self.client.get("/api/phase", headers=self.headers).json()
+        with patch.object(cockpit, "_now", return_value=_at(MON)):
+            body = self.client.get("/api/phase", headers=self.headers).json()
         self.assertEqual(body["id"], "A")
         self.assertEqual(body["lane_targets"], game.LANE_WEEK_TARGETS)
         self.assertEqual(body["week_target_min"], game.WEEK_TARGET_MIN)

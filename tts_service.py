@@ -3071,7 +3071,7 @@ async def _coach_advice(user_id, authorization, note, review=False):
         'For low completion reduce task size, discuss obstacles, and never use guilt or punishment. '
         'Review only provided evidence; missing practice data is unknown, not zero language ability. '
         'Output {"summary":"specific plan or weekly review and next steps", "questions":["question"], '
-        '"task_weights":{"listen":3,"write":2,"speak":2,"read":2,"review":1}}.'
+        '"task_weights":{"listen":3.5,"write":2,"speak":5,"read":4,"review":1.5}}.'
     )
     payload = {'model':_map_upstream_model(DEFAULT_MODEL), 'messages':[{'role':'system','content':system},{'role':'user','content':json.dumps({'request':'weekly review' if review else 'learning plan', 'profile':snapshot['profile'],'capacity':snapshot['capacity'],'evidence':snapshot['weekly_report'],'previous_interview':snapshot['plan'].get('interview_notes',''),'answers_or_reflection':note},ensure_ascii=False)}], 'temperature':0.3,'stream':False}
     async with httpx.AsyncClient(timeout=UPSTREAM_TIMEOUT_SECONDS) as client:

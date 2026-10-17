@@ -17,7 +17,9 @@ import curriculum
 KINDS = ('listen', 'write', 'speak', 'review', 'read')
 LINKS = {'listen': '/listen#mini-listening', 'write': '/write', 'speak': '/study?mode=personal', 'review': '/review', 'read': '/study'}
 LABELS = {'listen': ('听懂一小段', 'Understand a short clip'), 'write': ('写一段并订正', 'Write and revise'), 'speak': ('练自己想说的话并存档', 'Practise your own words and save recordings'), 'review': ('复习到期卡片', 'Review due cards'), 'read': ('拆解一个短句', 'Study a short sentence')}
-DEFAULT_WEIGHTS = {'listen': 3, 'write': 2, 'speak': 4, 'review': 1, 'read': 2}
+# Hours per week of the 16 h plan (game.LANE_WEEK_TARGETS: 210/120/300/90/240 min), so a stored coach plan splits
+# its own weekly minutes in the same proportions. The AI coach may adjust them within 1..5.
+DEFAULT_WEIGHTS = {'listen': 3.5, 'write': 2, 'speak': 5, 'review': 1.5, 'read': 4}
 
 @contextmanager
 def db():

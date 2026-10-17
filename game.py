@@ -15,9 +15,9 @@ Built around the learner's own plan (TCF Canada, NCLC 7 = about B2 in all four s
     Reviews add Again 1 / Hard 2 / Good 4 / Easy 5, +3 for a card's first review,
     a combo bonus while answers keep coming Good/Easy, and +10 for the day's
     first Good/Easy ("First blood"). Clearing today's queue gives +20 once a day.
-  * Targets are weekly (24 h); weekdays aim for 4 h, weekend days for 2 h, family
-    days for nothing. Only weekdays count for the streak, and family days never
-    break it.
+  * Targets are weekly (16 h = 960 min); the days follow the PRD's weekly template
+    (weekdays 160 min, Saturday 120, Sunday 40), family days aim for nothing. Only
+    weekdays count for the streak, and family days never break it.
 """
 
 from __future__ import annotations
@@ -30,13 +30,13 @@ import coach
 import srs
 
 
-LANE_WEEK_TARGETS = {  # raw minutes per week (24 effective hours in total)
-    "listening": 210,
-    "reading": 240,      # incl. 90 min of intensive reading (sentence breakdown)
-    "speaking": 330,     # incl. 90 min of shadowing
-    "writing": 210,      # TCF EE practice (increased from 120)
-    "review": 150,       # cards (decreased from 240, sum stays 1440 min)
-    "car": 600,          # car and walk listening: 10 h heard = 5 effective hours
+LANE_WEEK_TARGETS = {  # raw minutes per week (16 hours = 960 min in total, PRD 6.1)
+    "listening": 210,    # 3.5 h
+    "reading": 240,      # 4 h, all intensive reading (sentence breakdown)
+    "speaking": 300,     # 5 h, incl. 90 min of shadowing
+    "writing": 120,      # 2 h of TCF EE practice
+    "review": 90,        # 1.5 h of cards
+    "car": 0,            # car and walk listening is input, not part of the 16 h (still counts half)
 }
 LANE_WEIGHTS = {"car": 0.5}
 LANES = tuple(LANE_WEEK_TARGETS)
@@ -61,8 +61,7 @@ PLAN_START = datetime.date(2026, 10, 5)  # week 1 of the plan
 WEEK_TARGET_MIN = round(sum(m * LANE_WEIGHTS.get(lane, 1) for lane, m in LANE_WEEK_TARGETS.items()))
 MAINTENANCE_WEEK_TARGET_MIN = 300  # May-Aug 2027 (new baby): 5 h a week
 MAINTENANCE = (datetime.date(2027, 5, 1), datetime.date(2027, 8, 31))
-WEEKDAY_TARGET_MIN = 240
-WEEKEND_TARGET_MIN = 120
+DAY_TARGET_MIN = (160, 160, 160, 160, 160, 120, 40)  # Monday = 0; sums to WEEK_TARGET_MIN (PRD appendix C)
 DAY_FULL_XP_MIN = 300  # beyond 5 effective hours a day, XP is halved
 STREAK_MIN = 30  # minutes that make a weekday count for the streak
 
@@ -156,6 +155,24 @@ def week_bounds(day: datetime.date) -> tuple[datetime.date, datetime.date]:
 
 def week_target(day: datetime.date) -> int:
     return MAINTENANCE_WEEK_TARGET_MIN if MAINTENANCE[0] <= day <= MAINTENANCE[1] else WEEK_TARGET_MIN
+
+
+def lane_week_targets(day: datetime.date) -> dict[str, int]:
+    """Raw minutes per lane for the week of `day`.
+
+    Outside the maintenance period this is LANE_WEEK_TARGETS. In it, the same split scaled down
+    to the maintenance total (largest remainder, so the lanes still add up to it exactly).
+    """
+    total = week_target(day)
+    if total == WEEK_TARGET_MIN:
+        return dict(LANE_WEEK_TARGETS)
+    scale = total / WEEK_TARGET_MIN
+    exact = {lane: m * scale for lane, m in LANE_WEEK_TARGETS.items()}
+    scaled = {lane: int(value) for lane, value in exact.items()}
+    by_remainder = sorted(exact, key=lambda lane: exact[lane] - scaled[lane], reverse=True)
+    for lane in by_remainder[: total - sum(scaled.values())]:
+        scaled[lane] += 1
+    return scaled
 
 
 def level_threshold(level: int) -> int:
@@ -383,11 +400,11 @@ def state(user_id: int, tz_offset: int, now=None) -> dict[str, Any]:
     elif maintenance:
         day_target = 0 if weekend else MAINTENANCE_WEEK_TARGET_MIN // 5
     else:
-        day_target = WEEKEND_TARGET_MIN if weekend else WEEKDAY_TARGET_MIN
+        day_target = DAY_TARGET_MIN[today.weekday()]
 
-    # An explicit coach plan replaces the legacy fixed 24-hour week for this user.
+    # An explicit coach plan replaces the fixed 16-hour week for this user.
     stored_plan = coach.get_profile(user_id)
-    lane_targets = dict(LANE_WEEK_TARGETS)
+    lane_targets = lane_week_targets(today)
     planned_week = week_target(today)
     if stored_plan:
         profile = stored_plan['profile']
