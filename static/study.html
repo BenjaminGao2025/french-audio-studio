@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="color-scheme" content="light">
+    <meta name="color-scheme" content="light dark">
+    <script src="/static/theme.js?v=__ASSET_VERSION__"></script>
     <meta name="asset-version" content="__ASSET_VERSION__">
     <title>法语拆解与跟读复述 - 1000H French</title>
     <link rel="icon" href="/favicon.ico?v=2" sizes="any">
@@ -22,8 +23,11 @@
     <script src="/static/history.js?v=__ASSET_VERSION__" defer></script>
     <script src="/static/word-popover.js?v=__ASSET_VERSION__" defer></script>
     <script src="/static/study.js?v=__ASSET_VERSION__" defer></script>
+    <script src="/static/study-modes.js?v=__ASSET_VERSION__" defer></script>
+    <script src="/static/homework.js?v=__ASSET_VERSION__" defer></script>
 <link rel="stylesheet" href="/static/coach.css?v=__ASSET_VERSION__">
 <script src="/static/coach-reminders.js?v=__ASSET_VERSION__" defer></script>
+    <script src="/static/header-ui.js?v=__ASSET_VERSION__" defer></script>
 </head>
 <body>
     <div class="app-shell">
@@ -117,9 +121,15 @@
 
         <main>
             <div class="page-intro">
-                <h1 data-i18n="heading">法语拆解与跟读复述</h1>
+                <h1 data-i18n="heading">学习与开口练习</h1>
                 <p><span class="copy-zh">读懂一句话，分步练习，再开口复述。</span><span class="copy-en">Understand a sentence, practise step by step, then say it yourself.</span></p>
             </div>
+            <div class="study-modes" role="group" aria-label="学习方式">
+                <button id="study-mode-text" class="btn btn-secondary" type="button" aria-pressed="true"><span class="copy-zh">学习法语文本</span><span class="copy-en">Study French text</span></button>
+                <button id="study-mode-personal" class="btn btn-secondary" type="button" aria-pressed="false"><span class="copy-zh">练我想说的话</span><span class="copy-en">Practise my own ideas</span></button>
+            </div>
+            <div id="study-text-workspace">
+            <button id="study-back-personal" class="btn btn-secondary" type="button" hidden><span class="copy-zh">回到我的口语练习</span><span class="copy-en">Back to my speaking practice</span></button>
             <!-- 今日复习入口：先复习，再学新句子 -->
             <a id="today-review-banner" class="today-review-banner" href="/review" hidden>
                 <i data-lucide="brain" aria-hidden="true"></i>
@@ -206,6 +216,8 @@
                     <!-- 动态注入句子解析与跟读卡片 -->
                 </div>
             </section>
+            </div>
+            __PERSONAL_PRACTICE__
         </main>
     </div>
 

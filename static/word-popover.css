@@ -333,3 +333,39 @@
     color: var(--primary);
     font-weight: 600;
 }
+
+/* French words throughout the popup share lookup and back navigation. */
+.popover-lookup-word {
+    display: inline;
+    padding: 2px 0;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--primary);
+    font: inherit;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 3px;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+.popover-lookup-word:hover { background: var(--primary-soft); }
+.popover-back {
+    align-self: flex-start;
+    max-width: 100%;
+    min-height: 32px;
+    padding: 2px 4px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--primary);
+    font: inherit;
+    font-size: var(--text-sm);
+    text-align: left;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+}
+.popover-back:hover { background: var(--primary-soft); }
+
+.popover-word .popover-lookup-word { color: inherit; }
+.popover-lookup-word:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }

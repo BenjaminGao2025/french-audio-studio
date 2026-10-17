@@ -498,7 +498,7 @@
 }
 
 .breakdown-table tr:hover td {
-    background: rgba(238, 241, 237, 0.4);
+    background: var(--surface-subtle);
 }
 
 .token-cell {
@@ -2283,10 +2283,7 @@ a.nav-deck-btn {
     line-height: 1.5;
 }
 
-/* Closed: a click anywhere on the line opens it; the words work once it is open */
-.sentence-card:not(.is-open) .interactive-word {
-    pointer-events: none;
-}
+/* Words always pronounce; the arrow and empty heading space open/close the card. */
 
 .sentence-translation {
     margin: 2px 0 0;
@@ -2873,4 +2870,12 @@ a.nav-deck-btn {
 .btn-repeat-toggle.btn-step-repeat svg { width: 14px; height: 14px; }
 @media (pointer: coarse) {
     .btn-repeat-toggle.btn-step-repeat { width: 38px; min-width: 38px; height: 32px; min-height: 32px; }
+}
+
+/* Step words use the same single-tap pronunciation as the sentence heading. */
+.buildup-fr-text .interactive-word { touch-action: manipulation; }
+.is-blind-mode .buildup-fr-text .interactive-word {
+    color: inherit !important;
+    background: transparent !important;
+    text-shadow: inherit;
 }

@@ -41,3 +41,30 @@
 .coach-main input:not([type=checkbox]), .coach-main select, .coach-fields select { min-height: 42px; padding: 8px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface); }
 .coach-main h2 { margin: 0 0 12px; }
 .coach-main .coach-text { margin: 16px 0; }
+@media(max-width:640px) { .nav-tabs { min-width: 0; max-width: 100%; overflow-x: auto; justify-content: flex-start; } .nav-tabs .nav-tab { flex: 0 0 auto; } }
+.homework-main { max-width: 960px; }
+.homework-main .editor-panel textarea { min-height: 120px; }
+.homework-recordings { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 24px; }
+.homework-recordings audio { width: 100%; margin-top: 12px; }
+.homework-french { font-size: 20px; line-height: 1.8; white-space: pre-wrap; }
+@media(max-width:600px) { .homework-recordings { grid-template-columns: 1fr; } }
+/* Personal expression belongs to Study and shares its work area. */
+.study-modes { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+.study-modes [aria-pressed="true"] { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); }
+#study-personal { padding: 0; max-width: none; }
+#study-back-personal { margin-bottom: 16px; }
+.personal-intro { color: var(--muted); }
+.personal-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
+.personal-heading p { margin: 0; }
+.personal-parts { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.personal-parts [aria-pressed="true"] { background: var(--primary-soft); border-color: var(--primary); }
+.personal-help { margin-top: 20px; }
+#study-personal summary { cursor: pointer; font-weight: 600; }
+#study-personal label { display: block; margin: 16px 0 8px; }
+#study-personal .coach-days { display: flex; }
+#study-personal audio { margin-top: 16px; }
+#study-personal .homework-french { margin: 16px 0; }
+#homework-source { margin-bottom: 24px; }
+#study-personal .personal-parts { align-items: center; }
+#study-personal .personal-parts label { margin: 0; color: var(--muted); }
+#study-personal .personal-parts select { width: auto; min-width: 150px; }

@@ -1,5 +1,6 @@
 /* 1000H French — shared design tokens. See DESIGN_SYSTEM.md. */
 :root {
+    color-scheme: light;
     --page: #f5f7fb;
     --surface: #ffffff;
     --surface-subtle: #f8fafd;
@@ -47,3 +48,38 @@
     --text-title: 30px;
     --font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", sans-serif;
 }
+
+/* Applied before first paint by theme.js; one palette for every learning page. */
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #141a23;
+    --surface: #1b2430;
+    --surface-subtle: #202b38;
+    --surface-muted: #273444;
+    --ink: #d5deea;
+    --muted: #a5b4c7;
+    --placeholder: #a5b4c7;
+    --line: #354357;
+    --line-strong: #697e99;
+    --primary: #91b5e6;
+    --primary-rgb: 145, 181, 230;
+    --primary-hover: #a5c3ed;
+    --primary-soft: #26384e;
+    --primary-line: #526f94;
+    --primary-contrast: #141a23;
+    --focus-ring: rgba(var(--primary-rgb), 0.25);
+    --accent: #a3bfd3;
+    --accent-soft: #263744;
+    --accent-line: #536f83;
+    --danger: #eca1a9;
+    --danger-soft: #3b2933;
+    --danger-line: #855b68;
+    --success: #8dcca5;
+    --success-rgb: 141, 204, 165;
+    --success-soft: #23382f;
+    --success-line: #517561;
+    --success-highlight: #a8d6b8;
+    --shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    --shadow-overlay: 0 16px 48px rgba(0, 0, 0, 0.35);
+}
+html { background: var(--page); }

@@ -267,7 +267,7 @@
 
     function floatXp(xp) {
         if (!xp || !hud) return;
-        const anchor = hud.querySelector('.hud-xp');
+        const anchor = hud.querySelector('.hud-hero');
         const rect = anchor.getBoundingClientRect();
         const el = document.createElement('div');
         el.className = 'game-xp-float';
@@ -295,7 +295,7 @@
         hud.setAttribute('aria-label', T.hudAria);
         hud.innerHTML = `
             <button class="hud-hero" type="button" aria-expanded="false" title="${escapeHtml(T.heroTitle)}">
-                <span class="hud-level">Lv <b class="hud-level-n">1</b></span>
+                <span class="hud-level">Lv <b class="hud-level-n">1</b></span><span class="hud-progress-label">${EN ? 'Progress' : '学习进度'}</span><span aria-hidden="true">⌄</span>
                 <span class="hud-xp"><span class="hud-xp-bar"><span class="hud-xp-fill"></span></span><span class="hud-xp-text"></span></span>
             </button>
             <span class="hud-stat hud-today"><i data-lucide="sun" aria-hidden="true"></i><span></span></span>
@@ -307,6 +307,8 @@
             <button class="hud-btn hud-mute" type="button"><i data-lucide="volume-2" aria-hidden="true"></i></button>`;
         panel = document.createElement('div');
         panel.className = 'game-panel';
+        panel.id = 'learning-progress-panel';
+        hud.querySelector('.hud-hero').setAttribute('aria-controls', panel.id);
         panel.hidden = true;
         topbar.after(hud);
         hud.after(panel);
@@ -327,7 +329,7 @@
     }
 
     function renderMute() {
-        const btn = hud.querySelector('.hud-mute');
+        const btn = document.querySelector('.hud-mute');
         btn.innerHTML = `<i data-lucide="${muted() ? 'volume-x' : 'volume-2'}" aria-hidden="true"></i>`;
         btn.title = muted() ? T.unmute : T.mute;
         btn.setAttribute('aria-label', btn.title);
@@ -432,7 +434,7 @@
                     <button class="link-btn game-undo" type="button" data-log-id="${log.id}">${T.undo}</button></li>`).join('')
             : `<li class="muted">${T.nothingLogged}</li>`;
         const learning = state.learning;
-        const quests = learning ? `<div class="learning-quests"><strong>${EN ? 'Daily foundations' : '每日基础小关'}</strong> · +${learning.today_xp} XP<p class="game-hint">${EN ? 'Practice rewards: finish +10; a successful writing revision +15. At most three rewards per kind per day. Complete all three foundations to keep your weekday streak. XP is not a CEFR level.' : '完成练习 +10；成功订正写作 +15。每类每天最多奖励三次。三关全完成也能延续工作日连续学习。经验等级不代表语言等级。'}</p>${learning.quests.map(q => `<a href="${escapeHtml(q.href)}">${q.done ? '✓ ' : '○ '}${escapeHtml(EN ? q.en : q.zh)}</a>`).join('')}<a href="/coach">${EN ? 'My plan & weekly review' : '我的安排与每周复盘'}</a></div>` : '';
+        const quests = learning ? `<div class="learning-quests"><strong>${EN ? 'Daily foundations' : '每日基础小关'}</strong> · +${learning.today_xp} XP<p class="game-hint">${EN ? 'Practice rewards: listening +5/20; writing +10; a successful revision +15; personal speaking homework +15. At most three rewards per kind per day. Complete all three foundations to keep your weekday streak. XP is not a CEFR level.' : '听力 +5/20；写作 +10；成功订正 +15；个人口语作业 +15。每类每天最多奖励三次。三关全完成也能延续工作日连续学习。经验等级不代表语言等级。'}</p>${learning.quests.map(q => `<a href="${escapeHtml(q.href)}">${q.done ? '✓ ' : '○ '}${escapeHtml(EN ? q.en : q.zh)}</a>`).join('')}<a href="/coach">${EN ? 'My plan & weekly review' : '我的安排与每周复盘'}</a></div>` : '';
         panel.innerHTML = `${quests}
             <div class="game-panel-grid">
                 <section>
@@ -457,6 +459,12 @@
                     <p class="game-hint">${T.familyHint}</p>
                 </section>
             </div>`;
+        const summary = document.createElement('div');
+        summary.className = 'game-progress-summary';
+        for (const selector of ['.hud-xp-text', '.hud-week', '.hud-streak', '.hud-focus']) {
+            summary.append(hud.querySelector(selector).cloneNode(true));
+        }
+        panel.prepend(summary);
     }
 
     async function logTime(lane, minutes, note = '') {
@@ -574,6 +582,8 @@
         root.addEventListener('pagehide', () => flush(true));
     }
 
+    document.addEventListener('study:modechange', () => flush());
+
     function startTracking() {
         if (!pageLane) return;
         if (pageLane === 'car') { trackPlayback(); return; }
@@ -581,7 +591,7 @@
         ['pointerdown', 'keydown', 'wheel', 'touchstart', 'input', 'mousemove'].forEach(ev =>
             document.addEventListener(ev, mark, { passive: true, capture: true }));
         setInterval(() => {
-            if (!document.hidden && Date.now() - lastActivity < IDLE_MS) pendingSeconds += TICK_MS / 1000;
+            if (!document.hidden && !document.querySelector('#study-personal:not([hidden])') && Date.now() - lastActivity < IDLE_MS) pendingSeconds += TICK_MS / 1000;
             if (pendingSeconds >= FLUSH_SECONDS) flush();
         }, TICK_MS);
         document.addEventListener('visibilitychange', () => { if (document.hidden) flush(true); else loadState(); });

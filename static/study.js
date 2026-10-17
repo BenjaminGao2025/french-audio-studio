@@ -34,7 +34,7 @@ function initStudyWorkbench() {
     const TEXT = {
         en: {
             pageTitle: 'French Breakdown & Shadowing - 1000H French',
-            heading: 'French Breakdown & Shadowing',
+            heading: 'Study & speaking practice',
             navAria: 'Pages', navAudio: 'Audio Studio', navStudy: 'Study', navWrite: 'Write', navSpeak: 'Speak', navReview: 'Review', navListen: 'Listen',
             account: 'Account', login: 'Log in', trialBadgeTitle: 'Account validity',
             reviewBtn: 'Review', reviewBtnTitle: "Today's review (listen · speak · fill in)", dueBadgeTitle: 'Cards due today',
@@ -108,7 +108,7 @@ function initStudyWorkbench() {
             modeSwitchAria: 'Study mode',
             modeNormal: 'Show all', modeNormalTitle: 'Show the full French of every step',
             modeBlind: 'Test me', modeBlindTitle: 'Hide the new words of each step, so you say them from memory',
-            buildupHint: 'Build the sentence one piece at a time: listen to each step, then say it yourself.',
+            buildupHint: 'Tap any French word to hear it. Listen to each step, then say it yourself.',
             blindTipStrong: 'Feynman challenge', blindTipText: ': the new words of each step are hidden. Look at the meaning and say the French from memory!',
             revealAll: 'Reveal all', hideAgain: 'Hide again',
             fwBadge: 'Function words',
@@ -151,7 +151,7 @@ function initStudyWorkbench() {
         },
         zh: {
             pageTitle: '法语拆解与跟读复述 - 1000H French',
-            heading: '法语拆解与跟读复述',
+            heading: '学习与开口练习',
             navAria: '页面切换', navAudio: '音频工作台', navStudy: '拆解与复述', navWrite: '写作', navSpeak: '口语', navReview: '今日复习', navListen: '开车听',
             account: '账号', login: '登录', trialBadgeTitle: '账号有效期',
             reviewBtn: '复习', reviewBtnTitle: '今日复习（听 · 说 · 填）', dueBadgeTitle: '今天待复习卡片数',
@@ -225,7 +225,7 @@ function initStudyWorkbench() {
             modeSwitchAria: '学习模式切换',
             modeNormal: '全部显示', modeNormalTitle: '显示每一步完整的法语',
             modeBlind: '考考我', modeBlindTitle: '遮住每一步新加的词，凭记忆说出来',
-            buildupHint: '一块一块把句子搭起来：每一步先听，再自己说一遍。',
+            buildupHint: '点任意法语单词可以听发音。每一步先听，再自己说一遍。',
             blindTipStrong: '费曼认知挑战', blindTipText: '：递进关键词已遮挡。看着释义，凭借脑内记忆说出这句法语！',
             revealAll: '一键揭晓', hideAgain: '重新遮挡',
             fwBadge: '基础虚词',
@@ -1103,7 +1103,7 @@ function initStudyWorkbench() {
 
     function highlightBuildupDiff(currentFr, prevFr) {
         if (!currentFr) return '';
-        if (!prevFr) return escapeHtml(currentFr);
+        if (!prevFr) return renderInteractiveWordsHtml(currentFr);
 
         const normalizeToken = (w) => w.toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
 
@@ -1120,7 +1120,7 @@ function initStudyWorkbench() {
         });
 
         if (currWords.length === 0 || prevWords.length === 0) {
-            return escapeHtml(currentFr);
+            return renderInteractiveWordsHtml(currentFr);
         }
 
         const m = prevWords.length;
@@ -1177,7 +1177,7 @@ function initStudyWorkbench() {
                 result += '</mark>';
                 inMark = false;
             }
-            result += escapeHtml(piece);
+            result += renderInteractiveWordsHtml(piece);
         }
         if (inMark) {
             result += '</mark>';
@@ -2104,7 +2104,7 @@ function initStudyWorkbench() {
             };
             head.addEventListener('click', (e) => {
                 if (e.target.closest('button:not(.sentence-toggle), a')) return;
-                if (card.classList.contains('is-open') && e.target.closest('.interactive-word')) return;
+                if (e.target.closest('.interactive-word')) return;
                 if (String(window.getSelection && window.getSelection()).trim()) return;
                 setOpen(!card.classList.contains('is-open'));
             });
@@ -2152,6 +2152,7 @@ function initStudyWorkbench() {
                 if (interactiveWord) {
                     e.preventDefault();
                     e.stopPropagation();
+                    if (interactiveWord.closest('.buildup-steps-list.is-blind-mode')) { interactiveWord.click(); return; }
                     const word = interactiveWord.dataset.word || interactiveWord.dataset.token || interactiveWord.textContent.trim();
                     showPopoverForElement(word, interactiveWord, {
                         sentence: targetSentence,
@@ -2673,12 +2674,14 @@ function initStudyWorkbench() {
 
                     const token = e.target.closest('.buildup-new-token');
                     if (token) {
+                        e.stopPropagation();
                         token.classList.toggle('revealed');
                         return;
                     }
 
                     const firstRowText = e.target.closest('.buildup-step-row:first-child .buildup-fr-text');
                     if (firstRowText) {
+                        e.stopPropagation();
                         const firstRow = firstRowText.closest('.buildup-step-row');
                         if (firstRow) firstRow.classList.toggle('step-revealed');
                     }
@@ -3197,6 +3200,14 @@ function initStudyWorkbench() {
             });
         }
     });
+
+    // Personal expression can use the existing analysis without leaving this page.
+    window.FrenchStudy = { studyText(text) {
+        stopAllAudio();
+        frenchInput.value = text;
+        frenchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        return startAnalysis();
+    } };
 
     // Check prefilled URL query param `?text=...`
     window.renderStudyDeck = renderStudyDeck;

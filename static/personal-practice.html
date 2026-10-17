@@ -1,0 +1,40 @@
+<section id="study-personal" class="coach-main homework-main" aria-label="练我想说的话" hidden>
+    <p class="personal-intro"><span class="copy-zh">用中文写你想表达的事，完整转成简单法语，分段听读，再保存首尾录音。</span><span class="copy-en">Write your own ideas. Turn the full meaning into simple French, practise in small parts, and keep both recordings.</span></p>
+    <p id="homework-status" role="status" aria-live="polite"></p>
+    <section id="homework-login" class="editor-panel" hidden><button id="homework-signin" class="btn btn-primary" type="button"><span class="copy-zh">登录后保存练习</span><span class="copy-en">Sign in to save your practice</span></button></section>
+    <div id="homework-workspace" hidden>
+        <details id="homework-source" class="editor-panel" open>
+            <summary><span class="copy-zh">我想说的话</span><span class="copy-en">My own ideas</span></summary>
+            <p class="muted"><span class="copy-zh">写家庭、工作或今天的生活。会保留全部原意，按你的水平拆成小段；不用把想法删短。</span><span class="copy-en">Write about your life, work or family. All your ideas are kept and split into manageable parts for your level.</span></p>
+            <label for="homework-native"><span class="copy-zh">先用中文或你熟悉的语言写下来</span><span class="copy-en">Start in your native language</span></label>
+            <textarea id="homework-native" rows="4" maxlength="2000"></textarea>
+            <div class="coach-actions"><button id="homework-create" class="btn btn-primary">生成法语和范读 / Prepare French and audio</button><button id="homework-new" class="btn btn-secondary">新建一份 / New entry</button></div>
+        </details>
+        <div id="homework-entry" hidden>
+            <section class="editor-panel">
+                <div class="personal-heading"><h2>听懂，再开口 / Listen, then speak</h2><p class="muted" id="homework-meta"></p></div>
+                <div id="homework-parts" class="personal-parts" aria-label="练习分段"></div>
+                <p id="homework-part-source" class="muted"></p>
+                <div id="homework-french" class="homework-french" lang="fr"></div>
+                <audio id="homework-model" controls preload="metadata" style="width:100%"></audio>
+                <p id="homework-audio-status" class="muted" role="status" aria-live="polite"></p>
+                <div class="coach-actions"><button id="homework-audio-retry" class="btn btn-secondary" hidden>重新加载范读 / Retry audio</button><button id="homework-prepare" class="btn btn-secondary">继续准备范读 / Prepare audio</button><button id="homework-expand" class="btn btn-secondary" hidden>按原文补全并分段 / Expand all my ideas</button><button id="homework-study" class="btn btn-secondary">逐句拆解这段话 / Study this part</button><button id="homework-hide" class="btn btn-secondary">隐藏法语文本 / Hide the text</button></div>
+                <p class="muted">先录一遍，再逐句跟读、朗读，最后试着脱稿说。整段录音请用同一份完整文本，方便比较。 / Record once, repeat sentence by sentence, then try without the text. Use the same full text for both comparison recordings.</p>
+                <div class="coach-actions"><button id="homework-practice" class="btn btn-secondary">开始开口练习 / Practise aloud</button><span id="homework-clock" aria-live="polite"></span></div>
+                <details class="personal-help"><summary>怎么练、怎么计时 / Practice and timing</summary><p class="muted">每次只练一句，再逐渐连起来。麦克风活动用于估算开口时间；后台、切换到逐句学习或播放音频时暂停，可能受背景声音影响。 / Start with one sentence, then connect them. Microphone activity estimates speaking time; it pauses when hidden, studying the text or playing audio. Background noise can affect it.</p><a href="https://1000h.org/training-tasks/kick-off.html" target="_blank" rel="noopener">1000H 方法来源 / Method source</a></details>
+            </section>
+            <section class="editor-panel">
+                <h2>留下进步 / Keep your progress</h2>
+                <div class="homework-recordings">
+                    <div><h3>第一遍 / First attempt</h3><button id="record-first" class="btn btn-secondary">录第一遍 / Record first</button><button id="save-first" class="btn btn-primary" hidden>保存录音 / Save recording</button><audio id="audio-first" controls preload="metadata" hidden></audio></div>
+                    <div><h3>最后一遍 / Final attempt</h3><button id="record-final" class="btn btn-secondary">录最后一遍 / Record final</button><button id="save-final" class="btn btn-primary" hidden>保存录音 / Save recording</button><audio id="audio-final" controls preload="metadata" hidden></audio></div>
+                </div>
+                <p class="muted">每段 1–180 秒，第一遍保存后会保留。 / Each recording is 1–180 seconds. Your first recording is preserved.</p>
+                <label for="homework-reflection">练习心得 / Reflection</label><textarea id="homework-reflection" rows="3" maxlength="3000" placeholder="哪里卡住了？哪一句现在能独立说？ / What was hard? What can you say now?"></textarea>
+                <label class="coach-days"><input id="homework-recalled" type="checkbox">我已尝试脱稿说，并换一个细节再表达 / I tried recalling it and changing a detail</label>
+                <div class="coach-actions"><button id="homework-finish" class="btn btn-primary">完成并存档 / Finish and archive</button><button id="homework-download" class="btn btn-secondary">下载整份练习 / Download archive</button></div>
+            </section>
+        </div>
+        <details class="editor-panel"><summary>我的练习记录 / My practice archive</summary><div id="homework-history"></div></details>
+    </div>
+</section>

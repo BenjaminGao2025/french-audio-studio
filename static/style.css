@@ -107,7 +107,7 @@ input[type="radio"] + span {
 
 .nav-tab:hover {
     color: var(--ink);
-    background: rgba(255, 255, 255, 0.65);
+    background: var(--surface-muted);
 }
 
 .nav-tab.active,
