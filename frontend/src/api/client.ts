@@ -12,6 +12,12 @@ export class ApiError extends Error {
   }
 }
 
+/** Retry transient failures only: a 4xx (404 = not on this server, 401, 422) will not change. */
+export function shouldRetry(failureCount: number, error: unknown): boolean {
+  if (error instanceof ApiError && error.status >= 400 && error.status < 500) return false;
+  return failureCount < 2;
+}
+
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
   return window.localStorage.getItem(TOKEN_KEY);

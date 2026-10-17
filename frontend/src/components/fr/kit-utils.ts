@@ -1,5 +1,6 @@
 import type { useNavigate } from "@tanstack/react-router";
 import { ApiError } from "@/api/client";
+import { t } from "@/i18n";
 // Non-component kit exports (kept separate from kit.tsx so react-refresh stays happy).
 
 export const meta = (title: string, description: string) => ({
@@ -42,4 +43,10 @@ export function withBlock(route: string, id: string): string {
 /** The route is missing on this server (feature not built yet): 404 or 405 from the API. */
 export function isNotAvailable(error: unknown): boolean {
   return error instanceof ApiError && (error.status === 404 || error.status === 405);
+}
+
+/** Text for a failed user action: "not available" when the server lacks the route. */
+export function errorMessage(error: unknown, fallback = "Something went wrong"): string {
+  if (isNotAvailable(error)) return t("notAvailable");
+  return error instanceof Error ? error.message : fallback;
 }

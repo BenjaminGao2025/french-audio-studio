@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { BlockShell, Chip, useBlockFlow } from "@/components/fr/kit";
-import { btn, meta } from "@/components/fr/kit-utils";
+import { btn, errorMessage, meta } from "@/components/fr/kit-utils";
 import { cn } from "@/lib/utils";
 import { api } from "@/api";
 import { DataView } from "@/components/fr/states";
@@ -30,7 +30,7 @@ function EntryPanel({ onPassage }: { onPassage: (id: string) => void }) {
     api.reading
       .create(body)
       .then((p) => onPassage(p.id))
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed"))
+      .catch((e: unknown) => setError(errorMessage(e, "Failed")))
       .finally(() => setBusy(false));
   };
   return (

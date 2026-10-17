@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Download, EyeOff, Plus, Volume2 } from "lucide-react";
 import { BlockShell, Chip } from "@/components/fr/kit";
-import { btn, meta } from "@/components/fr/kit-utils";
+import { btn, errorMessage, meta } from "@/components/fr/kit-utils";
 import { cn } from "@/lib/utils";
 import { api } from "@/api";
 import { Skeleton } from "@/components/fr/states";
@@ -40,6 +40,7 @@ function JournalPage() {
   const [recite, setRecite] = useState<ReciteResult | null>(null);
   const [added, setAdded] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [reflection, setReflection] = useState("");
 
@@ -60,6 +61,7 @@ function JournalPage() {
   const createAndPrepare = () => {
     if (native.trim().length < 5) return;
     setBusy(true);
+    setError(null);
     void api.homework
       .create(native.trim())
       .then((j) => api.homework.prepare(j.id))
@@ -67,6 +69,7 @@ function JournalPage() {
         setJournal(j);
         go(1);
       })
+      .catch((e: unknown) => setError(errorMessage(e)))
       .finally(() => setBusy(false));
   };
 
@@ -120,6 +123,11 @@ function JournalPage() {
                 className="mt-4 h-64 w-full resize-none rounded-lg border border-input bg-background p-4 text-lg outline-none focus:ring-2 focus:ring-ring"
                 placeholder="今天…"
               />
+              {error && (
+                <p role="alert" className="mt-3 text-sm text-destructive">
+                  {error}
+                </p>
+              )}
               <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
                 <span>{native.trim().length} characters · aim for 50–100</span>
                 <button
