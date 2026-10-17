@@ -1,13 +1,16 @@
 """
-French Audio Studio - the daily cockpit (PRD M1).
+French Audio Studio - the daily cockpit (PRD M1, M2, M10).
 
-Today's plan: blocks from a weekly template with a planned -> active -> done/skipped lifecycle,
-and a 20-minute "minimal" day. A block kind is only planned once its page and backend exist
-(ENABLED_KINDS), so a day never contains a dead end.
+  * Today's plan: blocks from a weekly template with a planned -> active -> done/skipped
+    lifecycle, and a 20-minute "minimal" day. A block kind is only planned once its page and
+    backend exist (ENABLED_KINDS), so a day never contains a dead end.
+  * The hours ledger: active hours (auto time), manual hours (logged by hand) and input hours
+    (the car lane). Only active + manual count toward the 1000 hours (PRD 8.1).
+  * To-dos, the four-question daily review and tutor sessions (tutor time is manual speaking time).
 
 Nothing here calls an AI model. It shares users.db with game.py and srs.py and reads their
-study_time table. Targets still come from game.py's constants (24 h/week); the PRD's 16 h/week
-and phase_configs are a separate product decision.
+study_time and srs tables. Targets still come from game.py's constants (24 h/week); the PRD's
+16 h/week and phase_configs are a separate product decision.
 """
 
 from __future__ import annotations
@@ -24,6 +27,8 @@ import srs
 
 SKIP_REASONS = ("no_time", "too_hard", "health", "family")
 MILESTONES = (100, 300, 500, 750, 1000)
+NEW_CARDS_PER_DAY = 10
+SHADOW_SENTENCES = 8
 
 # Block kinds whose page and backend exist in this build. journal (homework), listening,
 # reading and checkpoint blocks join the plan when their backends land.
@@ -117,6 +122,17 @@ def init_db() -> None:
                 finished_at TEXT,
                 UNIQUE (user_id, day, position)
             );
+            CREATE TABLE IF NOT EXISTS daily_reviews (
+                user_id INTEGER NOT NULL,
+                day TEXT NOT NULL,
+                hard TEXT NOT NULL DEFAULT '',
+                solved TEXT NOT NULL DEFAULT '',
+                unsolved TEXT NOT NULL DEFAULT '',
+                tomorrow TEXT NOT NULL DEFAULT '',
+                mood INTEGER,
+                created_at TEXT NOT NULL,
+                PRIMARY KEY (user_id, day)
+            );
             CREATE TABLE IF NOT EXISTS todos (
                 id TEXT PRIMARY KEY,
                 user_id INTEGER NOT NULL,
@@ -126,6 +142,19 @@ def init_db() -> None:
                 kind TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_todos_user ON todos(user_id);
+            CREATE TABLE IF NOT EXISTS tutor_sessions (
+                id TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                day TEXT NOT NULL,
+                minutes INTEGER NOT NULL,
+                tutor TEXT,
+                topics TEXT,
+                homework TEXT,
+                cost REAL,
+                study_time_id INTEGER,
+                created_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_tutor_sessions_user ON tutor_sessions(user_id, day DESC);
             """
         )
     _initialized_db_paths.add(db_path)
@@ -149,6 +178,18 @@ def phase_info(day: datetime.date | None = None) -> dict[str, Any]:
     day = day or game.local_day(_now(), 0)
     base = PHASE_MAINTENANCE if _in_maintenance(day) else PHASE_A
     return {**base, "week_target_min": game.week_target(day)}
+
+
+def phase() -> dict[str, Any]:
+    info = phase_info()
+    return {
+        "id": info["id"],
+        "name": info["name"],
+        "week_target_min": info["week_target_min"],
+        "lane_targets": dict(game.LANE_WEEK_TARGETS),
+        "new_cards_per_day": NEW_CARDS_PER_DAY,
+        "gates": {},
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -351,3 +392,187 @@ def skip_block(user_id: int, block_id: str, reason: str) -> dict[str, Any]:
         if row["status"] != "done":
             conn.execute("UPDATE day_blocks SET status = 'skipped', skip_reason = ? WHERE id = ?", (reason, block_id))
         return _block(_own_block(conn, user_id, block_id))
+
+
+# ---------------------------------------------------------------------------
+# Hours ledger
+# ---------------------------------------------------------------------------
+def _hours(seconds: float) -> float:
+    return round(seconds / 3600, 2)
+
+
+def _by_lane(rows: list[sqlite3.Row]) -> dict[str, dict[str, int]]:
+    out = {lane: {"active": 0, "manual": 0, "input": 0} for lane in game.LANES}
+    for row in rows:
+        if row["lane"] not in out:
+            continue
+        # Car-lane time is input whoever logged it; it never counts toward the 1000 hours.
+        bucket = "input" if row["lane"] == "car" else ("manual" if row["source"] == "manual" else "active")
+        out[row["lane"]][bucket] += row["seconds"]
+    return out
+
+
+def ledger(user_id: int, tz_offset: int = 0, now: datetime.datetime | None = None) -> dict[str, Any]:
+    now = now or _now()
+    day = game.local_day(now, tz_offset)
+    week_start, week_end = game.week_bounds(day)
+    sql = "SELECT lane, source, COALESCE(SUM(seconds), 0) AS seconds FROM study_time WHERE user_id = ?"
+    with _connect() as conn:
+        total = _by_lane(conn.execute(sql + " GROUP BY lane, source", (user_id,)).fetchall())
+        week = _by_lane(
+            conn.execute(
+                sql + " AND day BETWEEN ? AND ? GROUP BY lane, source",
+                (user_id, week_start.isoformat(), week_end.isoformat()),
+            ).fetchall()
+        )
+    sums = {key: sum(lane[key] for lane in total.values()) for key in ("active", "manual", "input")}
+    milestone, to_go = _next_milestone((sums["active"] + sums["manual"]) / 3600)
+    return {
+        "active_hours": _hours(sums["active"]),
+        "manual_hours": _hours(sums["manual"]),
+        "input_hours": _hours(sums["input"]),
+        "lanes": [
+            {
+                "lane": lane,
+                "active": _hours(week[lane]["active"]),
+                "manual": _hours(week[lane]["manual"]),
+                "input": _hours(week[lane]["input"]),
+                "week_target": round(game.LANE_WEEK_TARGETS[lane] / 60, 2),
+            }
+            for lane in game.LANES
+        ],
+        "milestones": list(MILESTONES),
+        "next_milestone": milestone,
+        "hours_to_go": to_go,
+        "phase": phase_info(day)["name"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# To-dos
+# ---------------------------------------------------------------------------
+def list_todos(user_id: int) -> list[dict[str, Any]]:
+    with _connect() as conn:
+        _seed_todos(conn, user_id)
+        rows = conn.execute(
+            "SELECT * FROM todos WHERE user_id = ? ORDER BY due IS NULL, due, id", (user_id,)
+        ).fetchall()
+    return [_todo(r) for r in rows]
+
+
+def complete_todo(user_id: int, todo_id: str, now: datetime.datetime | None = None) -> None:
+    with _connect() as conn:
+        if not conn.execute("SELECT 1 FROM todos WHERE id = ? AND user_id = ?", (todo_id, user_id)).fetchone():
+            raise KeyError(todo_id)
+        conn.execute(
+            "UPDATE todos SET done_at = ? WHERE id = ? AND user_id = ? AND done_at IS NULL",
+            (srs._iso(now or _now()), todo_id, user_id),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Daily review (four questions)
+# ---------------------------------------------------------------------------
+def _review(day: str, row: sqlite3.Row | None) -> dict[str, Any]:
+    review: dict[str, Any] = {"day": day, "hard": "", "solved": "", "unsolved": "", "tomorrow": ""}
+    if row:
+        review.update({key: row[key] for key in ("hard", "solved", "unsolved", "tomorrow")})
+        if row["mood"] is not None:
+            review["mood"] = row["mood"]
+    return review
+
+
+def save_review(
+    user_id: int,
+    day: str,
+    hard: str,
+    solved: str,
+    unsolved: str,
+    tomorrow: str,
+    mood: int | None,
+    now: datetime.datetime | None = None,
+) -> dict[str, Any]:
+    with _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO daily_reviews (user_id, day, hard, solved, unsolved, tomorrow, mood, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (user_id, day) DO UPDATE SET
+                hard = excluded.hard, solved = excluded.solved, unsolved = excluded.unsolved,
+                tomorrow = excluded.tomorrow, mood = excluded.mood
+            """,
+            (user_id, day, hard, solved, unsolved, tomorrow, mood, srs._iso(now or _now())),
+        )
+    return get_review(user_id, day)
+
+
+def get_review(user_id: int, day: str) -> dict[str, Any]:
+    with _connect() as conn:
+        row = conn.execute("SELECT * FROM daily_reviews WHERE user_id = ? AND day = ?", (user_id, day)).fetchone()
+    return _review(day, row)
+
+
+# ---------------------------------------------------------------------------
+# Tutor sessions
+# ---------------------------------------------------------------------------
+def _tutor_session(row: sqlite3.Row) -> dict[str, Any]:
+    session = {"id": row["id"], "day": row["day"], "minutes": row["minutes"]}
+    for key in ("tutor", "topics", "homework", "cost"):
+        if row[key] is not None:
+            session[key] = row[key]
+    return session
+
+
+def add_tutor_session(
+    user_id: int,
+    day: str,
+    minutes: int,
+    tutor: str | None = None,
+    topics: str | None = None,
+    homework: str | None = None,
+    cost: float | None = None,
+    tz_offset: int = 0,
+    now: datetime.datetime | None = None,
+) -> dict[str, Any]:
+    """Log a lesson. PRD M10: tutor time is manual speaking time, booked on the lesson's day."""
+    now = now or _now()
+    note = " · ".join(part for part in ("Tutor", tutor, topics) if part)
+    study_time_id = game.log_time(user_id, "speaking", minutes, note, tz_offset, now=now, day=day)
+    session_id = uuid.uuid4().hex
+    with _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO tutor_sessions (id, user_id, day, minutes, tutor, topics, homework, cost, study_time_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (session_id, user_id, day, minutes, tutor, topics, homework, cost, study_time_id, srs._iso(now)),
+        )
+        row = conn.execute("SELECT * FROM tutor_sessions WHERE id = ?", (session_id,)).fetchone()
+    return _tutor_session(row)
+
+
+def list_tutor_sessions(user_id: int) -> list[dict[str, Any]]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM tutor_sessions WHERE user_id = ? ORDER BY day DESC, created_at DESC", (user_id,)
+        ).fetchall()
+    return [_tutor_session(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Shadowing
+# ---------------------------------------------------------------------------
+def shadow_sentences(user_id: int, limit: int = SHADOW_SENTENCES) -> list[dict[str, str]]:
+    """The learner's latest sentences that have a speak card. IPA is not stored for notes."""
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT n.sentence FROM srs_notes n
+            WHERE n.user_id = ? AND EXISTS (
+                SELECT 1 FROM srs_cards c WHERE c.note_id = n.id AND c.mode = 'speak'
+            )
+            ORDER BY n.created_at DESC LIMIT ?
+            """,
+            (user_id, limit),
+        ).fetchall()
+    return [{"text": r["sentence"], "ipa": ""} for r in rows]
