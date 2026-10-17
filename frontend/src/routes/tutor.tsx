@@ -6,6 +6,7 @@ import { btn, meta } from "@/components/fr/kit-utils";
 import { useTodos, useTutorSessions } from "@/api/hooks";
 import { DataView, EmptyState } from "@/components/fr/states";
 import { api } from "@/api";
+import { localDay } from "@/lib/format";
 
 export const Route = createFileRoute("/tutor")({
   // Optional key, so plain links such as <Link to="/hours"> need no search prop.
@@ -19,7 +20,7 @@ function Tutor() {
   const { block } = Route.useSearch();
   const todos = useTodos();
   const sessions = useTutorSessions();
-  const [day, setDay] = useState(() => new Date().toISOString().slice(0, 10));
+  const [day, setDay] = useState(localDay);
   const [minutes, setMinutes] = useState("30");
   const [tutor, setTutor] = useState("");
   const [topics, setTopics] = useState("");

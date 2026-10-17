@@ -6,7 +6,7 @@ import { btn, meta } from "@/components/fr/kit-utils";
 import { useToday, useMe } from "@/api/hooks";
 import { DataView } from "@/components/fr/states";
 import { api } from "@/api";
-import { fmtMinutes } from "@/lib/format";
+import { fmtMinutes, localDay } from "@/lib/format";
 
 export const Route = createFileRoute("/wrapup")({
   validateSearch: (s: Record<string, unknown>) => ({
@@ -88,7 +88,8 @@ function Wrap() {
               setBusy(true);
               void api.reviews
                 .add({
-                  day: new Date().toISOString().slice(0, 10),
+                  // the study day the plan belongs to (04:00 rollover), not the UTC date
+                  day: today.data?.day ?? localDay(),
                   ...fields,
                   mood: mood ?? undefined,
                 })

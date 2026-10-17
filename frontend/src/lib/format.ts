@@ -7,6 +7,12 @@ export function greeting(date = new Date()): string {
   return "Bonsoir";
 }
 
+/** The calendar date in the user's own timezone, as YYYY-MM-DD (toISOString would give UTC). */
+export function localDay(date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 export function fmtDay(date = new Date()): string {
   return date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 }
