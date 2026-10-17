@@ -10,7 +10,7 @@ import {
 import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { BlockShell } from "@/components/fr/kit";
-import { nextBlockRoute } from "@/api/hooks";
+import { nextBlock } from "@/api/hooks";
 import { withBlock } from "@/components/fr/kit-utils";
 import { api } from "@/api";
 vi.mock("@/api", () => ({
@@ -27,7 +27,10 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
 });
-async function mount(finishDisabled = false) {
+async function mount({
+  finishDisabled = false,
+  withBlockId = true,
+}: { finishDisabled?: boolean; withBlockId?: boolean } = {}) {
   window.localStorage.setItem("1000h.locale", "en");
   vi.mocked(api.today.get).mockResolvedValue({ blocks } as Awaited<
     ReturnType<typeof api.today.get>
@@ -49,7 +52,7 @@ async function mount(finishDisabled = false) {
         kicker="Journal"
         title="Journal"
         progress={0}
-        blockId="b2"
+        blockId={withBlockId ? "b2" : undefined}
         lane="speaking"
         finishDisabled={finishDisabled}
       >
@@ -62,8 +65,13 @@ async function mount(finishDisabled = false) {
     path: "/cards",
     component: () => <p>Next review</p>,
   });
+  const home = createRoute({
+    getParentRoute: () => root,
+    path: "/",
+    component: () => <p>Home</p>,
+  });
   const router = createRouter({
-    routeTree: root.addChildren([journal, cards]),
+    routeTree: root.addChildren([journal, cards, home]),
     history: createMemoryHistory({ initialEntries: ["/journal"] }),
   });
   await router.load();
@@ -88,18 +96,21 @@ it("skips b2 with the chosen reason", async () => {
   await waitFor(() => expect(api.today.skipBlock).toHaveBeenCalledWith("b2", "too_hard"));
   await waitFor(() => expect(router.state.location.pathname).toBe("/cards"));
 });
-it("selects next planned after active", () => expect(nextBlockRoute(blocks, "b2")).toBe("/cards"));
-it("returns home after the last available block", () =>
+it("selects next planned after active", () => expect(nextBlock(blocks, "b2")?.id).toBe("b3"));
+it("returns nothing after the last available block", () =>
   expect(
-    nextBlockRoute(
+    nextBlock(
       [blocks[1]].filter((b) => b !== undefined),
       "b3",
     ),
-  ).toBe("/"));
-it("selects first available without current id", () =>
-  expect(nextBlockRoute(blocks)).toBe("/journal"));
+  ).toBeUndefined());
+it("selects first available without current id", () => expect(nextBlock(blocks)?.id).toBe("b2"));
 it("falls back to an earlier block in position order", () =>
-  expect(nextBlockRoute([...blocks].reverse(), "b3")).toBe("/journal"));
+  expect(nextBlock([...blocks].reverse(), "b3")?.id).toBe("b2"));
+it("returns the block itself so callers never look it up by route", () => {
+  const twin = [...blocks, { id: "b4", position: 4, route: "/cards", status: "planned" }];
+  expect(nextBlock(twin, "b3")?.id).toBe("b4");
+});
 it("keeps parameters and replaces an existing block id", () => {
   const url = new URL(
     withBlock("/cards?modes=speak,listen&new_limit=0&block=old", "b1"),
@@ -111,9 +122,24 @@ it("keeps parameters and replaces an existing block id", () => {
 });
 
 it("does not finish an unsaved journal", async () => {
-  await mount(true);
+  await mount({ finishDisabled: true });
   const finish = await screen.findByRole("button", { name: "Finish block" });
   expect(finish).toBeDisabled();
   fireEvent.click(finish);
   expect(api.today.finishBlock).not.toHaveBeenCalled();
+});
+
+it("goes home, not into the plan, when the page was opened without a block", async () => {
+  const router = await mount({ withBlockId: false });
+  fireEvent.click(await screen.findByRole("button", { name: "Finish block" }));
+  await waitFor(() => expect(router.state.location.pathname).toBe("/"));
+  expect(api.today.finishBlock).not.toHaveBeenCalled();
+});
+
+it("skipping without a block also goes home", async () => {
+  const router = await mount({ withBlockId: false });
+  fireEvent.click(await screen.findByRole("button", { name: "Skip (just logged)" }));
+  fireEvent.click(screen.getByRole("button", { name: "Too hard" }));
+  await waitFor(() => expect(router.state.location.pathname).toBe("/"));
+  expect(api.today.skipBlock).not.toHaveBeenCalled();
 });

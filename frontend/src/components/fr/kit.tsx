@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { btn, navTo, withBlock } from "@/components/fr/kit-utils";
-import { useBlockActions, useToday, nextBlockRoute } from "@/api/hooks";
+import { useBlockActions, useToday, nextBlock } from "@/api/hooks";
 import { BlockTimer, SkipReasonSelect } from "@/components/fr/widgets";
 import { useT } from "@/i18n";
 import type { Lane, SkipReason } from "@/api/types";
@@ -89,13 +89,12 @@ export function Ring({
 
 const legacyLinks = [
   { href: "/study", label: "Intensive study" },
-  { href: "/study?mode=personal", label: "Legacy journal" },
   { href: "/review", label: "Legacy review" },
   { href: "/listen", label: "Episodes (legacy)" },
   { href: "/write", label: "Legacy writing" },
   { href: "/speak", label: "Legacy speaking" },
   { href: "/coach", label: "Coach" },
-  { href: "/tts", label: "Audio workbench" },
+  { href: "/", label: "Audio workbench" },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -191,14 +190,12 @@ export function useBlockFlow(blockId?: string, fallbackNext = "/") {
   const today = useToday();
   const actions = useBlockActions();
   const destination = () => {
+    // Opened from the sidebar, not from a plan block: do not jump into the plan.
+    if (!blockId) return "/";
     const blocks = today.data?.blocks;
     if (!blocks) return fallbackNext;
-    const route = nextBlockRoute(blocks, blockId);
-    const next = blocks.find(
-      (b) =>
-        b.id !== blockId && b.route === route && (b.status === "planned" || b.status === "active"),
-    );
-    return next ? withBlock(route, next.id) : route;
+    const next = nextBlock(blocks, blockId);
+    return next ? withBlock(next.route, next.id) : "/";
   };
   const finish = () => {
     const dest = destination();

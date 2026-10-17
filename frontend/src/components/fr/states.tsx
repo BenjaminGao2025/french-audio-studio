@@ -1,6 +1,7 @@
 import { AlertCircle, Inbox, RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
-import { btn } from "@/components/fr/kit-utils";
+import { btn, isNotAvailable } from "@/components/fr/kit-utils";
+import { useT } from "@/i18n";
 
 export function Skeleton({ lines = 3 }: { lines?: number }) {
   return (
@@ -32,6 +33,10 @@ export function EmptyState({
 }
 
 export function ErrorState({ error, retry }: { error: unknown; retry?: () => void }) {
+  const t = useT();
+  if (isNotAvailable(error)) {
+    return <EmptyState title={t("notAvailable")} hint={t("notAvailableHint")} />;
+  }
   const message = error instanceof Error ? error.message : "Something went wrong";
   return (
     <div className="flex flex-col items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-6 py-10 text-center">

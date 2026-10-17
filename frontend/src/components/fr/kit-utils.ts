@@ -1,4 +1,5 @@
 import type { useNavigate } from "@tanstack/react-router";
+import { ApiError } from "@/api/client";
 // Non-component kit exports (kept separate from kit.tsx so react-refresh stays happy).
 
 export const meta = (title: string, description: string) => ({
@@ -36,4 +37,9 @@ export function withBlock(route: string, id: string): string {
   const params = new URLSearchParams(query ?? "");
   params.set("block", id);
   return `${path}?${params.toString()}${hash ? `#${hash}` : ""}`;
+}
+
+/** The route is missing on this server (feature not built yet): 404 or 405 from the API. */
+export function isNotAvailable(error: unknown): boolean {
+  return error instanceof ApiError && (error.status === 404 || error.status === 405);
 }

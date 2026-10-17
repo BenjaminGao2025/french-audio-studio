@@ -282,6 +282,7 @@ const journal: T.Journal = {
   recordings: [],
   status: "prepared",
   complete: false,
+  created_at: "2026-10-12T16:00:00Z",
 };
 
 const listeningSession: T.ListeningSession = {

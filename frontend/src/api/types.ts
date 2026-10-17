@@ -114,6 +114,7 @@ export interface Journal {
   recalled?: boolean | undefined;
   status: string;
   complete: boolean;
+  created_at?: string | undefined;
   [k: string]: unknown;
 }
 

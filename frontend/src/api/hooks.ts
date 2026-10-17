@@ -99,14 +99,14 @@ export function useReviewCard() {
 }
 
 /** Follow position order, excluding the current block even before cache refresh. */
-export function nextBlockRoute(
-  blocks: { id: string; route: string; status: string; position: number }[],
+export function nextBlock<B extends { id: string; status: string; position: number }>(
+  blocks: B[],
   currentId?: string,
-): string {
+): B | undefined {
   const current = blocks.find((b) => b.id === currentId);
   const available = blocks
     .filter((b) => b.id !== currentId && (b.status === "planned" || b.status === "active"))
     .sort((a, b) => a.position - b.position);
-  if (!current) return available[0]?.route ?? "/";
-  return (available.find((b) => b.position > current.position) ?? available[0])?.route ?? "/";
+  if (!current) return available[0];
+  return available.find((b) => b.position > current.position) ?? available[0];
 }

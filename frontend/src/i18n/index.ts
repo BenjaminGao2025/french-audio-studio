@@ -60,6 +60,8 @@ const dict = {
     logout: "Sign out",
     email: "Email",
     password: "Password",
+    notAvailable: "Not available on this server yet",
+    notAvailableHint: "The backend for this feature has not been deployed.",
   },
   zh: {
     today: "今日",
@@ -90,6 +92,8 @@ const dict = {
     logout: "退出登录",
     email: "邮箱",
     password: "密码",
+    notAvailable: "此功能的后端尚未上线",
+    notAvailableHint: "服务器尚未部署这个功能的后端。",
   },
 } as const;
 
