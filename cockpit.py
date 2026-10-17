@@ -9,8 +9,9 @@ French Audio Studio - the daily cockpit (PRD M1, M2).
   * To-dos and the four-question daily review.
 
 Nothing here calls an AI model. It shares users.db with game.py and srs.py and reads their
-study_time and srs tables. Targets still come from game.py's constants (24 h/week); the PRD's
-16 h/week and phase_configs are a separate product decision.
+study_time and srs tables. Targets come from game.py's constants (16 h = 960 min a week, scaled
+down in the maintenance period); the weekly template below adds up to the same minutes. The PRD's
+phase_configs table is a separate product decision.
 """
 
 from __future__ import annotations
@@ -51,30 +52,38 @@ class Slot(NamedTuple):
     start_time: str
 
 
-WARMUP = Slot("warmup", "warmup", "Speaking warm-up · 10 cards", 10, "/cards?modes=speak,listen&new_limit=0", "review", "09:00")
-JOURNAL = Slot("journal", "journal", "“Say what I want to say” journal", 45, "/journal", "speaking", "09:10")
-REVIEW = Slot("review", "review", "Review queue", 10, "/cards", "review", "10:00")
-LISTENING = Slot("main1", "listening", "Main block 1 · Listening 3-step", 60, "/listening", "listening", "10:10")
-READING = Slot("main1", "reading", "Main block 1 · Intensive reading", 60, "/reading", "reading", "10:10")
+# One FSRS block a day (PRD 6.1, 10 minutes). It opens the whole queue, so new cards and the
+# cloze/grammar modes still have an entry; speak/listen-first ordering needs the PRD's M8 queue.
+WARMUP = Slot("warmup", "warmup", "Daily review · 10 cards", 10, "/cards", "review", "09:00")
+JOURNAL = Slot("journal", "journal", "“Say what I want to say” journal", 30, "/journal", "speaking", "09:10")
+PAST_SHADOWING = Slot("shadow", "shadowing", "Shadowing · past texts", 10, "/shadow", "speaking", "09:40")
+LISTENING = Slot("main1", "listening", "Main block 1 · Listening 3-step", 70, "/listening", "listening", "10:00")
+READING = Slot("main1", "reading", "Main block 1 · Intensive reading", 70, "/reading", "reading", "10:00")
 WRITING = Slot("main2", "writing", "Main block 2 · Writing T1 practice", 40, "/writing", "writing", "11:15")
-# Tuesday and Thursday 11:15 alternate between the two practices that replaced the old course
-# block. /reading is the block page (Finish/Skip, reading timer); it opens the /study sentence
-# breakdown, since the /api/reading passages backend does not exist yet.
+WRITING_REVISION = Slot("main2", "writing", "Main block 2 · Writing revision + second correction", 20, "/writing", "writing", "11:15")
+# Intensive reading and shadowing are the two practices that replaced the old course block: Tuesday
+# main block 2 is the first, Thursday's the second (fixed, not flipped by week parity, so the weekly
+# minutes do not depend on the week); Wednesday ends with 20 minutes of reading and Friday has 40.
+# /reading is the block page (Finish/Skip, reading timer); it opens the /study sentence breakdown,
+# since the /api/reading passages backend does not exist yet.
 INTENSIVE = Slot("main2", "intensive", "Main block 2 · Intensive reading (sentence breakdown)", 40, "/reading", "reading", "11:15")
+INTENSIVE_SHORT = Slot("main3", "intensive", "Main block 2 · Intensive reading (sentence breakdown)", 20, "/reading", "reading", "11:35")
 SHADOWING = Slot("main2", "shadowing", "Main block 2 · Shadowing", 40, "/shadow", "speaking", "11:15")
-WEEKLY_REVIEW = Slot("main2", "review", "Main block 2 · Weekly review", 40, "/cards?new_limit=0", "review", "11:15")
+# The 5-minute wrap-up is outside the planned study minutes (PRD 6.1): the day's blocks add up to
+# game.DAY_TARGET_MIN without it.
 WRAPUP = Slot("wrapup", "minimal", "Wrap-up", 5, "/wrapup", "review", "11:55")
 AI_SPEAKING = Slot("main1", "speaking", "Main block 1 · AI speaking practice", 60, "/speaking", "speaking", "10:00")
 AI_WRITING = Slot("main2", "writing", "Main block 2 · AI writing correction", 60, "/writing", "writing", "11:00")
-SUNDAY_REVIEW = Slot("main1", "review", "Weekly review · due cards", 90, "/cards", "review", "10:00")
+SUNDAY_REVIEW = Slot("main1", "review", "Weekly review · due cards", 40, "/cards", "review", "10:00")
 
-# PRD 6.1 and appendix C (phase A), Monday = 0.
+# PRD 6.1 and appendix C (phase A), Monday = 0: 160 minutes on a weekday, 120 on Saturday and 40 on
+# Sunday, 960 in the week (listening 210, reading 240, speaking 300, writing 120, review 90).
 WEEK_TEMPLATE: dict[int, tuple[Slot, ...]] = {
-    0: (WARMUP, JOURNAL, REVIEW, LISTENING, WRITING, WRAPUP),
-    1: (WARMUP, JOURNAL, REVIEW, READING, INTENSIVE, WRAPUP),
-    2: (WARMUP, JOURNAL, REVIEW, LISTENING, WRITING, WRAPUP),
-    3: (WARMUP, JOURNAL, REVIEW, READING, SHADOWING, WRAPUP),
-    4: (WARMUP, JOURNAL, REVIEW, LISTENING, WEEKLY_REVIEW, WRAPUP),
+    0: (WARMUP, JOURNAL, PAST_SHADOWING, LISTENING, WRITING, WRAPUP),
+    1: (WARMUP, JOURNAL, PAST_SHADOWING, READING, INTENSIVE, WRAPUP),
+    2: (WARMUP, JOURNAL, PAST_SHADOWING, LISTENING, WRITING_REVISION, INTENSIVE_SHORT, WRAPUP),
+    3: (WARMUP, JOURNAL, PAST_SHADOWING, READING, SHADOWING, WRAPUP),
+    4: (WARMUP, JOURNAL, PAST_SHADOWING, LISTENING, INTENSIVE, WRAPUP),
     5: (AI_SPEAKING, AI_WRITING, WRAPUP),
     6: (SUNDAY_REVIEW, WRAPUP),
 }
@@ -207,12 +216,13 @@ def phase_info(day: datetime.date | None = None) -> dict[str, Any]:
 
 
 def phase() -> dict[str, Any]:
-    info = phase_info()
+    day = game.local_day(_now(), 0)
+    info = phase_info(day)
     return {
         "id": info["id"],
         "name": info["name"],
         "week_target_min": info["week_target_min"],
-        "lane_targets": dict(game.LANE_WEEK_TARGETS),
+        "lane_targets": game.lane_week_targets(day),
         "new_cards_per_day": NEW_CARDS_PER_DAY,
         "gates": {},
     }
@@ -454,6 +464,7 @@ def ledger(user_id: int, tz_offset: int = 0, now: datetime.datetime | None = Non
             ).fetchall()
         )
     total = _by_lane(total_rows)
+    lane_targets = game.lane_week_targets(day)
     sums = {key: sum(lane[key] for lane in total.values()) for key in ("active", "manual", "input")}
     for row in total_rows:  # hours logged under a retired lane have no table row but still count
         if row["lane"] in game.RETIRED_LANES:
@@ -469,7 +480,7 @@ def ledger(user_id: int, tz_offset: int = 0, now: datetime.datetime | None = Non
                 "active": _hours(week[lane]["active"]),
                 "manual": _hours(week[lane]["manual"]),
                 "input": _hours(week[lane]["input"]),
-                "week_target": round(game.LANE_WEEK_TARGETS[lane] / 60, 2),
+                "week_target": round(lane_targets[lane] / 60, 2),
             }
             for lane in game.LANES
         ],

@@ -32,7 +32,7 @@
             streak: (n) => `${n}-day streak`, family: 'Family day', weekend: 'Weekend',
             logTime: 'Log time', mute: 'Turn sounds off', unmute: 'Turn sounds on',
             lanesTitle: 'This week, by part of the plan', maintenance: 'Maintenance weeks: 5 h',
-            skillsTitle: 'TCF Skills (24 h weekly target)',
+            skillsTitle: (h) => `TCF Skills (${h} h weekly target)`,
             skills: {
                 CO: 'CO · Listening',
                 CE: 'CE · Reading',
@@ -72,7 +72,7 @@
             streak: (n) => `连续 ${n} 个学习日`, family: '家庭日', weekend: '周末',
             logTime: '记录时间', mute: '关闭音效', unmute: '打开音效',
             lanesTitle: '本周各模块（按计划分配）', maintenance: '保温期：每周 5 小时',
-            skillsTitle: 'TCF 四项技能（每周 24 小时目标）',
+            skillsTitle: (h) => `TCF 四项技能（每周 ${h} 小时目标）`,
             skills: {
                 CO: 'CO · 听力理解',
                 CE: 'CE · 阅读理解',
@@ -436,7 +436,7 @@
         panel.innerHTML = `${quests}
             <div class="game-panel-grid">
                 <section>
-                    <h3>${T.skillsTitle || T.lanesTitle}${week.maintenance ? ` · ${T.maintenance}` : ''}</h3>
+                    <h3>${T.skillsTitle ? T.skillsTitle(hours(week.target)) : T.lanesTitle}${week.maintenance ? ` · ${T.maintenance}` : ''}</h3>
                     ${skillsHtml}
                     <p class="game-totals">${state.next_level_xp ? T.totals(state.hours_total, fmt(state.next_level_xp - state.xp)) : T.maxLevel(state.hours_total)}</p>
                     <p class="game-hint">½ ${escapeHtml(T.halfNote)}</p>

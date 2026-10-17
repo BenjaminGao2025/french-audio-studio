@@ -1,6 +1,7 @@
 import testenv  # noqa: F401
 import datetime as dt
 import json
+import re
 import unittest
 import uuid
 from unittest.mock import AsyncMock, patch
@@ -92,6 +93,15 @@ class CoachTests(unittest.TestCase):
         review=self.client.post('/api/coach/review',headers=self.auth,json={'note':'Too much vocabulary.'}).json()
         self.assertEqual(review['last_review']['source'],'llm')
         self.assertFalse(review['review_due'])
+
+    @patch('tts_service._post_chat',new_callable=AsyncMock)
+    def test_prompt_example_weights_are_the_default_16_hour_split(self,chat):
+        coach.save_profile(self.uid,profile())
+        chat.return_value=({},json.dumps({'summary':'Short daily practice.','questions':[]}))
+        self.client.post('/api/coach/plan',headers=self.auth,json={'note':''})
+        system=chat.call_args.args[1]['messages'][0]['content']
+        example=json.loads(re.search(r'"task_weights":(\{[^}]*\})',system).group(1))
+        self.assertEqual(example,coach.DEFAULT_WEIGHTS)
 
     @patch('tts_service._post_chat',new_callable=AsyncMock)
     def test_llm_failure_preserves_baseline(self,chat):

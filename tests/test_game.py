@@ -8,6 +8,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 import auth_db
+import coach
 import game
 import srs
 import tts_service
@@ -32,7 +33,7 @@ class LevelCurveTests(unittest.TestCase):
         # One level per hour: level 1000 = 1000 hours
         self.assertEqual(game.level_threshold(0), 0)
         self.assertEqual(game.level_threshold(game.MAX_LEVEL), 1000 * 60)
-        self.assertEqual(game.WEEK_TARGET_MIN, 24 * 60)
+        self.assertEqual(game.WEEK_TARGET_MIN, 16 * 60)
         self.assertEqual(game.level_for(59)["level"], 0)
         info = game.level_for(5 * 60 + 30)
         self.assertEqual(info["level"], 5)
@@ -46,22 +47,44 @@ class LevelCurveTests(unittest.TestCase):
         self.assertEqual(game.week_number(datetime.date(2026, 10, 5)), 1)
         self.assertEqual(game.week_number(datetime.date(2026, 11, 29)), 8)
         self.assertEqual(game.week_target(datetime.date(2027, 6, 1)), game.MAINTENANCE_WEEK_TARGET_MIN)
-        self.assertEqual(game.week_target(datetime.date(2026, 10, 5)), 1440)
+        self.assertEqual(game.week_target(datetime.date(2026, 10, 5)), 960)
 
-    def test_rebalanced_targets_and_skills(self):
-        self.assertEqual(game.LANE_WEEK_TARGETS["writing"], 210)
-        self.assertEqual(game.LANE_WEEK_TARGETS["review"], 150)
-        self.assertEqual(game.WEEK_TARGET_MIN, 1440)
+    def test_the_16_hour_week_and_its_split(self):
+        # PRD 6.1: 16 h = 960 min, listening 3.5 h, reading 4 h, speaking 5 h, writing 2 h, review 1.5 h.
+        self.assertEqual(
+            game.LANE_WEEK_TARGETS,
+            {"listening": 210, "reading": 240, "speaking": 300, "writing": 120, "review": 90, "car": 0},
+        )
+        self.assertEqual(game.WEEK_TARGET_MIN, 960)
+        self.assertEqual(sum(game.LANE_WEEK_TARGETS.values()), game.WEEK_TARGET_MIN)
+        self.assertEqual(game.MAINTENANCE_WEEK_TARGET_MIN, 300)
 
-    def test_the_course_target_moved_into_reading_and_speaking(self):
-        # The old 180 min/week course target is now 90 min of intensive reading and 90 of shadowing.
+    def test_day_targets_add_up_to_the_week(self):
+        # Monday = 0: 160 min on a weekday, 120 on Saturday, 40 on Sunday (PRD appendix C).
+        self.assertEqual(game.DAY_TARGET_MIN, (160, 160, 160, 160, 160, 120, 40))
+        self.assertEqual(sum(game.DAY_TARGET_MIN), game.WEEK_TARGET_MIN)
+
+    def test_the_course_lane_is_gone(self):
+        # Its 3 h went to intensive reading and shadowing (reading 4 h, speaking 5 h).
         self.assertNotIn("course", game.LANE_WEEK_TARGETS)
         self.assertNotIn("course", game.LANES)
-        self.assertEqual(game.LANE_WEEK_TARGETS["reading"], 150 + 90)
-        self.assertEqual(game.LANE_WEEK_TARGETS["speaking"], 240 + 90)
         self.assertEqual(tuple(game.LANES), ("listening", "reading", "speaking", "writing", "review", "car"))
-        self.assertEqual(game.WEEK_TARGET_MIN, 1440)  # the weekly total did not change
 
+    def test_lane_targets_outside_maintenance_are_a_copy_of_the_split(self):
+        targets = game.lane_week_targets(datetime.date(2026, 10, 5))
+        self.assertEqual(targets, game.LANE_WEEK_TARGETS)
+        targets["car"] = 99
+        self.assertEqual(game.LANE_WEEK_TARGETS["car"], 0)
+
+    def test_maintenance_scales_the_split_to_exactly_five_hours(self):
+        scaled = game.lane_week_targets(datetime.date(2027, 6, 1))
+        self.assertEqual(scaled, {"listening": 66, "reading": 75, "speaking": 94, "writing": 37, "review": 28, "car": 0})
+        self.assertEqual(sum(scaled.values()), game.MAINTENANCE_WEEK_TARGET_MIN)
+        # The edges of the period; the day before and after use the full split.
+        self.assertEqual(sum(game.lane_week_targets(datetime.date(2027, 5, 1)).values()), 300)
+        self.assertEqual(sum(game.lane_week_targets(datetime.date(2027, 8, 31)).values()), 300)
+        self.assertEqual(sum(game.lane_week_targets(datetime.date(2027, 4, 30)).values()), 960)
+        self.assertEqual(sum(game.lane_week_targets(datetime.date(2027, 9, 1)).values()), 960)
 
 
 class StudyTimeTests(unittest.TestCase):
@@ -75,45 +98,62 @@ class StudyTimeTests(unittest.TestCase):
         state = game.state(self.user_id, PDT, now)
         self.assertEqual(state["today"]["minutes"], 400)
         self.assertEqual(state["xp"], 300 + 50)
-        self.assertEqual(state["today"]["target"], 240)
+        self.assertEqual(state["today"]["target"], 160)
         self.assertEqual(state["week"]["by_lane"]["reading"], 200)
+
+    def test_day_targets_follow_the_weekly_template(self):
+        for offset, expected in enumerate(game.DAY_TARGET_MIN):  # 2026-10-05 is a Monday
+            day = datetime.date(2026, 10, 5) + datetime.timedelta(days=offset)
+            with self.subTest(day=day.isoformat()):
+                state = game.state(self.user_id, PDT, _at(day.isoformat(), 10))
+                self.assertEqual(state["today"]["target"], expected)
+        self.assertEqual(
+            [game.state(self.user_id, PDT, _at(d, 10))["today"]["target"] for d in ("2026-10-10", "2026-10-11")],
+            [120, 40],
+        )
 
     def test_tcf_skills_grouping_and_furthest_behind(self):
         now = _at("2026-10-06", 10)  # a Tuesday
         st = game.state(self.user_id, PDT, now)
         week = st["week"]
         skills = week["skills"]
-        self.assertEqual(skills["CO"]["target"], 510)  # listening (210) + car*0.5 (300)
-        self.assertEqual(skills["CE"]["target"], 240)  # reading (150 + 90 intensive reading)
-        self.assertEqual(skills["EE"]["target"], 210)  # writing (210)
-        self.assertEqual(skills["EO"]["target"], 330)  # speaking (240 + 90 shadowing)
-        self.assertEqual(skills["shared"]["target"], 150)  # review (150)
+        self.assertEqual(skills["CO"]["target"], 210)  # listening (210) + car*0.5 (the car has no target)
+        self.assertEqual(skills["CE"]["target"], 240)  # reading (all intensive reading)
+        self.assertEqual(skills["EE"]["target"], 120)  # writing
+        self.assertEqual(skills["EO"]["target"], 300)  # speaking (incl. 90 shadowing)
+        self.assertEqual(skills["shared"]["target"], 90)  # review
         total_target = sum(s["target"] for s in skills.values())
-        self.assertEqual(total_target, 1440)
-        self.assertEqual(week["focus_skill"]["skill"], "CO")
-        self.assertEqual(week["focus_skill"]["link"], "/listen")
-
-        # Log some listening time: 200 min listening -> EO becomes furthest behind (target 330 vs CE 240)
-        game.log_time(self.user_id, "listening", 200, "", PDT, now)
-        st = game.state(self.user_id, PDT, now)
-        week = st["week"]
-        self.assertEqual(week["focus_skill"]["skill"], "EO")
+        self.assertEqual(total_target, 960)
+        self.assertEqual(week["target"], 960)
+        self.assertEqual(week["focus_skill"]["skill"], "EO")  # nothing done: the biggest target is furthest behind
         self.assertEqual(week["focus_skill"]["link"], "/speak")
 
-        # Log speaking time: 240 min speaking -> CE becomes furthest behind (target 240 vs EE 210)
-        game.log_time(self.user_id, "speaking", 240, "", PDT, now)
+        # Log speaking time: 300 min speaking -> EO is done and CE is furthest behind (target 240)
+        game.log_time(self.user_id, "speaking", 300, "", PDT, now)
         st = game.state(self.user_id, PDT, now)
         week = st["week"]
         self.assertEqual(week["focus_skill"]["skill"], "CE")
         self.assertEqual(week["focus_skill"]["link"], "/study")
 
-        # Log reading time: 240 min reading -> EE becomes furthest behind
+        # Log reading time: 240 min reading -> CO becomes furthest behind (target 210 vs EE 120)
         game.log_time(self.user_id, "reading", 240, "", PDT, now)
+        st = game.state(self.user_id, PDT, now)
+        week = st["week"]
+        self.assertEqual(week["focus_skill"]["skill"], "CO")
+        self.assertEqual(week["focus_skill"]["link"], "/listen")
+
+        # Log listening time: 210 min listening -> EE becomes furthest behind
+        game.log_time(self.user_id, "listening", 210, "", PDT, now)
         st = game.state(self.user_id, PDT, now)
         week = st["week"]
         self.assertEqual(week["focus_skill"]["skill"], "EE")
         self.assertEqual(week["focus_skill"]["link"], "/write")
 
+    def test_week_lane_targets_add_up_to_the_week_target(self):
+        week = game.state(self.user_id, PDT, _at("2026-10-06", 10))["week"]
+        self.assertEqual(week["lane_targets"], game.LANE_WEEK_TARGETS)
+        weighted = sum(m * week["lane_weights"][lane] for lane, m in week["lane_targets"].items())
+        self.assertEqual(weighted, week["target"])
 
     def test_car_listening_counts_half(self):
         now = _at("2026-10-10", 10)  # a Saturday
@@ -123,7 +163,7 @@ class StudyTimeTests(unittest.TestCase):
         self.assertEqual(state["today"]["minutes"], 30)
         self.assertEqual(state["week"]["minutes"], 30)
         self.assertEqual(state["xp"], 30)
-        self.assertEqual(state["today"]["target"], game.WEEKEND_TARGET_MIN)
+        self.assertEqual(state["today"]["target"], 120)  # Saturday
 
     def test_heartbeats_are_capped_and_land_on_the_study_day(self):
         early = _at("2026-10-07", 2)  # 02:00 still belongs to the 6th
@@ -187,13 +227,79 @@ class RetiredCourseLaneTests(unittest.TestCase):
         self.assertNotIn("course", state["week"]["lane_targets"])
         self.assertEqual(sum(state["week"]["by_lane"].values()), 0)
         self.assertEqual(sum(s["minutes"] for s in state["week"]["skills"].values()), 0)
-        self.assertEqual(sum(s["target"] for s in state["week"]["skills"].values()), 1440)
+        self.assertEqual(sum(s["target"] for s in state["week"]["skills"].values()), 960)
 
     def test_an_old_manual_course_log_is_still_listed_so_it_can_be_deleted(self):
         logs = game.state(self.user_id, PDT, self.now)["today"]["logs"]
         self.assertEqual([(log["lane"], log["minutes"]) for log in logs], [("course", 90)])
         self.assertTrue(game.delete_log(self.user_id, logs[0]["id"]))
         self.assertEqual(game.state(self.user_id, PDT, self.now)["today"]["logs"], [])
+
+
+class MaintenanceStateTests(unittest.TestCase):
+    """May-Aug 2027: 5 h a week, the same split scaled down, nothing on weekends."""
+
+    def setUp(self):
+        self.user_id, _ = _new_user()
+
+    def test_week_target_lanes_and_day_targets(self):
+        wed = game.state(self.user_id, PDT, _at("2027-06-02", 10))
+        week = wed["week"]
+        self.assertTrue(week["maintenance"])
+        self.assertEqual(week["target"], game.MAINTENANCE_WEEK_TARGET_MIN)
+        self.assertEqual(week["lane_targets"], game.lane_week_targets(datetime.date(2027, 6, 2)))
+        self.assertEqual(sum(week["lane_targets"].values()), week["target"])
+        self.assertEqual(sum(s["target"] for s in week["skills"].values()), 0)  # no skill targets in maintenance
+        self.assertEqual(wed["today"]["target"], 60)
+        sat = game.state(self.user_id, PDT, _at("2027-06-05", 10))
+        self.assertEqual(sat["today"]["target"], 0)
+
+    def test_the_weekdays_add_up_to_five_hours(self):
+        days = [datetime.date(2027, 6, 7) + datetime.timedelta(days=i) for i in range(7)]  # Monday to Sunday
+        targets = [game.state(self.user_id, PDT, _at(d.isoformat(), 10))["today"]["target"] for d in days]
+        self.assertEqual(sum(targets), game.MAINTENANCE_WEEK_TARGET_MIN)
+
+
+class CoachPlanTargetsTests(unittest.TestCase):
+    """A stored coach plan replaces the fixed week; its default weights follow the 16 h split."""
+
+    def setUp(self):
+        self.user_id, _ = _new_user()
+
+    def _profile(self, weekday_minutes: int, weekend_minutes: int) -> dict:
+        return dict(
+            exam="TCF Canada", target="NCLC 7",
+            deadline=(coach.local_date() + datetime.timedelta(days=230)).isoformat(),
+            timezone="America/Vancouver", levels={k: "A1" for k in coach.KINDS},
+            weekday_minutes=weekday_minutes, weekend_minutes=weekend_minutes,
+            weekday_start="09:00", weekend_start="09:00", study_days=list(range(7)),
+            constraints="", experience="", reminder=False,
+        )
+
+    def test_default_weights_are_the_hours_of_the_16_hour_plan(self):
+        lane = {"listen": "listening", "write": "writing", "speak": "speaking", "review": "review", "read": "reading"}
+        self.assertEqual(set(coach.DEFAULT_WEIGHTS), set(coach.KINDS))
+        for kind, weight in coach.DEFAULT_WEIGHTS.items():
+            self.assertEqual(weight * 60, game.LANE_WEEK_TARGETS[lane[kind]], kind)
+        self.assertEqual(sum(coach.DEFAULT_WEIGHTS.values()), 16)
+        self.assertTrue(all(1 <= w <= 5 for w in coach.DEFAULT_WEIGHTS.values()))  # what the AI coach may set
+
+    def test_a_960_minute_coach_week_gets_the_same_lane_targets(self):
+        coach.save_profile(self.user_id, self._profile(160, 80))  # 5 * 160 + 2 * 80
+        state = game.state(self.user_id, PDT, _at("2026-10-06", 10))
+        week = state["week"]
+        self.assertEqual(week["target"], 960)
+        self.assertEqual(week["lane_targets"], game.LANE_WEEK_TARGETS)
+        self.assertEqual(state["today"]["target"], 160)
+
+    def test_a_smaller_coach_week_keeps_the_proportions(self):
+        coach.save_profile(self.user_id, self._profile(60, 60))  # 7 h
+        week = game.state(self.user_id, PDT, _at("2026-10-06", 10))["week"]
+        self.assertEqual(week["target"], 420)
+        for lane, minutes in week["lane_targets"].items():
+            share = game.LANE_WEEK_TARGETS[lane] / game.WEEK_TARGET_MIN
+            self.assertAlmostEqual(minutes, 420 * share, delta=0.5, msg=lane)  # rounded to whole minutes
+        self.assertEqual(week["lane_targets"]["car"], 0)
 
 
 class ReviewFeedbackTests(unittest.TestCase):

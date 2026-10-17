@@ -121,3 +121,19 @@ it("has no course lane, block or hours anywhere in the mock data", async () => {
   expect(ledger.lanes.reduce((a, l) => a + l.active, 0)).toBeCloseTo(ledger.active_hours);
   expect(ledger.lanes.reduce((a, l) => a + l.manual, 0)).toBeCloseTo(ledger.manual_hours);
 });
+it("pins the mock to the 16 h plan: 960 min split 210/240/300/120/90, no target for the car lane", async () => {
+  const split = { listening: 210, reading: 240, speaking: 300, writing: 120, review: 90, car: 0 };
+  const state = await mock.game.state();
+  const phase = await mock.phase.get();
+  const ledger = await mock.hours.ledger();
+  const today = await mock.today.get();
+  expect(phase.week_target_min).toBe(960);
+  expect(today.phase.week_target_min).toBe(960);
+  expect(state.week.target).toBe(960);
+  expect(phase.lane_targets).toEqual(split);
+  expect(state.week.lane_targets).toEqual(split);
+  expect(Object.fromEntries(ledger.lanes.map((l) => [l.lane, l.week_target * 60]))).toEqual(split);
+  // A weekday's study blocks add up to 160 min; the 5-minute wrap-up is not study time.
+  const study = today.blocks.filter((b) => b.kind !== "minimal");
+  expect(study.reduce((sum, b) => sum + b.planned_min, 0)).toBe(160);
+});
