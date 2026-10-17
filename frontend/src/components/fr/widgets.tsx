@@ -18,7 +18,8 @@ export function AudioButton({
   size = "md",
   disabled = false,
 }: {
-  url: string;
+  /** null when there is nothing playable (e.g. empty text): the button is disabled. */
+  url: string | null;
   label?: string;
   rate?: RateStage;
   onPlay?: () => void;
@@ -41,7 +42,7 @@ export function AudioButton({
     [],
   );
   const play = async () => {
-    if (pending.current) return;
+    if (pending.current || !url) return;
     if (playing && owner.current) {
       owner.current.pause();
       setPlaying(false);
@@ -80,7 +81,7 @@ export function AudioButton({
       <button
         type="button"
         onClick={() => void play()}
-        disabled={disabled}
+        disabled={disabled || !url}
         aria-label={label || (playing ? "Stop" : "Play")}
         className={
           size === "lg"

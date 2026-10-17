@@ -121,7 +121,7 @@ function Hours() {
             className="panel space-y-4 p-6"
             onSubmit={(e) => {
               e.preventDefault();
-              const m = Number(minutes);
+              const m = Math.round(Number(minutes));
               if (!Number.isFinite(m) || m < 1 || m > 300 || note.trim().length === 0) return;
               logTime.mutate(
                 { lane, minutes: m, note: note.trim() },

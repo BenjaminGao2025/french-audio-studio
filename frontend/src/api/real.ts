@@ -1,6 +1,26 @@
 // Real adapter: calls the FastAPI backend at /api on the same origin.
 import { request, tzOffset } from "./client";
+import {
+  clampDurationMs,
+  normalizeAnalyze,
+  normalizeAttempt,
+  normalizeCard,
+  normalizeEpisode,
+  normalizeEpisodes,
+  normalizeQueue,
+  normalizeSpeakTasks,
+  normalizeWriteTasks,
+  type RawAnalyzeSentence,
+  type RawAttempt,
+  type RawEpisode,
+  type RawSrsCard,
+  type RawSrsQueue,
+  type RawTasks,
+} from "./normalize";
 import type * as T from "./types";
+
+// /tts accepts 1-600 characters (tts_service.py TTS_SNIPPET_MAX_CHARS).
+const TTS_MAX_CHARS = 600;
 
 export const real = {
   auth: {
@@ -27,43 +47,61 @@ export const real = {
         method: "POST",
         body: { lane, minutes, note, tz_offset: tzOffset() },
       }),
-    deleteLog: (id: string) =>
-      request<void>(`/api/game/log/${id}`, { method: "DELETE", query: { tz_offset: tzOffset() } }),
+    deleteLog: (id: string | number) =>
+      request<T.GameState>(`/api/game/log/${id}`, {
+        method: "DELETE",
+        query: { tz_offset: tzOffset() },
+      }),
     familyDay: (on: boolean) =>
-      request<void>("/api/game/family-day", {
+      request<T.GameState>("/api/game/family-day", {
         method: "POST",
         body: { on, tz_offset: tzOffset() },
       }),
   },
   srs: {
-    queue: (
+    queue: async (
       opts: {
         new_limit?: number | undefined;
         min_importance?: number | undefined;
         modes?: string | undefined;
       } = {},
     ) =>
-      request<T.SrsQueue>("/api/srs/queue", {
-        query: {
-          tz_offset: tzOffset(),
-          new_limit: opts.new_limit,
-          min_importance: opts.min_importance,
-          modes: opts.modes,
-        },
-      }),
-    review: (
+      normalizeQueue(
+        await request<RawSrsQueue>("/api/srs/queue", {
+          query: {
+            tz_offset: tzOffset(),
+            new_limit: opts.new_limit,
+            min_importance: opts.min_importance,
+            modes: opts.modes,
+          },
+        }),
+      ),
+    review: async (
       id: string,
       rating: 1 | 2 | 3 | 4,
       duration_ms?: number | undefined,
       score?: number | undefined,
       answer?: string,
-    ) =>
-      request<T.SrsCard & { game: unknown }>(`/api/srs/cards/${id}/review`, {
+    ) => {
+      const card = await request<RawSrsCard & { game: unknown }>(`/api/srs/cards/${id}/review`, {
         method: "POST",
-        body: { rating, duration_ms, score, answer, tz_offset: tzOffset() },
-      }),
-    practice: (card_ids: string[]) =>
-      request<{ cards: T.SrsCard[] }>("/api/srs/practice", { method: "POST", body: { card_ids } }),
+        body: {
+          rating,
+          duration_ms: clampDurationMs(duration_ms),
+          score,
+          answer,
+          tz_offset: tzOffset(),
+        },
+      });
+      return { ...normalizeCard(card), game: card.game };
+    },
+    practice: async (card_ids: string[]) => {
+      const res = await request<RawSrsQueue>("/api/srs/practice", {
+        method: "POST",
+        body: { card_ids },
+      });
+      return normalizeQueue(res);
+    },
     addNote: (note: {
       sentence: string;
       translation_zh?: string | undefined;
@@ -120,25 +158,36 @@ export const real = {
   speech: {
     synthesize: (text: string, voice = "fr-FR-DeniseNeural", rate: "-30%" | "-20%" | "0%" = "0%") =>
       request<T.SpeechResult>("/api/speech", { method: "POST", body: { text, voice, rate } }),
-    ttsUrl: (text: string, voice = "fr-FR-DeniseNeural") =>
-      `/tts?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voice)}`,
-    transcribe: async (audio: Blob, language = "fr") => {
-      const form = new FormData();
-      form.set("audio", audio, "audio.webm");
-      return request<{ text: string }>(`/api/transcribe`, {
+    /** null when /tts would reject the text (empty or too long), so callers disable playback. */
+    ttsUrl: (text: string, voice = "fr-FR-DeniseNeural"): string | null =>
+      text.trim() && text.length <= TTS_MAX_CHARS
+        ? `/tts?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voice)}`
+        : null,
+    // The backend reads the raw request body and sniffs the audio type; it has no multipart parser.
+    transcribe: (audio: Blob, language = "fr") =>
+      request<{ text: string; duration?: number }>(`/api/transcribe`, {
         method: "POST",
-        form,
+        raw: audio,
         query: { language },
-      });
-    },
+      }),
   },
   analyze: {
-    text: (text: string) =>
-      request<T.AnalyzeResult>("/api/analyze", { method: "POST", body: { text } }),
+    text: async (text: string) =>
+      normalizeAnalyze(
+        await request<{ sentences: RawAnalyzeSentence[] }>("/api/analyze", {
+          method: "POST",
+          body: { text },
+        }),
+      ),
     lookup: (word: string) => request<unknown>("/api/lookup", { query: { word } }),
   },
   write: {
-    tasks: () => request<{ tasks: T.WriteTaskSpec[]; recommended?: unknown }>("/api/write/tasks"),
+    tasks: async (): Promise<{
+      tasks: T.WriteTaskSpec[];
+      recommended?: unknown;
+      recommended_task?: string | undefined;
+      recommended_level?: string | undefined;
+    }> => normalizeWriteTasks(await request<RawTasks>("/api/write/tasks")),
     subject: (task: string, level: string, theme?: string) =>
       request<unknown>("/api/write/subject", { method: "POST", body: { task, level, theme } }),
     attempt: (body: {
@@ -147,17 +196,20 @@ export const real = {
       level: string;
       text: string;
       seconds: number;
-    }) => request<T.Attempt>("/api/write/attempts", { method: "POST", body }),
-    getAttempt: (id: string) => request<T.Attempt>(`/api/write/attempts/${id}`),
+    }) =>
+      request<RawAttempt>("/api/write/attempts", { method: "POST", body }).then(normalizeAttempt),
+    getAttempt: (id: string) =>
+      request<RawAttempt>(`/api/write/attempts/${id}`).then(normalizeAttempt),
     round2: (id: string, text: string, seconds: number) =>
-      request<T.Attempt>(`/api/write/attempts/${id}/round2`, {
+      request<RawAttempt>(`/api/write/attempts/${id}/round2`, {
         method: "POST",
         body: { text, seconds },
-      }),
+      }).then(normalizeAttempt),
     rubric: (id: string) => request<T.Rubric>(`/api/write/attempts/${id}/rubric`),
   },
   speak: {
-    tasks: () => request<{ tasks: unknown[] }>("/api/speak/tasks"),
+    tasks: async (): Promise<{ tasks: T.SpeakTaskSpec[] }> =>
+      normalizeSpeakTasks(await request<RawTasks>("/api/speak/tasks")),
     attempt: (body: {
       task: string;
       subject: unknown;
@@ -165,12 +217,16 @@ export const real = {
       transcript: string;
       seconds: number;
       audio_duration: number;
-    }) => request<T.Attempt>("/api/speak/attempts", { method: "POST", body }),
-    getAttempt: (id: string) => request<T.Attempt>(`/api/speak/attempts/${id}`),
+    }) =>
+      request<RawAttempt>("/api/speak/attempts", { method: "POST", body }).then(normalizeAttempt),
+    getAttempt: (id: string) =>
+      request<RawAttempt>(`/api/speak/attempts/${id}`).then(normalizeAttempt),
     round2: (id: string, body: { transcript: string; seconds: number; audio_duration: number }) =>
-      request<T.Attempt>(`/api/speak/attempts/${id}/round2`, { method: "POST", body }),
+      request<RawAttempt>(`/api/speak/attempts/${id}/round2`, { method: "POST", body }).then(
+        normalizeAttempt,
+      ),
     roleplayReply: (
-      scenario: string,
+      scenario: Record<string, unknown>,
       history: { role: string; text: string }[],
       user_utterance: string,
     ) =>
@@ -181,9 +237,9 @@ export const real = {
     rubric: (id: string) => request<T.Rubric>(`/api/speak/attempts/${id}/rubric`),
   },
   episodes: {
-    list: () => request<T.Episode[]>("/api/episodes"),
+    list: async () => normalizeEpisodes(await request<{ episodes: RawEpisode[] }>("/api/episodes")),
     create: (body: { level?: string | undefined; minutes: number; request?: string | undefined }) =>
-      request<T.Episode>("/api/episodes", { method: "POST", body }),
+      request<RawEpisode>("/api/episodes", { method: "POST", body }).then(normalizeEpisode),
     remove: (id: string) => request<void>(`/api/episodes/${id}`, { method: "DELETE" }),
     audioUrl: (id: string) => `/episodes/${id}.mp3`,
     lrcUrl: (id: string) => `/episodes/${id}.lrc`,

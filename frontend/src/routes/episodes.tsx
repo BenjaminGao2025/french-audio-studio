@@ -19,6 +19,7 @@ function Episodes() {
   const [minutes, setMinutes] = useState(20);
   const [request, setRequest] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState<string | null>(null);
 
   return (
@@ -35,12 +36,16 @@ function Episodes() {
           onSubmit={(e) => {
             e.preventDefault();
             setBusy(true);
+            setError(null);
             void api.episodes
               .create({ minutes, request: request || undefined, level: "A2" })
               .then(() => {
                 setRequest("");
                 eps.refetch();
               })
+              .catch((err: unknown) =>
+                setError(err instanceof Error ? err.message : "Could not create the episode."),
+              )
               .finally(() => setBusy(false));
           }}
         >
@@ -66,6 +71,12 @@ function Episodes() {
           </button>
         </form>
 
+        {error && (
+          <p role="alert" className="mt-3 text-sm text-destructive">
+            {error}
+          </p>
+        )}
+
         <DataView
           query={eps}
           isEmpty={(d) => d.length === 0}
@@ -83,12 +94,14 @@ function Episodes() {
                   <div className="flex items-center gap-3">
                     <Headphones className="h-5 w-5 text-primary" />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate font-medium">{ep.title}</div>
+                      <div className="truncate font-medium">
+                        {ep.title || (ep.status === "generating" ? "Generating…" : "Untitled")}
+                      </div>
                       <div className="text-xs text-muted-foreground">
                         {ep.level} · {ep.minutes} min · {ep.created_at}
                       </div>
                     </div>
-                    <Chip>{ep.level}</Chip>
+                    <Chip>{ep.status && ep.status !== "ready" ? ep.status : ep.level}</Chip>
                     <button
                       onClick={() =>
                         void api.episodes.remove(ep.id).then(() => {
@@ -102,25 +115,30 @@ function Episodes() {
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
-                  <audio
-                    controls
-                    preload="none"
-                    src={api.episodes.audioUrl(ep.id)}
-                    onPlay={(event) => {
-                      const current = event.currentTarget;
-                      current
-                        .closest("ul")
-                        ?.querySelectorAll("audio")
-                        .forEach((audio) => {
-                          if (audio !== current) audio.pause();
-                        });
-                      setPlaying(ep.id);
-                    }}
-                    onEnded={() => setPlaying((p) => (p === ep.id ? null : p))}
-                    onError={() => setPlaying((p) => (p === ep.id ? null : p))}
-                    onPause={() => setPlaying((p) => (p === ep.id ? null : p))}
-                    className="mt-3 w-full"
-                  />
+                  {ep.status === "failed" && ep.error && (
+                    <p className="mt-2 text-xs text-destructive">{ep.error}</p>
+                  )}
+                  {(!ep.status || ep.status === "ready") && (
+                    <audio
+                      controls
+                      preload="none"
+                      src={api.episodes.audioUrl(ep.id)}
+                      onPlay={(event) => {
+                        const current = event.currentTarget;
+                        current
+                          .closest("ul")
+                          ?.querySelectorAll("audio")
+                          .forEach((audio) => {
+                            if (audio !== current) audio.pause();
+                          });
+                        setPlaying(ep.id);
+                      }}
+                      onEnded={() => setPlaying((p) => (p === ep.id ? null : p))}
+                      onError={() => setPlaying((p) => (p === ep.id ? null : p))}
+                      onPause={() => setPlaying((p) => (p === ep.id ? null : p))}
+                      className="mt-3 w-full"
+                    />
+                  )}
                   {playing === ep.id && (
                     <p className="mt-1 text-xs text-muted-foreground">
                       Playing — car lane heartbeat active.

@@ -121,6 +121,7 @@ function Cards() {
                   )}
                   {flipped ? (
                     <div className="mt-6 border-t border-border pt-6">
+                      {card.answer && <p className="fr mb-2 text-xl font-medium">{card.answer}</p>}
                       <p className="text-muted-foreground">{card.translation_en}</p>
                       <p className="mt-1 text-sm text-muted-foreground">{card.translation_zh}</p>
                     </div>

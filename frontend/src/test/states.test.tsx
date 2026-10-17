@@ -50,3 +50,39 @@ it("DataView renders the not-available state for a 404 query", () => {
   expect(screen.getByText("Not available on this server yet")).toBeInTheDocument();
   expect(screen.queryByText("content")).toBeNull();
 });
+
+it("quiet DataView hides an optional panel when the server lacks the route", () => {
+  const { container } = render(
+    <DataView
+      quiet
+      query={{
+        isPending: false,
+        isError: true,
+        error: new ApiError(404, "x"),
+        data: undefined,
+        refetch: () => {},
+      }}
+    >
+      {() => <p>content</p>}
+    </DataView>,
+  );
+  expect(container).toBeEmptyDOMElement();
+});
+
+it("quiet DataView still reports real errors", () => {
+  render(
+    <DataView
+      quiet
+      query={{
+        isPending: false,
+        isError: true,
+        error: new ApiError(500, "boom"),
+        data: undefined,
+        refetch: () => {},
+      }}
+    >
+      {() => <p>content</p>}
+    </DataView>,
+  );
+  expect(screen.getByText("boom")).toBeInTheDocument();
+});

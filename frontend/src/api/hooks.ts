@@ -1,7 +1,7 @@
 // TanStack Query hooks over the api adapter.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./index";
-import type { Lane, SkipReason } from "./types";
+import type { Attempt, Lane, SkipReason } from "./types";
 
 export const qk = {
   today: ["today"] as const,
@@ -37,13 +37,39 @@ export const useItemsSummary = () =>
 export const useItems = (skill?: string | undefined, pool?: string) =>
   useQuery({ queryKey: qk.items(skill, pool), queryFn: () => api.items.list({ skill, pool }) });
 export const useEpisodes = () =>
-  useQuery({ queryKey: qk.episodes, queryFn: () => api.episodes.list() });
+  useQuery({
+    queryKey: qk.episodes,
+    queryFn: () => api.episodes.list(),
+    // An episode renders for minutes in the background; keep the list fresh meanwhile.
+    refetchInterval: (q) => (q.state.data?.some((e) => e.status === "generating") ? 5000 : false),
+  });
 export const useTutorSessions = () =>
   useQuery({ queryKey: qk.tutorSessions, queryFn: () => api.tutor.sessions() });
 export const useListeningGate = () =>
   useQuery({ queryKey: qk.listeningGate, queryFn: () => api.listening.gate() });
 export const usePhase = () => useQuery({ queryKey: qk.phase, queryFn: () => api.phase.get() });
 export const useMe = () => useQuery({ queryKey: qk.me, queryFn: () => api.auth.me() });
+
+/**
+ * The backend writes feedback in the background (status generating_*, shown here as "pending").
+ * Poll the attempt every 3 s until it is ready or failed; the key carries the round so round 2
+ * never reads the settled result of round 1.
+ */
+export function useSettledAttempt(
+  kind: "write" | "speak",
+  attempt: Attempt | null,
+  round: 1 | 2,
+): Attempt | null {
+  const q = useQuery({
+    queryKey: [`${kind}-attempt`, attempt?.id, round],
+    queryFn: () => api[kind].getAttempt(attempt!.id),
+    enabled: attempt?.status === "pending",
+    refetchInterval: (query) =>
+      query.state.data?.status === "pending" || !query.state.data ? 3000 : false,
+    gcTime: 0,
+  });
+  return q.data && q.data.status !== "pending" ? q.data : attempt;
+}
 
 export function useBlockActions() {
   const qc = useQueryClient();

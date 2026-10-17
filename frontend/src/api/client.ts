@@ -32,6 +32,8 @@ type Opts = {
   method?: string;
   body?: unknown;
   form?: FormData;
+  /** Raw request body (e.g. recorded audio): the backend reads bytes, not multipart. */
+  raw?: Blob;
   query?: Record<string, string | number | boolean | undefined>;
 };
 
@@ -44,7 +46,10 @@ export async function request<T>(path: string, opts: Opts = {}): Promise<T> {
   const token = getToken();
   if (token) headers["Authorization"] = `Bearer ${token}`;
   let body: BodyInit | null = null;
-  if (opts.form) {
+  if (opts.raw) {
+    headers["Content-Type"] = opts.raw.type || "application/octet-stream";
+    body = opts.raw;
+  } else if (opts.form) {
     body = opts.form;
   } else if (opts.body !== undefined) {
     headers["Content-Type"] = "application/json";

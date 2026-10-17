@@ -59,6 +59,7 @@ export function DataView<T>({
   empty,
   children,
   skeletonLines = 3,
+  quiet = false,
 }: {
   query: {
     isPending: boolean;
@@ -71,9 +72,14 @@ export function DataView<T>({
   empty?: ReactNode;
   children: (data: T) => ReactNode;
   skeletonLines?: number;
+  /** Optional panel: render nothing (instead of "not available") when the server lacks the route. */
+  quiet?: boolean;
 }) {
   if (query.isPending) return <Skeleton lines={skeletonLines} />;
-  if (query.isError) return <ErrorState error={query.error} retry={query.refetch} />;
+  if (query.isError) {
+    if (quiet && isNotAvailable(query.error)) return null;
+    return <ErrorState error={query.error} retry={query.refetch} />;
+  }
   const data = query.data!;
   if (isEmpty?.(data)) return <>{empty ?? <EmptyState title="Nothing here yet" />}</>;
   return <>{children(data)}</>;

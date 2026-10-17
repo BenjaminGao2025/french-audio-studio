@@ -6,6 +6,7 @@ import { BlockShell, Chip } from "@/components/fr/kit";
 import { btn, meta } from "@/components/fr/kit-utils";
 import { cn } from "@/lib/utils";
 import { api } from "@/api";
+import { useSettledAttempt } from "@/api/hooks";
 import { DataView, Skeleton } from "@/components/fr/states";
 import { RubricPanel } from "@/components/fr/widgets";
 import type { Attempt, WriteTaskSpec } from "@/api/types";
@@ -92,7 +93,8 @@ function Writing() {
     setPhase("writing");
   };
 
-  const hints = (attempt?.feedback1 as { hints?: string[] } | undefined)?.hints ?? [];
+  const current = useSettledAttempt("write", attempt, phase === "round2" ? 2 : 1);
+  const hints = (current?.feedback1 as { hints?: string[] } | undefined)?.hints ?? [];
 
   return (
     <BlockShell
@@ -188,10 +190,16 @@ function Writing() {
                     (try fixing yourself before seeing corrections)
                   </span>
                 </h3>
-                {attempt?.status === "pending" ? (
+                {current?.status === "pending" ? (
                   <div className="mt-4">
                     <Skeleton lines={3} />
                   </div>
+                ) : current?.status === "failed" ? (
+                  <p role="alert" className="mt-3 text-sm text-destructive">
+                    {typeof current.error === "string" && current.error
+                      ? current.error
+                      : "Feedback failed. Revise and continue, or try again later."}
+                  </p>
                 ) : (
                   <ul className="mt-3 space-y-2 text-sm">
                     {hints.map((h) => (
@@ -224,7 +232,7 @@ function Writing() {
               </div>
             )}
 
-            {phase === "round2" && attempt && <Round2 attempt={attempt} />}
+            {phase === "round2" && current && <Round2 attempt={current} />}
           </>
         )}
       </DataView>
@@ -242,6 +250,13 @@ function Round2({ attempt }: { attempt: Attempt }) {
     queryFn: () => api.humanScores.calibration("writing"),
   });
   const fb = attempt.feedback2;
+  if (attempt.status === "pending") {
+    return (
+      <div className="panel mx-auto max-w-2xl p-8">
+        <Skeleton lines={4} />
+      </div>
+    );
+  }
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
       <div className="space-y-6">
@@ -260,7 +275,7 @@ function Round2({ attempt }: { attempt: Attempt }) {
             </ul>
           </div>
         )}
-        <DataView query={calibQ} skeletonLines={2}>
+        <DataView query={calibQ} skeletonLines={2} quiet>
           {(c) =>
             c.samples >= 1 ? (
               <div className="panel p-6">
@@ -280,7 +295,7 @@ function Round2({ attempt }: { attempt: Attempt }) {
         </DataView>
       </div>
       <aside>
-        <DataView query={rubricQ} skeletonLines={4}>
+        <DataView query={rubricQ} skeletonLines={4} quiet>
           {(r) => <RubricPanel rubric={r} attemptType="writing" attemptId={attempt.id} />}
         </DataView>
       </aside>

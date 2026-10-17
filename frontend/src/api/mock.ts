@@ -625,11 +625,11 @@ export const mock: Api = {
     },
     deleteLog: (id) => {
       gameState.today.logs = gameState.today.logs.filter((l) => l.id !== id);
-      return delay(undefined);
+      return delay(structuredClone(gameState));
     },
     familyDay: (on) => {
       gameState.today.family_day = on;
-      return delay(undefined);
+      return delay(structuredClone(gameState));
     },
   },
   srs: {
@@ -647,7 +647,18 @@ export const mock: Api = {
       queue = queue.filter((c) => c.id !== id);
       return delay({ ...mkCard(id, "", "", "", "speak", "review"), game: { xp: 10, combo: 5 } });
     },
-    practice: (card_ids) => delay({ cards: queue.filter((c) => card_ids.includes(c.id)) }),
+    practice: (card_ids) => {
+      const cards = queue.filter((c) => card_ids.includes(c.id));
+      return delay({
+        cards,
+        counts: {
+          learning: cards.filter((c) => c.state === "learning").length,
+          review: cards.filter((c) => c.state === "review").length,
+          new: cards.filter((c) => c.state === "new").length,
+          total: cards.length,
+        },
+      });
+    },
     addNote: () => delay({ ok: true }),
     lookupNotes: (sentences) => delay({ existing: sentences.slice(0, 1) }),
   },

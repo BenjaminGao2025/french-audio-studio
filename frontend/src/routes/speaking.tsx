@@ -6,6 +6,7 @@ import { BlockShell, Chip, Stat } from "@/components/fr/kit";
 import { btn, meta } from "@/components/fr/kit-utils";
 import { cn } from "@/lib/utils";
 import { api } from "@/api";
+import { useSettledAttempt } from "@/api/hooks";
 import { DataView, Skeleton } from "@/components/fr/states";
 import { AudioButton, Recorder, RubricPanel } from "@/components/fr/widgets";
 import type { Attempt } from "@/api/types";
@@ -22,19 +23,12 @@ export const Route = createFileRoute("/speaking")({
   component: Speaking,
 });
 
-interface SpeakTask {
-  task: string;
-  seconds: number;
-  prep_seconds?: number;
-  subjects: { id: string; prompt: string }[];
-}
-
 type Phase = "idle" | "prep" | "recording" | "review";
 
 function Speaking() {
   const { block } = Route.useSearch();
   const tasksQ = useQuery({ queryKey: ["speak-tasks"], queryFn: () => api.speak.tasks() });
-  const tasks = (tasksQ.data?.tasks ?? []) as unknown as SpeakTask[];
+  const tasks = tasksQ.data?.tasks ?? [];
 
   const [taskId, setTaskId] = useState("T1");
   const [phase, setPhase] = useState<Phase>("idle");
@@ -43,6 +37,7 @@ function Speaking() {
   const [attempt, setAttempt] = useState<Attempt | null>(null);
   const [transcript, setTranscript] = useState("");
   const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
   const audioDur = useRef(0);
 
   const t = tasks.find((x) => x.task === taskId) ?? tasks[0];
@@ -80,8 +75,10 @@ function Speaking() {
         audio_duration: audioDur.current,
       })
       .then((a) => setAttempt(a))
+      .catch((e: unknown) => setFailure(e instanceof Error ? e.message : "Could not save."))
       .finally(() => setBusy(false));
   };
+  const current = useSettledAttempt("speak", attempt, 1);
 
   return (
     <BlockShell
@@ -166,10 +163,16 @@ function Speaking() {
                       maxSeconds={total - el > 0 ? total - el : undefined}
                       onDone={(blob, dur) => {
                         audioDur.current = dur;
-                        void api.speech.transcribe(blob).then((r) => {
-                          setTranscript(r.text);
-                          submitAttempt(r.text, Math.round(dur));
-                        });
+                        setFailure(null);
+                        void api.speech
+                          .transcribe(blob)
+                          .then((r) => {
+                            setTranscript(r.text);
+                            submitAttempt(r.text, Math.round(dur));
+                          })
+                          .catch((e: unknown) =>
+                            setFailure(e instanceof Error ? e.message : "Could not transcribe."),
+                          );
                         setPhase("review");
                       }}
                       className="mt-6"
@@ -185,7 +188,21 @@ function Speaking() {
                   <div className="text-xs uppercase tracking-wider text-muted-foreground">
                     Transcript
                   </div>
-                  {busy || !attempt ? (
+                  {failure ? (
+                    <div role="alert" className="mt-3 text-sm text-destructive">
+                      {failure}
+                      <button
+                        className={cn(btn.ghost, "mt-3 block")}
+                        onClick={() => {
+                          setFailure(null);
+                          setEl(0);
+                          setPhase("idle");
+                        }}
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  ) : busy || !attempt ? (
                     <div className="mt-3">
                       <Skeleton lines={4} />
                     </div>
@@ -199,16 +216,16 @@ function Speaking() {
                   )}
                 </div>
                 <aside className="panel grid h-fit grid-cols-2 gap-6 p-6">
-                  <Stat label="Words / min" value={attempt?.wpm ?? "—"} />
+                  <Stat label="Words / min" value={current?.wpm ?? "—"} />
                   <Stat
                     label="Pause ratio"
-                    value={(attempt as { pause_ratio?: string } | null)?.pause_ratio ?? "—"}
+                    value={(current as { pause_ratio?: string } | null)?.pause_ratio ?? "—"}
                   />
                   <Stat
                     label="Questions asked"
-                    value={(attempt as { questions_asked?: number } | null)?.questions_asked ?? "—"}
+                    value={(current as { questions_asked?: number } | null)?.questions_asked ?? "—"}
                   />
-                  <Stat label="Status" value={attempt?.status ?? "—"} />
+                  <Stat label="Status" value={current?.status ?? "—"} />
                 </aside>
               </div>
             )}
@@ -263,7 +280,7 @@ function RubricLoader({ attemptId }: { attemptId: string }) {
     queryFn: () => api.speak.rubric(attemptId),
   });
   return (
-    <DataView query={rubricQ} skeletonLines={4}>
+    <DataView query={rubricQ} skeletonLines={4} quiet>
       {(r) => (
         <div className="space-y-2">
           {r.dims.map((d) => (

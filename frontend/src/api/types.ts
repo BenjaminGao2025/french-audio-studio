@@ -12,7 +12,7 @@ export interface UserStatus {
 }
 
 export interface GameLog {
-  id: string;
+  id: string | number;
   lane: Lane;
   minutes: number;
   note: string;
@@ -53,7 +53,7 @@ export interface GameState {
     lane_targets: Record<Lane, number>;
     lane_weights: Record<Lane, number>;
     skills: Record<string, unknown>;
-    focus_skill: string;
+    focus_skill: string | { skill: string; link?: unknown; minutes: number; target: number };
   };
   streak_days: number;
 }
@@ -71,6 +71,10 @@ export interface SrsCard {
   translation_zh: string;
   importance: number;
   intervals: Record<"1" | "2" | "3" | "4", number>;
+  /** Cloze/grammar: the text the learner has to type (the sentence shows a ___ blank). */
+  answer?: string | undefined;
+  /** Backend `target` (the word of a cloze/recognize card). */
+  target?: string | undefined;
   [k: string]: unknown;
 }
 
@@ -127,7 +131,7 @@ export interface AnalyzeWord {
   zh: string;
   why: string;
   english_link?: string | undefined;
-  false_friend?: string | undefined;
+  false_friend?: boolean | string | undefined;
 }
 
 export interface AnalyzeSentence {
@@ -158,7 +162,15 @@ export interface WriteTaskSpec {
   task: string;
   word_range: [number, number];
   minutes: number;
-  subjects: { id: string; prompt: string; level?: string }[];
+  subjects: { id: string; prompt: string; level?: string; [k: string]: unknown }[];
+  [k: string]: unknown;
+}
+
+export interface SpeakTaskSpec {
+  task: string;
+  seconds: number;
+  prep_seconds?: number | undefined;
+  subjects: { id: string; prompt: string; [k: string]: unknown }[];
   [k: string]: unknown;
 }
 
@@ -172,6 +184,8 @@ export interface Attempt {
     structures: unknown[];
   };
   wpm?: number | undefined;
+  /** Why the background feedback failed (status "failed"). */
+  error?: string | null | undefined;
   [k: string]: unknown;
 }
 
@@ -181,6 +195,9 @@ export interface Episode {
   level: string;
   minutes: number;
   created_at: string;
+  /** Absent in older payloads, which means ready. The audio exists only when ready. */
+  status?: "generating" | "ready" | "failed" | undefined;
+  error?: string | null | undefined;
   [k: string]: unknown;
 }
 
