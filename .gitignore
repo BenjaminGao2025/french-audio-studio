@@ -7,3 +7,4 @@ outputs/
 cloudflared.log
 config.yml
 models/
+frontend/node_modules/

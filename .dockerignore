@@ -7,3 +7,4 @@ cloudflared.log
 outputs/
 tests/
 models/
+frontend/
