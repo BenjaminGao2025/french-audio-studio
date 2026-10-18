@@ -1,268 +1,225 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { BlockShell, Chip, useBlockFlow } from "@/components/fr/kit";
+import { BlockShell, Chip } from "@/components/fr/kit";
 import { btn, errorMessage, meta } from "@/components/fr/kit-utils";
-import { cn } from "@/lib/utils";
-import { api } from "@/api";
-import { DataView } from "@/components/fr/states";
-import { ErrorState, Skeleton } from "@/components/fr/states";
+import { api, type Passage } from "@/api";
+import { useActiveSeconds } from "@/api/use-active-seconds";
+import { Skeleton } from "@/components/fr/states";
 
 export const Route = createFileRoute("/reading")({
   validateSearch: (s: Record<string, unknown>) => ({
     block: typeof s["block"] === "string" ? s["block"] : undefined,
   }),
   head: () =>
-    meta(
-      "Intensive reading",
-      "Read a French passage sentence by sentence with grammar breakdowns and questions.",
-    ),
+    meta("Intensive reading", "Read, break down sentences, save words and check understanding."),
   component: Reading,
 });
 
-function EntryPanel({ onPassage }: { onPassage: (id: string) => void }) {
-  const [text, setText] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const create = (body: { text?: string; generate?: { text_type: string; level: string } }) => {
-    setBusy(true);
-    setError(null);
-    api.reading
-      .create(body)
-      .then((p) => onPassage(p.id))
-      .catch((e: unknown) => setError(errorMessage(e, "Failed")))
-      .finally(() => setBusy(false));
-  };
-  return (
-    <div className="panel mx-auto max-w-2xl p-8">
-      <h2 className="text-lg font-semibold">Start a reading</h2>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Paste a text in the study page for the sentence-by-sentence breakdown (grammar, words,
-        simple English). Your reading time is counted there; come back here and press Finish when
-        you are done.
-      </p>
-      <a href="/study" className={`${btn.primary} mt-4`}>
-        Open the sentence breakdown
-      </a>
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder="Paste a French text (notice, email, ad, news…)…"
-        className="fr mt-4 h-40 w-full resize-none rounded-lg border border-input bg-background p-4 text-lg outline-none focus:ring-2 focus:ring-ring"
-      />
-      {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button
-          className={btn.primary}
-          disabled={busy || text.trim().length < 20}
-          onClick={() => create({ text: text.trim() })}
-        >
-          Read this text
-        </button>
-        <button
-          className={btn.ghost}
-          disabled={busy}
-          onClick={() => create({ generate: { text_type: "notice", level: "A2" } })}
-        >
-          Generate · notice · A2
-        </button>
-        <button
-          className={btn.ghost}
-          disabled={busy}
-          onClick={() => create({ generate: { text_type: "email", level: "B1" } })}
-        >
-          Generate · email · B1
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function Reading() {
   const { block } = Route.useSearch();
-  const flow = useBlockFlow(block);
-  const [passageId, setPassageId] = useState<string | null>(null);
-  const passage = useQuery({
-    queryKey: ["passage", passageId],
-    queryFn: () => api.reading.get(passageId ?? ""),
-    enabled: !!passageId,
-  });
-  const [i, setI] = useState(0);
-  const [open, setOpen] = useState<Set<number>>(new Set());
-  const [startedAt] = useState(() => Date.now());
-  const [markedRead, setMarkedRead] = useState(false);
-
-  if (!passageId) {
-    return (
-      <BlockShell
-        kicker="Intensive reading"
-        title="Reading"
-        progress={0}
-        blockId={block}
-        lane="reading"
-      >
-        <EntryPanel onPassage={setPassageId} />
-      </BlockShell>
-    );
-  }
-  if (passage.isPending)
-    return (
-      <BlockShell
-        kicker="Intensive reading"
-        title="Loading…"
-        progress={0}
-        blockId={block}
-        lane="reading"
-      >
-        <Skeleton lines={6} />
-      </BlockShell>
-    );
-  if (passage.isError)
-    return (
-      <BlockShell
-        kicker="Intensive reading"
-        title="Reading"
-        progress={0}
-        blockId={block}
-        lane="reading"
-      >
-        <ErrorState error={passage.error} retry={passage.refetch} />
-      </BlockShell>
-    );
-
-  const p = passage.data;
-  if (!p) return null;
-  const sentences = p.analysis.sentences;
-  const cur = sentences[Math.min(i, sentences.length - 1)];
-  if (!cur) return null;
-  const total = sentences.length + p.questions.length;
-  const doneCount = Math.min(i + 1, sentences.length) + open.size;
-  const progress = Math.min(1, doneCount / total);
-
-  const toggle = (k: number) => {
-    setOpen((prev) => {
-      const next = new Set(prev);
-      if (next.has(k)) next.delete(k);
-      else next.add(k);
-      return next;
-    });
+  const [passage, setPassage] = useState<Passage | null>(null);
+  const [text, setText] = useState("");
+  const [kind, setKind] = useState("notice");
+  const [level, setLevel] = useState("A2");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [selected, setSelected] = useState(0);
+  const [answers, setAnswers] = useState<number[]>([]);
+  const [saved, setSaved] = useState<string[]>([]);
+  const timer = useActiveSeconds(!!passage && !passage.result && !busy);
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    setError("");
+    try {
+      await fn();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
   };
+  const create = (importText: boolean) =>
+    void run(async () => {
+      const p = await api.reading.create(
+        importText ? { text: text.trim() } : { generate: { text_type: kind, level } },
+      );
+      setPassage(p);
+      setAnswers(p.questions.map(() => -1));
+      timer.reset();
+    });
+  const cur = passage?.analysis.sentences[selected];
 
   return (
     <BlockShell
-      kicker={`Intensive reading · ${p.level}`}
-      title={p.title}
-      progress={progress}
+      kicker="Intensive reading · Phase A"
+      title={passage?.title ?? "Reading"}
+      progress={passage?.result ? 1 : passage ? 0.5 : 0}
       blockId={block}
-      lane="reading"
+      finishDisabled={!passage?.result}
     >
-      <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr_0.9fr]">
-        <div className="panel space-y-1 p-6">
-          {sentences.map((s, k) => (
-            <button
-              key={k}
-              onClick={() => setI(k)}
-              className={cn(
-                "fr block w-full rounded-lg px-3 py-2 text-left text-xl leading-relaxed transition",
-                k === i ? "bg-accent text-accent-foreground" : "hover:bg-secondary",
-              )}
+      {error && (
+        <p role="alert" className="mb-4 text-destructive">
+          {error}
+        </p>
+      )}
+      {!passage ? (
+        <div className="panel mx-auto max-w-2xl space-y-4 p-7">
+          <p>Choose a short A1–A2 text, then study each sentence and answer the questions.</p>
+          <div className="flex gap-3">
+            <select
+              aria-label="Text type"
+              className="rounded border bg-background p-2"
+              value={kind}
+              onChange={(e) => setKind(e.target.value)}
             >
-              {s.text}
-            </button>
-          ))}
-          <button
-            className={cn(btn.ghost, "mt-4 w-full")}
-            disabled={markedRead}
-            onClick={() => {
-              setMarkedRead(true);
-              void api.reading
-                .done(p.id, Math.round((Date.now() - startedAt) / 1000))
-                .then(() => flow.finish())
-                .catch(() => setMarkedRead(false));
-            }}
-          >
-            {markedRead ? "Marked as read ✓" : "Mark as read"}
-          </button>
-        </div>
-        <div className="panel p-6">
-          <div className="text-xs uppercase tracking-wider text-muted-foreground">Grammar</div>
-          {cur.grammar_points.length ? (
-            <ul className="mt-2 space-y-2 text-sm">
-              {cur.grammar_points.map((g) => (
-                <li key={g.title}>
-                  <b className="font-medium">{g.title}</b> — {g.explanation}
-                </li>
+              {["notice", "email", "ad", "article"].map((x) => (
+                <option key={x}>{x}</option>
               ))}
-            </ul>
-          ) : (
-            <p className="mt-2 text-sm text-muted-foreground">
-              No grammar notes for this sentence.
-            </p>
-          )}
-          {cur.build_up.length > 0 && (
-            <>
-              <div className="mt-6 text-xs uppercase tracking-wider text-muted-foreground">
-                Build it up
-              </div>
-              <ol className="mt-3 space-y-2">
-                {cur.build_up.map((l, k) => (
-                  <li key={l} className="fr text-lg" style={{ paddingLeft: k * 12 }}>
-                    <span className="ipa mr-2">{k + 1}</span>
-                    {l}
-                  </li>
-                ))}
-              </ol>
-            </>
-          )}
+            </select>
+            <select
+              aria-label="Level"
+              className="rounded border bg-background p-2"
+              value={level}
+              onChange={(e) => setLevel(e.target.value)}
+            >
+              <option>A1</option>
+              <option>A2</option>
+            </select>
+            <button className={btn.primary} disabled={busy} onClick={() => create(false)}>
+              Generate passage
+            </button>
+          </div>
+          <textarea
+            aria-label="Your French text"
+            className="fr h-40 w-full rounded border bg-background p-4"
+            placeholder="Or paste your journal or another French text…"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+          <button
+            className={btn.ghost}
+            disabled={busy || text.trim().length < 20 || text.length > 5000}
+            onClick={() => create(true)}
+          >
+            Read this text
+          </button>
+          {busy && <Skeleton lines={4} />}
         </div>
-        <div className="space-y-4">
-          <div className="panel p-5">
-            <div className="text-xs uppercase tracking-wider text-muted-foreground">Vocabulary</div>
-            <ul className="mt-3 space-y-1.5 text-sm">
-              {cur.words.map((w) => (
-                <li key={w.word} className="flex items-center justify-between gap-2">
-                  <span className="fr text-base">{w.word}</span>
-                  <span className="text-muted-foreground">{w.en}</span>
+      ) : (
+        <>
+          <p className="mb-4 text-sm text-muted-foreground">
+            {passage.level} · {passage.text_type} · {passage.source}
+            {passage.source === "fixture" ? " · offline practice text" : ""}
+          </p>
+          {!cur ? (
+            <p>No sentence breakdown is available. Try another passage.</p>
+          ) : (
+            <div className="grid gap-6 lg:grid-cols-2">
+              <div className="panel space-y-2 p-6">
+                {passage.analysis.sentences.map((s, i) => (
                   <button
-                    className="rounded-full border border-border px-2 py-0.5 text-xs hover:bg-secondary"
+                    key={i}
+                    className={`fr block w-full rounded p-3 text-left text-xl ${i === selected ? "bg-accent" : "hover:bg-secondary"}`}
+                    onClick={() => setSelected(i)}
+                  >
+                    {s.text}
+                  </button>
+                ))}
+              </div>
+              <div className="panel space-y-4 p-6">
+                <p>
+                  {cur.translation_en ||
+                    "Offline breakdown: translations and grammar need the AI gateway."}
+                </p>
+                {cur.build_up.map((line, i) => (
+                  <p key={i} className="fr">
+                    {i + 1}. {line}
+                  </p>
+                ))}
+                {cur.grammar_points.map((g) => (
+                  <p key={g.title} className="text-sm">
+                    <b>{g.title}</b> — {g.explanation}
+                  </p>
+                ))}
+                <p className="text-sm font-medium">Vocabulary → cloze cards</p>
+                {cur.words.map((w, i) => (
+                  <button
+                    key={i}
+                    className={`${btn.ghost} mr-2 mb-2`}
+                    disabled={busy || saved.includes(`${selected}:${w.word}`)}
                     onClick={() =>
-                      void api.srs.addNote({
-                        sentence: cur.text,
-                        translation_en: cur.translation_en,
+                      void run(async () => {
+                        await api.reading.addWord(passage.id, cur.text, w.word, w.en);
+                        setSaved((v) => [...v, `${selected}:${w.word}`]);
                       })
                     }
                   >
-                    Add
+                    {w.word} · {w.en} {saved.includes(`${selected}:${w.word}`) ? "✓" : "+"}
                   </button>
-                </li>
-              ))}
-              {cur.words.length === 0 && <li className="text-muted-foreground">—</li>}
-            </ul>
-          </div>
-          <button
-            className={btn.ghost}
-            onClick={() => setOpen(new Set(p.questions.map((_, k) => k)))}
-          >
-            Show all answers
-          </button>
-          {p.questions.map((x, k) => (
-            <button key={k} onClick={() => toggle(k)} className="panel block w-full p-5 text-left">
-              <Chip>{x.kind.replace("_", " ")}</Chip>
-              <p className="mt-2 text-sm font-medium">{x.q}</p>
-              {open.has(k) ? (
-                <p className="mt-2 text-sm">
-                  {x.a}{" "}
-                  {x.evidence && (
-                    <span className="fr block text-muted-foreground">{x.evidence}</span>
-                  )}
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="mx-auto mt-6 max-w-2xl space-y-4">
+            {passage.questions.map((q, i) => (
+              <div key={i} className="panel space-y-3 p-5">
+                <Chip>{q.kind}</Chip>
+                <p>{q.q}</p>
+                {q.options.map((option, j) => (
+                  <button
+                    key={j}
+                    disabled={busy || !!passage.result}
+                    className={`${btn.ghost} block w-full text-left ${answers[i] === j ? "bg-accent" : ""}`}
+                    onClick={() => setAnswers((v) => v.map((a, k) => (k === i ? j : a)))}
+                  >
+                    {option}
+                    {passage.result && q.answer_index === j ? " ✓" : ""}
+                  </button>
+                ))}
+                {passage.result && (
+                  <>
+                    <p className="text-sm">{q.explanation}</p>
+                    <blockquote className="fr text-sm text-muted-foreground">
+                      {q.evidence}
+                    </blockquote>
+                  </>
+                )}
+              </div>
+            ))}
+            {passage.result ? (
+              <>
+                <p>
+                  {passage.result.correct} / {passage.questions.length} correct · attempt saved
                 </p>
-              ) : (
-                <p className="mt-1 text-xs text-muted-foreground">Tap to see answer</p>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
+                <button
+                  className={btn.primary}
+                  onClick={() => {
+                    setPassage(null);
+                    setSaved([]);
+                    setSelected(0);
+                  }}
+                >
+                  Read another passage
+                </button>
+              </>
+            ) : (
+              <button
+                className={btn.primary}
+                disabled={busy || answers.some((a) => a < 0)}
+                onClick={() =>
+                  void run(async () => {
+                    setPassage(
+                      await api.reading.done(passage.id, Math.min(1200, timer.read()), answers),
+                    );
+                  })
+                }
+              >
+                Submit answers & mark read
+              </button>
+            )}
+          </div>
+        </>
+      )}
     </BlockShell>
   );
 }

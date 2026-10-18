@@ -78,7 +78,7 @@ it("Journal explains that its backend is missing instead of doing nothing", asyn
 it("Reading explains that its backend is missing", async () => {
   vi.mocked(api.reading.create).mockRejectedValue(new ApiError(404, "Not Found"));
   mount(ReadingRoute as unknown as typeof JournalRoute);
-  fireEvent.click(await screen.findByRole("button", { name: /Generate · notice · A2/ }));
+  fireEvent.click(await screen.findByRole("button", { name: /Generate passage/ }));
   await waitFor(() =>
     expect(screen.getByText("Not available on this server yet")).toBeInTheDocument(),
   );

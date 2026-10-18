@@ -291,11 +291,20 @@ export type RateStage = "slow30" | "slow20" | "normal" | "real";
 
 export interface ListeningSession {
   id: string;
+  rate?: number;
+  revealed?: boolean;
+  analysis?: AnalyzeResult | null;
   material: {
     text: string;
     words: { w: string; ipa: string; en: string; note?: string }[];
     breakdown?: string | undefined;
-    question: { prompt: string; options: string[]; answer_index: number; evidence?: string };
+    question: {
+      prompt: string;
+      options: string[];
+      answer_index?: number;
+      explanation?: string;
+      evidence?: string;
+    };
   };
   rate_stage: RateStage;
   audio_url_normal: string;
@@ -321,7 +330,16 @@ export interface Passage {
   source: string;
   license: string;
   analysis: AnalyzeResult;
-  questions: { kind: string; q: string; a: string; evidence?: string }[];
+  questions: {
+    kind: string;
+    q: string;
+    a?: string;
+    options: string[];
+    answer_index?: number;
+    explanation?: string;
+    evidence?: string;
+  }[];
+  result?: { correct: number; answers: number[]; seconds: number };
 }
 
 export interface Rubric {

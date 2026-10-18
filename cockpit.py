@@ -33,9 +33,9 @@ SHADOW_SENTENCES = 8
 
 # Block kinds whose page and backend exist in this build (journal = /api/homework, speaking =
 # /api/speak, shadowing = /api/shadow/sentences, intensive = the /study sentence breakdown).
-# Listening, reading and checkpoint blocks join the plan when their backends land.
+# Listening and reading use the Phase A APIs; checkpoint remains disabled.
 ENABLED_KINDS = frozenset(
-    {"warmup", "journal", "review", "writing", "speaking", "intensive", "shadowing", "minimal"}
+    {"listening", "reading", "warmup", "journal", "review", "writing", "speaking", "intensive", "shadowing", "minimal"}
 )
 
 PHASE_A = {"id": "A", "name": "Phase A (0–300h)", "hours_from": 0, "hours_to": 300}
@@ -64,8 +64,7 @@ WRITING_REVISION = Slot("main2", "writing", "Main block 2 · Writing revision + 
 # Intensive reading and shadowing are the two practices that replaced the old course block: Tuesday
 # main block 2 is the first, Thursday's the second (fixed, not flipped by week parity, so the weekly
 # minutes do not depend on the week); Wednesday ends with 20 minutes of reading and Friday has 40.
-# /reading is the block page (Finish/Skip, reading timer); it opens the /study sentence breakdown,
-# since the /api/reading passages backend does not exist yet.
+# /reading supplies the shared analyzer breakdown through the Phase A passages API.
 INTENSIVE = Slot("main2", "intensive", "Main block 2 · Intensive reading (sentence breakdown)", 40, "/reading", "reading", "11:15")
 INTENSIVE_SHORT = Slot("main3", "intensive", "Main block 2 · Intensive reading (sentence breakdown)", 20, "/reading", "reading", "11:35")
 SHADOWING = Slot("main2", "shadowing", "Main block 2 · Shadowing", 40, "/shadow", "speaking", "11:15")
@@ -270,7 +269,24 @@ def _ensure_plan(conn: sqlite3.Connection, user_id: int, day: datetime.date, now
     row = conn.execute(
         "SELECT minimal FROM day_plans WHERE user_id = ? AND day = ?", (user_id, day.isoformat())
     ).fetchone()
-    return bool(row["minimal"])
+    minimal = bool(row["minimal"])
+    # Existing saved plans predate these APIs. Fill only missing listening/reading slots;
+    # preserve every existing block's id, state and recorded duration.
+    if not cursor.rowcount:
+        slots = _template(day, minimal)
+        existing = conn.execute("SELECT id,slot,position FROM day_blocks WHERE user_id=? AND day=? ORDER BY position", (user_id, day.isoformat())).fetchall()
+        present = {b["slot"] for b in existing}
+        missing = [s for s in slots if s.kind in {"listening", "reading"} and s.slot not in present]
+        if missing:
+            _insert_blocks(conn, user_id, day.isoformat(), missing)
+            order = {s.slot: i for i, s in enumerate(slots)}
+            rows = conn.execute("SELECT id,slot,position FROM day_blocks WHERE user_id=? AND day=? ORDER BY position", (user_id, day.isoformat())).fetchall()
+            rows = sorted(rows, key=lambda b: order.get(b["slot"], -1))
+            # Move out of the range first to satisfy the unique position index.
+            conn.execute("UPDATE day_blocks SET position=position+10000 WHERE user_id=? AND day=?", (user_id, day.isoformat()))
+            for position, block in enumerate(rows, 1):
+                conn.execute("UPDATE day_blocks SET position=? WHERE id=?", (position, block["id"]))
+    return minimal
 
 
 def _seed_todos(conn: sqlite3.Connection, user_id: int) -> None:

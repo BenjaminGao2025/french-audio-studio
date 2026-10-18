@@ -395,19 +395,25 @@ const passage: T.Passage = {
     {
       kind: "main_idea",
       q: "Why is the library closed?",
-      a: "Because of renovation works.",
+      options: ["Because of renovation works.", "A holiday.", "No books.", "A party."],
+      answer_index: 0,
+      explanation: "The text says pour travaux; it gives no other reason.",
       evidence: "« fermée lundi pour travaux »",
     },
     {
       kind: "detail",
       q: "When can books be returned?",
-      a: "On Tuesday.",
+      options: ["On Monday.", "On Tuesday.", "On Friday.", "At night."],
+      answer_index: 1,
+      explanation: "The text says mardi; the other times are not given.",
       evidence: "« pourront être rendus mardi »",
     },
     {
       kind: "word_meaning",
       q: "What does « empruntés » mean here?",
-      a: "Borrowed (books that were taken out).",
+      options: ["New books.", "Red books.", "Borrowed books.", "Lost books."],
+      answer_index: 2,
+      explanation: "Empruntés means borrowed in this sentence.",
       evidence: "« Les livres empruntés »",
     },
   ],
@@ -849,15 +855,26 @@ export const mock: Api = {
       delay(dailyReviews[day] ?? { day, hard: "", solved: "", unsolved: "", tomorrow: "" }),
   },
   listening: {
-    createSession: () => delay(structuredClone(listeningSession)),
-    blind: () => delay(structuredClone(listeningSession)),
-    reveal: () => delay(structuredClone(listeningSession)),
-    relisten: () => delay(structuredClone(listeningSession)),
+    createSession: () => {
+      mockRevealed = false;
+      mockRelistens = 0;
+      return delay(listeningView());
+    },
+    blind: () => delay(listeningView()),
+    reveal: () => {
+      mockRevealed = true;
+      return delay(listeningView());
+    },
+    relisten: (_id, _stage, index) => {
+      mockRelistens = Math.max(mockRelistens, index + 1);
+      return delay(listeningView());
+    },
     check: (_id, answer_index) =>
       delay({
-        ...structuredClone(listeningSession),
+        ...listeningView(true),
         result: { correct: answer_index === listeningSession.material.question.answer_index },
       }),
+    addWord: () => delay({}),
     gate: () =>
       delay({
         hours: { value: 38, target: 200 },
@@ -867,9 +884,23 @@ export const mock: Api = {
       }),
   },
   reading: {
-    create: () => delay(structuredClone(passage)),
-    get: () => delay(structuredClone(passage)),
-    done: () => delay(undefined),
+    create: () => {
+      mockReadingResult = null;
+      return delay(readingView());
+    },
+    get: () => delay(mockReadingResult ?? readingView()),
+    done: (_id, seconds, answers) => {
+      mockReadingResult = {
+        ...structuredClone(passage),
+        result: {
+          correct: answers.filter((a, i) => a === passage.questions[i]?.answer_index).length,
+          answers,
+          seconds,
+        },
+      };
+      return delay(mockReadingResult);
+    },
+    addWord: () => delay({}),
   },
   items: {
     summary: () => delay(structuredClone(itemsSummary)),
@@ -911,3 +942,38 @@ export const mock: Api = {
     put: (p) => delay(p),
   },
 };
+
+let mockRevealed = false;
+let mockRelistens = 0;
+let mockReadingResult: T.Passage | null = null;
+function listeningView(answered = false): T.ListeningSession {
+  const s = structuredClone(listeningSession);
+  s.rate = 0.75;
+  s.rate_stage = "slow30";
+  s.index = 1;
+  s.total = 1;
+  s.audio_url_normal = `/tts?text=${encodeURIComponent(listeningSession.material.text)}&rate=1`;
+  s.audio_url_slow = `/tts?text=${encodeURIComponent(listeningSession.material.text)}&rate=0.75`;
+  if (!mockRevealed) {
+    s.material.text = "";
+    s.material.words = [];
+    delete s.material.breakdown;
+  }
+  if (mockRelistens < 3 && !answered) s.material.question = { prompt: "", options: [] };
+  if (!answered) {
+    delete s.material.question.answer_index;
+    delete s.material.question.evidence;
+    delete s.material.question.explanation;
+  }
+  return s;
+}
+function readingView(): T.Passage {
+  const p = structuredClone(passage);
+  p.questions.forEach((q) => {
+    delete q.answer_index;
+    delete q.explanation;
+    delete q.evidence;
+    delete q.a;
+  });
+  return p;
+}
