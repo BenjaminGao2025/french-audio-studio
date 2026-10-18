@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Lock, Play, Turtle } from "lucide-react";
+import { Lock } from "lucide-react";
 import { BlockShell, Bar, Chip } from "@/components/fr/kit";
-import { btn, meta } from "@/components/fr/kit-utils";
-import { cn } from "@/lib/utils";
-import { api } from "@/api";
+import { btn, errorMessage, meta } from "@/components/fr/kit-utils";
+import { api, type ListeningSession } from "@/api";
+import { useActiveSeconds } from "@/api/use-active-seconds";
 import { useListeningGate } from "@/api/hooks";
 import { DataView, ErrorState, Skeleton } from "@/components/fr/states";
 import { AudioButton } from "@/components/fr/widgets";
@@ -14,284 +14,285 @@ export const Route = createFileRoute("/listening")({
   validateSearch: (s: Record<string, unknown>) => ({
     block: typeof s["block"] === "string" ? s["block"] : undefined,
   }),
-  head: () =>
-    meta(
-      "Listening 3-step",
-      "Blind listen, reveal and break down, then relisten and check understanding.",
-    ),
+  head: () => meta("Listening 3-step", "Listen, reveal, relisten and check understanding."),
   component: Listening,
 });
 
-const relistenStages = [
-  { label: "Slow ×1", stage: "slow20" as const },
-  { label: "Normal ×1", stage: "normal" as const },
-  { label: "Normal ×2", stage: "normal" as const },
-];
-
 function Listening() {
   const { block } = Route.useSearch();
+  const [source, setSource] = useState("auto");
+  const [round, setRound] = useState(0);
   const session = useQuery({
-    queryKey: ["listening-session", block ?? "solo"],
-    queryFn: () => api.listening.createSession(block),
+    queryKey: ["listening-session", block, source, round],
+    queryFn: () => api.listening.createSession(block, source),
+    staleTime: Infinity,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
   const gate = useListeningGate();
-
+  const [updated, setUpdated] = useState<ListeningSession | null>(null);
   const [step, setStep] = useState(0);
-  const [gist, setGist] = useState<0 | 1 | 2 | null>(null);
-  const [sel, setSel] = useState(0);
   const [blindPlays, setBlindPlays] = useState(0);
-  const [relistenDone, setRelistenDone] = useState<boolean[]>([false, false, false]);
-  const [ans, setAns] = useState<number | null>(null);
-  const [correct, setCorrect] = useState<boolean | null>(null);
-
-  if (session.isPending)
-    return (
-      <BlockShell
-        kicker="Listening"
-        title="Listening 3-step"
-        progress={0}
-        blockId={block}
-        lane="listening"
-      >
-        <Skeleton lines={6} />
-      </BlockShell>
-    );
-  if (session.isError)
-    return (
-      <BlockShell
-        kicker="Listening"
-        title="Listening 3-step"
-        progress={0}
-        blockId={block}
-        lane="listening"
-      >
-        <ErrorState error={session.error} retry={session.refetch} />
-      </BlockShell>
-    );
-
-  const s = session.data;
-  if (!s) return null;
-  const words = s.material.words;
-  const q = s.material.question;
-  const audioUrl = (slow: boolean) => {
-    const u = slow ? s.audio_url_slow : s.audio_url_normal;
-    return u || api.speech.ttsUrl(s.material.text);
+  const [relistens, setRelistens] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState<string[]>([]);
+  const timer = useActiveSeconds(blindPlays > 0 && !busy && !updated?.result);
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    setError("");
+    try {
+      await fn();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const s = updated ?? session.data;
+  const next = () => {
+    setUpdated(null);
+    setStep(0);
+    setBlindPlays(0);
+    setRelistens(0);
+    setSaved([]);
+    timer.reset();
+    setRound((v) => v + 1);
   };
 
   return (
     <BlockShell
-      kicker={`Item ${s.index} of ${s.total}`}
+      kicker="Listening · Phase A"
       title="Listening 3-step"
-      progress={(s.index - 1 + step / 4) / s.total}
+      progress={s?.result ? 1 : step / 4}
       blockId={block}
-      lane="listening"
+      finishDisabled={!s?.result}
     >
-      <div className="mx-auto max-w-2xl">
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex gap-2">
-            {["Blind listen", "Reveal", "Relisten", "Check"].map((x, i) => (
-              <Chip key={x} tone={i === step ? "accent" : "muted"}>
-                {i + 1}. {x}
-              </Chip>
-            ))}
-          </div>
-          <Chip>
-            <Turtle className="h-3 w-3" />{" "}
-            {s.rate_stage === "normal" ? "Normal speed" : s.rate_stage}
-          </Chip>
-        </div>
-
-        <div className="panel p-10">
-          {step === 0 && (
-            <div className="text-center">
-              <AudioButton
-                url={audioUrl(false)}
-                label="Play audio"
-                size="lg"
-                onPlay={() => setBlindPlays((p) => p + 1)}
-              />
-              <p className="mt-4 text-sm text-muted-foreground">
-                Normal speed · no text · {blindPlays ? `played ${blindPlays}×` : "tap to play"}
-              </p>
-              <p className="mt-10 text-sm font-medium">How much did you understand?</p>
-              <div className="mt-3 flex justify-center gap-2">
-                {(["Understood", "Half", "Not at all"] as const).map((g, gi) => (
-                  <button
-                    key={g}
-                    disabled={blindPlays === 0}
-                    onClick={() => {
-                      const self = (gi === 0 ? 2 : gi === 1 ? 1 : 0) as 0 | 1 | 2;
-                      setGist(self);
-                      void api.listening.blind(s.id, self, blindPlays);
-                      setStep(1);
-                    }}
-                    className={cn(btn.ghost, gist !== null && "border-primary")}
-                  >
-                    {g}
-                  </button>
+      <div className="mx-auto max-w-2xl space-y-5">
+        <label className="flex items-center gap-3 text-sm">
+          Material pool
+          <select
+            className="rounded border bg-background p-2"
+            value={source}
+            disabled={busy}
+            onChange={(e) => {
+              setSource(e.target.value);
+              next();
+            }}
+          >
+            <option value="auto">Learned material</option>
+            <option value="srs">Saved sentences</option>
+            <option value="journal">My journal</option>
+            <option value="story">Known-word story</option>
+          </select>
+        </label>
+        {session.isPending ? (
+          <Skeleton lines={6} />
+        ) : session.isError ? (
+          <>
+            <ErrorState error={session.error} retry={session.refetch} />
+            <p className="text-sm text-muted-foreground">
+              Save a learned sentence in Cards or prepare a Journal to fill this pool.
+            </p>
+          </>
+        ) : (
+          s && (
+            <>
+              <div className="flex flex-wrap gap-2">
+                {["Blind listen", "Reveal", "Relisten", "Check"].map((x, i) => (
+                  <Chip key={x} tone={i === step ? "accent" : "muted"}>
+                    {i + 1}. {x}
+                  </Chip>
                 ))}
               </div>
-              {blindPlays === 0 && (
-                <p className="mt-2 text-xs text-muted-foreground">Listen at least once first.</p>
-              )}
-            </div>
-          )}
-          {step === 1 && (
-            <>
-              <p className="text-sm text-muted-foreground">Tap any word.</p>
-              <p className="fr mt-4 flex flex-wrap gap-x-2 gap-y-1 text-3xl leading-relaxed">
-                {words.map((t, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setSel(i)}
-                    className={cn(
-                      "rounded px-0.5 transition",
-                      sel === i ? "bg-accent text-accent-foreground" : "hover:bg-secondary",
-                    )}
-                  >
-                    {t.w}
-                  </button>
-                ))}
+              <p className="text-sm text-muted-foreground">
+                Speed ladder: {s.rate ?? 1}× · blind listen at normal speed
               </p>
-              {words[sel] && (
-                <div className="mt-8 rounded-lg bg-secondary p-5">
-                  <div className="flex items-baseline gap-3">
-                    <span className="fr text-xl">{words[sel]?.w.replace(/[.,]/g, "")}</span>
-                    <span className="ipa">{words[sel]?.ipa}</span>
+              <div className="panel space-y-5 p-7">
+                {step === 0 && (
+                  <div className="space-y-5 text-center">
+                    <AudioButton
+                      url={s.audio_url_normal}
+                      label="Blind listen"
+                      onPlay={() => {
+                        if (!blindPlays) timer.reset();
+                        setBlindPlays((v) => v + 1);
+                      }}
+                    />
+                    <p className="text-sm">Listen, then assess your understanding.</p>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {(["Not yet", "Half", "Understood"] as const).map((label, i) => (
+                        <button
+                          key={label}
+                          className={btn.ghost}
+                          disabled={!blindPlays || busy}
+                          onClick={() =>
+                            void run(async () => {
+                              await api.listening.blind(
+                                s.id,
+                                i as 0 | 1 | 2,
+                                Math.min(blindPlays, 20),
+                              );
+                              setUpdated(await api.listening.reveal(s.id));
+                              setStep(1);
+                            })
+                          }
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <div className="mt-1 text-sm">{words[sel]?.en}</div>
-                  {words[sel]?.note && (
-                    <div className="mt-2 text-sm text-muted-foreground">{words[sel]?.note}</div>
-                  )}
-                  <button
-                    className="mt-3 rounded-full border border-border px-2.5 py-1 text-xs hover:bg-card"
-                    onClick={() => void api.srs.addNote({ sentence: s.material.text })}
-                  >
-                    Add to cards
-                  </button>
-                </div>
-              )}
-              {s.material.breakdown && (
-                <div className="mt-4 text-sm text-muted-foreground">
-                  Breakdown: <span className="text-foreground">{s.material.breakdown}</span>
-                </div>
-              )}
-              <button
-                className={cn(btn.primary, "mt-8")}
-                onClick={() => {
-                  void api.listening.reveal(s.id);
-                  setStep(2);
-                }}
-              >
-                Relisten →
-              </button>
-            </>
-          )}
-          {step === 2 && (
-            <div className="text-center">
-              <div className="flex justify-center gap-3">
-                {relistenStages.map((r, i) => (
-                  <AudioButton
-                    key={r.label}
-                    url={audioUrl(r.stage === "slow20")}
-                    label={r.label}
-                    disabled={i > 0 && !relistenDone[i - 1]}
-                    onPlay={() => {
-                      setRelistenDone((prev) => prev.map((v, k) => (k === i ? true : v)));
-                      void api.listening.relisten(s.id, r.stage);
-                    }}
-                  />
-                ))}
-              </div>
-              <p className="mt-6 text-sm text-muted-foreground">
-                Once slow, then normal twice. Follow the text with your eyes.
-              </p>
-              <button
-                className={cn(btn.primary, "mt-8")}
-                disabled={!relistenDone.every(Boolean)}
-                onClick={() => setStep(3)}
-              >
-                Answer the question →
-              </button>
-            </div>
-          )}
-          {step === 3 && (
-            <>
-              <p className="font-medium">{q.prompt}</p>
-              <div className="mt-4 space-y-2">
-                {q.options.map((opt, i) => (
-                  <button
-                    key={opt}
-                    disabled={ans !== null}
-                    onClick={() => {
-                      setAns(i);
-                      void api.listening
-                        .check(s.id, i)
-                        .then((r) => setCorrect(r.result?.correct ?? i === q.answer_index));
-                    }}
-                    className={cn(
-                      "w-full rounded-lg border px-4 py-3 text-left text-sm transition",
-                      ans === null
-                        ? "border-border hover:bg-secondary"
-                        : i === q.answer_index
-                          ? "border-primary bg-accent"
-                          : ans === i
-                            ? "border-destructive/50 bg-destructive/5"
-                            : "border-border opacity-60",
+                )}
+                {step === 1 && (
+                  <>
+                    <p className="fr text-2xl leading-relaxed">{s.material.text}</p>
+                    <p className="whitespace-pre-line text-sm">
+                      {s.material.breakdown ||
+                        "Offline sentence breakdown: translations and grammar require the AI gateway."}
+                    </p>
+                    {s.analysis?.sentences.map((sentence, i) => (
+                      <div key={i} className="rounded bg-secondary p-4">
+                        <p className="fr">{sentence.text}</p>
+                        <p>{sentence.translation_en}</p>
+                        {sentence.build_up.map((line, j) => (
+                          <p key={j} className="fr text-sm">
+                            {line}
+                          </p>
+                        ))}
+                        {sentence.grammar_points.map((g) => (
+                          <p key={g.title} className="text-sm">
+                            {g.title}: {g.explanation}
+                          </p>
+                        ))}
+                      </div>
+                    ))}
+                    <div className="flex flex-wrap gap-2">
+                      {s.material.words.map((w, i) => (
+                        <button
+                          key={i}
+                          className={btn.ghost}
+                          disabled={busy || saved.includes(w.w)}
+                          title={`${w.en} ${w.note ?? ""}`}
+                          onClick={() =>
+                            void run(async () => {
+                              await api.listening.addWord(s.id, s.material.text, w.w, w.en);
+                              setSaved((v) => [...v, w.w]);
+                            })
+                          }
+                        >
+                          {w.w} {w.en && `· ${w.en}`} {saved.includes(w.w) ? "✓" : "+ card"}
+                        </button>
+                      ))}
+                    </div>
+                    <button className={btn.primary} onClick={() => setStep(2)}>
+                      Relisten →
+                    </button>
+                  </>
+                )}
+                {step === 2 && (
+                  <>
+                    <p className="fr text-xl">{s.material.text}</p>
+                    <div className="flex flex-wrap gap-3">
+                      {["Slow ×1", "Normal ×1", "Normal ×2"].map((label, i) => (
+                        <AudioButton
+                          key={label}
+                          url={i === 0 ? s.audio_url_slow : s.audio_url_normal}
+                          label={relistens > i ? `${label} ✓` : label}
+                          disabled={busy || relistens !== i}
+                          onPlay={() =>
+                            void run(async () => {
+                              setUpdated(
+                                await api.listening.relisten(
+                                  s.id,
+                                  i === 0 ? "slow20" : "normal",
+                                  i,
+                                ),
+                              );
+                              setRelistens((v) => v + 1);
+                            })
+                          }
+                        />
+                      ))}
+                    </div>
+                    <button
+                      className={btn.primary}
+                      disabled={relistens < 3}
+                      onClick={() => setStep(3)}
+                    >
+                      Check understanding →
+                    </button>
+                  </>
+                )}
+                {step === 3 && (
+                  <>
+                    <p>{s.material.question.prompt}</p>
+                    <div className="space-y-2">
+                      {s.material.question.options.map((option, i) => (
+                        <button
+                          key={i}
+                          className={`${btn.ghost} block w-full text-left`}
+                          disabled={busy || !!s.result}
+                          onClick={() =>
+                            void run(async () => {
+                              setUpdated(
+                                await api.listening.check(s.id, i, Math.min(240, timer.read())),
+                              );
+                              void gate.refetch();
+                            })
+                          }
+                        >
+                          {option}
+                          {s.result && s.material.question.answer_index === i ? " ✓" : ""}
+                        </button>
+                      ))}
+                    </div>
+                    {s.result && (
+                      <>
+                        <p>{s.result.correct ? "Correct." : "Keep practising — no penalty."}</p>
+                        <p className="text-sm">{s.material.question.explanation}</p>
+                        <blockquote className="fr text-sm">
+                          {s.material.question.evidence}
+                        </blockquote>
+                        <button className={btn.primary} onClick={next}>
+                          Next item →
+                        </button>
+                      </>
                     )}
-                  >
-                    {opt}
-                  </button>
-                ))}
+                  </>
+                )}
               </div>
-              {ans !== null && (
-                <p className="mt-4 text-sm text-muted-foreground">
-                  {q.evidence && <span className="fr">“{q.evidence}” </span>}
-                  {correct ? "Correct." : "Logged — no penalty. It comes back in review."}
-                </p>
-              )}
             </>
-          )}
-        </div>
-
+          )
+        )}
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
         <DataView query={gate} skeletonLines={2}>
-          {(g) =>
-            g.unlocked ? (
-              <a
-                href="/listen"
-                className="panel mt-6 flex items-center gap-5 p-5 transition hover:bg-secondary"
-              >
-                <Play className="h-5 w-5 text-primary" />
-                <span className="text-sm font-medium">Open real material →</span>
-              </a>
-            ) : (
-              <div className="mt-6 flex items-center gap-5 rounded-xl border border-dashed border-border p-5">
-                <Lock className="h-5 w-5 text-muted-foreground" />
-                <div className="flex-1">
-                  <div className="text-sm font-medium">
-                    Real audio{" "}
-                    <span className="font-normal text-muted-foreground">
-                      · unlocks when all three are met
-                    </span>
+          {(g) => (
+            <div className="panel space-y-3 p-5">
+              <p className="flex items-center gap-2">
+                <Lock size={16} /> Real audio · all conditions required (200–300h transition)
+              </p>
+              <div className="grid grid-cols-3 gap-4 text-xs">
+                {[g.hours, g.understood_pct, g.unseen_quiz_pct].map((v, i) => (
+                  <div key={i}>
+                    {["Active hours", "Last 10 normal-speed understood %", "Unseen CO quiz %"][i]}
+                    <p>
+                      {v.value} / {v.target}
+                    </p>
+                    <Bar value={v.value / v.target} />
                   </div>
-                  <div className="mt-3 grid grid-cols-3 gap-4 text-xs text-muted-foreground">
-                    <div>
-                      {g.hours.value} / {g.hours.target}h
-                      <Bar value={g.hours.value / g.hours.target} />
-                    </div>
-                    <div>
-                      {g.understood_pct.value} / {g.understood_pct.target}% understood
-                      <Bar value={g.understood_pct.value / g.understood_pct.target} />
-                    </div>
-                    <div>
-                      {g.unseen_quiz_pct.value} / {g.unseen_quiz_pct.target}% unseen quiz
-                      <Bar value={g.unseen_quiz_pct.value / g.unseen_quiz_pct.target} />
-                    </div>
-                  </div>
-                </div>
+                ))}
               </div>
-            )
-          }
+              <p className="text-xs text-muted-foreground">
+                Unseen CO validation quizzes arrive in a later phase. Practice answers do not unlock
+                real audio.
+              </p>
+            </div>
+          )}
         </DataView>
       </div>
     </BlockShell>

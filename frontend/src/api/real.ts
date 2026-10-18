@@ -273,27 +273,32 @@ export const real = {
     get: (day: string) => request<T.DailyReview>("/api/daily-reviews", { query: { day } }),
   },
   listening: {
-    createSession: (block_id?: string) =>
-      request<T.ListeningSession>("/api/listening/sessions", {
+    createSession: (block_id?: string, source = "auto") =>
+      listeningResponse("/api/listening/sessions", {
         method: "POST",
-        body: { block_id },
+        body: { block_id, source },
       }),
     blind: (id: string, self: 0 | 1 | 2, plays: number) =>
-      request<T.ListeningSession>(`/api/listening/sessions/${id}/blind`, {
+      listeningResponse(`/api/listening/sessions/${id}/blind`, {
         method: "POST",
         body: { self, plays },
       }),
     reveal: (id: string) =>
-      request<T.ListeningSession>(`/api/listening/sessions/${id}/reveal`, { method: "POST" }),
-    relisten: (id: string, stage: T.RateStage) =>
-      request<T.ListeningSession>(`/api/listening/sessions/${id}/relisten`, {
+      listeningResponse(`/api/listening/sessions/${id}/reveal`, { method: "POST" }),
+    relisten: (id: string, stage: T.RateStage, index: number) =>
+      listeningResponse(`/api/listening/sessions/${id}/relisten`, {
         method: "POST",
-        body: { stage },
+        body: { stage, index },
       }),
-    check: (id: string, answer_index: number) =>
-      request<T.ListeningSession>(`/api/listening/sessions/${id}/check`, {
+    check: (id: string, answer_index: number, seconds = 0) =>
+      listeningResponse(`/api/listening/sessions/${id}/check`, {
         method: "POST",
-        body: { answer_index },
+        body: { answer_index, seconds, tz_offset: tzOffset() },
+      }),
+    addWord: (id: string, sentence: string, word: string, meaning = "") =>
+      request<unknown>(`/api/listening/sessions/${id}/words`, {
+        method: "POST",
+        body: { sentence, word, meaning },
       }),
     gate: () => request<T.ListeningGate>("/api/listening/gate"),
   },
@@ -301,10 +306,20 @@ export const real = {
     create: (body: {
       text?: string | undefined;
       generate?: { text_type: string; level: string };
-    }) => request<T.Passage>("/api/reading/passages", { method: "POST", body }),
-    get: (id: string) => request<T.Passage>(`/api/reading/passages/${id}`),
-    done: (id: string, seconds: number) =>
-      request<void>(`/api/reading/passages/${id}/done`, { method: "POST", body: { seconds } }),
+    }) => readingPassage(request<RawPassage>("/api/reading/passages", { method: "POST", body })),
+    get: (id: string) => readingPassage(request<RawPassage>(`/api/reading/passages/${id}`)),
+    done: (id: string, seconds: number, answers: number[]) =>
+      readingPassage(
+        request<RawPassage>(`/api/reading/passages/${id}/done`, {
+          method: "POST",
+          body: { seconds, answers, tz_offset: tzOffset() },
+        }),
+      ),
+    addWord: (id: string, sentence: string, word: string, meaning = "") =>
+      request<unknown>(`/api/reading/passages/${id}/words`, {
+        method: "POST",
+        body: { sentence, word, meaning },
+      }),
   },
   items: {
     summary: () => request<T.ItemsSummary>("/api/items/summary"),
@@ -330,3 +345,20 @@ export const real = {
 };
 
 export type Api = typeof real;
+
+// Passage analysis is the host analyzer's wire shape, shared with /api/analyze.
+type RawPassage = Omit<T.Passage, "analysis"> & { analysis: { sentences: RawAnalyzeSentence[] } };
+async function readingPassage(pending: Promise<RawPassage>): Promise<T.Passage> {
+  const p = await pending;
+  return { ...p, analysis: normalizeAnalyze(p.analysis) };
+}
+
+async function listeningResponse(
+  path: string,
+  opts: Parameters<typeof request>[1],
+): Promise<T.ListeningSession> {
+  const s = await request<
+    Omit<T.ListeningSession, "analysis"> & { analysis?: { sentences: RawAnalyzeSentence[] } | null }
+  >(path, opts);
+  return { ...s, analysis: s.analysis ? normalizeAnalyze(s.analysis) : null };
+}

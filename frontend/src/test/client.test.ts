@@ -129,3 +129,53 @@ it("uploads a homework recording as a raw audio body with kind in the query", as
   expect(init?.body).toBe(audio);
   expect(init?.headers).toMatchObject({ "Content-Type": "audio/webm;codecs=opus" });
 });
+it("normalizes reading analysis and sends MCQ answers, time and timezone", async () => {
+  vi.spyOn(Date.prototype, "getTimezoneOffset").mockReturnValue(420);
+  const raw = {
+    id: "p1",
+    title: "Library",
+    text: "Elle ouvre mardi.",
+    questions: [],
+    analysis: {
+      sentences: [
+        {
+          sentence: "Elle ouvre mardi.",
+          translation_en: "It opens Tuesday.",
+          build_up: [{ fr: "Elle ouvre", en: "It opens" }],
+          words: [{ fr: "mardi", meaning_en: "Tuesday", ipa: "" }],
+          grammar_points: [],
+        },
+      ],
+    },
+  };
+  const fetcher = vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(async () => new Response(JSON.stringify(raw)));
+  const passage = await real.reading.create({ generate: { text_type: "email", level: "A1" } });
+  expect(passage.analysis.sentences[0]?.text).toBe("Elle ouvre mardi.");
+  expect(passage.analysis.sentences[0]?.build_up).toEqual(["Elle ouvre"]);
+  expect(passage.analysis.sentences[0]?.words[0]?.word).toBe("mardi");
+  await real.reading.done("p1", 90, [0, 2]);
+  expect(JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body))).toEqual({
+    seconds: 90,
+    answers: [0, 2],
+    tz_offset: 420,
+  });
+});
+it("sends retry-safe relisten index and vocabulary targets through the typed client", async () => {
+  const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("{}"));
+  await real.listening.relisten("s1", "normal", 2);
+  expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual({
+    stage: "normal",
+    index: 2,
+  });
+  await real.reading.addWord("p1", "Elle ouvre mardi.", "mardi", "Tuesday");
+  expect(new URL(String(fetcher.mock.calls[1]?.[0])).pathname).toBe(
+    "/api/reading/passages/p1/words",
+  );
+  expect(JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body))).toEqual({
+    sentence: "Elle ouvre mardi.",
+    word: "mardi",
+    meaning: "Tuesday",
+  });
+});

@@ -34,6 +34,7 @@ it("resolves every promise-returning adapter function with representative argume
     "today.minimal": [false],
     "reviews.add": [{ day: "2026-10-17", hard: "", solved: "", unsolved: "", tomorrow: "" }],
     "items.list": [{}],
+    "reading.done": ["p1", 60, [0, 1, 2]],
     "checkpoints.decide": ["cp8", "continue", "test"],
     "phase.put": [phase],
   };
