@@ -55,6 +55,9 @@ function initStudyWorkbench() {
             deckAria: 'Analysis and shadowing cards', deckHeading: 'Sentence analysis & pronunciation practice',
             sentenceCountEmpty: '0 sentences',
             playAll: 'Play all', repeat: 'Repeat',
+            selectSentence: 'Tick to include this sentence in the read-along',
+            selectedCount: (n) => `${n} selected`,
+            playSelected: 'Read selected', clearSelection: 'Clear',
             historyTitle: 'History', historyTotalEmpty: '0 items',
             clearHistory: 'Clear history', clearHistoryTitle: 'Clear the history in this category', closeEsc: 'Close (Esc)',
             histAll: 'All', histStudy: '📖 Breakdowns', histTts: '🎧 Audio',
@@ -172,6 +175,8 @@ function initStudyWorkbench() {
             deckAria: '解析与跟读卡片', deckHeading: '句子精析与发音复述',
             sentenceCountEmpty: '共 0 句',
             playAll: '全部播放', repeat: '循环',
+            selectSentence: '勾选这句，一起连读', selectedCount: (n) => `已选 ${n} 句`,
+            playSelected: '连读选中', clearSelection: '清除选择',
             historyTitle: '历史记录', historyTotalEmpty: '共 0 条',
             clearHistory: '清空历史', clearHistoryTitle: '清空当前分类历史', closeEsc: '关闭 (Esc)',
             histAll: '全部', histStudy: '📖 拆解精析', histTts: '🎧 音频制作',
@@ -541,6 +546,17 @@ function initStudyWorkbench() {
     let currentActiveAudio = null;
     let currentAudioCleanup = null;
     let currentGlobalRecordingStopper = null;
+    let currentClipFinish = null;
+
+    // Personal practice pauses its "speaking time" while model audio plays. Each clip keeps
+    // the counter honest, and the personal page reads window.FrenchAudioState.playing.
+    let activeClipCount = 0;
+    function setClipPlaying(on) {
+        activeClipCount = Math.max(0, activeClipCount + (on ? 1 : -1));
+        const state = window.FrenchAudioState = window.FrenchAudioState || {};
+        state.playing = activeClipCount > 0;
+        state.count = activeClipCount;
+    }
 
     function stopAllAudio() {
         if (currentAudioCleanup) {
@@ -551,6 +567,13 @@ function initStudyWorkbench() {
             } catch (e) {
                 console.warn('Audio cleanup error:', e);
             }
+        }
+        if (currentClipFinish) {
+            const finishClip = currentClipFinish;
+            currentClipFinish = null;
+            try {
+                finishClip();
+            } catch (e) {}
         }
         if (currentActiveAudio) {
             const audio = currentActiveAudio;
@@ -583,13 +606,17 @@ function initStudyWorkbench() {
     function playClip(cleanText, onDone) {
         const audio = new Audio(`/tts?text=${encodeURIComponent(cleanText)}&voice=fr-FR-DeniseNeural`);
         currentActiveAudio = audio;
+        setClipPlaying(true);
         let done = false;
         const finish = () => {
             if (done) return;
             done = true;
+            setClipPlaying(false);
+            if (currentClipFinish === finish) currentClipFinish = null;
             if (currentActiveAudio === audio) currentActiveAudio = null;
             onDone();
         };
+        currentClipFinish = finish;
         const speakFallback = () => {
             if (done || currentActiveAudio !== audio) return;
             if (!('speechSynthesis' in window)) { finish(); return; }
@@ -620,17 +647,18 @@ function initStudyWorkbench() {
     function playFrenchSpeech(text, onEndCallback = null, options = {}) {
         if (!text || !text.trim()) return;
         stopAllAudio();
+        const scope = options.scope || document;
         const repeat = !options.once && Boolean(window.FrenchPlayback && window.FrenchPlayback.repeat());
         const mode = options.all ? 'all' : repeat ? 'loop' : 'once';
         const sentences = mode === 'all'
-            ? Array.from(document.querySelectorAll('.sentence-french-text')).map(el => el.textContent.trim()).filter(Boolean)
+            ? Array.from(scope.querySelectorAll('.sentence-french-text')).map(el => el.textContent.trim()).filter(Boolean)
             : [];
         const keys = sentences.map(srsSentenceKey);
         let current = text.trim();
         let ended = false;
         const markReading = (index) => {
-            document.querySelectorAll('.sentence-french-text.is-reading').forEach(el => el.classList.remove('is-reading'));
-            const el = index >= 0 ? document.querySelectorAll('.sentence-french-text')[index] : null;
+            scope.querySelectorAll('.sentence-french-text.is-reading').forEach(el => el.classList.remove('is-reading'));
+            const el = index >= 0 ? scope.querySelectorAll('.sentence-french-text')[index] : null;
             if (el) el.classList.add('is-reading');
         };
         const endAll = () => {
@@ -1274,6 +1302,9 @@ function initStudyWorkbench() {
         return `
             <header class="sentence-head">
                 ${isMulti ? `
+                    <input type="checkbox" class="sentence-select-box" data-index="${idx}" title="${T.selectSentence}" aria-label="${T.selectSentence}">
+                ` : ''}
+                ${isMulti ? `
                     <button class="sentence-toggle" type="button" aria-expanded="${open}" aria-controls="sentence-body-${idx}"
                         title="${open ? T.hideBreakdown : T.showBreakdown}" aria-label="${open ? T.hideBreakdown : T.showBreakdown}">
                         <i data-lucide="chevron-right"></i>
@@ -1313,10 +1344,99 @@ function initStudyWorkbench() {
         return out;
     }
 
-    function renderStudyDeck(sentences) {
+    // Multi-select read-along: tick several sentences, then play them in order.
+    function attachDeckSelectionBar(container) {
+        const bar = document.createElement('div');
+        bar.className = 'deck-select-bar';
+        bar.hidden = true;
+        bar.innerHTML = `
+            <span class="deck-select-count" aria-live="polite"></span>
+            <button class="btn-play-selected" type="button"><i data-lucide="play"></i><span class="play-selected-label">${T.playSelected}</span></button>
+            <button class="btn-clear-selected" type="button">${T.clearSelection}</button>
+        `;
+        bar.addEventListener('click', (e) => {
+            if (e.target.closest('.btn-play-selected')) {
+                playSelectedSequence(container, bar.querySelector('.btn-play-selected'));
+                return;
+            }
+            if (e.target.closest('.btn-clear-selected')) {
+                container.querySelectorAll('.sentence-select-box').forEach(box => {
+                    box.checked = false;
+                    box.closest('.sentence-card')?.classList.remove('is-selected');
+                });
+                updateDeckSelectBar(container);
+            }
+        });
+        container.appendChild(bar);
+    }
+
+    function deckSelectedCards(container) {
+        return Array.from(container.querySelectorAll('.sentence-card'))
+            .filter(card => card.querySelector('.sentence-select-box')?.checked);
+    }
+
+    function updateDeckSelectBar(container) {
+        const bar = container.querySelector('.deck-select-bar');
+        if (!bar) return;
+        const count = deckSelectedCards(container).length;
+        bar.hidden = count === 0;
+        const label = bar.querySelector('.deck-select-count');
+        if (label) label.textContent = count ? T.selectedCount(count) : '';
+    }
+
+    function playSelectedSequence(container, btn) {
+        const setPlaying = (playing) => {
+            btn.classList.toggle('is-playing', playing);
+            btn.innerHTML = `<i data-lucide="${playing ? 'square' : 'play'}"></i><span class="play-selected-label">${playing ? T.stop : T.playSelected}</span>`;
+            refreshIcons();
+        };
+        if (btn.classList.contains('is-playing')) {
+            stopAllAudio();
+            return;
+        }
+        const targets = deckSelectedCards(container)
+            .map(card => ({ card, el: card.querySelector('.sentence-french-text') }))
+            .filter(item => item.el && item.el.textContent.trim());
+        if (!targets.length) return;
+        stopAllAudio();
+        let index = 0;
+        let ended = false;
+        const clearMarks = () => container.querySelectorAll('.sentence-french-text.is-reading').forEach(el => el.classList.remove('is-reading'));
+        const end = () => {
+            if (ended) return;
+            ended = true;
+            clearTimeout(playbackLoopTimer);
+            if (currentAudioCleanup === end) currentAudioCleanup = null;
+            clearMarks();
+            setPlaying(false);
+            if (window.FrenchPlayback) window.FrenchPlayback.setActive(false);
+        };
+        currentAudioCleanup = end;  // stopping the audio also stops the whole read-along
+        if (window.FrenchPlayback) window.FrenchPlayback.setActive(true, stopAllAudio);
+        setPlaying(true);
+        const step = () => {
+            if (ended) return;
+            if (index >= targets.length) { end(); return; }
+            const item = targets[index++];
+            clearMarks();
+            item.el.classList.add('is-reading');
+            try { item.card.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) {}
+            playClip(item.el.textContent.trim(), () => {
+                playbackLoopTimer = setTimeout(() => { if (!ended) step(); }, 500);
+            });
+        };
+        step();
+    }
+
+    function renderStudyDeck(sentences, options = {}) {
         window.renderStudyDeck = renderStudyDeck;
+        // Personal practice renders the same deck into its own panel (its own container and
+        // no page-level deck header), so nothing on the study deck is touched.
+        const container = options.container || sentencesContainer;
+        const section = options.section === undefined ? studyDeckSection : options.section;
+        const badge = options.badge === undefined ? sentenceCountBadge : options.badge;
         sentences = attachOptionLabels(sentences);
-        sentencesContainer.innerHTML = '';
+        container.innerHTML = '';
         if (!window.activeTokensMap) {
             window.activeTokensMap = new Map();
         }
@@ -1324,12 +1444,13 @@ function initStudyWorkbench() {
         phraseByWord.clear();
 
         if (!sentences || sentences.length === 0) {
-            studyDeckSection.hidden = true;
+            if (section) section.hidden = true;
             return;
         }
 
-        studyDeckSection.hidden = false;
-        sentenceCountBadge.textContent = T.sentenceCount(sentences.length);
+        if (section) section.hidden = false;
+        if (badge) badge.textContent = T.sentenceCount(sentences.length);
+        if (sentences.length > 1) attachDeckSelectionBar(container);
 
         sentences.forEach((s, idx) => {
             const isV2 = s.schemaVersion === 2 || Boolean(s.words && s.words.length > 0) || Boolean(s.build_up && s.build_up.length > 0) || Boolean(s.alignment && s.alignment.length > 0);
@@ -1755,7 +1876,7 @@ function initStudyWorkbench() {
                 card.innerHTML = headHtml + `<div class="sentence-body" id="sentence-body-${idx}" ${open ? '' : 'hidden'}>${shadowingHtml}${tableHtml}</div>`;
             }
 
-            sentencesContainer.appendChild(card);
+            container.appendChild(card);
             attachSentenceCardEvents(card, sentenceText, transZh, transEn);
         });
 
@@ -2104,9 +2225,21 @@ function initStudyWorkbench() {
             };
             head.addEventListener('click', (e) => {
                 if (e.target.closest('button:not(.sentence-toggle), a')) return;
+                if (e.target.closest('.sentence-select-box')) return;
                 if (e.target.closest('.interactive-word')) return;
                 if (String(window.getSelection && window.getSelection()).trim()) return;
                 setOpen(!card.classList.contains('is-open'));
+            });
+        }
+
+        // Multi-select: tick the box, then use "Read selected" in the bar above the deck
+        const selectBox = card.querySelector('.sentence-select-box');
+        if (selectBox) {
+            selectBox.addEventListener('click', (e) => e.stopPropagation());
+            selectBox.addEventListener('change', () => {
+                card.classList.toggle('is-selected', selectBox.checked);
+                const container = card.closest('.sentences-container');
+                if (container) updateDeckSelectBar(container);
             });
         }
 
@@ -2352,6 +2485,7 @@ function initStudyWorkbench() {
 
                     const userAudio = new Audio(userAudioUrl);
                     currentActiveAudio = userAudio;
+                    setClipPlaying(true);
 
                     isUserPlaying = true;
                     playUserBtn.classList.add('playing');
@@ -2362,6 +2496,7 @@ function initStudyWorkbench() {
                     const handleUserAudioEnd = () => {
                         if (finished) return;
                         finished = true;
+                        setClipPlaying(false);
                         if (currentActiveAudio === userAudio) {
                             currentActiveAudio = null;
                         }
@@ -2374,6 +2509,7 @@ function initStudyWorkbench() {
                     const userCleanup = () => {
                         if (!finished) {
                             finished = true;
+                            setClipPlaying(false);
                             resetUserBtn();
                         }
                     };
@@ -2599,6 +2735,16 @@ function initStudyWorkbench() {
                 scopeElement.classList.add('step-revealed');
                 scopeElement.querySelectorAll('.buildup-new-token').forEach(t => t.classList.add('revealed'));
                 refreshIcons();
+
+                // Personal practice keeps its shadowing scores: the page stores them with the entry.
+                if (!isCompact && scopeElement.closest('#study-personal')) {
+                    document.dispatchEvent(new CustomEvent('french:score', { detail: {
+                        sentence: sentenceText,
+                        score: evaluation.overallScore,
+                        accuracy: evaluation.accuracy,
+                        completeness: evaluation.completeness,
+                    } }));
+                }
             }
         }
 
@@ -3178,10 +3324,10 @@ function initStudyWorkbench() {
                 stopAllAudio();
                 return;
             }
-            const first = document.querySelector('.sentence-french-text');
+            const first = sentencesContainer.querySelector('.sentence-french-text');
             if (!first) return;
             setPlayAllLabel(true);
-            playFrenchSpeech(first.textContent.trim(), () => setPlayAllLabel(false), { all: true });
+            playFrenchSpeech(first.textContent.trim(), () => setPlayAllLabel(false), { all: true, scope: sentencesContainer });
         });
     }
 
@@ -3207,7 +3353,7 @@ function initStudyWorkbench() {
         frenchInput.value = text;
         frenchInput.dispatchEvent(new Event('input', { bubbles: true }));
         return startAnalysis();
-    } };
+    }, stopAudio: stopAllAudio };
 
     // Check prefilled URL query param `?text=...`
     window.renderStudyDeck = renderStudyDeck;

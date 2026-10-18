@@ -61,6 +61,7 @@
     let selectedPart=-1;
     function showPart(index){
         selectedPart=index;
+        if(analysisRun){analysisRun.abort();analysisRun=null;}
         const part=entry?.parts?.[index];
         $('homework-french').textContent=part?part.french:entry?.french||'';
         $('homework-french').hidden=false;
@@ -69,12 +70,133 @@
         if($('homework-part-select'))$('homework-part-select').value=String(index);
         const url=entry?.reference_url;
         loadAudio(model,url?(part?url+'?part='+index:url):'');
+        syncAnalysis();
     }
     $('homework-parts').onchange=e=>{if(e.target.id==='homework-part-select'&&!recording)showPart(Number(e.target.value));};
     $('homework-audio-retry').onclick=()=>{const url=entry?.reference_url;if(url)loadAudio(model,url+(selectedPart>=0?'?part='+selectedPart:''),true);};
-    $('homework-study').onclick=()=>run($('homework-study'),async()=>{
-        if(!entry?.french)throw Error(t('先准备法语文本。','Prepare your French text first.'));
-        if(await window.StudyModes.select('text',{returnToPractice:true}))window.FrenchStudy.studyText($('homework-french').textContent);
+
+    // ---- Inline sentence breakdown: the same cards as the study page, cached per part ----
+    const deck=$('homework-deck');
+    const analysisStatus=msg=>$('homework-analysis-status').textContent=msg;
+    let analysisRun=null;
+    const chunksByPart=new Map();
+    const partKey=()=>entry.id+':'+selectedPart;
+    function partText(){const part=entry?.parts?.[selectedPart];return (part?part.french:entry?.french||'').trim();}
+    function analysisCache(){const a=entry?.analyses?.[String(selectedPart)];return a&&a.chunks?a:null;}
+    function localChunks(){return chunksByPart.get(partKey())||null;}
+    function mergedSentences(){
+        const source=localChunks()||analysisCache();
+        if(!source)return null;
+        const total=source.total||0;
+        if(!total)return null;
+        const out=[];
+        for(let i=0;i<total;i++){const chunk=source.chunks?.[String(i)];if(!chunk)return null;out.push(...chunk);}
+        return out.length?out:null;
+    }
+    function chunkCount(){
+        const source=localChunks()||analysisCache();
+        return source?Object.keys(source.chunks||{}).length:0;
+    }
+    function normSentence(value){return String(value||'').replace(/[’]/g,"'").replace(/\s+/g,' ').trim().toLowerCase();}
+    function decorateBestScores(){
+        const best=new Map();
+        for(const s of entry?.scores||[]){const k=normSentence(s.sentence);const current=best.get(k);if(!current||s.score>current.score)best.set(k,s);}
+        if(!best.size)return;
+        deck.querySelectorAll('.sentence-card').forEach(card=>{
+            const text=card.querySelector('.sentence-french-text')?.textContent||'';
+            const score=best.get(normSentence(text));
+            if(!score)return;
+            const actions=card.querySelector('.sentence-head-actions');
+            if(!actions)return;
+            let chip=actions.querySelector('.hw-best-score');
+            if(!chip){chip=document.createElement('span');chip.className='hw-best-score';actions.insertBefore(chip,actions.firstChild);}
+            chip.textContent=t(`最好 ${score.score}`,`Best ${score.score}`);
+            chip.title=t('这份作业里保存过的跟读评分','Shadowing score saved with this entry');
+        });
+    }
+    function renderPersonalDeck(sentences,scroll=false){
+        if(!window.renderStudyDeck)return;
+        window.renderStudyDeck(sentences,{container:deck,badge:null,section:null});
+        decorateBestScores();
+        if(scroll)deck.scrollIntoView({behavior:'smooth',block:'start'});
+    }
+    function refreshAnalysisControls(){
+        const merged=mergedSentences();
+        $('homework-analyze').hidden=!!merged;
+        $('homework-analyze-refresh').hidden=!merged;
+        if(!entry?.french){$('homework-analyze').hidden=true;$('homework-analyze-refresh').hidden=true;analysisStatus('');return;}
+        if(merged){
+            const saved=(entry.scores||[]).length;
+            analysisStatus(t(`拆解已就绪 · ${merged.length} 句 · 点词听发音、勾选连读、下滑跟读打分。`+(saved?`已保存 ${saved} 次评分。`:''),
+                `Breakdown ready · ${merged.length} sentence(s). Tap words to hear them, tick several to read them in order, shadow below.`+(saved?` ${saved} score(s) saved.`:'')));
+        }else{
+            const done=chunkCount();
+            $('homework-analyze').textContent=done?t('继续拆解','Continue breakdown'):t('生成逐句拆解','Build the breakdown');
+            analysisStatus(done?t(`已拆解 ${done} 小节，点「继续拆解」补全。`,`${done} piece(s) done — continue to finish.`)
+                :t('生成后和「拆解与复述」页一样：点词读音、多选连读、逐句讲解、跟读打分，评分会存进这份作业。',
+                   'Once built: tap words to hear them, tick sentences to read in order, sentence-by-sentence notes, and shadowing scores saved with this entry.'));
+        }
+    }
+    function syncAnalysis(){
+        window.FrenchStudy?.stopAudio?.();
+        deck.innerHTML='';
+        $('homework-analyze-cancel').hidden=!analysisRun;
+        refreshAnalysisControls();
+        const merged=mergedSentences();
+        if(merged)renderPersonalDeck(merged);
+    }
+    async function requestChunk(jid,part,chunk,force,signal){
+        const response=await fetch(`/api/homework/${jid}/analyze`,{method:'POST',signal,
+            headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+            body:JSON.stringify({part,chunk,force:!!force})});
+        const data=await response.json();
+        if(!response.ok)throw Error(typeof data.detail==='string'?data.detail:data.detail?.message||t('拆解暂时失败，请重试','Breakdown failed; please retry'));
+        return data;
+    }
+    async function analyzeCurrentPart(force=false){
+        if(analysisRun||busy||!entry?.french)return;
+        const jid=entry.id,part=selectedPart,key=jid+':'+part;
+        const local=force?{chunks:{},total:0}:(chunksByPart.get(key)||{chunks:{},total:0});
+        chunksByPart.set(key,local);
+        const controller=new AbortController();analysisRun=controller;
+        const aborted=()=>controller.signal.aborted;
+        $('homework-analyze-cancel').hidden=false;$('homework-analyze').disabled=true;$('homework-analyze').hidden=true;
+        const tick=()=>{const done=Object.keys(local.chunks).length;analysisStatus(t(`正在逐句拆解 ${done}/${local.total||'…'} 小节…（每节约 30 秒，已完成的会缓存）`,`Building the breakdown: ${done}/${local.total||'…'} piece(s)… (~30 s each, progress is cached)`));};
+        try{
+            if(force||!local.chunks['0']){
+                const first=await requestChunk(jid,part,0,force,controller.signal);
+                local.chunks['0']=first.sentences;local.total=first.chunks;tick();
+            }
+            const missing=[];
+            for(let i=1;i<local.total;i++)if(!local.chunks[String(i)])missing.push(i);
+            let next=0;
+            const worker=async()=>{while(next<missing.length&&!aborted()){const index=missing[next++];const data=await requestChunk(jid,part,index,false,controller.signal);local.chunks[String(index)]=data.sentences;local.total=data.chunks;tick();}};
+            await Promise.all([worker(),worker()]);
+            if(aborted()){analysisStatus(t('已停止，进度已缓存，点「继续拆解」接着来。','Stopped; progress is cached — continue anytime.'));return;}
+            const merged=mergedSentences();
+            if(merged&&entry?.id===jid&&selectedPart===part){renderPersonalDeck(merged,true);refreshAnalysisControls();}
+        }catch(e){
+            if(e.name==='AbortError'||aborted())analysisStatus(t('已停止，进度已缓存，点「继续拆解」接着来。','Stopped; progress is cached — continue anytime.'));
+            else analysisStatus(`${t('拆解失败：','Breakdown failed: ')}${e.message}`);
+        }finally{
+            if(analysisRun===controller)analysisRun=null;
+            $('homework-analyze-cancel').hidden=true;$('homework-analyze').disabled=false;
+            if(entry?.id===jid&&selectedPart===part)refreshAnalysisControls();
+        }
+    }
+    $('homework-analyze').onclick=()=>analyzeCurrentPart(false);
+    $('homework-analyze-refresh').onclick=()=>analyzeCurrentPart(true);
+    $('homework-analyze-cancel').onclick=()=>{analysisRun?.abort();};
+    document.addEventListener('french:score',e=>{
+        if(!entry||!e.detail)return;
+        const {sentence,score,accuracy,completeness}=e.detail||{};
+        if(!sentence||typeof score!=='number')return;
+        const jid=entry.id,part=selectedPart;
+        api(`/api/homework/${jid}/scores`,{part,sentence:sentence.slice(0,400),score,accuracy,completeness}).then(()=>{
+            if(!entry||entry.id!==jid)return;
+            (entry.scores=entry.scores||[]).push({part,sentence,score,accuracy,completeness});
+            decorateBestScores();
+        }).catch(()=>{});
     });
     $('homework-expand').onclick=()=>run($('homework-expand'),()=>prepare(true));
     $('homework-signin').onclick=()=>{location.href='/study?mode=personal&login=1&next='+encodeURIComponent('/study?mode=personal');};
@@ -174,7 +296,7 @@
         s.tick=setInterval(()=>{
             const now=performance.now(),delta=Math.min(0.25,(now-s.prior)/1000);s.prior=now;
             analyser.getByteTimeDomainData(values);const rms=Math.sqrt(values.reduce((sum,v)=>sum+((v-128)/128)**2,0)/values.length);
-            const playerActive=[...document.querySelectorAll('audio')].some(a=>!a.paused),visible=!document.hidden&&!host.hidden;
+            const playerActive=[...document.querySelectorAll('audio')].some(a=>!a.paused)||Boolean(window.FrenchAudioState&&window.FrenchAudioState.playing),visible=!document.hidden&&!host.hidden;
             if(visible&&!playerActive&&rms>0.025)s.lastVoice=now;
             if(visible&&!playerActive&&now-s.lastVoice<650){s.pending+=delta;s.estimated+=delta;}
             $('homework-clock').textContent=t(`开口活动估算 ${Math.floor(s.estimated/60)} 分 ${Math.floor(s.estimated%60)} 秒`,`Estimated activity: ${Math.floor(s.estimated/60)}m ${Math.floor(s.estimated%60)}s`);
@@ -197,6 +319,7 @@
     window.addEventListener('pagehide',()=>{for(const state of mediaState.values())if(state.url)URL.revokeObjectURL(state.url);clearTimeout(recordStopTimer);releaseStream(recordStream);if(practiceState){clearInterval(practiceState.tick);clearInterval(practiceState.flush);releaseStream(practiceState.stream);practiceState.context.close();}});
     window.PersonalPractice={async leave(){
         if(recording||Object.keys(pending).length){status(t('请先停止并保存录音，再切换学习方式。','Stop and save your recording before switching.'));return false;}
+        if(analysisRun){analysisRun.abort();analysisRun=null;}
         await stopPractice();return true;
     }};
     let initialized=false;
@@ -204,7 +327,9 @@
         if(initialized||window.StudyModes?.current!=='personal')return;initialized=true;
         if(!token){$('homework-login').hidden=false;return;}
         $('homework-workspace').hidden=false;$('homework-native').value=localStorage.getItem(key+'.draft')||'';
-        history().then(entries=>{const saved=localStorage.getItem(key+'.current');const chosen=entries.find(e=>e.id===saved)||entries[0];if(chosen)render(chosen);}).catch(e=>status(e.message));
+        history().then(async entries=>{const saved=localStorage.getItem(key+'.current');const chosen=entries.find(e=>e.id===saved)||entries[0];if(!chosen)return;
+            // The list stays light; the full entry (with cached breakdowns and scores) comes on open.
+            try{render(await api('/api/homework/'+chosen.id));}catch(_){render(chosen);}}).catch(e=>status(e.message));
     }
     document.addEventListener('study:modechange',initialize);initialize();
 })();

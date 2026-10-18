@@ -3276,6 +3276,93 @@ async def homework_prepare(journal_id: str,req: HomeworkPrepareRequest,authoriza
         raise HTTPException(503,'生成暂时失败，已保存的原文和法语不会丢失，请重试 / Preparation failed; your text is saved. Please retry')
 
 
+# The study page sends one request per short chunk (thinking models need ~30 s per
+# sentence, and the tunnel stops at 100 s). Personal parts are split the same way.
+_HOMEWORK_SENTENCE_END = re.compile(r'[.!?…]+[»”")]?(?=\s|$)')
+
+
+def _homework_analysis_chunks(text: str) -> list[str]:
+    sentences = []
+    start = 0
+    for match in _HOMEWORK_SENTENCE_END.finditer(text):
+        piece = text[start:match.end()].strip()
+        if piece:
+            sentences.append(piece)
+        start = match.end()
+    tail = text[start:].strip()
+    if tail:
+        sentences.append(tail)
+    if not sentences:
+        sentences = [text.strip()] if text.strip() else []
+    chunks: list[str] = []
+    for sentence in sentences:
+        # Same rule as the study page: very short neighbours share one chunk.
+        if chunks and len(chunks[-1]) + len(sentence) < 90:
+            chunks[-1] = chunks[-1] + '\n' + sentence
+        else:
+            chunks.append(sentence)
+    return chunks
+
+
+class HomeworkAnalyzeRequest(BaseModel):
+    part: int = Field(default=-1, ge=-1, le=19)
+    chunk: int = Field(default=0, ge=0, le=199)
+    force: bool = False
+
+
+@app.post('/api/homework/{journal_id}/analyze')
+async def homework_analyze(journal_id: str, req: HomeworkAnalyzeRequest, authorization: str | None = Header(default=None)):
+    user_id = _require_user_id(authorization)
+    try:
+        entry = journal.get(user_id, journal_id)
+    except KeyError:
+        raise HTTPException(404, '作业不存在 / Homework not found')
+    parts = entry.get('parts') or []
+    if req.part >= len(parts) or (req.part == -1 and not entry['french']):
+        raise HTTPException(404, '段落不存在 / Part not found')
+    text = (parts[req.part]['french'] if req.part >= 0 else entry['french']).strip()
+    if not text:
+        raise HTTPException(422, '请先生成法语文本 / Prepare the French text first')
+    chunks = _homework_analysis_chunks(text)
+    if req.chunk >= len(chunks):
+        raise HTTPException(404, '分段不存在 / Chunk not found')
+    if req.force and req.chunk == 0:
+        entry = journal.clear_analysis(user_id, journal_id, req.part)
+    cached = journal.get_analysis_chunk(entry, req.part, req.chunk)
+    if cached is not None:
+        return {'sentences': cached, 'cached': True, 'chunks': len(chunks), 'done': journal.analysis_done_chunks(entry, req.part)}
+    token = _authorization_token(authorization)
+    try:
+        result = await request_french_analysis(AnalyzeRequest(text=chunks[req.chunk]), token)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning('Homework analysis failed: %s', type(exc).__name__)
+        raise HTTPException(503, '拆解暂时失败，请重试 / Breakdown failed; please retry')
+    sentences = result.get('sentences') or []
+    if not sentences:
+        raise HTTPException(503, '拆解暂时失败，请重试 / Breakdown failed; please retry')
+    entry = journal.save_analysis(user_id, journal_id, req.part, req.chunk, sentences, len(chunks))
+    return {'sentences': sentences, 'cached': False, 'chunks': len(chunks), 'done': journal.analysis_done_chunks(entry, req.part)}
+
+
+class HomeworkScoreRequest(BaseModel):
+    part: int = Field(default=-1, ge=-1, le=19)
+    sentence: str = Field(min_length=1, max_length=400)
+    score: int = Field(ge=0, le=100)
+    accuracy: int = Field(ge=0, le=100)
+    completeness: int = Field(ge=0, le=100)
+
+
+@app.post('/api/homework/{journal_id}/scores')
+def homework_score(journal_id: str, req: HomeworkScoreRequest, authorization: str | None = Header(default=None)):
+    # Shadowing scores from the inline cards are kept with the entry: practice evidence.
+    try:
+        return journal.add_score(_require_user_id(authorization), journal_id, req.part, req.sentence.strip(), req.score, req.accuracy, req.completeness)
+    except KeyError:
+        raise HTTPException(404, '作业不存在 / Homework not found')
+
+
 @app.post('/api/homework/{journal_id}/recordings')
 async def homework_recording(journal_id: str, request: Request, kind: Literal['first','final']=Query()):
     user_id=_require_user_id(request.headers.get('authorization'),request)

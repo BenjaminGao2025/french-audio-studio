@@ -18,10 +18,16 @@
                 <div id="homework-french" class="homework-french" lang="fr"></div>
                 <audio id="homework-model" controls preload="metadata" style="width:100%"></audio>
                 <p id="homework-audio-status" class="muted" role="status" aria-live="polite"></p>
-                <div class="coach-actions"><button id="homework-audio-retry" class="btn btn-secondary" hidden>重新加载范读 / Retry audio</button><button id="homework-prepare" class="btn btn-secondary">继续准备范读 / Prepare audio</button><button id="homework-expand" class="btn btn-secondary" hidden>按原文补全并分段 / Expand all my ideas</button><button id="homework-study" class="btn btn-secondary">逐句拆解这段话 / Study this part</button><button id="homework-hide" class="btn btn-secondary">隐藏法语文本 / Hide the text</button></div>
+                <div class="coach-actions"><button id="homework-audio-retry" class="btn btn-secondary" hidden>重新加载范读 / Retry audio</button><button id="homework-prepare" class="btn btn-secondary">继续准备范读 / Prepare audio</button><button id="homework-expand" class="btn btn-secondary" hidden>按原文补全并分段 / Expand all my ideas</button><button id="homework-hide" class="btn btn-secondary">隐藏法语文本 / Hide the text</button></div>
                 <p class="muted">先录一遍，再逐句跟读、朗读，最后试着脱稿说。整段录音请用同一份完整文本，方便比较。 / Record once, repeat sentence by sentence, then try without the text. Use the same full text for both comparison recordings.</p>
                 <div class="coach-actions"><button id="homework-practice" class="btn btn-secondary">开始开口练习 / Practise aloud</button><span id="homework-clock" aria-live="polite"></span></div>
-                <details class="personal-help"><summary>怎么练、怎么计时 / Practice and timing</summary><p class="muted">每次只练一句，再逐渐连起来。麦克风活动用于估算开口时间；后台、切换到逐句学习或播放音频时暂停，可能受背景声音影响。 / Start with one sentence, then connect them. Microphone activity estimates speaking time; it pauses when hidden, studying the text or playing audio. Background noise can affect it.</p><a href="https://1000h.org/training-tasks/kick-off.html" target="_blank" rel="noopener">1000H 方法来源 / Method source</a></details>
+                <details class="personal-help"><summary>怎么练、怎么计时 / Practice and timing</summary><p class="muted">每次只练一句，再逐渐连起来。麦克风活动用于估算开口时间；后台或播放音频时暂停，可能受背景声音影响。 / Start with one sentence, then connect them. Microphone activity estimates speaking time; it pauses when hidden or playing audio. Background noise can affect it.</p><a href="https://1000h.org/training-tasks/kick-off.html" target="_blank" rel="noopener">1000H 方法来源 / Method source</a></details>
+            </section>
+            <section class="editor-panel" id="homework-analysis">
+                <div class="personal-heading"><h2>逐句精析与跟读 / Sentence breakdown</h2><p class="muted">点任意词听发音，勾选多句连读，逐句看讲解、跟读打分；评分会记进这份作业。 / Tap any word to hear it, tick sentences to read them in order, see per-sentence notes, shadow with scores saved here.</p></div>
+                <div class="coach-actions"><button id="homework-analyze" class="btn btn-primary" hidden>生成逐句拆解 / Build the breakdown</button><button id="homework-analyze-cancel" class="btn btn-secondary" hidden>停止 / Stop</button><button id="homework-analyze-refresh" class="btn btn-secondary" hidden>重新拆解 / Rebuild</button></div>
+                <p id="homework-analysis-status" class="muted" role="status" aria-live="polite"></p>
+                <div id="homework-deck" class="sentences-container"></div>
             </section>
             <section class="editor-panel">
                 <h2>留下进步 / Keep your progress</h2>

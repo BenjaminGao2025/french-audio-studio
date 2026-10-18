@@ -39,10 +39,18 @@ def init(c):
       journal_id TEXT NOT NULL, beat_id TEXT NOT NULL, seconds INTEGER NOT NULL,
       created_at TEXT NOT NULL, PRIMARY KEY(journal_id,beat_id)
     );
+    CREATE TABLE IF NOT EXISTS journal_scores (
+      id TEXT PRIMARY KEY, journal_id TEXT NOT NULL, part INTEGER NOT NULL, sentence TEXT NOT NULL,
+      score INTEGER NOT NULL, accuracy INTEGER NOT NULL, completeness INTEGER NOT NULL, created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_journal_scores_entry ON journal_scores(journal_id, created_at);
     ''')
     columns={r[1] for r in c.execute('PRAGMA table_info(speaking_journals)')}
     if 'parts_json' not in columns:
         c.execute("ALTER TABLE speaking_journals ADD COLUMN parts_json TEXT NOT NULL DEFAULT '[]'")
+    if 'analyses_json' not in columns:
+        # Per-part sentence breakdowns (the same cards as the study page), cached so the LLM runs once.
+        c.execute("ALTER TABLE speaking_journals ADD COLUMN analyses_json TEXT NOT NULL DEFAULT '{}'")
 
 
 def create(user_id,native_text):
@@ -61,10 +69,13 @@ def get(user_id,journal_id):
         init(c);row=c.execute('SELECT * FROM speaking_journals WHERE id=? AND user_id=?',(journal_id,user_id)).fetchone()
         if not row:raise KeyError(journal_id)
         recordings=c.execute('SELECT id,kind,duration,created_at FROM journal_recordings WHERE journal_id=? ORDER BY created_at',(journal_id,)).fetchall()
+        scores=c.execute('SELECT id,part,sentence,score,accuracy,completeness,created_at FROM journal_scores WHERE journal_id=? ORDER BY created_at DESC LIMIT 400',(journal_id,)).fetchall()
     d=dict(row);d.pop('reference_file');d['recordings']=[dict(x, url=f'/api/homework/{journal_id}/recordings/{x["id"]}') for x in recordings]
     d['reference_url']=f'/api/homework/{journal_id}/reference' if row['reference_file'] else ''
     d['complete']=row['status']=='complete'
     d['parts']=json.loads(d.pop('parts_json'))
+    d['analyses']=json.loads(d.pop('analyses_json') or '{}')
+    d['scores']=[dict(x) for x in scores]
     d['can_expand']=not d['parts'] and bool(d['french']) and not recordings
     return d
 
@@ -72,17 +83,76 @@ def get(user_id,journal_id):
 def list_entries(user_id):
     with auth_db.connect() as c:
         init(c);ids=[x[0] for x in c.execute('SELECT id FROM speaking_journals WHERE user_id=? ORDER BY created_at DESC LIMIT 30',(user_id,))]
-    return [get(user_id,i) for i in ids]
+    entries=[]
+    for i in ids:
+        e=get(user_id,i)
+        # The history list stays light; the full entry is fetched when it is opened.
+        e['analyses']={};e['scores']=[]
+        entries.append(e)
+    return entries
 
 
 def prepared(user_id,journal_id,french,reference_file,parts=None):
     get(user_id,journal_id)
+    parts_json=json.dumps(parts or [],ensure_ascii=False)
     with auth_db.connect() as c:
         init(c);c.execute('BEGIN IMMEDIATE')
         if c.execute('SELECT 1 FROM journal_recordings WHERE journal_id=?',(journal_id,)).fetchone():
             raise ValueError('已有录音的文本会保留，请另建一份作业 / Preserve recorded text; create another entry')
-        c.execute("UPDATE speaking_journals SET french=?, reference_file=?, parts_json=?, status='ready',updated_at=? WHERE id=? AND user_id=?",(french,Path(reference_file).name if reference_file else '',json.dumps(parts or [],ensure_ascii=False),coach.now().isoformat(),journal_id,user_id))
+        current=c.execute('SELECT french,parts_json FROM speaking_journals WHERE id=? AND user_id=?',(journal_id,user_id)).fetchone()
+        changed=not current or current['french']!=french or current['parts_json']!=parts_json
+        stamp=coach.now().isoformat()
+        if changed:
+            # New text: the cached sentence breakdowns belong to the old text.
+            c.execute("UPDATE speaking_journals SET french=?, reference_file=?, parts_json=?, analyses_json='{}', status='ready',updated_at=? WHERE id=? AND user_id=?",(french,Path(reference_file).name if reference_file else '',parts_json,stamp,journal_id,user_id))
+        else:
+            c.execute("UPDATE speaking_journals SET french=?, reference_file=?, parts_json=?, status='ready',updated_at=? WHERE id=? AND user_id=?",(french,Path(reference_file).name if reference_file else '',parts_json,stamp,journal_id,user_id))
     return get(user_id,journal_id)
+
+
+def get_analysis_chunk(entry,part,chunk):
+    slot=(entry.get('analyses') or {}).get(str(part)) or {}
+    chunks=slot.get('chunks') or {}
+    return chunks.get(str(chunk))
+
+
+def analysis_done_chunks(entry,part):
+    slot=(entry.get('analyses') or {}).get(str(part)) or {}
+    return sorted(int(k) for k in (slot.get('chunks') or {}) if str(k).isdigit())
+
+
+def save_analysis(user_id,journal_id,part,chunk,sentences,total):
+    get(user_id,journal_id)
+    with auth_db.connect() as c:
+        init(c);c.execute('BEGIN IMMEDIATE')
+        row=c.execute('SELECT analyses_json FROM speaking_journals WHERE id=? AND user_id=?',(journal_id,user_id)).fetchone()
+        data=json.loads(row[0] or '{}')
+        slot=data.setdefault(str(part),{'chunks':{},'total':total})
+        slot['total']=total;slot['chunks'][str(chunk)]=sentences
+        c.execute('UPDATE speaking_journals SET analyses_json=?,updated_at=? WHERE id=? AND user_id=?',(json.dumps(data,ensure_ascii=False),coach.now().isoformat(),journal_id,user_id))
+    return get(user_id,journal_id)
+
+
+def clear_analysis(user_id,journal_id,part):
+    get(user_id,journal_id)
+    with auth_db.connect() as c:
+        init(c);c.execute('BEGIN IMMEDIATE')
+        row=c.execute('SELECT analyses_json FROM speaking_journals WHERE id=? AND user_id=?',(journal_id,user_id)).fetchone()
+        data=json.loads(row[0] or '{}')
+        if str(part) in data:
+            data.pop(str(part))
+            c.execute('UPDATE speaking_journals SET analyses_json=?,updated_at=? WHERE id=? AND user_id=?',(json.dumps(data,ensure_ascii=False),coach.now().isoformat(),journal_id,user_id))
+    return get(user_id,journal_id)
+
+
+def add_score(user_id,journal_id,part,sentence,score,accuracy,completeness):
+    get(user_id,journal_id)
+    stamp=coach.now().isoformat()
+    with auth_db.connect() as c:
+        init(c);c.execute('BEGIN IMMEDIATE')
+        c.execute('INSERT INTO journal_scores VALUES(?,?,?,?,?,?,?,?)',(uuid.uuid4().hex,journal_id,int(part),sentence[:400],int(score),int(accuracy),int(completeness),stamp))
+        c.execute('UPDATE speaking_journals SET updated_at=? WHERE id=?',(stamp,journal_id))
+    return {'part':int(part),'sentence':sentence[:400],'score':int(score),'accuracy':int(accuracy),'completeness':int(completeness),'created_at':stamp}
 
 
 def attach_reference(user_id,journal_id,reference_file,expected_text=None):
@@ -172,6 +242,10 @@ def archive(user_id,journal_id):
         z.writestr('reflection.txt',entry['reflection'])
         z.writestr('parts.json',json.dumps(entry['parts'],ensure_ascii=False,indent=2))
         z.writestr('practice.json',json.dumps({'practice_seconds':entry['practice_seconds'],'recalled_self_report':bool(entry['recalled']),'recordings':entry['recordings']},ensure_ascii=False,indent=2))
+        if entry['scores']:
+            z.writestr('scores.json',json.dumps(entry['scores'],ensure_ascii=False,indent=2))
+        if entry['analyses']:
+            z.writestr('analysis.json',json.dumps(entry['analyses'],ensure_ascii=False,indent=2))
         ref=reference_path(user_id,journal_id)
         if ref.exists():z.write(ref,'model.mp3')
         for i,r in enumerate(entry['recordings']):

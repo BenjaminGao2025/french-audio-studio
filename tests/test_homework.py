@@ -24,6 +24,11 @@ def audio_bytes(seconds=2, sample=100):
     return buf.getvalue()
 
 
+def _zip_names(content):
+    with zipfile.ZipFile(io.BytesIO(content)) as z:
+        return z.namelist()
+
+
 class HomeworkTests(unittest.TestCase):
     def setUp(self):
         self.client=TestClient(tts_service.app)
@@ -110,6 +115,54 @@ class HomeworkTests(unittest.TestCase):
         self.assertIn('THEIR OWN ideas',chat.call_args.args[1]['messages'][0]['content'])
         self.assertEqual(self.client.post(f'/api/homework/{entry["id"]}/prepare',headers=self.auth,json={}).status_code,200)
         self.assertEqual(chat.call_count,1)
+
+    @patch('tts_service.request_french_analysis',new_callable=AsyncMock)
+    def test_analysis_is_cached_per_part_and_chunked(self,analysis):
+        entry=journal.create(self.uid,'我在图书馆学习法语。')
+        french_a='Je vais à la bibliothèque municipale pour emprunter des livres français.'
+        french_b='Ensuite je reste chez moi pour lire et réviser mes leçons tranquillement.'
+        parts=[{'source':entry['native_text'],'french':french_a+'\n'+french_b}]
+        journal.prepared(self.uid,entry['id'],french_a+'\n'+french_b,self.ref.name,parts)
+        analysis.return_value={'sentences':[{'sentence':french_a,'translation_en':'I go to the library.','translation_zh':'我去图书馆。'}]}
+        path=f'/api/homework/{entry["id"]}/analyze'
+        self.assertEqual(self.client.post(path,json={'part':0,'chunk':0}).status_code,401)
+        other=auth_db.register_user(f'other-{uuid.uuid4().hex}@example.com','password123')
+        self.assertEqual(self.client.post(path,headers={'Authorization':'Bearer '+other['token']},json={'part':0,'chunk':0}).status_code,404)
+        r=self.client.post(path,headers=self.auth,json={'part':0,'chunk':0})
+        self.assertEqual(r.status_code,200,r.text)
+        body=r.json();self.assertEqual(body['chunks'],2);self.assertFalse(body['cached'])
+        self.assertEqual(body['done'],[0]);self.assertEqual(body['sentences'][0]['sentence'],french_a)
+        self.assertEqual(analysis.call_count,1)
+        r=self.client.post(path,headers=self.auth,json={'part':0,'chunk':0})
+        self.assertEqual(r.json()['cached'],True);self.assertEqual(analysis.call_count,1)
+        analysis.return_value={'sentences':[{'sentence':french_b,'translation_en':'Then I stay home.','translation_zh':'然后我待在家。'}]}
+        r=self.client.post(path,headers=self.auth,json={'part':0,'chunk':1})
+        self.assertEqual(r.json()['done'],[0,1])
+        stored=journal.get(self.uid,entry['id'])['analyses']['0']
+        self.assertEqual(set(stored['chunks']),{'0','1'})
+        self.assertEqual(stored['total'],2)
+        self.assertEqual(self.client.post(path,headers=self.auth,json={'part':0,'chunk':2}).status_code,404)
+        self.assertEqual(self.client.post(path,headers=self.auth,json={'part':1,'chunk':0}).status_code,404)
+        self.assertIn('analysis.json',_zip_names(self.client.get(f'/api/homework/{entry["id"]}/archive',headers=self.auth).content))
+        # A new text drops stale breakdowns: they belong to the old text.
+        journal.prepared(self.uid,entry['id'],'Une autre phrase.','')
+        self.assertEqual(journal.get(self.uid,entry['id'])['analyses'],{})
+
+    def test_shadowing_scores_are_saved_and_listed_lightly(self):
+        path=f'/api/homework/{self.entry["id"]}/scores'
+        payload={'part':-1,'sentence':'J’habite à Vancouver.','score':82,'accuracy':80,'completeness':90}
+        self.assertEqual(self.client.post(path,json=payload).status_code,401)
+        r=self.client.post(path,headers=self.auth,json=payload)
+        self.assertEqual(r.status_code,200,r.text)
+        entry=journal.get(self.uid,self.entry['id'])
+        self.assertEqual(entry['scores'][0]['score'],82)
+        self.assertEqual(entry['scores'][0]['sentence'],'J’habite à Vancouver.')
+        listed=[e for e in self.client.get('/api/homework',headers=self.auth).json()['entries'] if e['id']==self.entry['id']][0]
+        self.assertEqual(listed['scores'],[])
+        self.assertEqual(listed['analyses'],{})
+        with zipfile.ZipFile(io.BytesIO(journal.archive(self.uid,self.entry['id'])[0])) as z:
+            self.assertIn('scores.json',z.namelist())
+            self.assertEqual(json.loads(z.read('scores.json'))[0]['score'],82)
 
     def test_old_page_redirects_into_study(self):
         r=self.client.get('/homework',follow_redirects=False)
