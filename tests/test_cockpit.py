@@ -51,23 +51,23 @@ class TodayPlanTests(unittest.TestCase):
     def setUp(self):
         self.user_id, _ = _new_user()
 
-    def test_monday_plan_follows_the_template_minus_disabled_kinds(self):
+    def test_monday_plan_follows_the_enabled_template(self):
         plan = cockpit.today(self.user_id, PDT, now=_at(MON))
         self.assertEqual(plan["day"], MON)
         self.assertFalse(plan["minimal"])
-        self.assertEqual(_kinds(plan), ["warmup", "journal", "shadowing", "writing", "minimal"])
-        self.assertEqual([b["position"] for b in plan["blocks"]], [1, 2, 3, 4, 5])
+        self.assertEqual(_kinds(plan), ["warmup", "journal", "shadowing", "listening", "writing", "minimal"])
+        self.assertEqual([b["position"] for b in plan["blocks"]], [1, 2, 3, 4, 5, 6])
         self.assertEqual(
             [b["route"] for b in plan["blocks"]],
-            ["/cards", "/journal", "/shadow", "/writing", "/wrapup"],
+            ["/cards", "/journal", "/shadow", "/listening", "/writing", "/wrapup"],
         )
-        self.assertEqual([b["planned_min"] for b in plan["blocks"]], [10, 30, 10, 40, 5])
+        self.assertEqual([b["planned_min"] for b in plan["blocks"]], [10, 30, 10, 70, 40, 5])
         self.assertTrue(all(b["status"] == "planned" and b["actual_sec"] == 0 for b in plan["blocks"]))
         self.assertEqual(plan["blocks"][0]["start_time"], "09:00")
         self.assertEqual(plan["blocks"][0]["lane"], "review")
         self.assertEqual(plan["blocks"][1]["lane"], "speaking")
         self.assertEqual(plan["blocks"][2]["lane"], "speaking")
-        self.assertEqual(plan["blocks"][3]["lane"], "writing")
+        self.assertEqual(plan["blocks"][3]["lane"], "listening")
         self.assertEqual(plan["blocks"][0]["material_ids"], [])
 
     def test_header_fields_are_honest(self):
@@ -81,23 +81,23 @@ class TodayPlanTests(unittest.TestCase):
 
     def test_other_weekdays(self):
         tue = cockpit.today(self.user_id, PDT, now=_at(TUE))
-        self.assertEqual(_kinds(tue), ["warmup", "journal", "shadowing", "intensive", "minimal"])
+        self.assertEqual(_kinds(tue), ["warmup", "journal", "shadowing", "reading", "intensive", "minimal"])
         self.assertEqual(tue["blocks"][3]["route"], "/reading")
         wed = cockpit.today(self.user_id, PDT, now=_at(WED))
-        self.assertEqual(_kinds(wed), ["warmup", "journal", "shadowing", "writing", "intensive", "minimal"])
-        self.assertEqual([b["planned_min"] for b in wed["blocks"][3:5]], [20, 20])
-        self.assertEqual([b["start_time"] for b in wed["blocks"][3:5]], ["11:15", "11:35"])
+        self.assertEqual(_kinds(wed), ["warmup", "journal", "shadowing", "listening", "writing", "intensive", "minimal"])
+        self.assertEqual([b["planned_min"] for b in wed["blocks"][4:6]], [20, 20])
+        self.assertEqual([b["start_time"] for b in wed["blocks"][4:6]], ["11:15", "11:35"])
         thu = cockpit.today(self.user_id, PDT, now=_at(THU))
-        self.assertEqual(_kinds(thu), ["warmup", "journal", "shadowing", "shadowing", "minimal"])
-        self.assertEqual([b["route"] for b in thu["blocks"][2:4]], ["/shadow", "/shadow"])
-        self.assertEqual([b["planned_min"] for b in thu["blocks"][2:4]], [10, 40])
+        self.assertEqual(_kinds(thu), ["warmup", "journal", "shadowing", "reading", "shadowing", "minimal"])
+        self.assertEqual([b["route"] for b in thu["blocks"][2:5]], ["/shadow", "/reading", "/shadow"])
+        self.assertEqual([b["planned_min"] for b in thu["blocks"][2:5]], [10, 70, 40])
         fri = cockpit.today(self.user_id, PDT, now=_at(FRI))
-        self.assertEqual(_kinds(fri), ["warmup", "journal", "shadowing", "intensive", "minimal"])
-        self.assertEqual(fri["blocks"][3]["planned_min"], 40)
+        self.assertEqual(_kinds(fri), ["warmup", "journal", "shadowing", "listening", "intensive", "minimal"])
+        self.assertEqual(fri["blocks"][4]["planned_min"], 40)
 
     def test_tuesday_and_thursday_alternate_intensive_reading_and_shadowing(self):
-        tue = cockpit.today(self.user_id, PDT, now=_at(TUE))["blocks"][3]
-        thu = cockpit.today(self.user_id, PDT, now=_at(THU))["blocks"][3]
+        tue = cockpit.today(self.user_id, PDT, now=_at(TUE))["blocks"][4]
+        thu = cockpit.today(self.user_id, PDT, now=_at(THU))["blocks"][4]
         self.assertEqual(
             (tue["title"], tue["lane"], tue["planned_min"], tue["start_time"]),
             ("Main block 2 · Intensive reading (sentence breakdown)", "reading", 40, "11:15"),
@@ -114,8 +114,7 @@ class TodayPlanTests(unittest.TestCase):
 
     def test_the_template_adds_up_to_the_16_hour_week(self):
         # PRD appendix C: 160 minutes on a weekday, 120 on Saturday, 40 on Sunday, 960 in the week.
-        # The 5-minute wrap-up is not study time. Listening and reading blocks are in the template
-        # even though their kinds are not enabled yet (see ENABLED_KINDS).
+        # The 5-minute wrap-up is not study time; all study kinds are enabled.
         by_lane: dict[str, int] = {}
         for weekday, slots in cockpit.WEEK_TEMPLATE.items():
             study = [s for s in slots if s.slot != "wrapup"]
@@ -160,7 +159,7 @@ class TodayPlanTests(unittest.TestCase):
                     )
         self.assertIn("journal", cockpit.ENABLED_KINDS)
         self.assertIn("speaking", cockpit.ENABLED_KINDS)
-        for kind in ("listening", "reading", "checkpoint"):
+        for kind in ("checkpoint",):
             self.assertNotIn(kind, cockpit.ENABLED_KINDS)
 
     def test_loading_twice_does_not_duplicate_the_plan(self):
@@ -171,7 +170,7 @@ class TodayPlanTests(unittest.TestCase):
             count = conn.execute(
                 "SELECT COUNT(*) FROM day_blocks WHERE user_id = ? AND day = ?", (self.user_id, MON)
             ).fetchone()[0]
-        self.assertEqual(count, 5)
+        self.assertEqual(count, 6)
 
     def test_simultaneous_loads_create_one_plan(self):
         errors, results = [], []
@@ -189,7 +188,7 @@ class TodayPlanTests(unittest.TestCase):
             t.join()
         self.assertEqual(errors, [])
         self.assertEqual(len({tuple(ids) for ids in results}), 1)
-        self.assertEqual(len(results[0]), 5)
+        self.assertEqual(len(results[0]), 6)
 
     def test_day_boundary_follows_the_timezone_offset(self):
         # The same instant is Monday evening in Vancouver and Tuesday morning in Paris.
@@ -210,7 +209,7 @@ class TodayPlanTests(unittest.TestCase):
     def test_maintenance_period_defaults_to_the_minimal_day(self):
         plan = cockpit.today(self.user_id, 0, now=datetime.datetime(2027, 6, 15, 12, 0, tzinfo=UTC))
         self.assertTrue(plan["minimal"])
-        self.assertEqual(_kinds(plan), ["review", "journal", "minimal"])
+        self.assertEqual(_kinds(plan), ["review", "listening", "journal", "minimal"])
         self.assertEqual(plan["phase"]["id"], "maintenance")
         self.assertEqual(plan["phase"]["week_target_min"], game.MAINTENANCE_WEEK_TARGET_MIN)
 
@@ -224,7 +223,7 @@ class TodayPlanTests(unittest.TestCase):
         _add_time(self.user_id, "car", 120, MON)  # input, not active
         _add_time(self.user_id, "review", 99, SAT)  # another day
         after = cockpit.today(self.user_id, PDT, now=_at(TUE))
-        self.assertEqual(after["yesterday"], {"blocks_done": 2, "blocks_total": 5, "active_minutes": 45})
+        self.assertEqual(after["yesterday"], {"blocks_done": 2, "blocks_total": 6, "active_minutes": 45})
 
     def test_first_day_has_an_empty_yesterday(self):
         plan = cockpit.today(self.user_id, PDT, now=_at(MON))
@@ -339,9 +338,9 @@ class MinimalDayTests(unittest.TestCase):
     def test_switching_on_replaces_the_planned_blocks(self):
         plan = cockpit.set_minimal(self.user_id, True, PDT, now=self.now)
         self.assertTrue(plan["minimal"])
-        self.assertEqual(_kinds(plan), ["review", "journal", "minimal"])
+        self.assertEqual(_kinds(plan), ["review", "listening", "journal", "minimal"])
         self.assertEqual(plan["blocks"][0]["title"], "Review 10 cards")
-        self.assertEqual(self._positions(), [1, 2, 3])
+        self.assertEqual(self._positions(), [1, 2, 3, 4])
 
     def test_switching_to_the_same_state_keeps_the_blocks(self):
         on = cockpit.set_minimal(self.user_id, True, PDT, now=self.now)
@@ -355,15 +354,15 @@ class MinimalDayTests(unittest.TestCase):
         warmup = self.plan["blocks"][0]
         cockpit.finish_block(self.user_id, warmup["id"])
         on = cockpit.set_minimal(self.user_id, True, PDT, now=self.now)
-        self.assertEqual(_kinds(on), ["warmup", "review", "journal", "minimal"])
+        self.assertEqual(_kinds(on), ["warmup", "review", "listening", "journal", "minimal"])
         off = cockpit.set_minimal(self.user_id, False, PDT, now=self.now)
-        self.assertEqual(_kinds(off), ["warmup", "journal", "shadowing", "writing", "minimal"])
+        self.assertEqual(_kinds(off), ["warmup", "journal", "shadowing", "listening", "writing", "minimal"])
         on_again = cockpit.set_minimal(self.user_id, True, PDT, now=self.now)
-        self.assertEqual(_kinds(on_again), ["warmup", "review", "journal", "minimal"])
+        self.assertEqual(_kinds(on_again), ["warmup", "review", "listening", "journal", "minimal"])
         for plan in (on, off, on_again):
             self.assertEqual(plan["blocks"][0]["id"], warmup["id"])
             self.assertEqual(plan["blocks"][0]["status"], "done")
-        self.assertEqual(self._positions(), [1, 2, 3, 4])
+        self.assertEqual(self._positions(), [1, 2, 3, 4, 5])
 
     def test_a_finished_wrapup_is_not_added_again(self):
         wrapup = self.plan["blocks"][-1]
@@ -382,7 +381,7 @@ class MinimalDayTests(unittest.TestCase):
     def test_switching_before_the_first_load_creates_the_plan(self):
         user, _ = _new_user()
         plan = cockpit.set_minimal(user, True, PDT, now=self.now)
-        self.assertEqual(_kinds(plan), ["review", "journal", "minimal"])
+        self.assertEqual(_kinds(plan), ["review", "listening", "journal", "minimal"])
 
     def test_the_choice_is_remembered_for_the_day(self):
         cockpit.set_minimal(self.user_id, True, PDT, now=self.now)
@@ -622,7 +621,7 @@ class RetiredCourseRowsTests(unittest.TestCase):
         block = next(b for b in plan["blocks"] if b["id"] == self._id("old-tue"))
         self.assertEqual((block["kind"], block["route"], block["lane"], block["status"]), ("intensive", "/reading", "reading", "active"))
         self.assertNotIn("course", _kinds(plan))
-        self.assertEqual(len(plan["blocks"]), 5)  # nothing was added or duplicated
+        self.assertEqual(len(plan["blocks"]), 6)  # nothing was added or duplicated
 
     def test_the_old_tutor_block_is_left_to_the_tutor_migration(self):
         cockpit.today(self.user_id, PDT, now=_at(MON))

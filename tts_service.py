@@ -31,6 +31,7 @@ import episodes
 import game
 import routers.app_shell
 import routers.auth
+import routers.comprehension
 import routers.cockpit
 import routers.game
 import routers.history
@@ -190,7 +191,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 # Account, history, SRS-data and game routes live in routers/. The AI-backed routes (transform,
 # analyze, episodes, write, speak, ...) stay in this module: tests patch tts_service._post_chat and
 # friends, and a handler only sees such a patch when it looks the name up here.
-for _routes in (routers.auth, routers.history, routers.srs, routers.game, routers.cockpit, routers.app_shell):
+for _routes in (routers.auth, routers.history, routers.srs, routers.game, routers.comprehension, routers.cockpit, routers.app_shell):
     app.include_router(_routes.router)
 
 
@@ -1242,10 +1243,10 @@ def _validate_voice(voice: str) -> str:
     return voice
 
 
-def _snippet_cached(text: str, voice: str) -> bool:
+def _snippet_cached(text: str, voice: str, rate: float = 1.0) -> bool:
     try:
         content = _normalized_text(text)
-        stamp = _safe_timestamp(None, text=content, voice=_validate_voice(voice))
+        stamp = _safe_timestamp(None, text=content, voice=_validate_voice(voice) if rate == 1 else f"{_validate_voice(voice)}@{rate:g}")
     except HTTPException:
         return False
     base = OUTPUT_DIR / f"TTS_{voice}_{stamp}"
@@ -1253,11 +1254,13 @@ def _snippet_cached(text: str, voice: str) -> bool:
 
 
 async def create_speech_files(
-    text: str, voice: str, timestamp: str | None = None
+    text: str, voice: str, timestamp: str | None = None, *, rate: float = 1.0
 ) -> tuple[str, str]:
     content = _normalized_text(text)
     selected_voice = _validate_voice(voice)
-    job_timestamp = _safe_timestamp(timestamp, text=content, voice=selected_voice)
+    if not .5 <= rate <= 1.5:
+        raise HTTPException(422, "Rate must be between 0.5 and 1.5")
+    job_timestamp = _safe_timestamp(timestamp, text=content, voice=selected_voice if rate == 1 else f"{selected_voice}@{rate:g}")
     safe_voice = selected_voice.replace("/", "_").replace("\\", "_")
     base_filename = f"TTS_{safe_voice}_{job_timestamp}"
     audio_filename = f"{base_filename}.mp3"
@@ -1271,7 +1274,8 @@ async def create_speech_files(
         tmp_suffix = f".{uuid.uuid4().hex[:8]}.part"
         tmp_audio = audio_path.with_name(audio_filename + tmp_suffix)
         tmp_srt = srt_path.with_name(srt_filename + tmp_suffix)
-        communicate = edge_tts.Communicate(content, selected_voice)
+        communicate = (edge_tts.Communicate(content, selected_voice) if rate == 1 else
+                       edge_tts.Communicate(content, selected_voice, rate=f"{round((rate - 1) * 100):+d}%"))
         submaker = edge_tts.SubMaker()
         try:
             with tmp_audio.open("wb") as audio_file:
@@ -2166,16 +2170,18 @@ async def generate_tts(
     voice: str = "fr-FR-DeniseNeural",
     format: Literal["mp3", "srt"] = "mp3",
     download: bool = False,
+    rate: float = Query(default=1.0, ge=.5, le=1.5),
 ):
     # <audio> cannot send an Authorization header. Same-origin cookie is the credential.
     # Anonymous calls used to be an open Edge-TTS proxy on the public site.
     user_id = _require_user_id(request.headers.get("authorization"), request)
     if len(text) > TTS_SNIPPET_MAX_CHARS:
         raise HTTPException(status_code=422, detail="文本过长，请使用音频工作台生成。")
-    if not _snippet_cached(text, voice):  # cache hits (prefetch, replays) are free
+    if not _snippet_cached(text, voice, rate):  # cache hits (prefetch, replays) are free
         _rate_limit(user_id, "speech")
     # Snippets are cached by (voice, text) hash, so the same URL always returns the same audio.
-    audio_filename, srt_filename = await create_speech_files(text, voice)
+    audio_filename, srt_filename = (await create_speech_files(text, voice) if rate == 1 else
+                                    await create_speech_files(text, voice, rate=rate))
     filename = srt_filename if format == "srt" else audio_filename
     return _output_file(filename, download=download, cache_seconds=30 * 86400)
 

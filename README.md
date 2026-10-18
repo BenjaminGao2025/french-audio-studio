@@ -219,3 +219,42 @@ AI 不可用时保留已有计划；用户用“更新安排”或修改时间�
 
 
 2026-10-15：个人表达练习已整合进 Study。完整保留原文信息，分成小段法语并保存每段对应的原文；可选择整篇或一段范读，在当前页逐句拆解并返回录音练习。旧简略稿尚未录音时可主动补全；已有录音的版本保持原文。范读/录音通过 Bearer 验证加载为本地 blob，显示加载、就绪和失败重试；音频生成失败时保留已生成的法语，重试无需再次调用文本模型。个人练习显示时暂停 Study 的阅读自动计时，开口活动与录音仍分别按原机制记录。
+
+### Phase A listening and intensive reading
+
+`/app/listening` uses learned SRS/history sentences, prepared journal texts, or stories made
+with the user's known vocabulary. An empty pool asks the learner to study/save a sentence or
+prepare a journal first. Blind listening, reveal (the shared analyzer), slow + two normal
+replays and a four-option check are persisted. Successful checks advance the personal
+0.75 → 0.9 → 1.0 speed ladder. Real audio stays locked until all PRD conditions are met;
+the unseen CO validation quiz is a later-phase feature and practice cannot unlock it.
+
+`/app/reading` accepts pasted texts or generates A1–A2 notices, emails, ads and short articles.
+It offers sentence breakdowns, vocabulary-to-cloze, two comprehension MCQs and saved attempts
+with explanations quoting the passage. Generation uses the same AGY gateway as other AI
+features. With no `WEB2API_API_KEY`, deterministic practice texts/questions and the analyzer's
+structural fallback work offline; translations/grammar require the gateway. TTS still needs
+Edge speech connectivity. Generated questions with invalid choices or citations use a
+local fallback. No live upstream call is required by the tests.
+
+Authenticated APIs (bearer token or the existing session cookie):
+
+- `POST /api/listening/sessions` (`block_id?`, `source: auto|srs|journal|story`)
+- `GET /api/listening/sessions/{id}`; `GET /api/listening/gate`
+- `POST /api/listening/sessions/{id}/blind` (`self: 0|1|2`, `plays`)
+- `POST /api/listening/sessions/{id}/reveal`
+- `POST /api/listening/sessions/{id}/relisten` (`stage: slow20|normal`, `index: 0|1|2`)
+- `POST /api/listening/sessions/{id}/check` (`answer_index`, `seconds`, `tz_offset`)
+- `GET /api/listening/sessions/{id}/audio?rate=1` (or the session's slow rate)
+- `POST /api/reading/passages` (`text` or `generate: {text_type, level}`)
+- `GET /api/reading/passages`; `GET /api/reading/passages/{id}`
+- `POST /api/reading/passages/{id}/done` (`answers`, `seconds`, `tz_offset`)
+- `POST /api/listening/sessions/{id}/words` and `POST /api/reading/passages/{id}/words`
+  (`sentence`, `word`, `meaning?`) create idempotent SRS cloze cards.
+
+`GET /tts` also accepts numeric `rate` (0.5–1.5); rate is part of the audio cache key.
+Listening/reading completion records active seconds in `study_time` atomically with the
+attempt, so retrying cannot add time twice. The SPA excludes AI waits, hidden tabs and idle
+time, and omits the shared block heartbeat on these two pages. Unfinished sessions do not
+log time. SQLite tables initialize idempotently on first use. Existing saved Today plans gain
+missing listening/reading blocks while retaining their existing block ids and state.
