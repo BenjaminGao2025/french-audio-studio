@@ -9,6 +9,7 @@ import { useActiveSeconds } from "@/api/use-active-seconds";
 import { useListeningGate } from "@/api/hooks";
 import { DataView, ErrorState, Skeleton } from "@/components/fr/states";
 import { AudioButton } from "@/components/fr/widgets";
+import { FrenchWords } from "@/components/fr/words";
 
 export const Route = createFileRoute("/listening")({
   validateSearch: (s: Record<string, unknown>) => ({
@@ -146,19 +147,31 @@ function Listening() {
                 )}
                 {step === 1 && (
                   <>
-                    <p className="fr text-2xl leading-relaxed">{s.material.text}</p>
+                    <FrenchWords
+                      text={s.material.text}
+                      glosses={s.material.words.map((w) => ({
+                        word: w.w,
+                        ipa: w.ipa,
+                        en: w.en,
+                        note: w.note,
+                      }))}
+                      className="fr text-2xl leading-relaxed"
+                    />
                     <p className="whitespace-pre-line text-sm">
                       {s.material.breakdown ||
                         "Offline sentence breakdown: translations and grammar require the AI gateway."}
                     </p>
                     {s.analysis?.sentences.map((sentence, i) => (
                       <div key={i} className="rounded bg-secondary p-4">
-                        <p className="fr">{sentence.text}</p>
+                        <FrenchWords text={sentence.text} glosses={sentence.words} className="fr" />
                         <p>{sentence.translation_en}</p>
                         {sentence.build_up.map((line, j) => (
-                          <p key={j} className="fr text-sm">
-                            {line}
-                          </p>
+                          <FrenchWords
+                            key={j}
+                            text={line}
+                            glosses={sentence.words}
+                            className="fr text-sm"
+                          />
                         ))}
                         {sentence.grammar_points.map((g) => (
                           <p key={g.title} className="text-sm">

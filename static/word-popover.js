@@ -385,6 +385,7 @@
      *   localLookup(lower, word, context) the page's own data for a word, or null
      *   remember(lower, item)             called with every looked-up entry
      *   wordSelector                      CSS selector of clickable words (clicks on them never close the popover)
+     *   blockFor(element)                 optional: the text block of a word; the card never covers it
      *   contextFor(element)               {sentence, sentence_cn} around a selected phrase, for saving it
      *   saving: { isSaved(item), toggle(item), entries(token), setImportance(entries, level) }
      *                                     optional "add to review" star and importance stars
@@ -441,20 +442,24 @@
             const height = pop.offsetHeight || 160;
             let left = rect.left + (rect.width / 2) - (width / 2);
             left = Math.max(12, Math.min(left, root.innerWidth - width - 12));
+            // The card stays clear of the whole text block the word is in (blockFor), so the other
+            // lines of a wrapped sentence remain tappable while it is open; the edge nearer the
+            // word wins when both have room
+            const block = options.blockFor ? options.blockFor(el) : null;
+            const area = block ? block.getBoundingClientRect() : rect;
+            const prefersBelow = area !== rect && rect.top + rect.bottom > area.top + area.bottom;
             // 16px gap so the tapped word stays fully visible; flip below when there is no room above
             const gap = 16;
-            const spaceAbove = rect.top - height - gap;
-            const spaceBelow = root.innerHeight - (rect.bottom + height + gap);
-            let top;
+            const spaceAbove = area.top - height - gap;
+            const spaceBelow = root.innerHeight - (area.bottom + height + gap);
+            const fitsAbove = spaceAbove >= 65;
+            const fitsBelow = spaceBelow >= 0;
             let below;
-            if (spaceAbove < 65 && spaceBelow >= 0) {
-                top = rect.bottom + gap; below = true;
-            } else if (spaceAbove < 65 && spaceBelow < 0) {
-                below = spaceAbove <= spaceBelow;
-                top = below ? Math.min(root.innerHeight - height - 12, rect.bottom + gap) : Math.max(12, rect.top - height - gap);
-            } else {
-                top = rect.top - height - gap; below = false;
-            }
+            if (fitsAbove && fitsBelow) below = prefersBelow;
+            else if (fitsAbove) below = false;
+            else if (fitsBelow) below = true;
+            else below = spaceAbove <= spaceBelow;
+            const top = below ? Math.min(root.innerHeight - height - 12, area.bottom + gap) : Math.max(12, area.top - height - gap);
             pop.classList.toggle('arrow-top', below);
             pop.style.left = `${left}px`;
             pop.style.top = `${top}px`;
@@ -755,11 +760,26 @@
         let mouseHeld = false;
         let selectionTimer = null;
         let lastPhrase = '';
+        // A long press on a phone selects the word instead of clicking it: that opens the word
+        // like a tap does (unless a click already opened it, as with a double click)
+        function selectedWordElement(range) {
+            if (!wordSelector) return null;
+            const node = range.commonAncestorContainer;
+            const el = node.nodeType === 1 ? node : node.parentElement;
+            if (!el) return null;
+            const inside = el.closest(wordSelector);
+            if (inside) return inside;
+            // A range that wraps the word element itself has the line around it as its ancestor
+            const touched = Array.from(el.querySelectorAll(wordSelector)).filter(w => range.intersectsNode(w));
+            return touched.length === 1 ? touched[0] : null;
+        }
         function showSelectedPhrase() {
             const selection = root.getSelection();
             const range = selection && selection.rangeCount > 0 && !selection.isCollapsed ? selection.getRangeAt(0) : null;
             const selected = range ? frenchTextOf(range).replace(/\s+/g, ' ').trim() : '';
-            if (!selected || !selected.includes(' ')) { lastPhrase = ''; return; }
+            const word = selected && !selected.includes(' ') ? selectedWordElement(range) : null;
+            if (!selected || (!selected.includes(' ') && !word)) { lastPhrase = ''; return; }
+            if (word && isOpen() && activeEl === word) return;
             if (selected === lastPhrase) return;
             if (document.activeElement && document.activeElement.matches('input, textarea, [contenteditable="true"]')) return;
             const rect = range.getBoundingClientRect();
@@ -767,6 +787,7 @@
             lastPhrase = selected;
             const anchor = range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement;
             const context = options.contextFor ? options.contextFor(anchor) || {} : {};
+            if (word) { show(word.dataset.word || word.dataset.token || selected, word, context); return; }
             show(selected, { getBoundingClientRect: () => rect }, context);
         }
         const scheduleSelection = (delay) => {
@@ -948,5 +969,19 @@
         return { load, clear, entries, isSaved, toggle, setImportance, popoverSaving };
     }
 
-    root.FrenchWordPopover = { create, createWordBook, numberReading: frenchNumberReading, basicWords: BASIC_FRENCH_WORDS };
+    // The element whose box is nearest to a point, within `slop` pixels (0 inside it); null if none is
+    // that near. Lets a tap that misses every word by a few pixels still count for the closest one.
+    function nearestElement(elements, x, y, slop) {
+        let best = null;
+        let bestDistance = slop;
+        for (const el of elements) {
+            for (const r of el.getClientRects()) {
+                const distance = Math.hypot(Math.max(r.left - x, 0, x - r.right), Math.max(r.top - y, 0, y - r.bottom));
+                if (distance <= bestDistance) { best = el; bestDistance = distance; }
+            }
+        }
+        return best;
+    }
+
+    root.FrenchWordPopover = { create, createWordBook, nearestElement, numberReading: frenchNumberReading, basicWords: BASIC_FRENCH_WORDS };
 })(window);

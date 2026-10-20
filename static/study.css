@@ -148,24 +148,65 @@
     font-weight: 700;
 }
 
-/* Clickable words in the French sentence */
+/* Clickable words in the French sentence.
+   A word's own box is only as tall as its glyphs, so a finger that lands beside it hits the
+   sentence row instead. Each word therefore carries an invisible hit area (::after: no layout,
+   no paint, and the popover still anchors to the glyphs). On touch screens the French line is
+   exactly --word-tap-height tall and so is that area, so words on neighbouring lines tile with
+   no gap; a tap that still misses goes to the nearest word (study.js, wordAtTap).
+   Words stay selectable: a long press or drag selects a word or phrase, which opens like a tap
+   (word-popover.js). */
+.sentence-french-text,
+.buildup-fr-text {
+    --word-tap-height: 0px;
+}
+
+@media (pointer: coarse) {
+    .sentence-french-text,
+    .buildup-fr-text {
+        --word-tap-height: 44px;
+    }
+}
+
 .interactive-word {
+    position: relative;
     display: inline;
     cursor: pointer;
     border-radius: 3px;
     padding: 0 1px;
     margin: 0;
     transition: background 0.15s ease, color 0.15s ease;
+    -webkit-user-select: text;
     user-select: text;
+    /* No double-tap zoom or tap delay; the tap flash uses the theme colour */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: rgba(var(--primary-rgb), 0.18);
     box-decoration-break: clone;
     -webkit-box-decoration-break: clone;
 }
 
-.interactive-word:hover {
-    background: rgba(var(--primary-rgb), 0.1);
-    color: var(--primary);
-    text-decoration: underline;
-    text-underline-offset: 3px;
+.interactive-word::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: -0.15em;
+    right: -0.15em;
+    height: max(100%, var(--word-tap-height, 0px));
+    transform: translateY(-50%);
+}
+
+.interactive-word:active {
+    background: rgba(var(--primary-rgb), 0.16);
+}
+
+/* Hover only where a pointer really hovers: on a phone it would stay on after a tap */
+@media (hover: hover) and (pointer: fine) {
+    .interactive-word:hover {
+        background: rgba(var(--primary-rgb), 0.1);
+        color: var(--primary);
+        text-decoration: underline;
+        text-underline-offset: 3px;
+    }
 }
 
 .interactive-word:focus-visible {
@@ -175,10 +216,18 @@
     border-radius: 3px;
 }
 
+/* The other word taps (word list, word-by-word gloss, step chunks, score diff): no double-tap zoom */
+.token-word,
+.gloss-fr,
+.buildup-new-token,
+.diff-word {
+    touch-action: manipulation;
+}
+
+/* No font-weight change here: it would re-flow the line under the popover */
 .interactive-word.is-active-word {
     background: rgba(var(--primary-rgb), 0.16);
     color: var(--primary);
-    font-weight: 600;
     border-radius: 3px;
 }
 
@@ -2837,6 +2886,27 @@ a.nav-deck-btn {
     }
 }
 
+/* The word lines are as tall as the hit area, and already pad the heading: trim its own
+   padding, and keep the buttons level with the first line (after the base rules, so it wins) */
+@media (pointer: coarse) {
+    .sentence-french-text,
+    .buildup-fr-text {
+        line-height: var(--word-tap-height);
+    }
+
+    .sentence-head {
+        padding-block: var(--space-1);
+    }
+
+    .sentence-head-actions {
+        margin-top: 3px;
+    }
+
+    .sentence-toggle {
+        margin-top: 8px;
+    }
+}
+
 /* Steps on a phone: the French line selects like normal text (WebKit needs the prefix),
    and a highlighted chunk is a tap target that opens the word popover (study.js) */
 .buildup-steps-list:not(.is-blind-mode) .buildup-fr-text,
@@ -2873,7 +2943,6 @@ a.nav-deck-btn {
 }
 
 /* Step words use the same single-tap pronunciation as the sentence heading. */
-.buildup-fr-text .interactive-word { touch-action: manipulation; }
 .is-blind-mode .buildup-fr-text .interactive-word {
     color: inherit !important;
     background: transparent !important;
