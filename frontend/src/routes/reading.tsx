@@ -128,7 +128,12 @@ function Reading() {
                 ))}
               </div>
               <div className="panel space-y-4 p-6">
-                <FrenchWords text={cur.text} glosses={cur.words} className="fr text-xl" />
+                <FrenchWords
+                  text={cur.text}
+                  glosses={cur.words}
+                  className="fr text-xl"
+                  sentenceControls
+                />
                 <p>
                   {cur.translation_en ||
                     "Offline breakdown: translations and grammar need the AI gateway."}

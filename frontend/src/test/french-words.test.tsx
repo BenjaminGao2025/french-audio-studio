@@ -23,6 +23,10 @@ vi.mock("@/api", () => ({
 // vitest turns CSS imports into empty strings, so read the stylesheet itself
 const styles = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
 
+// jsdom gives Ranges no geometry; the floating bar only needs a box to sit next to
+window.Range.prototype.getBoundingClientRect = () =>
+  ({ left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 }) as DOMRect;
+
 const SENTENCE = "J'ai déjà deux enfants, et ma femme est enceinte.";
 const glosses = [
   { word: "enfants", ipa: "ɑ̃.fɑ̃", pos: "noun", lemma: "enfant", en: "children", zh: "孩子" },
@@ -30,22 +34,28 @@ const glosses = [
 ];
 
 const plays: string[] = [];
+const clips: { src: string; paused: boolean }[] = [];
 beforeEach(() => {
   plays.length = 0;
+  clips.length = 0;
   vi.stubGlobal(
     "Audio",
     class {
       src: string;
       onended = null;
       onerror = null;
+      paused = false;
       constructor(src: string) {
         this.src = src;
+        clips.push(this);
       }
       play() {
         plays.push(this.src);
         return Promise.resolve();
       }
-      pause() {}
+      pause() {
+        this.paused = true;
+      }
       addEventListener() {}
       dispatchEvent() {
         return true;
@@ -214,12 +224,13 @@ describe("FrenchWords", () => {
     // Far from every word, with no position, or after selecting text: not a tap
     fireEvent.click(line, { clientX: 900, clientY: 10, detail: 1 });
     fireEvent.click(line, { clientX: 49, clientY: 10, detail: 0 });
-    vi.spyOn(window, "getSelection").mockReturnValue({
+    const selected = vi.spyOn(window, "getSelection").mockReturnValue({
       toString: () => "ma femme",
     } as unknown as Selection);
     fireEvent.click(line, { clientX: 99, clientY: 10, detail: 1 });
     expect(screen.getByRole("dialog")).toHaveAttribute("aria-label", "Meaning of déjà");
     expect(plays).toEqual(["/tts?text=J'ai", "/tts?text=d%C3%A9j%C3%A0"]);
+    selected.mockRestore();
   });
 
   it("works from the keyboard, and Escape, the close button or another press dismiss the card", () => {
@@ -303,6 +314,139 @@ describe("FrenchWords", () => {
   });
 });
 
+describe("FrenchWords selection", () => {
+  const mountPlain = () => render(<FrenchWords text={SENTENCE} glosses={glosses} className="fr" />);
+  const mountControls = () =>
+    render(<FrenchWords text={SENTENCE} glosses={glosses} className="fr" sentenceControls />);
+  const bar = () => screen.getByRole("toolbar", { name: "Selection actions" });
+  const readButton = () => screen.getByRole("button", { name: "Read selection" });
+
+  // A mouse drag: press on one word, move to another, release
+  const drag = (from: HTMLElement, to: HTMLElement) => {
+    fireEvent.mouseDown(from, { clientX: 100, clientY: 10, button: 0 });
+    fireEvent.mouseMove(to, { clientX: 200, clientY: 10 });
+    fireEvent.mouseUp(document);
+  };
+
+  it("reads exactly the dragged words through the shared controller, and opens no card", () => {
+    mountPlain();
+    drag(word("deux"), word("enfants,"));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(bar()).toBeInTheDocument();
+    fireEvent.click(readButton());
+    expect(plays).toEqual(["/tts?text=deux%20enfants"]);
+    // The click that ends a drag is not a tap on the word it lands on
+    fireEvent.click(word("enfants,"), { clientX: 200, clientY: 10 });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("offers Meaning for a short selection, which opens the phrase card", async () => {
+    mountPlain();
+    drag(word("ma"), word("femme"));
+    fireEvent.click(screen.getByRole("button", { name: "Meaning" }));
+    expect(screen.getByRole("dialog")).toHaveAttribute("aria-label", "Meaning of ma femme");
+    expect(await screen.findByText("looked up")).toBeInTheDocument();
+  });
+
+  it("shows the bar for a selection made by the system (a long press with handles)", async () => {
+    mountPlain();
+    const ma = word("ma");
+    const femme = word("femme");
+    const range = document.createRange();
+    range.setStartBefore(ma);
+    range.setEndAfter(femme);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    document.dispatchEvent(new Event("selectionchange"));
+    expect(await screen.findByRole("toolbar")).toBeInTheDocument();
+    fireEvent.click(readButton());
+    expect(plays).toEqual(["/tts?text=ma%20femme"]);
+  });
+
+  it("keeps a single selected word out of the card but offers to read it", async () => {
+    mountPlain();
+    const femme = word("femme");
+    const range = document.createRange();
+    range.selectNodeContents(femme.firstChild!);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    document.dispatchEvent(new Event("selectionchange"));
+    expect(await screen.findByRole("toolbar")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    fireEvent.click(readButton());
+    expect(plays).toEqual(["/tts?text=femme"]);
+  });
+
+  it("picks a span word by word in range mode and reads it", () => {
+    mountControls();
+    fireEvent.click(screen.getByRole("button", { name: "Select words" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Tap the first word");
+    fireEvent.click(word("deux"));
+    expect(screen.getByRole("status")).toHaveTextContent("Tap the last word");
+    fireEvent.click(word("enfants,"));
+    expect(screen.queryByRole("status")).toBeNull();
+    fireEvent.click(readButton());
+    expect(plays).toEqual(["/tts?text=deux%20enfants"]);
+    // Clear drops the span, and the switch leaves range mode
+    fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
+    expect(screen.queryByRole("toolbar")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Select words" }));
+    expect(screen.queryByRole("status")).toBeNull();
+    // A tap on a word opens it again once range mode is off
+    fireEvent.click(word("femme"));
+    expect(screen.getByRole("dialog")).toHaveAttribute("aria-label", "Meaning of femme");
+  });
+
+  it("reads the whole sentence from the per-sentence button", () => {
+    mountControls();
+    const button = screen.getByRole("button", { name: "Read sentence" });
+    expect(button.className).toMatch(/min-h-11/);
+    fireEvent.click(button);
+    expect(plays).toEqual([`/tts?text=${encodeURIComponent(SENTENCE)}`]);
+  });
+
+  it("reads through the shared controller, which stops the audio already playing", () => {
+    mountPlain();
+    // A word is playing…
+    fireEvent.click(word("femme"));
+    expect(plays).toEqual(["/tts?text=femme"]);
+    const playing = clips[clips.length - 1]!;
+    // …and reading the selection takes the player over from it
+    drag(word("deux"), word("enfants,"));
+    fireEvent.click(readButton());
+    expect(plays).toEqual(["/tts?text=femme", "/tts?text=deux%20enfants"]);
+    expect(playing.paused).toBe(true);
+  });
+});
+
+describe("read-selection CSS", () => {
+  const rule = (selector: string) => {
+    const start = styles.indexOf(`\n${selector} {`);
+    expect(start, selector).toBeGreaterThan(-1);
+    return styles.slice(start, styles.indexOf("}", start));
+  };
+
+  it("floats the bar near the selection with 44px buttons on touch screens", () => {
+    expect(rule(".fr-read-bar")).toMatch(/position: fixed;/);
+    expect(rule(".fr-read-bar")).toMatch(/z-index: 60;/);
+    expect(rule(".fr-read-bar")).toMatch(/user-select: none;/);
+    expect(rule(".fr-read-btn")).toMatch(/min-height: 36px;/);
+    expect(styles).toMatch(
+      /@media \(pointer: coarse\) \{\s*\.fr-read-btn \{\s*min-height: 44px;\s*min-width: 44px;/,
+    );
+    expect(rule(".fr-read-btn-main")).toMatch(/background-color: var\(--primary\);/);
+  });
+
+  it("paints the picked span at the height of the glyphs and stops selection in range mode", () => {
+    expect(rule(".fr-word.fr-word-range")).toMatch(/background-color: color-mix/);
+    expect(rule(".fr-words.is-range-mode,\n.fr-words.is-range-mode .fr-word")).toMatch(
+      /user-select: none;/,
+    );
+  });
+});
+
 describe("hit-target CSS", () => {
   const rule = (selector: string) => {
     const start = styles.indexOf(`\n${selector} {`);
@@ -319,15 +463,23 @@ describe("hit-target CSS", () => {
     expect(hit).toMatch(/height: max\(100%, var\(--word-tap-height, 0px\)\);/);
     expect(hit).toMatch(/left: -0\.15em;\s*right: -0\.15em;/);
     expect(hit).not.toMatch(/pointer-events: none/);
+    // Behind the word's own text, so a drag that starts on the word selects from inside it
+    // (an overlay on top would move the selection anchor to the end of the word)
+    expect(hit).toMatch(/z-index: -1;/);
+    expect(rule(".fr-word")).toMatch(/isolation: isolate;/);
     expect(styles).toMatch(
       /@media \(pointer: coarse\) \{\s*\.fr-words \{\s*--word-tap-height: 44px;\s*line-height: var\(--word-tap-height\);/,
     );
   });
 
-  it("highlights on hover only where a pointer hovers, and stops a long press from selecting on touch", () => {
+  it("highlights on hover only where a pointer hovers, and keeps words selectable on touch", () => {
     expect(styles).toMatch(/@media \(hover: hover\) and \(pointer: fine\) \{\s*\.fr-word:hover \{/);
+    // A long press selects with the system handles; only range mode switches selection off
     expect(styles).toMatch(
-      /@media \(pointer: coarse\) \{\s*\.fr-word \{\s*-webkit-user-select: none;\s*user-select: none;\s*-webkit-touch-callout: none;/,
+      /@media \(pointer: coarse\) \{\s*\.fr-word \{\s*-webkit-user-select: text;\s*user-select: text;\s*-webkit-touch-callout: default;/,
+    );
+    expect(styles).not.toMatch(
+      /@media \(pointer: coarse\) \{\s*\.fr-word \{\s*-webkit-user-select: none;/,
     );
     expect(rule('.fr-word:active,\n.fr-word[aria-expanded="true"]')).toMatch(/background-color/);
   });

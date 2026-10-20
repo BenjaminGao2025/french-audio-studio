@@ -183,6 +183,9 @@
     -webkit-tap-highlight-color: rgba(var(--primary-rgb), 0.18);
     box-decoration-break: clone;
     -webkit-box-decoration-break: clone;
+    /* The hit area below sits behind the text of this word (see ::after), so it needs its own
+       stacking context to stay above the backgrounds around it */
+    isolation: isolate;
 }
 
 .interactive-word::after {
@@ -193,6 +196,10 @@
     right: -0.15em;
     height: max(100%, var(--word-tap-height, 0px));
     transform: translateY(-50%);
+    /* Behind the word's own text, above everything around it: the text hit-tests normally, so a
+       drag that starts on the word selects from inside it (an overlay on top would move the
+       selection anchor to the end of the word and drop it from the selection) */
+    z-index: -1;
 }
 
 .interactive-word:active {
@@ -229,6 +236,40 @@
     background: rgba(var(--primary-rgb), 0.16);
     color: var(--primary);
     border-radius: 3px;
+}
+
+/* Selecting French text: a soft theme tint (the selection of a line as tall as the tap area
+   is a tall band; the colour keeps it quiet) and no text colour change */
+.sentence-french-text ::selection,
+.buildup-fr-text ::selection,
+.sentence-french-text::selection,
+.buildup-fr-text::selection {
+    background: rgba(var(--primary-rgb), 0.22);
+    color: inherit;
+}
+
+/* Select mode (read-selection.js): taps pick the first and the last word instead of opening
+   them, so the line must not start a native selection. The span is painted on the words
+   themselves (glyph height, not the 44px line) and carried over the space after each word. */
+.sentence-french-text.is-range-mode,
+.sentence-french-text.is-range-mode .interactive-word {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+}
+.sentence-french-text.is-range-mode .interactive-word {
+    cursor: pointer;
+    outline: 1px dashed rgba(var(--primary-rgb), 0.35);
+    outline-offset: 1px;
+}
+.sentence-french-text.is-range-mode .interactive-word.is-range-word {
+    outline-color: transparent;
+    background: rgba(var(--primary-rgb), 0.24);
+    box-shadow: 0.3em 0 0 rgba(var(--primary-rgb), 0.24);
+    color: var(--ink);
+}
+.sentence-french-text.is-range-mode .interactive-word.is-range-last {
+    box-shadow: none;
 }
 
 /* Shadowing & Scoring Panel */
@@ -2359,8 +2400,8 @@ a.nav-deck-btn {
 .btn-speak-round {
     display: inline-grid;
     place-items: center;
-    width: 38px;
-    height: 38px;
+    width: 44px;
+    height: 44px;
     padding: 0;
     border: 1px solid var(--primary);
     border-radius: 50%;
@@ -2374,6 +2415,36 @@ a.nav-deck-btn {
 }
 
 .btn-speak-round svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* Select mode toggle: tap the first and the last word to read or look up a span */
+.btn-range-select {
+    display: inline-grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 1px solid var(--line-strong);
+    border-radius: 50%;
+    background: var(--surface);
+    color: var(--primary);
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.btn-range-select:hover {
+    background: var(--surface-muted);
+}
+
+.btn-range-select[aria-pressed="true"] {
+    border-color: var(--primary);
+    background: var(--primary);
+    color: var(--primary-contrast);
+}
+
+.btn-range-select svg {
     width: 18px;
     height: 18px;
 }
@@ -2421,6 +2492,7 @@ a.nav-deck-btn {
     height: 16px;
 }
 
+.sentence-card:not(.is-open) .btn-range-select,
 .sentence-card:not(.is-open) .btn-sentence-save {
     display: none;
 }

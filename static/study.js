@@ -102,6 +102,7 @@ function initStudyWorkbench() {
             askPlaceholder: "Ask anything, or answer the AI's follow-up question (Chinese or English). e.g. What about de + la?",
             askMicTitle: 'Ask by speaking', askMic: 'Speak', ask: 'Ask',
             listenSentence: 'Listen to the whole sentence', readSentenceAria: 'Read the sentence aloud',
+            selectWordsTitle: 'Select words: tap the first and the last word, then read them or see their meaning', selectWordsAria: 'Select words in this sentence',
             pronounceTitle: 'Listen to the model pronunciation', pronounce: 'Listen',
             buildupRecordTitle: 'Say this step yourself and get a score', shadowScore: 'Say it',
             playMyRecordingTitle: 'Play back my recording', retryTitle: 'Record again', retryShort: 'Retry',
@@ -219,6 +220,7 @@ function initStudyWorkbench() {
             askPlaceholder: '有问题随时问，或回答 AI 的追问（中文或英语都行）例：那 de + la 呢？',
             askMicTitle: '用说的提问', askMic: '说', ask: '问',
             listenSentence: '收听整句标准发音', readSentenceAria: '朗读句子',
+            selectWordsTitle: '选词：点第一个和最后一个词，然后朗读或查看释义', selectWordsAria: '在这句里选词',
             pronounceTitle: '点击听范读发音', pronounce: '发音',
             buildupRecordTitle: '自己说一遍这一步，并给你打分', shadowScore: '跟读打分',
             playMyRecordingTitle: '回听我的录音', retryTitle: '重新录音跟读', retryShort: '重练',
@@ -385,20 +387,24 @@ function initStudyWorkbench() {
     // (outside blind mode, where a tap on it reveals it instead)
     const GLOSS_TAP_SELECTOR = '.gloss-fr, .buildup-steps-list:not(.is-blind-mode) .buildup-new-token';
 
+    function sentenceContextFor(element) {
+        const card = element && element.closest('.sentence-card');
+        if (!card) return {};
+        return {
+            sentence: card.querySelector('.sentence-french-text')?.textContent || '',
+            sentence_cn: card.querySelector('.translation-cn')?.textContent || '',
+        };
+    }
+
     const wordPopover = window.FrenchWordPopover.create({
         speak: (text) => playFrenchSpeech(text, null, { once: true }),
         getAuthToken: () => getEffectiveAuthToken(),
         wordSelector: `.interactive-word, .diff-word, .token-word, ${GLOSS_TAP_SELECTOR}`,
         // The popover must not cover the other lines of the sentence it was opened from
         blockFor: (element) => (element && element.closest ? element.closest('.sentence-french-text, .buildup-fr-text') : null),
-        contextFor(element) {
-            const card = element && element.closest('.sentence-card');
-            if (!card) return {};
-            return {
-                sentence: card.querySelector('.sentence-french-text')?.textContent || '',
-                sentence_cn: card.querySelector('.translation-cn')?.textContent || '',
-            };
-        },
+        // Selecting text shows the read bar below (Read selection / Meaning), not the popover
+        selectionPopover: false,
+        contextFor: sentenceContextFor,
         localLookup(lower, word, context) {
             // A word that belongs to a fixed expression of this sentence shows the expression
             const phrase = context.sentence ? phraseByWord.get(`${srsSentenceKey(context.sentence)}::${lower}`) : null;
@@ -428,6 +434,20 @@ function initStudyWorkbench() {
     function showPopoverForElement(word, element, context = {}) {
         wordPopover.show(word, element, context);
     }
+
+    // Select French text (drag, long press, or the sentence's Select mode): a bar below offers
+    // Read selection and Meaning. The click on Read starts the audio, as iOS requires.
+    window.FrenchReadSelection.create({
+        wordSelector: '.interactive-word',
+        rangeLineFor: (toggle) => {
+            const card = toggle.closest('.sentence-card');
+            return card ? card.querySelector('.sentence-french-text') : null;
+        },
+        speak: (text, onEnd) => playFrenchSpeech(text, onEnd),
+        meaning: (text, anchor, context) => wordPopover.show(text, anchor, context),
+        contextFor: sentenceContextFor,
+        openWord: () => wordPopover.activeElement(),
+    });
 
     // Speech Recognition API Detection
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition || null;
@@ -1297,6 +1317,9 @@ function initStudyWorkbench() {
                     <button class="btn-speak-round" type="button" title="${T.listenSentence}" aria-label="${T.readSentenceAria}">
                         <i data-lucide="volume-2"></i>
                     </button>
+                    <button class="btn-range-select" type="button" data-range-toggle aria-pressed="false" title="${T.selectWordsTitle}" aria-label="${T.selectWordsAria}">
+                        <i data-lucide="text-select"></i>
+                    </button>
                     <button class="btn-sentence-save" type="button" data-sentence="${escapeHtml(sentenceText)}" title="${T.sentenceAdd}">
                         <i data-lucide="bookmark-plus"></i>
                         <span class="sentence-save-label">${T.addToReview}</span>
@@ -2112,7 +2135,8 @@ function initStudyWorkbench() {
             head.addEventListener('click', (e) => {
                 if (e.target.closest('button:not(.sentence-toggle), a')) return;
                 if (wordAtTap(e)) return;
-                if (String(window.getSelection && window.getSelection()).trim()) return;
+                // The end of a drag or a selection is not a click on the row
+                if (!window.FrenchReadSelection.isTap(e)) return;
                 setOpen(!card.classList.contains('is-open'));
             });
         }
@@ -2130,7 +2154,7 @@ function initStudyWorkbench() {
                 return;
             }
             const tokenWord = e.target.closest('.token-word');
-            if (tokenWord) {
+            if (tokenWord && window.FrenchReadSelection.isTap(e)) {
                 e.stopPropagation();
                 const word = tokenWord.textContent.trim();
                 showPopoverForElement(word, tokenWord, {
@@ -2141,7 +2165,7 @@ function initStudyWorkbench() {
             }
             const glossWord = e.target.closest(GLOSS_TAP_SELECTOR);
             if (glossWord) {
-                if (String(window.getSelection && window.getSelection()).trim()) return;
+                if (!window.FrenchReadSelection.isTap(e)) return;
                 e.stopPropagation();
                 const word = glossWord.matches('.buildup-new-token') ? chunkSpeechText(glossWord.textContent) : glossWord.textContent.trim();
                 // The popover takes up to 40 characters; a longer chunk is just read aloud
@@ -2957,6 +2981,8 @@ function initStudyWorkbench() {
     // a word that is still hidden.
     const WORD_TAP_SLOP = 22;  // half of the 44px minimum touch size
     function wordAtTap(e) {
+        // A click that ends a drag or a selection is not a tap, whatever it lands on
+        if (!window.FrenchReadSelection.isTap(e)) return null;
         const direct = e.target.closest('.interactive-word');
         if (direct) return direct;
         const line = e.target.closest('.sentence-french-text, .buildup-fr-text');
@@ -3216,7 +3242,7 @@ function initStudyWorkbench() {
     // Tap a word in the analysis to see it in the popover
     document.addEventListener('click', (e) => {
         const wordEl = e.target.closest('.interactive-word, .diff-word, .token-word');
-        if (wordEl) {
+        if (wordEl && window.FrenchReadSelection.isTap(e)) {
             e.stopPropagation();
             const card = wordEl.closest('.sentence-card');
             const targetSentence = card ? (card.querySelector('.sentence-french-text')?.textContent || '') : '';

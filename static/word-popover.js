@@ -387,6 +387,7 @@
      *   wordSelector                      CSS selector of clickable words (clicks on them never close the popover)
      *   blockFor(element)                 optional: the text block of a word; the card never covers it
      *   contextFor(element)               {sentence, sentence_cn} around a selected phrase, for saving it
+     *   selectionPopover                  false: selecting a phrase does not open it (the page has its own selection bar)
      *   saving: { isSaved(item), toggle(item), entries(token), setImportance(entries, level) }
      *                                     optional "add to review" star and importance stars
      */
@@ -760,26 +761,16 @@
         let mouseHeld = false;
         let selectionTimer = null;
         let lastPhrase = '';
-        // A long press on a phone selects the word instead of clicking it: that opens the word
-        // like a tap does (unless a click already opened it, as with a double click)
-        function selectedWordElement(range) {
-            if (!wordSelector) return null;
-            const node = range.commonAncestorContainer;
-            const el = node.nodeType === 1 ? node : node.parentElement;
-            if (!el) return null;
-            const inside = el.closest(wordSelector);
-            if (inside) return inside;
-            // A range that wraps the word element itself has the line around it as its ancestor
-            const touched = Array.from(el.querySelectorAll(wordSelector)).filter(w => range.intersectsNode(w));
-            return touched.length === 1 ? touched[0] : null;
-        }
+        // A selection of two or more words opens the phrase. A single selected word does not: a
+        // long press on a phone selects the word first, and the system handles must stay usable
+        // to extend it (a tap still opens one word). Pages that have their own selection UI
+        // (read-selection.js) switch this off with selectionPopover: false.
         function showSelectedPhrase() {
+            if (options.selectionPopover === false) return;
             const selection = root.getSelection();
             const range = selection && selection.rangeCount > 0 && !selection.isCollapsed ? selection.getRangeAt(0) : null;
             const selected = range ? frenchTextOf(range).replace(/\s+/g, ' ').trim() : '';
-            const word = selected && !selected.includes(' ') ? selectedWordElement(range) : null;
-            if (!selected || (!selected.includes(' ') && !word)) { lastPhrase = ''; return; }
-            if (word && isOpen() && activeEl === word) return;
+            if (!selected || !selected.includes(' ')) { lastPhrase = ''; return; }
             if (selected === lastPhrase) return;
             if (document.activeElement && document.activeElement.matches('input, textarea, [contenteditable="true"]')) return;
             const rect = range.getBoundingClientRect();
@@ -787,7 +778,6 @@
             lastPhrase = selected;
             const anchor = range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement;
             const context = options.contextFor ? options.contextFor(anchor) || {} : {};
-            if (word) { show(word.dataset.word || word.dataset.token || selected, word, context); return; }
             show(selected, { getBoundingClientRect: () => rect }, context);
         }
         const scheduleSelection = (delay) => {
@@ -817,7 +807,7 @@
             if ((e.key === 's' || e.key === 'S') && saving) { els.star.click(); e.preventDefault(); e.stopImmediatePropagation(); }
         }, true);
 
-        return { show, close, isOpen, refreshSaved, element: pop };
+        return { show, close, isOpen, refreshSaved, activeElement: () => activeEl, element: pop };
     }
 
     /**
