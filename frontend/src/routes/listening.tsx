@@ -156,6 +156,7 @@ function Listening() {
                         note: w.note,
                       }))}
                       className="fr text-2xl leading-relaxed"
+                      sentenceControls
                     />
                     <p className="whitespace-pre-line text-sm">
                       {s.material.breakdown ||
@@ -163,7 +164,12 @@ function Listening() {
                     </p>
                     {s.analysis?.sentences.map((sentence, i) => (
                       <div key={i} className="rounded bg-secondary p-4">
-                        <FrenchWords text={sentence.text} glosses={sentence.words} className="fr" />
+                        <FrenchWords
+                          text={sentence.text}
+                          glosses={sentence.words}
+                          className="fr"
+                          sentenceControls
+                        />
                         <p>{sentence.translation_en}</p>
                         {sentence.build_up.map((line, j) => (
                           <FrenchWords

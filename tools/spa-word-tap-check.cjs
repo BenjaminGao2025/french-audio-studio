@@ -27,7 +27,7 @@ async function open(browser,{touch}){
   if(p==='/api/reading/passages'&&method==='POST')return route.fulfill({json:passage});
   if(p==='/api/lookup')return route.fulfill({json:{token:u.searchParams.get('word'),explanation_en:'Looked-up meaning.',explanation_cn:'查到的释义'}});
   if(p.startsWith('/api/'))return route.fulfill({status:404,json:{detail:'Not in the fixture'}});
-  if(p==='/tts')return route.fulfill({status:204,body:''});
+  if(p==='/tts')return route.fulfill({contentType:'audio/wav',body:Buffer.from('UklGRigAAABXQVZFRm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==','base64')});
   if(p.startsWith('/app')){
    const file=path.join(appRoot,p.replace(/^\/app\/?/,''));
    if(p!=='/app'&&p!=='/app/'&&path.extname(p)&&fs.existsSync(file))return route.fulfill({contentType:mime[path.extname(file)]||'application/octet-stream',body:fs.readFileSync(file)});
@@ -71,7 +71,7 @@ async function geometry(page,index){
    assert(m.minTouchHeight>=44,`Every word needs a touch band of at least 44px (smallest ${m.minTouchHeight}px)`);checks+=2;
    const css=await page.locator('.fr-word').first().evaluate(w=>{const s=getComputedStyle(w);return {touchAction:s.touchAction,userSelect:s.userSelect||s.webkitUserSelect,tapHighlight:s.webkitTapHighlightColor};});
    report.wordStyle=css;
-   assert.equal(css.touchAction,'manipulation');assert.equal(css.userSelect,'none','A long press taps a word instead of selecting it');
+   assert.equal(css.touchAction,'manipulation');assert.equal(css.userSelect,'text','Words stay selectable on touch');
    assert.notEqual(css.tapHighlight,'rgba(0, 0, 0, 0)');checks+=3;
    const card=page.getByRole('dialog');
    const cardWord=async()=>(await card.locator('.fr').first().textContent()).trim();
@@ -128,6 +128,55 @@ async function geometry(page,index){
    // Build-up lines are tappable too, on the same tiles
    const buildup=await geometry(page,1);report.phoneBuildUp=buildup.m;
    assert.equal(buildup.m.deadHorizontalPx,0);assert(buildup.m.minTouchHeight>=44);checks+=2;
+   // ---- Read selection (phone: long press with handles, and the range-mode fallback) ----
+   const bar=page.locator('[data-fr-read-bar]');
+   const readSel=async(expected)=>{
+    const before=await page.evaluate(()=>testPronunciations.length);
+    await bar.getByRole('button',{name:'Read selection'}).click();
+    await page.waitForTimeout(300);
+    assert.deepEqual(await page.evaluate(n=>testPronunciations.slice(n),before),[expected],'Read selection speaks exactly the snapped words');
+    checks++;
+   };
+   await page.evaluate(()=>window.scrollTo(0,0));
+   await page.evaluate(()=>document.querySelectorAll('.fr-words')[0].scrollIntoView({block:'center',behavior:'instant'}));
+   // A long press selects one word: the card stays shut, the bar offers to read it
+   await page.evaluate(()=>{const w=document.querySelectorAll('.fr-words')[0].querySelector('[data-fr-word="femme"]');const r=document.createRange();r.selectNodeContents(w.firstChild);const s=getSelection();s.removeAllRanges();s.addRange(r);});
+   await page.waitForTimeout(500);
+   assert.equal(await card.count(),0,'Selecting one word does not open the card');
+   assert.equal(await bar.isVisible(),true,'Selecting one word shows the read bar');checks+=2;
+   await readSel('femme');
+   // …and extending the selection to a phrase reads the whole phrase
+   await page.evaluate(()=>{const p=document.querySelectorAll('.fr-words')[0];const a=p.querySelector('[data-fr-word="ma"]'),b=p.querySelector('[data-fr-word="femme"]');const r=document.createRange();r.setStartBefore(a);r.setEndAfter(b);const s=getSelection();s.removeAllRanges();s.addRange(r);});
+   await page.waitForTimeout(500);
+   assert.equal(await bar.isVisible(),true,'The bar follows the extended selection');checks++;
+   await readSel('ma femme');
+   await page.evaluate(()=>getSelection().removeAllRanges());
+   await page.keyboard.press('Escape');
+   // Range mode: the per-sentence "Select words" switch, then tap the first and the last word
+   const boxes2=await boxesOf(page,0);
+   const dBox=boxes2.find(b=>b.word==='deux'),eBox=boxes2.find(b=>b.word==='enfants');
+   await page.getByRole('button',{name:'Select words'}).click();
+   assert.equal(await page.locator('.fr-words.is-range-mode').count(),1,'The Select switch puts the sentence in range mode');checks++;
+   assert.equal(await page.getByRole('status').textContent(),'Tap the first word','Range mode explains the first tap');checks++;
+   await page.mouse.click((dBox.left+dBox.right)/2,(dBox.top+dBox.bottom)/2);
+   await page.waitForTimeout(150);
+   assert.equal(await page.getByRole('status').textContent(),'Tap the last word','…then the last one');checks++;
+   await page.mouse.click((eBox.left+eBox.right)/2,(eBox.top+eBox.bottom)/2);
+   await page.waitForTimeout(300);
+   assert.equal(await bar.isVisible(),true,'Range mode shows the bar for the picked span');checks++;
+   await readSel('deux enfants');
+   await bar.getByRole('button',{name:'Clear selection'}).click();
+   assert.equal(await bar.isHidden(),true,'Clear drops the picked span');checks++;
+   await page.getByRole('button',{name:'Select words'}).click();
+   // The per-sentence Read button: a large hit area that reads the whole sentence
+   const readBtn=page.getByRole('button',{name:'Read sentence'});
+   const rb=await readBtn.boundingBox();
+   assert(rb.width>=44&&rb.height>=44,`Read sentence hit area >= 44px (${rb.width}x${rb.height})`);
+   const sentenceBefore=await page.evaluate(()=>testPronunciations.length);
+   await readBtn.click();
+   await page.waitForTimeout(300);
+   assert.deepEqual(await page.evaluate(n=>testPronunciations.slice(n),sentenceBefore),[TEXT],'Read sentence speaks the whole sentence');
+   checks+=2;
    // The vocabulary buttons next to the breakdown still work and still save, not play
    assert.deepEqual(errors,[]);
    await page.evaluate(()=>window.scrollTo(0,0));
@@ -142,14 +191,25 @@ async function geometry(page,index){
    await word.hover();await page.waitForTimeout(300);
    assert.notEqual(await word.evaluate(w=>getComputedStyle(w).backgroundColor),rest,'Hovering a word highlights it');checks++;
    assert.equal(await word.evaluate(w=>(getComputedStyle(w).userSelect||getComputedStyle(w).webkitUserSelect)),'auto','Text stays selectable with a mouse');checks++;
-   // Dragging across words selects text and must not open a card
-   const a=await word.boundingBox();
-   await page.mouse.move(a.x-30,a.y+a.height/2);await page.mouse.down();await page.mouse.move(a.x+a.width+30,a.y+a.height/2,{steps:5});await page.mouse.up();
-   assert.equal(await page.getByRole('dialog').count(),0,'A drag-select is not a tap');checks++;
+   // Dragging across words with the mouse: the bar appears on mouseup with the snapped words,
+   // and the single-word card must not open
+   const dboxes=await boxesOf(page,0);
+   const dBox=dboxes.find(b=>b.word==='deux'),eBox=dboxes.find(b=>b.word==='enfants');
+   await page.mouse.move(dBox.left+2,(dBox.top+dBox.bottom)/2);await page.mouse.down();
+   await page.mouse.move(eBox.right-2,(dBox.top+dBox.bottom)/2,{steps:5});await page.mouse.up();
+   await page.waitForTimeout(300);
+   assert.equal(await page.getByRole('dialog').count(),0,'A drag-select is not a tap');
+   const bar=page.locator('[data-fr-read-bar]');
+   assert.equal(await bar.isVisible(),true,'The read bar appears after a mouse drag');checks+=2;
+   const dragBefore=await page.evaluate(()=>testPronunciations.length);
+   await bar.getByRole('button',{name:'Read selection'}).click();
+   await page.waitForTimeout(300);
+   assert.deepEqual(await page.evaluate(n=>testPronunciations.slice(n),dragBefore),['deux enfants'],'Read selection speaks the exact words snapped to whole words');
+   checks++;
    assert.deepEqual(errors,[]);
    await ctx.close();
   }
   if(process.env.WORD_TAP_REPORT)console.log(JSON.stringify(report,null,1));
-  console.log(`PASS ${checks} checks: SPA word tap targets, gaps, audio, card and desktop hover/selection.`);
+  console.log(`PASS ${checks} checks: SPA word tap targets, gaps, audio, card, drag/selection read bar, range mode and sentence controls.`);
  }finally{await browser.close();}
 })().catch(e=>{console.error(e.message||e);if(process.env.WORD_TAP_REPORT)console.log(JSON.stringify(report,null,1));process.exitCode=1;});

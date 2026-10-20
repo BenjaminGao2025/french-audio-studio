@@ -252,6 +252,9 @@
   transition:
     background-color 0.15s ease,
     color 0.15s ease;
+  /* The hit area below sits behind the text of this word (see ::after), so it needs its own
+     stacking context to stay above the backgrounds around it */
+  isolation: isolate;
 }
 .fr-word::after {
   content: "";
@@ -261,6 +264,10 @@
   right: -0.15em;
   height: max(100%, var(--word-tap-height, 0px));
   transform: translateY(-50%);
+  /* Behind the word's own text, above everything around it: the text hit-tests normally, so a
+     drag that starts on the word selects from inside it (an overlay on top would move the
+     selection anchor to the end of the word and drop it from the selection) */
+  z-index: -1;
 }
 .fr-word:active,
 .fr-word[aria-expanded="true"] {
@@ -280,12 +287,111 @@
     text-underline-offset: 3px;
   }
 }
-/* On a phone a long press taps the word instead of selecting it and raising the system callout;
-   with a mouse the text stays selectable */
+/* Words stay selectable on touch too: a long press selects with the system handles (and callout),
+   a drag selects with a mouse. The hit areas above only receive taps; nothing here stops a gesture.
+   The selection highlight is a soft tint of the theme colour and leaves the text colour alone. */
 @media (pointer: coarse) {
   .fr-word {
-    -webkit-user-select: none;
-    user-select: none;
-    -webkit-touch-callout: none;
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: default;
+  }
+}
+.fr-words ::selection {
+  background-color: color-mix(in oklab, var(--primary) 24%, transparent);
+  color: inherit;
+}
+/* Range mode ("Select words"): taps pick the first and the last word, so the text itself must not
+   start a native selection. The picked span is highlighted at the height of the glyphs (not the
+   44px line); the padding fills the space between neighbouring picked words. */
+.fr-words.is-range-mode,
+.fr-words.is-range-mode .fr-word {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.fr-word.fr-word-range {
+  background-color: color-mix(in oklab, var(--primary) 22%, transparent);
+  padding-inline: 0.15em;
+  margin-inline: calc(1px - 0.15em);
+  border-radius: 0;
+}
+
+/* The floating bar of a selection ("Read selection", "Meaning"): fixed near the selection, above
+   cards, and never a selection target itself. Buttons are 44px tall on touch screens. */
+.fr-read-bar {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100vw - 16px);
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background-color: var(--card);
+  color: var(--foreground);
+  box-shadow: 0 6px 20px -4px rgb(0 0 0 / 0.2);
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.fr-read-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  min-width: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: color-mix(in oklab, var(--primary) 20%, transparent);
+}
+.fr-read-btn:hover {
+  background-color: var(--secondary);
+}
+.fr-read-btn-main {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+}
+.fr-read-btn-main:hover {
+  background-color: var(--primary);
+  opacity: 0.9;
+}
+.fr-read-btn:disabled {
+  opacity: 0.4;
+}
+.fr-read-btn.is-playing {
+  animation: fr-read-pulse 1s ease-in-out infinite;
+}
+.fr-read-btn:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+.fr-read-error {
+  padding: 0 8px;
+  font-size: 0.75rem;
+  color: var(--destructive);
+}
+@keyframes fr-read-pulse {
+  50% {
+    opacity: 0.6;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fr-read-btn.is-playing {
+    animation: none;
+  }
+}
+@media (pointer: coarse) {
+  .fr-read-btn {
+    min-height: 44px;
+    min-width: 44px;
   }
 }

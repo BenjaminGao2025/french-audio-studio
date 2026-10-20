@@ -18,11 +18,13 @@ assert.match(word, /position: relative;/, 'anchors the hit area');
 assert.match(word, /touch-action: manipulation;/, 'no double-tap zoom on a word');
 assert.match(word, /-webkit-user-select: text;\s*user-select: text;/, 'a phrase can still be selected');
 assert.match(word, /-webkit-tap-highlight-color: rgba\(var\(--primary-rgb\)/, 'tap feedback in the theme colour');
+assert.match(word, /isolation: isolate;/, 'the hit area below needs its own stacking context');
 const hit = block('.interactive-word::after');
 assert.match(hit, /position: absolute;/, 'the hit area adds no layout');
 assert.match(hit, /height: max\(100%, var\(--word-tap-height, 0px\)\);/, 'at least --word-tap-height tall');
 assert.match(hit, /left: -0\.15em;[\s\S]*right: -0\.15em;/, 'neighbouring words meet in the gap between them');
 assert.doesNotMatch(hit, /pointer-events: none/, 'the hit area must receive the tap');
+assert.match(hit, /z-index: -1;/, 'behind the word text, so a drag that starts on the word selects from inside it');
 // 44px on touch screens, for the hit area and for the line it sits in
 const coarse = css.split('@media (pointer: coarse) {').slice(1).map(part => part.slice(0, part.indexOf('\n}\n')));
 assert(coarse.some(rule => /--word-tap-height: 44px;/.test(rule)), '44px word hit area on touch screens');
@@ -129,13 +131,12 @@ const settled = () => new Promise(resolve => setTimeout(resolve, 700));
     spoken.length = 0;
     select(byWord.deux);
     await settled();
-    assert.equal(popover.isOpen(), true, 'a selected word opens');
-    assert.equal(popup.querySelector('.popover-word').textContent.trim(), 'deux');
-    assert.deepEqual(spoken, ['deux']);
-    assert(byWord.deux.classList.contains('is-active-word'), 'anchored to the word itself');
+    assert.equal(popover.isOpen(), false, 'a single selected word does not open the popover');
+    assert.deepEqual(spoken, []);
     // ...and extending the selection to a phrase opens the phrase instead
     select(byWord.deux, byWord.enfants);
     await settled();
+    assert.equal(popover.isOpen(), true, 'a selected phrase opens as a phrase');
     assert.equal(popup.querySelector('.popover-word').textContent.replace(/\s+/g, ' ').trim(), 'deux enfants', 'the popover trims the comma off a phrase');
     // A click already opened the word (a double click selects it afterwards): no second opening
     popover.close();
