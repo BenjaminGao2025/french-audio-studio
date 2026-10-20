@@ -18,7 +18,11 @@ vi.mock("@/components/fr/kit", () => ({
   Chip: ({ children }: { children: ReactNode }) => <span>{children}</span>,
 }));
 vi.mock("@/api", () => ({
-  api: { reading: { create: vi.fn(), get: vi.fn(), done: vi.fn(), addWord: vi.fn() } },
+  api: {
+    reading: { create: vi.fn(), get: vi.fn(), done: vi.fn(), addWord: vi.fn() },
+    speech: { ttsUrl: (text: string) => `/tts?text=${encodeURIComponent(text)}` },
+    analyze: { lookup: vi.fn() },
+  },
 }));
 const passage: Passage = {
   id: "p1",
@@ -111,6 +115,31 @@ it("saves selected vocabulary as a cloze through the module API", async () => {
   await waitFor(() =>
     expect(api.reading.addWord).toHaveBeenCalledWith("p1", passage.text, "bibliothèque", "library"),
   );
+});
+it("plays and explains a word tapped in the breakdown, without touching the vocabulary list", async () => {
+  const played: string[] = [];
+  vi.stubGlobal(
+    "Audio",
+    class {
+      src: string;
+      constructor(src: string) {
+        this.src = src;
+      }
+      play() {
+        played.push(this.src);
+        return Promise.resolve();
+      }
+      pause() {}
+    },
+  );
+  await create();
+  fireEvent.click(screen.getAllByRole("button", { name: "bibliothèque" })[0]!);
+  expect(played).toEqual(["/tts?text=biblioth%C3%A8que"]);
+  expect(screen.getByRole("dialog", { name: "Meaning of bibliothèque" })).toHaveTextContent(
+    "library",
+  );
+  expect(api.reading.addWord).not.toHaveBeenCalled();
+  vi.unstubAllGlobals();
 });
 it("shows generation errors and allows retry", async () => {
   vi.mocked(api.reading.create).mockRejectedValueOnce(new Error("Gateway unavailable"));

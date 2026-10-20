@@ -117,6 +117,18 @@ it("five blind plays never complete relistens, which unlock sequentially", async
   expect(api.listening.relisten).toHaveBeenCalledWith("ls1", "slow20", 0);
 });
 
+it("plays and explains a word tapped in the revealed text", async () => {
+  await mount();
+  fireEvent.click(screen.getByRole("button", { name: "Blind listen" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Understood" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "Understood" }));
+  await screen.findByRole("button", { name: "Relisten →" });
+  audioPlay.mockClear();
+  fireEvent.click(screen.getByRole("button", { name: "Bonjour" }));
+  expect(audioPlay).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole("dialog", { name: "Meaning of Bonjour" })).toHaveTextContent("hello");
+  expect(api.listening.addWord).not.toHaveBeenCalled();
+});
 it("keeps reveal locked and reports a failed blind submission", async () => {
   vi.mocked(api.listening.blind).mockRejectedValueOnce(new Error("Save failed"));
   await mount();

@@ -389,6 +389,8 @@ function initStudyWorkbench() {
         speak: (text) => playFrenchSpeech(text, null, { once: true }),
         getAuthToken: () => getEffectiveAuthToken(),
         wordSelector: `.interactive-word, .diff-word, .token-word, ${GLOSS_TAP_SELECTOR}`,
+        // The popover must not cover the other lines of the sentence it was opened from
+        blockFor: (element) => (element && element.closest ? element.closest('.sentence-french-text, .buildup-fr-text') : null),
         contextFor(element) {
             const card = element && element.closest('.sentence-card');
             if (!card) return {};
@@ -2109,7 +2111,7 @@ function initStudyWorkbench() {
             };
             head.addEventListener('click', (e) => {
                 if (e.target.closest('button:not(.sentence-toggle), a')) return;
-                if (e.target.closest('.interactive-word')) return;
+                if (wordAtTap(e)) return;
                 if (String(window.getSelection && window.getSelection()).trim()) return;
                 setOpen(!card.classList.contains('is-open'));
             });
@@ -2117,7 +2119,7 @@ function initStudyWorkbench() {
 
         // 0. Interactive Word & Token Click Delegation
         card.addEventListener('click', (e) => {
-            const interactiveWord = e.target.closest('.interactive-word');
+            const interactiveWord = wordAtTap(e);
             if (interactiveWord) {
                 e.stopPropagation();
                 const word = interactiveWord.dataset.word || interactiveWord.dataset.token || interactiveWord.textContent.trim();
@@ -2932,15 +2934,35 @@ function initStudyWorkbench() {
         // Numbers, ordinals and times (2026, 1er, 3e, 15h30, 3,5) are clickable too
         const regex = /(aujourd['’]hui|[A-Za-zÀ-ÖØ-öø-ÿŒœ]+(?:['’][A-Za-zÀ-ÖØ-öø-ÿŒœ]+)?['’]?|\d+(?:[.,:]\d+)*(?:h\d{0,2})?(?:ère|ere|er|re|ème|eme|e)?|[^\sA-Za-zÀ-ÖØ-öø-ÿŒœ\d]+|\s+)/gi;
         const tokens = text.match(regex) || [text];
-        return tokens.map(token => {
+        return tokens.map((token, i) => {
             if (/^[A-Za-zÀ-ÖØ-öø-ÿŒœ\d]/i.test(token)) {
                 const clean = token.replace(/['’]$/, '').trim() || token.trim();
-                return `<span class="interactive-word" lang="fr" role="button" tabindex="0" data-word="${escapeHtml(clean)}" data-token="${escapeHtml(token.trim())}" title="${escapeHtml(clean)}${T.wordTitleSuffix}">${escapeHtml(token)}</span>`;
+                // Punctuation stuck to the word ("enfants,") is part of its tap target
+                const next = tokens[i + 1];
+                const tail = next && !/^[\sA-Za-zÀ-ÖØ-öø-ÿŒœ\d]/i.test(next) ? next : '';
+                return `<span class="interactive-word" lang="fr" role="button" tabindex="0" data-word="${escapeHtml(clean)}" data-token="${escapeHtml(token.trim())}" title="${escapeHtml(clean)}${T.wordTitleSuffix}">${escapeHtml(token + tail)}</span>`;
             }
+            // Already inside the span of the word before it
+            if (i > 0 && !/^[\sA-Za-zÀ-ÖØ-öø-ÿŒœ\d]/i.test(token) && /^[A-Za-zÀ-ÖØ-öø-ÿŒœ\d]/i.test(tokens[i - 1])) return '';
             return escapeHtml(token);
         }).join('');
     }
     window.renderInteractiveWordsHtml = renderInteractiveWordsHtml;
+
+    // The word a click means. A tap that lands on the French line but not on a word (between two
+    // words, on a comma, a few pixels off the glyphs) still belongs to the nearest word on that
+    // line, so it can never fall through to the open/close handler of the sentence row. Taps far
+    // from every word (the empty end of a line) and clicks without a position (a keyboard
+    // Enter on a button) are left alone. So is blind mode: there a nearby tap must not read out
+    // a word that is still hidden.
+    const WORD_TAP_SLOP = 22;  // half of the 44px minimum touch size
+    function wordAtTap(e) {
+        const direct = e.target.closest('.interactive-word');
+        if (direct) return direct;
+        const line = e.target.closest('.sentence-french-text, .buildup-fr-text');
+        if (!line || e.detail === 0 || line.closest('.is-blind-mode') || e.target.closest('button, a')) return null;
+        return window.FrenchWordPopover.nearestElement(line.querySelectorAll('.interactive-word'), e.clientX, e.clientY, WORD_TAP_SLOP);
+    }
 
 
     // -------------------------------------------------------------------------

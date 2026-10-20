@@ -225,3 +225,67 @@
     -webkit-font-smoothing: antialiased;
   }
 }
+
+/* Tappable French words (components/fr/words.tsx; the same targets as .interactive-word on /study).
+   A word's own box is only as tall as its glyphs, so each word carries an invisible hit area
+   (::after: no layout, no paint). On touch screens the line is exactly --word-tap-height tall and so
+   is that area: words on neighbouring lines tile with no gap, and the small gap between two words
+   on a line is shared between them. Anything still missed goes to the nearest word (words.tsx).
+   Unlayered on purpose: it must win over the leading-* utilities on the same element. */
+.fr-words {
+  --word-tap-height: 0px;
+}
+@media (pointer: coarse) {
+  .fr-words {
+    --word-tap-height: 44px;
+    line-height: var(--word-tap-height);
+  }
+}
+.fr-word {
+  position: relative;
+  cursor: pointer;
+  border-radius: 0.2em;
+  padding: 0 1px;
+  /* No double-tap zoom or tap delay; the tap flash uses the theme colour */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: color-mix(in oklab, var(--primary) 20%, transparent);
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+.fr-word::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: -0.15em;
+  right: -0.15em;
+  height: max(100%, var(--word-tap-height, 0px));
+  transform: translateY(-50%);
+}
+.fr-word:active,
+.fr-word[aria-expanded="true"] {
+  background-color: color-mix(in oklab, var(--primary) 16%, transparent);
+  color: var(--primary);
+}
+.fr-word:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+/* Hover only where a pointer really hovers: on a phone it would stay on after a tap */
+@media (hover: hover) and (pointer: fine) {
+  .fr-word:hover {
+    background-color: color-mix(in oklab, var(--primary) 10%, transparent);
+    color: var(--primary);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}
+/* On a phone a long press taps the word instead of selecting it and raising the system callout;
+   with a mouse the text stays selectable */
+@media (pointer: coarse) {
+  .fr-word {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+}

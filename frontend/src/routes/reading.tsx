@@ -5,6 +5,7 @@ import { btn, errorMessage, meta } from "@/components/fr/kit-utils";
 import { api, type Passage } from "@/api";
 import { useActiveSeconds } from "@/api/use-active-seconds";
 import { Skeleton } from "@/components/fr/states";
+import { FrenchWords } from "@/components/fr/words";
 
 export const Route = createFileRoute("/reading")({
   validateSearch: (s: Record<string, unknown>) => ({
@@ -127,14 +128,16 @@ function Reading() {
                 ))}
               </div>
               <div className="panel space-y-4 p-6">
+                <FrenchWords text={cur.text} glosses={cur.words} className="fr text-xl" />
                 <p>
                   {cur.translation_en ||
                     "Offline breakdown: translations and grammar need the AI gateway."}
                 </p>
                 {cur.build_up.map((line, i) => (
-                  <p key={i} className="fr">
-                    {i + 1}. {line}
-                  </p>
+                  <div key={i} className="flex gap-2">
+                    <span className="fr">{i + 1}.</span>
+                    <FrenchWords text={line} glosses={cur.words} className="fr" />
+                  </div>
                 ))}
                 {cur.grammar_points.map((g) => (
                   <p key={g.title} className="text-sm">
