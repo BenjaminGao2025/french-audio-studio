@@ -448,6 +448,7 @@
         const audio = new Audio(ttsUrl(text));
         audio.playbackRate = rate;
         currentAudio = audio;
+        window.FrenchAudio.bind(audio, () => { if (currentAudio === audio) stopAudio(); });
         if (repeat) {
             window.FrenchPlayback.setActive(true, stopAudio);
             audio.addEventListener('ended', () => {
@@ -470,6 +471,7 @@
                 utterance.lang = 'fr-FR';
                 utterance.rate = rate;
                 window.speechSynthesis.cancel();
+                window.FrenchAudio.bind(utterance, stopAudio, audio);
                 window.speechSynthesis.speak(utterance);
             }
         });

@@ -580,10 +580,11 @@ function initStudyWorkbench() {
     }
 
     // One clip, Edge TTS with Web Speech as the fallback; onDone runs when it finishes by itself
-    function playClip(cleanText, onDone) {
+    function playClip(cleanText, onDone, onInterrupt, owner) {
         const audio = new Audio(`/tts?text=${encodeURIComponent(cleanText)}&voice=fr-FR-DeniseNeural`);
         currentActiveAudio = audio;
         let done = false;
+        window.FrenchAudio.bind(audio, () => { done = true; onInterrupt(); }, owner);
         const finish = () => {
             if (done) return;
             done = true;
@@ -599,6 +600,7 @@ function initStudyWorkbench() {
             utterance.rate = 0.95;
             utterance.onend = finish;
             utterance.onerror = finish;
+            window.FrenchAudio.bind(utterance, onInterrupt, owner);
             window.speechSynthesis.speak(utterance);
         };
         audio.addEventListener('ended', finish);
@@ -667,7 +669,10 @@ function initStudyWorkbench() {
                     current = sentences[(index + 1) % sentences.length];
                 }
                 playbackLoopTimer = setTimeout(() => { if (!ended) step(); }, 800);
-            });
+            }, () => {
+                if (currentAudioCleanup === endAll) stopAllAudio();
+                else endAll();
+            }, endAll);
         };
         step();
     }
@@ -2378,6 +2383,7 @@ function initStudyWorkbench() {
                         }
                     };
                     currentAudioCleanup = userCleanup;
+                    window.FrenchAudio.bind(userAudio, handleUserAudioEnd);
 
                     userAudio.addEventListener('ended', handleUserAudioEnd);
                     userAudio.addEventListener('error', handleUserAudioEnd);

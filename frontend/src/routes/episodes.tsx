@@ -1,3 +1,4 @@
+import { audioController } from "@/lib/audio-controller";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { Headphones, Plus, Trash2 } from "lucide-react";
@@ -125,12 +126,7 @@ function Episodes() {
                       src={api.episodes.audioUrl(ep.id)}
                       onPlay={(event) => {
                         const current = event.currentTarget;
-                        current
-                          .closest("ul")
-                          ?.querySelectorAll("audio")
-                          .forEach((audio) => {
-                            if (audio !== current) audio.pause();
-                          });
+                        audioController.claim(current);
                         setPlaying(ep.id);
                       }}
                       onEnded={() => setPlaying((p) => (p === ep.id ? null : p))}

@@ -11,7 +11,13 @@ const sentence={sentence:"Je viens de Pékin, en Chine, mais j'étais étudiant.
   await ctx.addInitScript(({lang,theme})=>{
    localStorage.setItem('frenchStudio.uiLang',lang);localStorage.setItem('frenchStudio.theme',theme);localStorage.setItem('frenchStudio.userToken','touch-fixture');
    window.testPronunciations=[];
-   HTMLMediaElement.prototype.play=function(){const u=new URL(this.src,location.href);if(u.pathname==='/tts')window.testPronunciations.push(u.searchParams.get('text'));return Promise.resolve();};
+   window.testAudioStates=new Map();
+   window.testSpoken=null;
+   speechSynthesis.speak=function(utterance){window.testSpoken=utterance.text;window.testUtterance=utterance;};
+   speechSynthesis.cancel=function(){window.testSpoken=null;};
+   Object.defineProperty(HTMLMediaElement.prototype,'paused',{get(){return window.testAudioStates.get(this)!==true;}});
+   HTMLMediaElement.prototype.pause=function(){window.testAudioStates.set(this,false);this.dispatchEvent(new Event('pause'));};
+   HTMLMediaElement.prototype.play=function(){window.testAudioStates.set(this,true);const u=new URL(this.src,location.href);if(u.pathname==='/tts')window.testPronunciations.push(u.searchParams.get('text'));return Promise.resolve();};
   },{lang,theme});
   await ctx.route('**/*',route=>{
    const u=new URL(route.request().url()),p=u.pathname;
@@ -27,12 +33,33 @@ const sentence={sentence:"Je viens de Pékin, en Chine, mais j'étais étudiant.
   await page.waitForFunction(()=>window.FrenchHistory&&window.FrenchHistory.onRestoreStudy);
   await page.evaluate(s=>window.FrenchHistory.onRestoreStudy({text:s.sentence,sentences:[s,{...s,sentence:"Bonjour.",original:"Bonjour.",build_up:[]}],sentenceCount:2}),sentence);
   const card=page.locator('.sentence-card').first();
+  await card.locator('.btn-speak-round').evaluate(button=>button.click());
+  await page.evaluate(()=>{window.externalRecording=new Audio('/my-recording');return externalRecording.play();});
+  assert(await card.locator('.btn-speak-round').isEnabled(),'External recording must reset sentence UI');
+  assert.equal(await page.evaluate(()=>[...testAudioStates.values()].filter(Boolean).length+(testSpoken?1:0)),1);
+  await page.evaluate(()=>FrenchPlayback.setRepeat(true));
+  await card.locator('.btn-speak-round').evaluate(button=>button.click());
+  await page.waitForTimeout(100);
+  const loopBefore=await page.evaluate(()=>{
+   const n=testPronunciations.length;
+   if(testSpoken){testSpoken=null;testUtterance.onend(new Event('end'));}
+   else {const a=[...testAudioStates].find(([,playing])=>playing)[0];testAudioStates.set(a,false);a.dispatchEvent(new Event('ended'));}
+   return n;
+  });
+  await page.waitForFunction(n=>testPronunciations.length>n,loopBefore);
+  assert(await card.locator('.btn-speak-round').isDisabled(),'Repeat must stay active across clips');
+  await page.evaluate(()=>{FrenchPlayback.stop();FrenchPlayback.setRepeat(false);});
   if((await card.getAttribute('class')).includes('is-open'))await card.locator('.sentence-toggle').tap();
   async function say(locator,word,keyboard=false){
+   await page.keyboard.press('Escape');
+   await card.locator('.btn-speak-round').evaluate(button=>button.click());
+   assert(await card.locator('.btn-speak-round').isDisabled());
    const before=await page.evaluate(()=>testPronunciations.length);
    if(keyboard){await locator.focus();await page.keyboard.press('Enter');}else await locator.tap();
    await page.waitForFunction(n=>testPronunciations.length>n,before);
-   assert.deepEqual(await page.evaluate(n=>testPronunciations.slice(n),before),[word]);await page.keyboard.press('Escape');checks++;
+   assert.deepEqual(await page.evaluate(n=>testPronunciations.slice(n),before),[word]);assert(await card.locator('.btn-speak-round').isEnabled(),'Sentence play button must reset after a word interrupts it');
+   assert.equal(await page.evaluate(()=>[...testAudioStates.values()].filter(Boolean).length+(testSpoken?1:0)),1,'Only the requested word may remain playing');
+   await page.keyboard.press('Escape');checks++;
   }
   await say(card.locator('.sentence-french-text .interactive-word[data-word="Pékin"]'),'Pékin');
   assert(!(await card.getAttribute('class')).includes('is-open'),'Word tap must not expand/collapse the card');

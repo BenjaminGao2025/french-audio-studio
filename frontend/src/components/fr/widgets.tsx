@@ -6,9 +6,9 @@ import { cn } from "@/lib/utils";
 import { btn } from "@/components/fr/kit-utils";
 import { Chip } from "@/components/fr/kit";
 
-// ---- AudioButton: one shared <audio> element, shows playing state ----
+import { audioController } from "@/lib/audio-controller";
 
-let sharedAudio: HTMLAudioElement | null = null;
+// AudioButton shares playback ownership with native players on every SPA route.
 
 export function AudioButton({
   url,
@@ -34,6 +34,7 @@ export function AudioButton({
     () => () => {
       const audio = owner.current;
       if (audio) {
+        audioController.stop(audio);
         audio.pause();
         audio.onended = null;
         audio.onerror = null;
@@ -44,16 +45,11 @@ export function AudioButton({
   const play = async () => {
     if (pending.current || !url) return;
     if (playing && owner.current) {
-      owner.current.pause();
+      audioController.stop(owner.current);
       setPlaying(false);
       return;
     }
-    if (sharedAudio) {
-      sharedAudio.pause();
-      sharedAudio.onended?.(new Event("ended"));
-    }
     const audio = new Audio(url);
-    sharedAudio = audio;
     owner.current = audio;
     audio.onended = () => setPlaying(false);
     audio.onerror = () => {
@@ -63,8 +59,8 @@ export function AudioButton({
     pending.current = true;
     setError(false);
     try {
-      await audio.play();
-      if (owner.current === audio) {
+      const started = await audioController.play(audio, () => setPlaying(false));
+      if (started && owner.current === audio) {
         setPlaying(true);
         onPlay?.();
       }
