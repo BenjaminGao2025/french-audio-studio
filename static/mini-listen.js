@@ -39,6 +39,7 @@
         if(check.result)resultView(check.result);
         if(challenge)$('mini-status').textContent=t('每周保留第一次答案；提交后才能查看原文。只是短练习，不是等级认证。','Your first answers are saved for this week. Text appears after submission. This is practice, not a level certificate.');
     }
+    window.FrenchAudio.bind(audio, stop);
     async function playLine(line,version){
         const r=await fetch(`/api/coach/listen/${check.id}/audio?line=${line}`,{headers:{Authorization:'Bearer '+token}});
         if(!r.ok)throw Error(t('音频暂时不可用，请重试','Audio unavailable; please retry'));

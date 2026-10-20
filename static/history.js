@@ -708,6 +708,9 @@
                     this.stopPreviewAudio();
                     const audio = new Audio(url);
                     this.currentAudio = audio;
+                    window.FrenchAudio.bind(audio, () => {
+                        if (this.currentAudio === audio) this.stopPreviewAudio();
+                    });
                     btn.classList.add('is-playing');
                     btn.innerHTML = `<i data-lucide="pause"></i><span>${T.pause}</span>`;
                     if (window.lucide) window.lucide.createIcons();
