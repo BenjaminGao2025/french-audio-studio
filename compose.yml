@@ -8,7 +8,8 @@ services:
     env_file: .env
     environment:
       OUTPUT_DIR: /app/outputs
-      AGY_BASE_URL: http://127.0.0.1:8645/v1
+      AGY_BASE_URL: ${AGY_BASE_URL:-http://127.0.0.1:3425/v1}
+      AGY_MODEL: ${AGY_MODEL:-gemini-3.8-flash}
       MAX_TEXT_CHARS: "15000"
     volumes:
       - ./outputs:/app/outputs
