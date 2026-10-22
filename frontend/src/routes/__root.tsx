@@ -10,6 +10,7 @@ import {
 import { useEffect } from "react";
 
 import { useLocale } from "../i18n";
+import { FocusTimer } from "../components/fr/focus-timer";
 
 function NotFoundComponent() {
   return (
@@ -95,6 +96,8 @@ function RootComponent() {
       <HeadContent />
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
+      {/* Outside <Outlet />: the focus timer stays mounted across every route. */}
+      <FocusTimer />
     </QueryClientProvider>
   );
 }
