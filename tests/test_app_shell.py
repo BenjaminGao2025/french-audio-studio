@@ -35,9 +35,45 @@ def _entry_js():
     return scripts[0]
 
 
-class AppShellTests(unittest.TestCase):
+class AppShellDisabledTests(unittest.TestCase):
+    """The shell is off by default: /app must never be reachable from a browser."""
+
     @classmethod
     def setUpClass(cls):
+        cls.client = TestClient(tts_service.app)
+
+    def test_app_urls_redirect_to_study(self):
+        self.assertFalse(app_shell.APP_SHELL_ENABLED)
+        for path in ("/app", "/app/", "/app/hours", "/app/cards?block=x", "/app/login", "/app/assets/x.js"):
+            with self.subTest(path=path):
+                res = self.client.get(path, follow_redirects=False)
+                self.assertEqual(res.status_code, 302)
+                self.assertEqual(res.headers["location"], "/study")
+
+    def test_head_request_redirects(self):
+        res = self.client.head("/app", follow_redirects=False)
+        self.assertEqual(res.status_code, 302)
+        self.assertEqual(res.headers["location"], "/study")
+
+    def test_study_still_serves(self):
+        self.assertEqual(self.client.get("/study").status_code, 200)
+        self.assertEqual(self.client.get("/static/study.html").status_code, 200)
+
+    def test_no_static_page_links_to_the_app(self):
+        for path in Path(tts_service.STATIC_DIR).glob("*.html"):
+            with self.subTest(page=path.name):
+                self.assertNotIn('href="/app/', path.read_text(encoding="utf-8"))
+                self.assertNotIn("href='/app/", path.read_text(encoding="utf-8"))
+
+
+class AppShellTests(unittest.TestCase):
+    """Router internals, exercised with the kill switch explicitly turned back on."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls._enabled = mock.patch.object(app_shell, "APP_SHELL_ENABLED", True)
+        cls._enabled.start()
+        cls.addClassCleanup(cls._enabled.stop)
         cls.client = TestClient(tts_service.app)
 
     def test_shell_served_for_app_root_and_deep_links(self):
@@ -149,12 +185,12 @@ class AppShellTests(unittest.TestCase):
         self.assertEqual(self.client.get("/study").status_code, 200)
         self.assertEqual(self.client.get("/static/study.html").status_code, 200)
 
-    def test_legacy_pages_with_a_nav_link_to_the_app(self):
+    def test_legacy_pages_with_no_nav_link_to_the_app(self):
         for name in ("index", "study", "review", "listen", "write", "speak", "coach"):
             with self.subTest(page=name):
                 html = (Path(tts_service.STATIC_DIR) / f"{name}.html").read_text(encoding="utf-8")
-                self.assertEqual(html.count('<a href="/app/" class="nav-tab">'), 1)
-                self.assertLess(html.index('href="/app/"'), html.index('href="/coach"'))
+                self.assertNotIn('href="/app/', html)
+                self.assertIn('href="/coach" class="nav-tab', html)
 
     def test_unbuilt_frontend_gives_503_with_hint(self):
         with mock.patch.object(app_shell, "APP_DIR", APP_DIR / "does-not-exist"):

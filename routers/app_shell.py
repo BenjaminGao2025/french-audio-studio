@@ -1,15 +1,22 @@
-"""Serves the React SPA built into static/app (source: frontend/)."""
+"""Serves the React SPA built into static/app (source: frontend/).
+
+Set APP_SHELL_ENABLED=1 to serve it again; while off, every /app URL redirects to /study.
+"""
 from __future__ import annotations
 
+import os
 from pathlib import PurePosixPath
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
 from web_common import STATIC_DIR
 
 router = APIRouter()
 
+# Single kill switch: the shell is taken offline by default, the build and this router stay.
+APP_SHELL_ENABLED = os.getenv("APP_SHELL_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
+APP_SHELL_FALLBACK = "/study"
 APP_DIR = (STATIC_DIR / "app").resolve()
 IMMUTABLE = "public, max-age=31536000, immutable"
 NO_STORE = "no-cache, no-store, must-revalidate"
@@ -29,6 +36,9 @@ MEDIA_TYPES = {
 @router.api_route("/app", methods=["GET", "HEAD"], include_in_schema=False)
 @router.api_route("/app/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
 async def app_shell(path: str = ""):
+    if not APP_SHELL_ENABLED:
+        # Off: /app, /app/ and /app/anything all land on the page that still works.
+        return RedirectResponse(APP_SHELL_FALLBACK, status_code=302)
     # A last segment with a dot (or anything under assets/) is a file: serve it or 404, never
     # the shell, so a missing chunk is a real 404 instead of HTML served as JavaScript.
     if path.startswith("assets/") or "." in PurePosixPath(path).name:
