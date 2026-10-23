@@ -1015,7 +1015,7 @@
             els.deckList.innerHTML = notes.size ? Array.from(notes.values()).map(({ note, cards }) => `
                 <article class="deck-note">
                     <div class="deck-note-text">
-                        <p class="deck-note-fr" data-sentence="${escapeHtml(note.sentence)}">${clickableFr(note.sentence)}
+                        <p class="deck-note-fr" data-sentence="${escapeHtml(note.sentence)}"><span class="deck-note-sentence">${clickableFr(note.sentence)}</span>
                             <button class="icon-btn btn-play" type="button" data-speech="${escapeHtml(note.sentence)}" data-rate="1" title="${T.play}"><i data-lucide="volume-2"></i></button>
                         </p>
                         ${pick(note.translation_zh, note.translation_en) ? `<p class="deck-note-zh">${escapeHtml(pick(note.translation_zh, note.translation_en))}</p>` : ''}

@@ -630,10 +630,20 @@ kbd {
 
 .deck-note-fr {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 6px;
     margin: 0;
     font-weight: 700;
+}
+
+.deck-note-sentence {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.deck-note-fr .btn-play {
+    flex-shrink: 0;
 }
 
 .deck-note-zh {
