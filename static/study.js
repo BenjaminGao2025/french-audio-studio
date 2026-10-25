@@ -143,6 +143,9 @@ function initStudyWorkbench() {
             cancelAnalysis: 'Cancel', cancelAnalysisTitle: 'Stop the analysis and keep editing (Esc)',
             analysisCancelled: 'Analysis cancelled. Your text is still here; edit it and press Enter when ready.',
             analyzingStatus: 'The AI is splitting the text into sentences, chunks and collocations and analysing them. Please wait...',
+            cleaningStatus: 'Checking your text for French sentences to study...',
+            cleanedInput: (n) => `Extracted ${n} French sentences from your text.`,
+            analyzeSkipped: (failed, total) => `${failed} of ${total} parts could not be analysed and were skipped.`,
             analyzeFailed: 'Analysis request failed',
             analyzingProgress: (done, total) => `The AI is analysing your text: ${done} of ${total} parts done…`,
             analyzeDone: 'Done! First try explaining the sentence yourself (Feynman self-test), then read the explanation. Tap “Add to review” for sentences you want to learn and ⭐ for words; tap 🔊 to hear them, or try shadowing with scores.',
@@ -261,6 +264,9 @@ function initStudyWorkbench() {
             cancelAnalysis: '取消', cancelAnalysisTitle: '停止分析，继续编辑 (Esc)',
             analysisCancelled: '已取消分析，文本仍保留，可继续编辑，改好后按 Enter 重新开始。',
             analyzingStatus: '正在调用 LLM 进行全句切分与意群搭配深度三列解析，请稍候...',
+            cleaningStatus: '正在检查文本中的法语句子…',
+            cleanedInput: (n) => `已从你的文本中提取 ${n} 句法语`,
+            analyzeSkipped: (failed, total) => `其中 ${failed} / ${total} 段解析失败，已跳过。`,
             analyzeFailed: '分析请求失败',
             analyzingProgress: (done, total) => `AI 正在逐段解析：已完成 ${done} / ${total} 段…`,
             analyzeDone: '拆解完成！先试着自己讲讲这句话（费曼自测），再看讲解；想背的句子点「加入复习」，想背的词点 ⭐、点击 🔊 即时发音，或进行跟读打分。',
@@ -3015,7 +3021,7 @@ function initStudyWorkbench() {
         return parts.length ? parts : [text];
     }
 
-    async function analyzePart(text, token, model, signal) {
+    async function analyzePartOnce(text, token, model, signal) {
         const res = await fetch('/api/analyze', {
             signal,
             method: 'POST',
@@ -3027,9 +3033,73 @@ function initStudyWorkbench() {
         });
         const data = await readJsonSafely(res);
         if (!res.ok) {
-            throw new Error(data.detail?.message || data.detail || T.analyzeFailed);
+            const err = new Error(data.detail?.message || data.detail || T.analyzeFailed);
+            err.status = res.status;
+            throw err;
         }
         return data.sentences || [];
+    }
+
+    // A pasted lesson is often Chinese markdown with French examples in it. The server pulls
+    // out the French lines; a pure French paste comes back unchanged with no AI call. Any
+    // failure here is not fatal: the original text is analysed as before.
+    async function cleanInputForAnalysis(text, token, signal) {
+        try {
+            const res = await fetch('/api/clean-input', {
+                signal,
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify({ text }),
+            });
+            if (!res.ok) return null;
+            const data = await readJsonSafely(res);
+            if (!data || !data.changed || typeof data.cleaned !== 'string' || !data.cleaned.trim()) return null;
+            return { cleaned: data.cleaned, count: Number(data.count) || 0 };
+        } catch (_) {
+            return null;
+        }
+    }
+
+    // The tunnel sometimes turns one upstream stall into a 502/504. Retry those parts, but
+    // never a 4xx (a bad request stays bad) and never after Cancel.
+    const ANALYZE_RETRY_DELAYS = [1500, 4000];
+    function retryableAnalyzeError(err, signal) {
+        if (signal && signal.aborted) return false;
+        if (!err || err.name === 'AbortError') return false;
+        // No status means fetch itself failed: network error or timeout
+        return err.status ? err.status >= 500 : true;
+    }
+
+    function waitForRetry(ms, signal) {
+        return new Promise((resolve, reject) => {
+            const onAbort = () => {
+                clearTimeout(timer);
+                reject(new DOMException('cancelled', 'AbortError'));
+            };
+            const timer = setTimeout(() => {
+                if (signal) signal.removeEventListener('abort', onAbort);
+                resolve();
+            }, ms);
+            if (signal) {
+                if (signal.aborted) onAbort();
+                else signal.addEventListener('abort', onAbort, { once: true });
+            }
+        });
+    }
+
+    async function analyzePart(text, token, model, signal) {
+        for (let attempt = 0; ; attempt += 1) {
+            try {
+                return await analyzePartOnce(text, token, model, signal);
+            } catch (err) {
+                const delayMs = ANALYZE_RETRY_DELAYS[attempt];
+                if (delayMs === undefined || !retryableAnalyzeError(err, signal)) throw err;
+                await waitForRetry(delayMs, signal);
+            }
+        }
     }
 
     // Enter can start an analysis by accident: a Cancel button (and Esc) stops it.
@@ -3073,33 +3143,55 @@ function initStudyWorkbench() {
             const { signal } = analysisController;
             showCancelButton(true);
             statusMessage.className = 'status-message status-working';
-            statusMessage.textContent = T.analyzingStatus;
+            statusMessage.textContent = T.cleaningStatus;
+
+            // Markdown lessons with Chinese explanations are reduced to their French lines first
+            const cleaned = await cleanInputForAnalysis(text, token, signal);
+            if (signal.aborted) throw new DOMException('cancelled', 'AbortError');
+            const analysisText = cleaned ? cleaned.cleaned : text;
+            const cleanNote = cleaned ? T.cleanedInput(cleaned.count) : '';
 
             // Short parts, two at a time: thinking models need ~30 s per sentence, and a
             // single request for a long text would hit the 100 s limit of the tunnel.
-            const parts = splitForAnalysis(text);
+            const parts = splitForAnalysis(analysisText);
             const results = new Array(parts.length);
+            const failedParts = [];
             let next = 0;
             let done = 0;
-            if (parts.length > 1) statusMessage.textContent = T.analyzingProgress(0, parts.length);
+            const showProgress = () => {
+                const progress = parts.length > 1 ? T.analyzingProgress(done, parts.length) : T.analyzingStatus;
+                statusMessage.textContent = cleanNote ? `${cleanNote} ${progress}` : progress;
+            };
+            showProgress();
             const worker = async () => {
                 while (next < parts.length && !signal.aborted) {
                     const index = next++;
-                    results[index] = await analyzePart(parts[index], token, model, signal);
+                    try {
+                        results[index] = await analyzePart(parts[index], token, model, signal);
+                    } catch (err) {
+                        // Cancel still stops everything; a part that failed twice is skipped so
+                        // the rest of the text is still analysed and the progress keeps moving.
+                        if (signal.aborted || err.name === 'AbortError') throw err;
+                        failedParts.push(err);
+                        results[index] = [];
+                    }
                     done += 1;
-                    if (parts.length > 1) statusMessage.textContent = T.analyzingProgress(done, parts.length);
+                    showProgress();
                 }
             };
             await Promise.all([worker(), worker()]);
             if (signal.aborted) throw new DOMException('cancelled', 'AbortError');
+            // Every part failing is a real failure, not a partial result
+            if (failedParts.length === parts.length) throw failedParts[0];
             const sentences = results.flat();
 
             renderStudyDeck(sentences);
-            saveHistoryItem(text, sentences);
-            collapseInputPanel(text);
+            saveHistoryItem(analysisText, sentences);
+            collapseInputPanel(analysisText);
 
             statusMessage.className = 'status-message status-success';
-            statusMessage.textContent = T.analyzeDone;
+            const skipped = failedParts.length ? ` ${T.analyzeSkipped(failedParts.length, parts.length)}` : '';
+            statusMessage.textContent = `${cleanNote ? cleanNote + ' ' : ''}${T.analyzeDone}${skipped}`;
         } catch (err) {
             if (analysisController && analysisController.signal.aborted) {
                 // Nothing partial is rendered or saved; the text stays as typed
