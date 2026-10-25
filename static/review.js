@@ -448,7 +448,9 @@
         const audio = new Audio(ttsUrl(text));
         audio.playbackRate = rate;
         currentAudio = audio;
-        window.FrenchAudio.bind(audio, () => { if (currentAudio === audio) stopAudio(); });
+        // A replaced media/speech owner must not stop the new playback session.
+        const stopPlayback = () => { if (currentAudio === audio) stopAudio(); };
+        window.FrenchAudio.bind(audio, stopPlayback);
         if (repeat) {
             window.FrenchPlayback.setActive(true, stopAudio);
             audio.addEventListener('ended', () => {
@@ -466,12 +468,17 @@
         audio.play().catch((err) => {
             // Interrupted by another play/stop: do not fall back to reading the old text.
             if (currentAudio !== audio || (err && err.name === 'AbortError')) return;
+            // iOS can block card autoplay; let the Play/Slow tap retry synchronously.
+            if (err && err.name === 'NotAllowedError') {
+                stopAudio();
+                return;
+            }
             if ('speechSynthesis' in window) {
                 const utterance = new SpeechSynthesisUtterance(text);
                 utterance.lang = 'fr-FR';
                 utterance.rate = rate;
                 window.speechSynthesis.cancel();
-                window.FrenchAudio.bind(utterance, stopAudio, audio);
+                window.FrenchAudio.bind(utterance, stopPlayback, audio);
                 window.speechSynthesis.speak(utterance);
             }
         });

@@ -157,7 +157,7 @@
         if (!ac) return;
         const t0 = ac.currentTime + start;
         [[1, volume], [2, volume * 0.25]].forEach(([mult, vol]) => {
-            const osc = ac.createOscillator();
+            const osc = root.FrenchAudio.exempt(ac.createOscillator());
             const gain = ac.createGain();
             osc.type = 'sine';
             osc.frequency.setValueAtTime(freq * mult, t0);
@@ -175,7 +175,7 @@
         const ac = audio();
         if (!ac) return;
         const t0 = ac.currentTime;
-        const osc = ac.createOscillator();
+        const osc = root.FrenchAudio.exempt(ac.createOscillator());
         const gain = ac.createGain();
         osc.type = 'sine';
         osc.frequency.setValueAtTime(140, t0);
@@ -212,7 +212,7 @@
 
     function voiceClip(key) {
         if (!voiceClips[key]) {
-            voiceClips[key] = new Audio(`/api/game/callout/${key}.mp3`);
+            voiceClips[key] = root.FrenchAudio.exempt(new Audio(`/api/game/callout/${key}.mp3`));
             voiceClips[key].preload = 'auto';
         }
         return voiceClips[key];

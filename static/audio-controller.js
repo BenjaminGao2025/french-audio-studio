@@ -1,10 +1,15 @@
-/* One playback owner per page, including detached Audio objects and native controls. */
+/* One playback owner per page, except exempt game sounds and announcements. */
 (function (root) {
     'use strict';
     if (root.FrenchAudio) return;
     const bindings = new WeakMap();
+    const exemptions = new WeakSet();
     let active = null;
 
+    function exempt(source) {
+        exemptions.add(source);
+        return source;
+    }
     function bind(source, stop, owner = source) {
         bindings.set(source, { stop, owner });
         return source;
@@ -19,6 +24,7 @@
         entry.source.dispatchEvent(new Event('audiointerrupt'));
     }
     function claim(source, stop) {
+        if (exemptions.has(source)) return null;
         if (active && active.source === source && !active.cancelled) return active;
         const previous = active;
         active = null;
@@ -30,7 +36,7 @@
             } else interrupt(previous);
         }
         document.querySelectorAll('audio, video').forEach(media => {
-            if (media !== source && !media.paused) media.pause();
+            if (media !== source && !exemptions.has(media) && !media.paused) media.pause();
         });
         const entry = { source, owner, stop, cancelled: false };
         active = entry;
@@ -48,7 +54,7 @@
         const entry = claim(this, () => this.pause());
         // Claim synchronously: even a pending play request must be interrupted.
         return Promise.resolve(nativePlay.apply(this, args)).then(value => {
-            if (entry.cancelled) this.pause();
+            if (entry && entry.cancelled) this.pause();
             return value;
         });
     };
@@ -78,5 +84,5 @@
         };
     }
     root.addEventListener('pagehide', stopAll);
-    root.FrenchAudio = { bind, stopAll };
+    root.FrenchAudio = { bind, exempt, stopAll };
 })(window);
