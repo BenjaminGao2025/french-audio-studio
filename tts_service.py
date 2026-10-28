@@ -47,11 +47,14 @@ from web_common import BASE_DIR, OUTPUT_DIR, SIGNED_OUT_DETAIL, STATIC_DIR, _req
 # Every AI call goes to the AGY (Antigravity) adapter: an OpenAI-compatible Gemini gateway.
 AGY_BASE_URL = os.getenv("AGY_BASE_URL", "http://127.0.0.1:8645/v1").rstrip("/")
 AGY_MODEL = os.getenv("AGY_MODEL", "gemini-3.8-flash-low")
+# Sent on every AGY call unless a payload sets its own. Empty / "none" / "off" disables it.
+AGY_REASONING_EFFORT = os.getenv("AGY_REASONING_EFFORT", "low").strip()
 # The model id clients see. Browsers may still hold an older model name (a Perplexity-era one):
 # every name is accepted, and AGY_MODEL answers it.
 DEFAULT_MODEL = "gemini-3.8-flash"
 MODEL_LABELS = {DEFAULT_MODEL: "Gemini 3.8 Flash (AGY)"}
-UPSTREAM_TIMEOUT_SECONDS = float(os.getenv("UPSTREAM_TIMEOUT_SECONDS", "120"))
+# Stays under the ~100s Cloudflare tunnel limit.
+UPSTREAM_TIMEOUT_SECONDS = float(os.getenv("UPSTREAM_TIMEOUT_SECONDS", "90"))
 MAX_TEXT_CHARS = int(os.getenv("MAX_TEXT_CHARS", "15000"))
 TTS_SNIPPET_MAX_CHARS = 600
 ASR_MODEL_DIR = Path(
@@ -547,12 +550,17 @@ def _upstream_error(response: httpx.Response) -> HTTPException:
 async def _post_chat(
     client: httpx.AsyncClient, payload: dict, headers: dict[str, str]
 ) -> tuple[dict, str]:
+    # Copy so the caller's dict stays untouched, and never override an explicit value.
+    requested = dict(payload)
+    effort = AGY_REASONING_EFFORT.lower()
+    if effort and effort not in ("none", "off") and "reasoning_effort" not in requested:
+        requested["reasoning_effort"] = AGY_REASONING_EFFORT
     for upstream_attempt in range(2):
         try:
             response = await client.post(
                 f"{AGY_BASE_URL}/chat/completions",
                 headers=headers,
-                json=payload,
+                json=requested,
             )
         except httpx.TimeoutException as exc:
             raise HTTPException(
