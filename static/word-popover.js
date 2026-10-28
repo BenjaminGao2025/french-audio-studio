@@ -918,7 +918,7 @@
                         targetText = options.resolveChunk(sentence, clean) || clean;
                     }
                     payload.targets = [{ text: targetText, mode: inSentence ? 'cloze' : 'recognize', meta: meta || {} }];
-                    payload.auto_listen = true;
+                    // Only the word's own card: never add sentence-level (listen/speak) cards here.
                     const note = await call('POST', '/api/srs/notes', payload);
                     if (options.onSaved) options.onSaved(note);
                 }

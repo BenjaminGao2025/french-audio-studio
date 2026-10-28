@@ -80,7 +80,7 @@ function initStudyWorkbench() {
             dueDetail: (parts, minutes, done) => `${parts} · about ${minutes} min${done ? ` · ${done} reviews done today` : ''}. Review first, then learn new sentences.`,
             starSaved: 'In review (click to remove this fill-in card)', starAdd: 'Add to review: blank out this word in its sentence',
             grammarSaved: 'In review (click to remove this grammar card)', grammarAdd: 'Add to review: the AI writes a new sentence with this rule for you to fill in',
-            sentenceSaved: 'In review (click to remove the “listen” and “speak” cards of this sentence)', sentenceAdd: 'Add to review: creates a “listen” card and a “speak” card',
+            sentenceInReview: 'In review ✓', sentenceRemove: 'Click to remove', sentenceAdd: 'Add to review: creates a “listen” card and a “speak” card',
             inReview: 'In review', addToReview: 'Add to review',
             clickToListen: 'Listen: ', listenTo: (text) => `Listen to “${text}”`, listenStandard: 'Listen to the standard pronunciation',
             modelReading: 'Model', modelReadingFull: 'Model reading', listen: 'Listen',
@@ -201,7 +201,7 @@ function initStudyWorkbench() {
             dueDetail: (parts, minutes, done) => `${parts} · 约 ${minutes} 分钟${done ? ` · 今天已复习 ${done} 次` : ''}。先复习，再学新句子。`,
             starSaved: '已加入复习（点击移除这张挖空卡）', starAdd: '加入复习：在句子里挖空这个词',
             grammarSaved: '已加入复习（点击移除这张语法卡）', grammarAdd: '加入复习：AI 用这条规则造一个新例句让你填空',
-            sentenceSaved: '已加入复习（点击移除这句的「听」「说」卡片）', sentenceAdd: '加入复习：生成「听」和「说」两张卡片',
+            sentenceInReview: '已加入复习 ✓', sentenceRemove: '点击移除', sentenceAdd: '加入复习：生成「听」和「说」两张卡片',
             inReview: '已加入复习', addToReview: '加入复习',
             clickToListen: '点击试听: ', listenTo: (text) => `收听「${text}」标准发音`, listenStandard: '收听标准发音',
             modelReading: '范读', modelReadingFull: '官方范读', listen: '收听',
@@ -823,9 +823,14 @@ function initStudyWorkbench() {
         refreshDueBadge();
     }
 
+    // "Add to review" creates exactly these sentence-level cards. Word and grammar cards
+    // (cloze, recognize, grammar) never count here, so the button state tracks only the
+    // sentence-level deck its own click created.
+    const SENTENCE_CARD_MODES = new Set(['listen', 'speak']);
+
     function sentenceCards(sentence) {
         const note = srsNotesByKey.get(srsSentenceKey(sentence));
-        return note ? note.cards.filter(c => c.mode === 'listen' || c.mode === 'speak') : [];
+        return note ? note.cards.filter(c => SENTENCE_CARD_MODES.has(c.mode)) : [];
     }
 
     function showSrsError(err) {
@@ -896,9 +901,9 @@ function initStudyWorkbench() {
         document.querySelectorAll('.btn-sentence-save').forEach(btn => {
             const saved = sentenceCards(btn.dataset.sentence).length > 0;
             btn.classList.toggle('active', saved);
-            btn.title = saved ? T.sentenceSaved : T.sentenceAdd;
+            btn.title = saved ? T.sentenceRemove : T.sentenceAdd;
             const label = btn.querySelector('.sentence-save-label');
-            if (label) label.textContent = saved ? T.inReview : T.addToReview;
+            if (label) label.textContent = saved ? T.sentenceInReview : T.addToReview;
         });
         wordPopover.refreshSaved();
     }
