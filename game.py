@@ -392,6 +392,11 @@ def state(user_id: int, tz_offset: int, now=None) -> dict[str, Any]:
     total_minutes = sum(minutes_by_day.values())
     active_days = {day for day, minutes in minutes_by_day.items() if minutes >= STREAK_MIN}
     active_days.update(datetime.date.fromisoformat(d) for d in learning["completed_days"])
+    # Any day with tracked or hand-logged time (or a completed coaching day) counts as studied.
+    studied_days = {day for day, minutes in minutes_by_day.items() if minutes > 0}
+    studied_days.update(datetime.date.fromisoformat(d) for d in learning["completed_days"])
+    seven_days_ago = today - datetime.timedelta(days=6)
+    days_studied_7d = sum(1 for day in studied_days if seven_days_ago <= day <= today)
     family_today = today in family_days
     weekend = today.weekday() >= 5
     maintenance = week_target(today) != WEEK_TARGET_MIN
@@ -478,6 +483,7 @@ def state(user_id: int, tz_offset: int, now=None) -> dict[str, Any]:
             "focus_skill": focus_skill,
         },
         "streak_days": _weekday_streak(active_days, family_days, today),
+        "days_studied_7d": days_studied_7d,
     }
 
 

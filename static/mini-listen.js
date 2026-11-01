@@ -20,7 +20,7 @@
     async function action(button,fn){button.disabled=true;$('mini-status').textContent='';try{await fn();}catch(e){$('mini-status').textContent=e.message;}finally{button.disabled=false;}}
     function stop(){playVersion++;audio.pause();audio.removeAttribute('src');audio.load();if(blobUrl){URL.revokeObjectURL(blobUrl);blobUrl=null;}}
     function resultView(result){
-        $('mini-result').textContent=`${result.score} / ${result.total} · ${result.assisted?t('看提示后完成','Completed with help'):t('未查看文字提示','Without text hints')} · ${t('完成练习也有奖励，答错可以拆句再听。','Finishing earns practice credit; listen again to learn from errors.')}`;
+        $('mini-result').textContent=`${result.score} / ${result.total} · ${result.assisted?t('看提示后完成','Completed with help'):t('未查看文字提示','Without text hints')} · ${t('完成练习后可以回看原文，答错可以拆句再听。','After finishing you can review the text; listen again to learn from errors.')}`;
         $('mini-submit').disabled=true;
         check.lesson.questions.forEach((q,i)=>{const field=$('mini-questions').children[i];const note=document.createElement('p');note.className='muted';note.textContent=t('答案：','Answer: ')+q.options[result.correct[i]];field.append(note);});
         $('mini-hint').disabled=false;

@@ -20,7 +20,7 @@
     border: 1px solid var(--line);
     border-radius: 999px;
     background: var(--surface);
-    padding: 4px 12px 4px 4px;
+    padding: 4px 12px;
     color: var(--ink);
     cursor: pointer;
     font: inherit;
@@ -29,50 +29,6 @@
 .hud-hero:hover,
 .hud-hero[aria-expanded="true"] {
     border-color: var(--primary);
-}
-
-.hud-level {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 3px;
-    border-radius: 999px;
-    background: var(--primary);
-    color: var(--primary-contrast);
-    padding: 3px 10px;
-    font-size: 12px;
-    font-weight: 700;
-}
-
-.hud-level b {
-    font-size: 15px;
-}
-
-.hud-xp {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.hud-xp-bar {
-    width: 120px;
-    height: 8px;
-    border-radius: 999px;
-    background: var(--surface-muted);
-    overflow: hidden;
-}
-
-.hud-xp-fill {
-    display: block;
-    height: 100%;
-    width: 0;
-    border-radius: 999px;
-    background: var(--accent);
-    transition: width 0.6s ease;
-}
-
-.hud-xp-text {
-    font-variant-numeric: tabular-nums;
-    font-weight: 600;
 }
 
 .hud-stat {
@@ -92,7 +48,7 @@
     font-weight: 700;
 }
 
-.hud-streak svg {
+.hud-days svg {
     color: var(--accent);
 }
 
@@ -149,11 +105,6 @@
 .hud-focus svg {
     width: 13px;
     height: 13px;
-}
-
-.game-hud.is-leveling .hud-hero {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 4px var(--accent-soft);
 }
 
 /* Progress panel */
@@ -358,121 +309,21 @@
     font-weight: 600;
 }
 
-/* Callouts */
-.game-banner {
+/* A quiet save-failure notice */
+.game-notice {
     position: fixed;
-    top: 34%;
+    top: 16px;
     left: 50%;
     z-index: 10000;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    padding: 12px 28px;
-    border-radius: 14px;
-    background: rgba(27, 33, 30, 0.92);
+    max-width: calc(100vw - 32px);
+    padding: 8px 14px;
+    border-radius: var(--radius-sm);
+    background: var(--danger);
     color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
     pointer-events: none;
     transform: translateX(-50%);
-    animation: game-banner-in 1.3s ease forwards;
-}
-
-.game-banner strong {
-    font-size: 40px;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
-}
-
-.game-banner span {
-    color: var(--success-highlight);
-    font-size: 15px;
-    font-weight: 700;
-}
-
-.game-banner.is-first strong { color: #ff8a7a; }
-.game-banner.is-small { padding: 8px 22px; }
-.game-banner.is-small strong { font-size: 24px; color: var(--success-highlight); }
-.game-banner.is-big strong { color: var(--success-highlight); font-size: 52px; }
-.game-banner.is-level { animation-duration: 2.2s; background: var(--primary); }
-.game-banner.is-level strong { font-size: 48px; }
-
-/* A short full-screen flash behind the big callouts */
-.game-flash {
-    position: fixed;
-    inset: 0;
-    z-index: 9999;
-    pointer-events: none;
-    background: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 60%);
-    animation: game-flash 0.6s ease-out forwards;
-}
-
-.game-flash.is-red { background: radial-gradient(circle at 50% 40%, rgba(255, 110, 90, 0.35), rgba(255, 110, 90, 0) 60%); }
-.game-flash.is-gold { background: radial-gradient(circle at 50% 40%, rgba(var(--primary-rgb), 0.3), rgba(var(--primary-rgb), 0) 62%); }
-
-@keyframes game-flash {
-    0% { opacity: 0; }
-    20% { opacity: 1; }
-    100% { opacity: 0; }
-}
-
-/* The checked answer lights up when it is right */
-.attempt-result.game-hit {
-    animation: game-hit 0.9s ease-out;
-}
-
-@keyframes game-hit {
-    0% { box-shadow: 0 0 0 0 rgba(var(--success-rgb), 0.55); transform: scale(1); }
-    25% { box-shadow: 0 0 0 10px rgba(var(--success-rgb), 0.18); transform: scale(1.02); }
-    100% { box-shadow: 0 0 0 18px rgba(var(--success-rgb), 0); transform: scale(1); }
-}
-.game-banner.is-level span { color: #ffffff; font-size: 18px; }
-.game-banner.is-error { background: var(--danger); }
-.game-banner.is-error strong { font-size: 15px; text-transform: none; }
-
-@keyframes game-banner-in {
-    0% { opacity: 0; transform: translateX(-50%) scale(0.6); }
-    12% { opacity: 1; transform: translateX(-50%) scale(1.08); }
-    22% { transform: translateX(-50%) scale(1); }
-    80% { opacity: 1; }
-    100% { opacity: 0; transform: translateX(-50%) translateY(-12px); }
-}
-
-.game-xp-float {
-    position: fixed;
-    z-index: 10000;
-    color: var(--accent);
-    font-size: 15px;
-    font-weight: 800;
-    pointer-events: none;
-    transform: translateX(-50%);
-    animation: game-xp-float 1.2s ease-out forwards;
-}
-
-@keyframes game-xp-float {
-    0% { opacity: 0; transform: translate(-50%, 10px); }
-    20% { opacity: 1; }
-    100% { opacity: 0; transform: translate(-50%, -18px); }
-}
-
-/* Match summary on the review "done" screen */
-.game-summary {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    margin: 4px 0 8px;
-    padding: 12px 18px;
-    border-radius: 10px;
-    background: var(--accent-soft);
-    font-size: 14px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .game-banner,
-    .game-xp-float,
-    .game-flash,
-    .attempt-result.game-hit {
-        animation: none;
-    }
 }
 
 @media (max-width: 760px) {
@@ -480,16 +331,12 @@
         gap: 6px 12px;
     }
 
-    .hud-xp-bar {
-        width: 72px;
-    }
-
     .hud-btn span,
     .hud-focus span {
         display: none;
     }
 
-    /* Phone: one row. Week, streak and XP numbers are in the panel behind the level */
+    /* Phone: one row. Week and days studied are in the panel behind the button */
     .game-hud {
         flex-wrap: nowrap;
         gap: 8px;
@@ -500,13 +347,8 @@
         padding-right: 8px;
     }
 
-    .hud-xp-bar {
-        width: 48px;
-    }
-
-    .hud-xp-text,
     .hud-week,
-    .hud-streak {
+    .hud-days {
         display: none;
     }
 
@@ -525,15 +367,6 @@
 
     .hud-spacer {
         min-width: 0;
-    }
-
-    .game-banner strong {
-        font-size: 30px;
-    }
-
-    .game-banner.is-big strong,
-    .game-banner.is-level strong {
-        font-size: 36px;
     }
 
     .lane-row {

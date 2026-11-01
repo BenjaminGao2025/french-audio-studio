@@ -594,7 +594,6 @@
                         </div>
                     </div>`,
             };
-            if (session.attempt.suggested >= 3 && window.FrenchGame) window.FrenchGame.onCorrect();
             reveal();
         }, 600);
     }
@@ -635,7 +634,6 @@
                     <span>${T.answer}<b class="letter-diff is-answer fr-word" data-speech="${escapeHtml(answer)}">${diff ? diff.answer : escapeHtml(answer)}</b></span>
                 </div>`,
         };
-        if (suggested >= 3 && window.FrenchGame) window.FrenchGame.onCorrect();
         reveal();
     }
 
@@ -843,10 +841,7 @@
         refreshIcons();
 
         if (card.mode === 'speak' || card.mode === 'cloze' || card.mode === 'grammar') {
-            // Let the announcer finish first, so the voices never overlap
-            const wait = window.FrenchGame ? window.FrenchGame.voiceBusyMs() : 0;
-            if (!wait) playFrench(cardSpeech(card));
-            else setTimeout(() => { if (session.current === card && session.revealed) playFrench(cardSpeech(card)); }, wait);
+            playFrench(cardSpeech(card));
         }
     }
 
@@ -864,7 +859,6 @@
                 answer: session.attempt ? ((session.attempt.answer || '').slice(0, 500) || null) : null,
                 tz_offset: new Date().getTimezoneOffset(),
             });
-            if (window.FrenchGame) window.FrenchGame.onReview(updated.game);
             session.reviewed += 1;
             if ((updated.state === 'learning' || updated.state === 'relearning')
                 && Date.parse(updated.due) - Date.now() <= LEARN_AHEAD_MS) {
@@ -915,8 +909,6 @@
             els.doneDetail.textContent = session.reviewed
                 ? T.doneDesc
                 : T.emptyDesc;
-            // Today's queue is gone: that is a cleared wave (once a day), plus the match summary
-            if (session.reviewed && window.FrenchGame) window.FrenchGame.onWaveCleared(els.done);
             refreshIcons();
             return;
         }

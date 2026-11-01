@@ -185,6 +185,17 @@ class StudyTimeTests(unittest.TestCase):
         state = game.state(self.user_id, PDT, _at("2026-10-15", 10))
         self.assertEqual(state["streak_days"], 0)
 
+    def test_days_studied_in_the_last_seven_days(self):
+        # Window: the 7 days up to and including today (2026-10-07 .. 2026-10-13).
+        game.log_time(self.user_id, "reading", 60, "", PDT, _at("2026-10-06", 10))  # outside
+        game.log_time(self.user_id, "reading", 60, "", PDT, _at("2026-10-07", 10))  # oldest day inside
+        game.log_time(self.user_id, "reading", 20, "", PDT, _at("2026-10-09", 10))  # short day counts
+        game.set_family_day(self.user_id, True, PDT, _at("2026-10-12", 10))  # rest day, not studied
+        state = game.state(self.user_id, PDT, _at("2026-10-13", 10))
+        self.assertEqual(state["days_studied_7d"], 2)
+        game.log_time(self.user_id, "reading", 60, "", PDT, _at("2026-10-13", 10))
+        self.assertEqual(game.state(self.user_id, PDT, _at("2026-10-13", 10))["days_studied_7d"], 3)
+
     def test_family_day_has_no_target(self):
         now = _at("2026-10-06", 10)
         game.set_family_day(self.user_id, True, PDT, now)

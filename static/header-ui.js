@@ -54,7 +54,6 @@
         row(label('账号', 'Account'), actions.querySelector('#user-auth-btn'));
         row(label('外观', 'Appearance'), actions.querySelector('#theme-select'));
         row(label('界面语言', 'Language'), actions.querySelector('#lang-toggle'));
-        row(label('练习音效', 'Practice sounds'), document.querySelector('.hud-mute'));
         const connection = actions.querySelector('.connection-settings');
         if (connection) settings.body.append(connection);
         // Page-specific actions belong alongside the page title, not global navigation.

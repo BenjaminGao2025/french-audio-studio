@@ -617,13 +617,6 @@
             structDiv.appendChild(item);
         });
 
-        // Play callout
-        if (window.FrenchGame?.callout) {
-            window.FrenchGame.callout('Wave cleared');
-        } else if (window.FrenchGame?.announce) {
-            window.FrenchGame.announce('Wave cleared');
-        }
-
         refreshIcons();
     }
 
