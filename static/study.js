@@ -48,6 +48,7 @@ function initStudyWorkbench() {
             inputAria: 'French text input', inputHeading: 'Enter the French text to break down and shadow',
             historyBtn: 'History', historyBtnTitle: 'View and restore past queries',
             exampleBtn: 'Example', exampleBtnTitle: 'Fill in a classic French example',
+            photoBtn: '📷 Photo/upload', photoBtnTitle: 'Take or choose a photo of a textbook page and study its French item by item',
             clear: 'Clear', clearTitle: 'Clear the input',
             inputPlaceholder: 'Paste or type a French text (one sentence or several). It is split into B1 core words, chunks and collocations, with audio and shadowing scores. Enter to analyze, Shift+Enter for a new line.',
             actionAria: 'Breakdown actions', analyze: 'Break down & analyse',
@@ -145,6 +146,9 @@ function initStudyWorkbench() {
             analyzingStatus: 'The AI is splitting the text into sentences, chunks and collocations and analysing them. Please wait...',
             cleaningStatus: 'Checking your text for French sentences to study...',
             cleanedInput: (n) => `Extracted ${n} French sentences from your text.`,
+            photoReading: 'Reading your photo…', photoCancelled: 'Photo reading cancelled.',
+            photoUnreadable: 'This file could not be opened as a photo. Please try another one.',
+            photoFailed: 'The photo could not be read. Please try again.',
             analyzeSkipped: (failed, total) => `${failed} of ${total} parts could not be analysed and were skipped.`,
             analyzeFailed: 'Analysis request failed',
             analyzingProgress: (done, total) => `The AI is analysing your text: ${done} of ${total} parts done…`,
@@ -169,6 +173,7 @@ function initStudyWorkbench() {
             inputAria: '输入法语文本', inputHeading: '输入待拆解与复述的法语文本',
             historyBtn: '查询历史', historyBtnTitle: '查看并恢复过往查询历史',
             exampleBtn: '填入示例', exampleBtnTitle: '填入经典法语示例',
+            photoBtn: '📷 拍照/上传', photoBtnTitle: '拍摄或选择一张课本照片，提取法语后逐条学习',
             clear: '清空', clearTitle: '清空输入框',
             inputPlaceholder: '粘贴或输入一段法语文本（可包含单句或多句），系统将基于 B1 核心词汇标准切分词组/搭配并支持发音与跟读评测。回车开始拆解，Shift+回车换行。',
             actionAria: '拆解操作', analyze: '开始拆解与精析',
@@ -266,6 +271,9 @@ function initStudyWorkbench() {
             analyzingStatus: '正在调用 LLM 进行全句切分与意群搭配深度三列解析，请稍候...',
             cleaningStatus: '正在检查文本中的法语句子…',
             cleanedInput: (n) => `已从你的文本中提取 ${n} 句法语`,
+            photoReading: '正在识别照片…', photoCancelled: '已取消识别照片。',
+            photoUnreadable: '这个文件打不开，请换一张照片。',
+            photoFailed: '照片识别失败，请稍后再试。',
             analyzeSkipped: (failed, total) => `其中 ${failed} / ${total} 段解析失败，已跳过。`,
             analyzeFailed: '分析请求失败',
             analyzingProgress: (done, total) => `AI 正在逐段解析：已完成 ${done} / ${total} 段…`,
@@ -294,6 +302,8 @@ function initStudyWorkbench() {
     const charCounter = document.getElementById('char-counter');
     const fillExampleButton = document.getElementById('fill-example-btn');
     const clearInputButton = document.getElementById('clear-input-btn');
+    const photoButton = document.getElementById('photo-upload-btn');
+    const photoInput = document.getElementById('photo-input');
     const analyzeButton = document.getElementById('analyze-btn');
     const analyzeButtonLabel = document.getElementById('analyze-btn-label');
     const statusMessage = document.getElementById('study-status-message');
@@ -3143,6 +3153,7 @@ function initStudyWorkbench() {
 
             analyzeButton.classList.add('is-loading');
             analyzeButton.disabled = true;
+            photoButton.disabled = true;
             analyzeButtonLabel.textContent = T.analyzing;
             analysisController = new AbortController();
             const { signal } = analysisController;
@@ -3212,8 +3223,81 @@ function initStudyWorkbench() {
             showCancelButton(false);
             analyzeButton.classList.remove('is-loading');
             analyzeButton.disabled = false;
+            photoButton.disabled = false;
             analyzeButtonLabel.textContent = T.analyze;
         }
+    }
+
+    // Downscaled here first: a phone photo is far over the upload limit, and 1600 px keeps print legible
+    const PHOTO_MAX_SIDE = 1600;
+    async function photoToDataUrl(file) {
+        const url = URL.createObjectURL(file);
+        try {
+            const img = new Image();
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = () => reject(new Error(T.photoUnreadable));
+                img.src = url;
+            });
+            const scale = Math.min(1, PHOTO_MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.round(img.naturalWidth * scale);
+            canvas.height = Math.round(img.naturalHeight * scale);
+            const context = canvas.getContext('2d');
+            context.fillStyle = '#fff';  // JPEG has no alpha: transparency would turn black
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            context.drawImage(img, 0, 0, canvas.width, canvas.height);
+            return canvas.toDataURL('image/jpeg', 0.8);
+        } finally {
+            URL.revokeObjectURL(url);
+        }
+    }
+
+    // The French lines from the photo then go through the same flow as pasted text
+    async function startPhotoExtract(file) {
+        if (analysisController) return;
+        let extracted = false;
+        try {
+            const token = requireAuthToken();
+            analysisController = new AbortController();
+            const { signal } = analysisController;
+            analyzeButton.disabled = true;
+            photoButton.disabled = true;
+            showCancelButton(true);
+            statusMessage.className = 'status-message status-working';
+            statusMessage.textContent = T.photoReading;
+
+            const image = await photoToDataUrl(file);
+            const res = await fetch('/api/photo-extract', {
+                signal,
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify({ image }),
+            });
+            const data = await readJsonSafely(res);
+            if (!res.ok) throw new Error(data.detail?.message || data.detail || T.photoFailed);
+            frenchInput.value = data.text;
+            charCounter.textContent = `${frenchInput.value.length} / 15000`;
+            extracted = true;
+        } catch (err) {
+            if (analysisController && analysisController.signal.aborted) {
+                statusMessage.className = 'status-message';
+                statusMessage.textContent = T.photoCancelled;
+            } else {
+                statusMessage.className = 'status-message status-error';
+                // fetch itself failing is a TypeError with a browser-language message
+                statusMessage.textContent = err instanceof TypeError ? T.photoFailed : err.message;
+            }
+        } finally {
+            analysisController = null;
+            showCancelButton(false);
+            analyzeButton.disabled = false;
+            photoButton.disabled = false;
+        }
+        if (extracted) startAnalysis();
     }
 
     // -------------------------------------------------------------------------
@@ -3246,6 +3330,14 @@ function initStudyWorkbench() {
         frenchInput.value = "Elle comprend 40 questions portant sur des documents de la vie quotidienne et ayant des objectifs différents.";
         charCounter.textContent = `${frenchInput.value.length} / 15000`;
         startAnalysis();
+    });
+
+    // Photo: no capture attribute, so iPhone offers both the camera and the library
+    photoButton.addEventListener('click', () => photoInput.click());
+    photoInput.addEventListener('change', () => {
+        const file = photoInput.files[0];
+        photoInput.value = '';  // picking the same photo again must fire change
+        if (file) startPhotoExtract(file);
     });
 
     // Clear
