@@ -219,10 +219,72 @@ class PhotoExtractPageTests(unittest.TestCase):
 
     def test_study_js_uploads_and_reuses_the_analysis_flow(self):
         js = Path(host.STATIC_DIR, "study.js").read_text(encoding="utf-8")
-        self.assertIn("fetch('/api/photo-extract'", js)
+        self.assertIn("xhr.open('POST', '/api/photo-extract')", js)
         self.assertIn("const PHOTO_MAX_SIDE = 1600;", js)
         self.assertIn("canvas.toDataURL('image/jpeg', 0.8)", js)
         self.assertIn("frenchInput.value = data.text;", js)
         self.assertIn("if (extracted) startAnalysis();", js)
-        self.assertEqual(js.count("photoReading:"), 2)  # English and Chinese
-        self.assertIn("正在识别照片…", js)
+
+    def test_study_page_has_the_step_panel_under_the_input(self):
+        html = Path(host.STATIC_DIR, "study.html").read_text(encoding="utf-8")
+        self.assertIn('data-i18n-aria="photoStatusAria"', html)
+        panel_tag = html.split('<div id="photo-status"')[1].split(">")[0]
+        self.assertIn("hidden", panel_tag)
+        self.assertNotIn("style=", panel_tag)
+        between = html.split("</article>")[1].split('<section class="action-row"')[0]
+        self.assertIn('id="photo-status-result"', between)
+        for step in ("compress", "upload", "read", "found", "analyze"):
+            self.assertIn(f'data-step="{step}"', between)
+        self.assertNotIn("<script", between)
+        self.assertNotIn("<style", between)
+
+    def test_study_css_styles_every_step_state(self):
+        css = Path(host.STATIC_DIR, "study.css").read_text(encoding="utf-8")
+        self.assertIn(".photo-status {", css)
+        for state in ("current", "done", "failed", "cancelled"):
+            self.assertIn(f".photo-step.is-{state}::before", css)
+
+    def test_upload_reports_progress_and_can_be_cancelled(self):
+        js = Path(host.STATIC_DIR, "study.js").read_text(encoding="utf-8")
+        self.assertNotIn("fetch('/api/photo-extract'", js)
+        upload = js.split("function uploadPhoto(")[1].split("\n    }\n")[0]
+        self.assertIn("new XMLHttpRequest()", upload)
+        self.assertIn("xhr.upload.onprogress", upload)
+        self.assertIn("xhr.upload.onload = onUploaded", upload)
+        self.assertIn("xhr.setRequestHeader('Authorization', `Bearer ${token}`)", upload)
+        self.assertIn("xhr.send(JSON.stringify({ image }))", upload)
+        self.assertIn("signal.addEventListener('abort', () => xhr.abort()", upload)
+        self.assertIn("xhr.onabort", upload)
+
+    def test_cancel_stays_reachable_during_a_photo(self):
+        js = Path(host.STATIC_DIR, "study.js").read_text(encoding="utf-8")
+        self.assertIn("if (show && photoStep) photoStatus.append(cancelAnalysisButton);", js)
+        self.assertIn("photoToDataUrl(file, signal)", js)
+        self.assertIn("photoStatus.scrollIntoView({ block: 'nearest' });", js)
+
+    def test_analysis_progress_goes_to_the_step_panel(self):
+        js = Path(host.STATIC_DIR, "study.js").read_text(encoding="utf-8")
+        self.assertIn("if (fromPhoto) setPhotoStep('analyze', T.photoAnalyzing(", js)
+        self.assertIn("if (fromPhoto) finishPhotoStatus('success',", js)
+        self.assertIn("if (fromPhoto) finishPhotoStatus('cancelled',", js)
+        self.assertIn("if (fromPhoto) finishPhotoStatus('failed',", js)
+
+    def test_step_strings_exist_in_both_languages(self):
+        js = Path(host.STATIC_DIR, "study.js").read_text(encoding="utf-8")
+        keys = (
+            "photoStatusAria", "photoSteps", "photoCompressing", "photoUploading", "photoUploaded",
+            "photoReading", "photoFound", "photoAnalyzing", "photoAllDone", "photoStepFailed",
+            "photoCancelled", "photoNetworkError",
+        )
+        for key in keys:
+            with self.subTest(key=key):
+                self.assertEqual(js.count(f"{key}:"), 2)
+        strings = (
+            "Compressing photo…", "压缩图片…",
+            "`Uploading ${percent}%`", "`上传中 ${percent}%`",
+            "`Uploaded, reading French… (${seconds}s)`", "`上传成功，正在识别法语（已等 ${seconds} 秒）`",
+            "`识别出 ${n} 条`",
+            "`Analysing part ${part} of ${total}`", "`正在分析第 ${part}/${total} 段`",
+        )
+        for text in strings:
+            self.assertIn(text, js)

@@ -146,9 +146,20 @@ function initStudyWorkbench() {
             analyzingStatus: 'The AI is splitting the text into sentences, chunks and collocations and analysing them. Please wait...',
             cleaningStatus: 'Checking your text for French sentences to study...',
             cleanedInput: (n) => `Extracted ${n} French sentences from your text.`,
-            photoReading: 'Reading your photo…', photoCancelled: 'Photo reading cancelled.',
+            photoStatusAria: 'Photo reading progress',
+            photoSteps: { compress: 'Compress photo', upload: 'Upload', read: 'Read French', found: 'Items found', analyze: 'Analyse' },
+            photoCompressing: 'Compressing photo…',
+            photoUploading: (percent) => `Uploading ${percent}%`,
+            photoUploaded: 'Uploaded',
+            photoReading: (seconds) => `Uploaded, reading French… (${seconds}s)`,
+            photoFound: (n) => `Found ${n} item${n === 1 ? '' : 's'}`,
+            photoAnalyzing: (part, total) => `Analysing part ${part} of ${total}`,
+            photoAllDone: (n) => `All done: ${n} sentence${n === 1 ? '' : 's'} ready to study.`,
+            photoStepFailed: (step, message) => `Failed at “${step}”: ${message}`,
+            photoCancelled: 'Photo reading cancelled.',
             photoUnreadable: 'This file could not be opened as a photo. Please try another one.',
             photoFailed: 'The photo could not be read. Please try again.',
+            photoNetworkError: 'The connection dropped. Please check your network and try again.',
             analyzeSkipped: (failed, total) => `${failed} of ${total} parts could not be analysed and were skipped.`,
             analyzeFailed: 'Analysis request failed',
             analyzingProgress: (done, total) => `The AI is analysing your text: ${done} of ${total} parts done…`,
@@ -271,9 +282,20 @@ function initStudyWorkbench() {
             analyzingStatus: '正在调用 LLM 进行全句切分与意群搭配深度三列解析，请稍候...',
             cleaningStatus: '正在检查文本中的法语句子…',
             cleanedInput: (n) => `已从你的文本中提取 ${n} 句法语`,
-            photoReading: '正在识别照片…', photoCancelled: '已取消识别照片。',
+            photoStatusAria: '照片识别进度',
+            photoSteps: { compress: '压缩图片', upload: '上传', read: '识别法语', found: '识别结果', analyze: '分析' },
+            photoCompressing: '压缩图片…',
+            photoUploading: (percent) => `上传中 ${percent}%`,
+            photoUploaded: '上传成功',
+            photoReading: (seconds) => `上传成功，正在识别法语（已等 ${seconds} 秒）`,
+            photoFound: (n) => `识别出 ${n} 条`,
+            photoAnalyzing: (part, total) => `正在分析第 ${part}/${total} 段`,
+            photoAllDone: (n) => `全部完成：共 ${n} 句，可以开始学习了。`,
+            photoStepFailed: (step, message) => `「${step}」这一步失败：${message}`,
+            photoCancelled: '已取消识别照片。',
             photoUnreadable: '这个文件打不开，请换一张照片。',
             photoFailed: '照片识别失败，请稍后再试。',
+            photoNetworkError: '网络连接中断，请检查网络后重试。',
             analyzeSkipped: (failed, total) => `其中 ${failed} / ${total} 段解析失败，已跳过。`,
             analyzeFailed: '分析请求失败',
             analyzingProgress: (done, total) => `AI 正在逐段解析：已完成 ${done} / ${total} 段…`,
@@ -304,9 +326,12 @@ function initStudyWorkbench() {
     const clearInputButton = document.getElementById('clear-input-btn');
     const photoButton = document.getElementById('photo-upload-btn');
     const photoInput = document.getElementById('photo-input');
+    const photoStatus = document.getElementById('photo-status');
+    const photoStatusResult = document.getElementById('photo-status-result');
     const analyzeButton = document.getElementById('analyze-btn');
     const analyzeButtonLabel = document.getElementById('analyze-btn-label');
     const statusMessage = document.getElementById('study-status-message');
+    let photoStep = null;
     const studyInputPanel = document.querySelector('.study-input-panel');
     const actionRow = document.querySelector('.action-row');
     const inputCollapsedBar = document.getElementById('input-collapsed-bar');
@@ -327,6 +352,7 @@ function initStudyWorkbench() {
 
     function expandInputPanel() {
         if (!studyInputPanel || !inputCollapsedBar) return;
+        hidePhotoStatus();
         studyInputPanel.hidden = false;
         if (actionRow) actionRow.hidden = false;
         inputCollapsedBar.hidden = true;
@@ -3129,8 +3155,10 @@ function initStudyWorkbench() {
             cancelAnalysisButton.textContent = T.cancelAnalysis;
             cancelAnalysisButton.title = T.cancelAnalysisTitle;
             cancelAnalysisButton.addEventListener('click', cancelAnalysis);
-            analyzeButton.before(cancelAnalysisButton);
         }
+        // During a photo it sits in the step panel: on a phone the action row is off screen
+        if (show && photoStep) photoStatus.append(cancelAnalysisButton);
+        else if (show) analyzeButton.before(cancelAnalysisButton);
         cancelAnalysisButton.hidden = !show;
     }
     function cancelAnalysis() {
@@ -3147,7 +3175,9 @@ function initStudyWorkbench() {
             return;
         }
 
+        const fromPhoto = photoStep !== null;
         try {
+            hidePhotoStatus();
             const token = requireAuthToken();
             const model = modelSelect.value;
 
@@ -3160,6 +3190,7 @@ function initStudyWorkbench() {
             showCancelButton(true);
             statusMessage.className = 'status-message status-working';
             statusMessage.textContent = T.cleaningStatus;
+            if (fromPhoto) setPhotoStep('analyze', T.cleaningStatus);
 
             // Markdown lessons with Chinese explanations are reduced to their French lines first
             const cleaned = await cleanInputForAnalysis(text, token, signal);
@@ -3177,6 +3208,7 @@ function initStudyWorkbench() {
             const showProgress = () => {
                 const progress = parts.length > 1 ? T.analyzingProgress(done, parts.length) : T.analyzingStatus;
                 statusMessage.textContent = cleanNote ? `${cleanNote} ${progress}` : progress;
+                if (fromPhoto) setPhotoStep('analyze', T.photoAnalyzing(Math.min(done + 1, parts.length), parts.length));
             };
             showProgress();
             const worker = async () => {
@@ -3208,15 +3240,18 @@ function initStudyWorkbench() {
             statusMessage.className = 'status-message status-success';
             const skipped = failedParts.length ? ` ${T.analyzeSkipped(failedParts.length, parts.length)}` : '';
             statusMessage.textContent = `${cleanNote ? cleanNote + ' ' : ''}${T.analyzeDone}${skipped}`;
+            if (fromPhoto) finishPhotoStatus('success', `${T.photoAllDone(sentences.length)}${skipped}`);
         } catch (err) {
             if (analysisController && analysisController.signal.aborted) {
                 // Nothing partial is rendered or saved; the text stays as typed
                 statusMessage.className = 'status-message';
                 statusMessage.textContent = T.analysisCancelled;
                 frenchInput.focus();
+                if (fromPhoto) finishPhotoStatus('cancelled', T.analysisCancelled);
             } else {
                 statusMessage.className = 'status-message status-error';
                 statusMessage.textContent = `${T.analyzeError}${err.message}`;
+                if (fromPhoto) finishPhotoStatus('failed', T.photoStepFailed(T.photoSteps[photoStep], err.message));
             }
         } finally {
             analysisController = null;
@@ -3230,13 +3265,14 @@ function initStudyWorkbench() {
 
     // Downscaled here first: a phone photo is far over the upload limit, and 1600 px keeps print legible
     const PHOTO_MAX_SIDE = 1600;
-    async function photoToDataUrl(file) {
+    async function photoToDataUrl(file, signal) {
         const url = URL.createObjectURL(file);
         try {
             const img = new Image();
             await new Promise((resolve, reject) => {
                 img.onload = resolve;
                 img.onerror = () => reject(new Error(T.photoUnreadable));
+                signal.addEventListener('abort', () => reject(new DOMException('cancelled', 'AbortError')), { once: true });
                 img.src = url;
             });
             const scale = Math.min(1, PHOTO_MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
@@ -3253,6 +3289,90 @@ function initStudyWorkbench() {
         }
     }
 
+    // XMLHttpRequest because fetch cannot report upload progress. Resolves with the parts of
+    // a fetch Response that readJsonSafely and the caller use.
+    function uploadPhoto(image, token, signal, onProgress, onUploaded) {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/api/photo-extract');
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+            };
+            xhr.upload.onload = onUploaded;
+            xhr.onload = () => resolve({
+                ok: xhr.status >= 200 && xhr.status < 300,
+                status: xhr.status,
+                json: async () => JSON.parse(xhr.responseText),
+            });
+            xhr.onerror = () => reject(new Error(T.photoNetworkError));
+            xhr.onabort = () => reject(new DOMException('cancelled', 'AbortError'));
+            signal.addEventListener('abort', () => xhr.abort(), { once: true });
+            xhr.send(JSON.stringify({ image }));
+        });
+    }
+
+    // Step panel of the photo flow. photoStep is the running step, or null when no photo is
+    // being processed. Steps are is-pending, is-current, is-done, is-failed or is-cancelled;
+    // the panel is is-working, is-success, is-failed or is-cancelled.
+    const PHOTO_STEPS = ['compress', 'upload', 'read', 'found', 'analyze'];
+    let photoReadTimer = null;
+
+    function photoStepItem(step) {
+        return photoStatus.querySelector(`[data-step="${step}"]`);
+    }
+
+    // doneText replaces the label of the step being left
+    function setPhotoStep(step, text, doneText) {
+        clearInterval(photoReadTimer);
+        if (doneText) photoStepItem(photoStep).textContent = doneText;
+        photoStep = step;
+        const current = PHOTO_STEPS.indexOf(step);
+        PHOTO_STEPS.forEach((name, index) => {
+            const state = index < current ? 'done' : index === current ? 'current' : 'pending';
+            photoStepItem(name).className = `photo-step is-${state}`;
+        });
+        photoStepItem(step).textContent = text;
+    }
+
+    function startPhotoStatus() {
+        PHOTO_STEPS.forEach((name) => {
+            photoStepItem(name).textContent = T.photoSteps[name];
+        });
+        photoStatus.className = 'photo-status is-working';
+        photoStatusResult.textContent = '';
+        photoStatus.hidden = false;
+        setPhotoStep('compress', T.photoCompressing);
+    }
+
+    function startPhotoReading() {
+        const startedAt = Date.now();
+        setPhotoStep('read', T.photoReading(0), T.photoUploaded);
+        const item = photoStepItem('read');
+        photoReadTimer = setInterval(() => {
+            item.textContent = T.photoReading(Math.floor((Date.now() - startedAt) / 1000));
+        }, 1000);
+    }
+
+    function finishPhotoStatus(state, message) {
+        clearInterval(photoReadTimer);
+        const item = photoStepItem(photoStep);
+        item.className = `photo-step is-${state === 'success' ? 'done' : state}`;
+        item.textContent = T.photoSteps[photoStep];
+        photoStep = null;
+        photoStatus.className = `photo-status is-${state}`;
+        photoStatusResult.textContent = message;
+        // The panel carries the outcome: the status line below it would only repeat it
+        statusMessage.className = 'status-message';
+        statusMessage.textContent = '';
+        photoStatus.scrollIntoView({ block: 'nearest' });
+    }
+
+    function hidePhotoStatus() {
+        if (photoStep === null) photoStatus.hidden = true;
+    }
+
     // The French lines from the photo then go through the same flow as pasted text
     async function startPhotoExtract(file) {
         if (analysisController) return;
@@ -3263,33 +3383,32 @@ function initStudyWorkbench() {
             const { signal } = analysisController;
             analyzeButton.disabled = true;
             photoButton.disabled = true;
+            startPhotoStatus();
             showCancelButton(true);
-            statusMessage.className = 'status-message status-working';
-            statusMessage.textContent = T.photoReading;
+            photoStatus.scrollIntoView({ block: 'nearest' });
 
-            const image = await photoToDataUrl(file);
-            const res = await fetch('/api/photo-extract', {
-                signal,
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                },
-                body: JSON.stringify({ image }),
-            });
+            const image = await photoToDataUrl(file, signal);
+            setPhotoStep('upload', T.photoUploading(0), T.photoSteps.compress);
+            const res = await uploadPhoto(
+                image, token, signal,
+                (percent) => setPhotoStep('upload', T.photoUploading(percent)),
+                startPhotoReading,
+            );
             const data = await readJsonSafely(res);
             if (!res.ok) throw new Error(data.detail?.message || data.detail || T.photoFailed);
+            setPhotoStep('found', T.photoFound(data.count), T.photoSteps.read);
             frenchInput.value = data.text;
             charCounter.textContent = `${frenchInput.value.length} / 15000`;
             extracted = true;
         } catch (err) {
             if (analysisController && analysisController.signal.aborted) {
-                statusMessage.className = 'status-message';
-                statusMessage.textContent = T.photoCancelled;
+                finishPhotoStatus('cancelled', T.photoCancelled);
+            } else if (photoStep) {
+                finishPhotoStatus('failed', T.photoStepFailed(T.photoSteps[photoStep], err.message));
             } else {
+                // Not signed in: no step has started and the login dialog is open
                 statusMessage.className = 'status-message status-error';
-                // fetch itself failing is a TypeError with a browser-language message
-                statusMessage.textContent = err instanceof TypeError ? T.photoFailed : err.message;
+                statusMessage.textContent = err.message;
             }
         } finally {
             analysisController = null;
@@ -3377,6 +3496,7 @@ function initStudyWorkbench() {
             onRestoreStudy: (item) => {
                 // 1. Stop any currently playing audio
                 stopAllAudio();
+                hidePhotoStatus();
 
                 // 2. Clean URL params so page reload won't re-trigger analysis
                 if (window.history && window.history.replaceState) {

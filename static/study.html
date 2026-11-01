@@ -175,6 +175,18 @@
                 </div>
             </article>
 
+            <!-- Photo flow progress: one line per step, right under the input; study.js fills in the text -->
+            <div id="photo-status" class="photo-status" role="group" aria-label="照片识别进度" data-i18n-aria="photoStatusAria" hidden>
+                <ol class="photo-steps">
+                    <li class="photo-step" data-step="compress"></li>
+                    <li class="photo-step" data-step="upload"></li>
+                    <li class="photo-step" data-step="read"></li>
+                    <li class="photo-step" data-step="found"></li>
+                    <li class="photo-step" data-step="analyze"></li>
+                </ol>
+                <p id="photo-status-result" class="photo-status-result" role="status"></p>
+            </div>
+
             <!-- 操作与状态横条 -->
             <section class="action-row" aria-label="拆解操作" data-i18n-aria="actionAria">
                 <div id="study-status-message" class="status-message" role="status" aria-live="polite"></div>

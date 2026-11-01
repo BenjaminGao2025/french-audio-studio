@@ -50,6 +50,138 @@
     min-height: 140px;
 }
 
+/* Photo flow: one line per step, right under the input (states are set in study.js) */
+.photo-status {
+    margin-top: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    background: var(--surface);
+    border: 1px solid var(--primary-line);
+    border-radius: var(--radius-md);
+    scroll-margin: var(--space-3);
+}
+
+.photo-status .btn {
+    margin-top: var(--space-3);
+}
+
+.photo-status.is-failed {
+    border-color: var(--danger-line);
+}
+
+.photo-status.is-success,
+.photo-status.is-cancelled {
+    border-color: var(--line);
+}
+
+/* The input and action row are collapsed by now: keep clear of the bar that replaces them */
+.photo-status.is-success {
+    margin-bottom: var(--space-3);
+}
+
+.photo-status.is-working ~ .action-row .status-message {
+    visibility: hidden;
+}
+
+.photo-steps {
+    display: grid;
+    gap: var(--space-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+/* Once everything is done the result line says it: the deck below needs the room */
+.photo-status.is-success .photo-steps {
+    display: none;
+}
+
+.photo-step {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    font-size: var(--text-base);
+    line-height: 1.5;
+    color: var(--muted);
+    overflow-wrap: anywhere;
+}
+
+.photo-step::before {
+    content: "•";
+    flex: 0 0 20px;
+    height: 20px;
+    margin-top: 2px;
+    box-sizing: border-box;
+    font-weight: 700;
+    line-height: 20px;
+    text-align: center;
+}
+
+.photo-step.is-current {
+    color: var(--ink);
+    font-weight: 600;
+}
+
+.photo-step.is-current::before {
+    content: "";
+    border: 2px solid var(--primary-line);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 900ms linear infinite;
+}
+
+.photo-step.is-done {
+    color: var(--ink);
+}
+
+.photo-step.is-done::before {
+    content: "✓";
+    color: var(--success);
+}
+
+.photo-step.is-failed {
+    color: var(--danger);
+    font-weight: 600;
+}
+
+.photo-step.is-failed::before {
+    content: "✕";
+}
+
+.photo-step.is-cancelled {
+    color: var(--ink);
+    font-weight: 600;
+}
+
+.photo-step.is-cancelled::before {
+    content: "–";
+}
+
+.photo-status-result {
+    margin: var(--space-3) 0 0;
+    font-size: var(--text-base);
+    font-weight: 600;
+    line-height: 1.5;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+}
+
+.photo-status-result:empty {
+    display: none;
+}
+
+.photo-status.is-success .photo-status-result {
+    margin-top: 0;
+}
+
+.photo-status.is-success .photo-status-result::before {
+    content: "✓ ";
+    color: var(--success);
+}
+
+.photo-status.is-failed .photo-status-result {
+    color: var(--danger);
+}
+
 /* Collapsed Input Bar (Post-analysis) */
 .input-collapsed-bar {
     background: var(--surface);
