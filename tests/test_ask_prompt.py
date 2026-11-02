@@ -18,8 +18,8 @@ def test_answer_is_grounded_in_the_learner_sentence():
     assert "Ground your answer in their sentence first" in s
     assert "point to the actual clue in that sentence" in s
     assert "not a generic rule" in s
-    assert "l' = la before a vowel sound" in s
-    assert "les would be plural" in s
+    assert "l' = la before a vowel sound" not in s
+    assert "les would be plural" not in s
 
 
 def test_follow_ups_continue_and_never_repeat_examples():
