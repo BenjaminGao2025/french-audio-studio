@@ -47,7 +47,14 @@
 }
 
 .study-input-panel textarea {
+    flex: none;
     min-height: 140px;
+}
+
+/* Image dragged over the input (set in study.js) */
+.study-input-panel textarea.is-drop-target {
+    background: var(--primary-soft);
+    box-shadow: inset 0 0 0 2px var(--primary-line);
 }
 
 /* Photo flow: one line per step, right under the input (states are set in study.js) */

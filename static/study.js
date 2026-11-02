@@ -50,7 +50,7 @@ function initStudyWorkbench() {
             exampleBtn: 'Example', exampleBtnTitle: 'Fill in a classic French example',
             photoBtn: '📷 Photo/upload', photoBtnTitle: 'Take or choose a photo of a textbook page and study its French item by item',
             clear: 'Clear', clearTitle: 'Clear the input',
-            inputPlaceholder: 'Paste or type a French text (one sentence or several). It is split into B1 core words, chunks and collocations, with audio and shadowing scores. Enter to analyze, Shift+Enter for a new line.',
+            inputPlaceholder: 'Paste French text or a screenshot, or tap 📷 to upload',
             actionAria: 'Breakdown actions', analyze: 'Break down & analyse',
             parsed: 'Analysed', expandInput: 'Edit / enter a new text', expandInputTitle: 'Open the input to edit it or enter a new text',
             deckAria: 'Analysis and shadowing cards', deckHeading: 'Sentence analysis & pronunciation practice',
@@ -186,7 +186,7 @@ function initStudyWorkbench() {
             exampleBtn: '填入示例', exampleBtnTitle: '填入经典法语示例',
             photoBtn: '📷 拍照/上传', photoBtnTitle: '拍摄或选择一张课本照片，提取法语后逐条学习',
             clear: '清空', clearTitle: '清空输入框',
-            inputPlaceholder: '粘贴或输入一段法语文本（可包含单句或多句），系统将基于 B1 核心词汇标准切分词组/搭配并支持发音与跟读评测。回车开始拆解，Shift+回车换行。',
+            inputPlaceholder: '粘贴法语文字或截图，或点 📷 上传',
             actionAria: '拆解操作', analyze: '开始拆解与精析',
             parsed: '已解析', expandInput: '重新编辑 / 输入新文本', expandInputTitle: '展开输入框以修改或输入新内容',
             deckAria: '解析与跟读卡片', deckHeading: '句子精析与发音复述',
@@ -338,6 +338,48 @@ function initStudyWorkbench() {
     const collapsedBarText = document.getElementById('collapsed-bar-text');
     const btnExpandInput = document.getElementById('btn-expand-input');
 
+    // The box grows with its text up to half the window, then scrolls inside. A hidden box
+    // cannot be measured: it is fitted again when it is shown.
+    function fitFrenchInput() {
+        if (!frenchInput.offsetWidth) return;
+        const { scrollTop } = frenchInput;
+        const style = getComputedStyle(frenchInput);
+        const padding = parseFloat(style.paddingTop);
+        const lineHeight = parseFloat(style.lineHeight);
+        // Padding scrolls with the text: one padding plus whole lines puts a line edge at the
+        // top and bottom of the box at both scroll ends, so neither end cuts a line
+        const maxHeight = padding + Math.floor((window.innerHeight / 2 - padding) / lineHeight) * lineHeight;
+        // Measured without a scrollbar, whose width would wrap the text differently; the panel
+        // holds its height meanwhile or the page would jump when scrolled down
+        studyInputPanel.style.height = `${studyInputPanel.offsetHeight}px`;
+        frenchInput.style.overflowY = 'hidden';
+        frenchInput.style.height = 'auto';
+        const contentHeight = frenchInput.scrollHeight;
+        const scrolls = contentHeight > maxHeight;
+        frenchInput.style.height = `${scrolls ? maxHeight : contentHeight}px`;
+        frenchInput.style.overflowY = scrolls ? 'auto' : 'hidden';
+        studyInputPanel.style.height = '';
+        frenchInput.scrollTop = scrolls ? scrollTop : 0;
+    }
+
+    function updateFrenchInput() {
+        charCounter.textContent = `${frenchInput.value.length} / 15000`;
+        fitFrenchInput();
+    }
+
+    // Every programmatic fill goes through here and opens the text at its first line
+    function setFrenchText(text) {
+        frenchInput.value = text;
+        frenchInput.scrollTop = 0;
+        updateFrenchInput();
+    }
+
+    // focus() scrolls to the caret: a long text would open at its end
+    function focusFrenchInput() {
+        frenchInput.focus();
+        frenchInput.scrollTop = 0;
+    }
+
     function collapseInputPanel(rawText) {
         if (!studyInputPanel || !inputCollapsedBar) return;
         studyInputPanel.hidden = true;
@@ -357,7 +399,8 @@ function initStudyWorkbench() {
         if (actionRow) actionRow.hidden = false;
         inputCollapsedBar.hidden = true;
         if (frenchInput) {
-            frenchInput.focus();
+            fitFrenchInput();
+            focusFrenchInput();
         }
         refreshIcons();
     }
@@ -3246,7 +3289,7 @@ function initStudyWorkbench() {
                 // Nothing partial is rendered or saved; the text stays as typed
                 statusMessage.className = 'status-message';
                 statusMessage.textContent = T.analysisCancelled;
-                frenchInput.focus();
+                focusFrenchInput();
                 if (fromPhoto) finishPhotoStatus('cancelled', T.analysisCancelled);
             } else {
                 statusMessage.className = 'status-message status-error';
@@ -3398,7 +3441,8 @@ function initStudyWorkbench() {
             if (!res.ok) throw new Error(data.detail?.message || data.detail || T.photoFailed);
             setPhotoStep('found', T.photoFound(data.count), T.photoSteps.read);
             frenchInput.value = data.text;
-            charCounter.textContent = `${frenchInput.value.length} / 15000`;
+            frenchInput.scrollTop = 0;
+            updateFrenchInput();
             extracted = true;
         } catch (err) {
             if (analysisController && analysisController.signal.aborted) {
@@ -3439,15 +3483,19 @@ function initStudyWorkbench() {
         }
     });
 
-    // Textarea counter
+    // Textarea counter and height
     frenchInput.addEventListener('input', () => {
-        charCounter.textContent = `${frenchInput.value.length} / 15000`;
+        updateFrenchInput();
+        // The caret scroll stops short of the bottom padding, which leaves the top line cut
+        if (frenchInput.selectionEnd === frenchInput.value.length) frenchInput.scrollTop = frenchInput.scrollHeight;
     });
+    window.addEventListener('resize', fitFrenchInput);
+    document.addEventListener('study:modechange', fitFrenchInput);
+    fitFrenchInput();
 
     // Fill Example
     fillExampleButton.addEventListener('click', () => {
-        frenchInput.value = "Elle comprend 40 questions portant sur des documents de la vie quotidienne et ayant des objectifs différents.";
-        charCounter.textContent = `${frenchInput.value.length} / 15000`;
+        setFrenchText("Elle comprend 40 questions portant sur des documents de la vie quotidienne et ayant des objectifs différents.");
         startAnalysis();
     });
 
@@ -3459,10 +3507,42 @@ function initStudyWorkbench() {
         if (file) startPhotoExtract(file);
     });
 
+    // A pasted or dropped image takes the same path as the photo button
+    const isImageItem = (item) => item.kind === 'file' && item.type.startsWith('image/');
+    function imageFrom(transfer) {
+        const file = [...transfer.files].find((f) => f.type.startsWith('image/'));
+        if (file) return file;
+        const item = [...transfer.items].find(isImageItem);
+        return item ? item.getAsFile() : null;
+    }
+
+    frenchInput.addEventListener('paste', (e) => {
+        if (e.clipboardData.getData('text/plain').trim()) return;
+        const image = imageFrom(e.clipboardData);
+        if (!image) return;
+        e.preventDefault();
+        startPhotoExtract(image);
+    });
+
+    // Only items are readable during a drag; files stay empty until the drop
+    frenchInput.addEventListener('dragover', (e) => {
+        if (![...e.dataTransfer.items].some(isImageItem)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+        frenchInput.classList.add('is-drop-target');
+    });
+    frenchInput.addEventListener('dragleave', () => frenchInput.classList.remove('is-drop-target'));
+    frenchInput.addEventListener('drop', (e) => {
+        frenchInput.classList.remove('is-drop-target');
+        const image = imageFrom(e.dataTransfer);
+        if (!image) return;
+        e.preventDefault();
+        startPhotoExtract(image);
+    });
+
     // Clear
     clearInputButton.addEventListener('click', () => {
-        frenchInput.value = '';
-        charCounter.textContent = '0 / 15000';
+        setFrenchText('');
         sentencesContainer.innerHTML = '';
         studyDeckSection.hidden = true;
         statusMessage.textContent = '';
@@ -3503,10 +3583,7 @@ function initStudyWorkbench() {
                     window.history.replaceState(null, '', window.location.pathname);
                 }
 
-                if (item.text) {
-                    frenchInput.value = item.text;
-                    charCounter.textContent = `${item.text.length} / 15000`;
-                }
+                if (item.text) setFrenchText(item.text);
                 if (item.sentences && item.sentences.length > 0) {
                     renderStudyDeck(item.sentences);
                     statusMessage.className = 'status-message status-success';
@@ -3520,8 +3597,7 @@ function initStudyWorkbench() {
             onReanalyzeStudy: (item) => {
                 stopAllAudio();
                 if (item.text) {
-                    frenchInput.value = item.text;
-                    charCounter.textContent = `${item.text.length} / 15000`;
+                    setFrenchText(item.text);
                     startAnalysis();
                 }
             },
@@ -3567,8 +3643,7 @@ function initStudyWorkbench() {
     // Personal expression can use the existing analysis without leaving this page.
     window.FrenchStudy = { studyText(text) {
         stopAllAudio();
-        frenchInput.value = text;
-        frenchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        setFrenchText(text);
         return startAnalysis();
     } };
 
@@ -3591,8 +3666,7 @@ function initStudyWorkbench() {
         });
     }
     if (prefillText) {
-        frenchInput.value = decodeURIComponent(prefillText);
-        charCounter.textContent = `${frenchInput.value.length} / 15000`;
+        setFrenchText(decodeURIComponent(prefillText));
         setTimeout(() => {
             if (getEffectiveAuthToken()) {
                 startAnalysis();
