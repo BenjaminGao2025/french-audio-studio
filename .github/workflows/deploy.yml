@@ -6,23 +6,97 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: tts-production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
 jobs:
   test-and-deploy:
-    name: Run Tests and Update Live Production
-    runs-on: self-hosted
+    name: Test and deploy tts.gaoyuze.com
+    runs-on: [self-hosted, tts, tts-container]
+    timeout-minutes: 30
+    env:
+      REPO_DIR: /home/mgacai/projects/notion-mcp-terminal/TTS
+      IMAGE: deploygrow-tts:latest
+      PREV_IMAGE: deploygrow-tts:prev-deploy
+      GH_TOKEN: ${{ github.token }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: /home/mgacai/projects/notion-mcp-terminal/TTS
     steps:
-      - name: Update Server Code to Latest Main
+      - name: Set up git helper (runs git as repo owner)
         run: |
-          cd /home/mgacai/projects/notion-mcp-terminal/TTS
-          git fetch origin main
-          git reset --hard origin/main
+          OWNER_UID=$(stat -c %u "$REPO_DIR"); OWNER_GID=$(stat -c %g "$REPO_DIR")
+          AUTH=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          echo "::add-mask::$AUTH"
+          cat > "$RUNNER_TEMP/g" <<SH
+          #!/bin/bash
+          # Run git as the repo owner so .git never becomes root-owned
+          exec setpriv --reuid=$OWNER_UID --regid=$OWNER_GID --clear-groups env HOME=/tmp GIT_TERMINAL_PROMPT=0 git -C "$REPO_DIR" -c credential.helper= -c "http.https://github.com/.extraheader=AUTHORIZATION: basic \$GIT_AUTH" "\$@"
+          SH
+          chmod 755 "$RUNNER_TEMP/g"
+          echo "GIT_AUTH=$AUTH" >> "$GITHUB_ENV"
 
-      - name: Run Unit Tests
+      - name: Guard - abort if tracked files have uncommitted changes
         run: |
-          cd /home/mgacai/projects/notion-mcp-terminal/TTS
-          docker run --rm -v "$PWD":/src -w /src --entrypoint python deploygrow-tts:latest -m unittest discover -s tests
+          DIRTY=$("$RUNNER_TEMP/g" status --porcelain --untracked-files=no)
+          if [ -n "$DIRTY" ]; then
+            echo "::error::Tracked uncommitted changes in $REPO_DIR; refusing to deploy:"
+            echo "$DIRTY"
+            exit 1
+          fi
 
-      - name: Build and Restart Production Container
+      - name: Record previous commit and image
         run: |
-          cd /home/mgacai/projects/notion-mcp-terminal/TTS
-          docker compose up -d --build
+          PREV=$("$RUNNER_TEMP/g" rev-parse HEAD)
+          echo "PREV=$PREV" >> "$GITHUB_ENV"
+          echo "Previous commit: $PREV"
+          docker tag "$IMAGE" "$PREV_IMAGE"
+
+      - name: Update code to origin/main
+        run: |
+          "$RUNNER_TEMP/g" fetch origin main
+          "$RUNNER_TEMP/g" reset --hard origin/main
+          echo "Now at: $("$RUNNER_TEMP/g" rev-parse HEAD)"
+
+      - name: Run unit tests (throwaway container)
+        run: |
+          if ! docker run --rm -v "$REPO_DIR":/src -w /src --user "$(stat -c %u:%g "$REPO_DIR")" \
+               -e PYTHONDONTWRITEBYTECODE=1 --entrypoint python "$IMAGE" -m unittest discover -s tests; then
+            echo "::error::Tests failed; restoring code to $PREV (live container untouched)"
+            "$RUNNER_TEMP/g" reset --hard "$PREV"
+            exit 1
+          fi
+
+      - name: Build and restart production container
+        run: |
+          if ! docker compose up -d --build; then
+            echo "::error::Build/up failed; rolling back"
+            "$RUNNER_TEMP/g" reset --hard "$PREV"
+            docker tag "$PREV_IMAGE" "$IMAGE"
+            docker compose up -d
+            exit 1
+          fi
+
+      - name: Health check (rollback on failure)
+        run: |
+          ok=0
+          for i in $(seq 1 30); do
+            a=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:8000 || true)
+            b=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 https://tts.gaoyuze.com || true)
+            echo "attempt $i: local=$a public=$b"
+            if [ "$a" = 200 ] && [ "$b" = 200 ]; then ok=1; break; fi
+            sleep 2
+          done
+          if [ "$ok" != 1 ]; then
+            echo "::error::Health check failed; rolling back to $PREV"
+            "$RUNNER_TEMP/g" reset --hard "$PREV"
+            docker tag "$PREV_IMAGE" "$IMAGE"
+            docker compose up -d
+            exit 1
+          fi
+          echo "Deployed $("$RUNNER_TEMP/g" rev-parse HEAD)"
