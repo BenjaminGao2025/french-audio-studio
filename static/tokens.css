@@ -29,6 +29,10 @@
     --success-soft: #edf6f0;
     --success-line: #b8dac4;
     --success-highlight: #a8d6b8;
+    /* Grammar structure: N noun group, V verb, S sentence building. Text-safe (4.5:1 on surface). */
+    --grammar-n: #2f5f9e;
+    --grammar-v: #b0413e;
+    --grammar-s: #2a7349;
     --shadow: 0 2px 8px rgba(32, 40, 46, 0.04);
     --shadow-overlay: 0 16px 48px rgba(32, 40, 46, 0.16);
     --radius-sm: 6px;
@@ -79,6 +83,9 @@
     --success-soft: #23382f;
     --success-line: #517561;
     --success-highlight: #a8d6b8;
+    --grammar-n: #8fb4ea;
+    --grammar-v: #ee9a96;
+    --grammar-s: #86cfa2;
     --shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
     --shadow-overlay: 0 16px 48px rgba(0, 0, 0, 0.35);
 }

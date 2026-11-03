@@ -1,6 +1,7 @@
 """Per-user history of audio and study records."""
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Header, Query
@@ -8,9 +9,11 @@ from pydantic import BaseModel, Field
 
 import auth_db
 import coach
+import grammar
 from web_common import _require_user_id
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class SaveHistoryRequest(BaseModel):
@@ -46,6 +49,11 @@ async def save_history(
     )
     if req.type == "study":
         coach.record(user_id, "read", req.id, {"source": "sentence_analysis"}, 0)
+        # The grammar map counts each analysed sentence once per grammar point it showed
+        try:
+            auth_db.record_grammar_hits(user_id, grammar.hits_from_sentences(req.payload.get("sentences")), req.id)
+        except Exception:
+            logger.exception("Could not record grammar hits")
     return res
 
 

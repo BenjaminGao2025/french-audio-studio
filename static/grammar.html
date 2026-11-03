@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
+    <script src="/static/audio-controller.js?v=__ASSET_VERSION__"></script>
+    <script src="/static/theme.js?v=__ASSET_VERSION__"></script>
+    <meta name="asset-version" content="__ASSET_VERSION__">
+    <title>语法地图 - 1000H French</title>
+    <link rel="icon" href="/favicon.ico?v=2" sizes="any">
+    <link rel="stylesheet" href="/static/tokens.css?v=__ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/style.css?v=__ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/game.css?v=__ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/ui.css?v=__ASSET_VERSION__">
+    <link rel="stylesheet" href="/static/grammar.css?v=__ASSET_VERSION__">
+    <script src="https://unpkg.com/lucide@1.34.0/dist/umd/lucide.min.js" defer></script>
+    <script src="/static/i18n.js?v=__ASSET_VERSION__" defer></script>
+    <script src="/static/game.js?v=__ASSET_VERSION__" defer></script>
+    <script src="/static/grammar.js?v=__ASSET_VERSION__" defer></script>
+<link rel="stylesheet" href="/static/coach.css?v=__ASSET_VERSION__">
+<script src="/static/coach-reminders.js?v=__ASSET_VERSION__" defer></script>
+    <script src="/static/header-ui.js?v=__ASSET_VERSION__" defer></script>
+</head>
+<body>
+    <div class="app-shell">
+        <header class="topbar">
+            <div class="brand-block">
+                <div class="brand-mark" aria-hidden="true">
+                    <i data-lucide="map"></i>
+                </div>
+                <div>
+                    <p class="product-label">1000H French</p>
+                </div>
+            </div>
+
+            <nav class="nav-tabs" aria-label="页面切换" data-i18n-aria="navAria">
+                <a href="/coach" class="nav-tab"><span class="copy-zh">学习教练</span><span class="copy-en">Coach</span></a>
+                <a href="/" class="nav-tab">
+                    <i data-lucide="headphones" aria-hidden="true"></i>
+                    <span data-i18n="navAudio">音频工作台</span>
+                </a>
+                <a href="/study" class="nav-tab">
+                    <i data-lucide="sparkles" aria-hidden="true"></i>
+                    <span data-i18n="navStudy">拆解与复述</span>
+                </a>
+                <a href="/write" class="nav-tab">
+                    <i data-lucide="pen-tool" aria-hidden="true"></i>
+                    <span data-i18n="navWrite">写作</span>
+                </a>
+                <a href="/speak" class="nav-tab">
+                    <i data-lucide="mic" aria-hidden="true"></i>
+                    <span data-i18n="navSpeak">口语</span>
+                </a>
+                <a href="/review" class="nav-tab">
+                    <i data-lucide="brain" aria-hidden="true"></i>
+                    <span data-i18n="navReview">今日复习</span>
+                </a>
+                <a href="/listen" class="nav-tab">
+                    <i data-lucide="car" aria-hidden="true"></i>
+                    <span data-i18n="navListen">开车听</span>
+                </a>
+                <a href="/grammar" class="nav-tab active" aria-current="page">
+                    <i data-lucide="map" aria-hidden="true"></i>
+                    <span data-i18n="navGrammar">语法地图</span>
+                </a>
+            </nav>
+
+            <div class="topbar-actions">
+                <button id="lang-toggle" class="btn btn-secondary lang-toggle" type="button"></button>
+            </div>
+        </header>
+
+        <main class="grammar-main">
+            <div class="page-intro">
+                <h1 data-i18n="heading">语法地图</h1>
+                <p data-i18n="intro">你在「拆解与复述」里学过的每一句，都会在这里点亮它用到的语法。不用背规则表：句子见多了，规则就记住了。</p>
+            </div>
+            <p id="grammar-status" class="grammar-status" role="status" aria-live="polite"></p>
+            <section id="grammar-login" class="grammar-login" hidden>
+                <a class="btn btn-primary" href="/study?login=1" data-i18n="loginCta">登录后查看你的语法地图</a>
+            </section>
+            <div id="grammar-map" class="grammar-map"></div>
+        </main>
+    </div>
+</body>
+</html>

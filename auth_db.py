@@ -84,6 +84,15 @@ def init_db() -> None:
                 lang TEXT NOT NULL,
                 created_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS grammar_hits (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                gid TEXT NOT NULL,
+                sentence_text TEXT NOT NULL,
+                history_id TEXT,
+                ts TEXT NOT NULL
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_grammar_hits_unique ON grammar_hits(user_id, gid, sentence_text);
             """
         )
         conn.commit()
@@ -485,6 +494,38 @@ def add_waitlist_entry(kind: str, contact: str, details: dict[str, str], lang: s
             ),
         )
         return int(cursor.lastrowid)
+
+
+def record_grammar_hits(user_id: int, hits: list[tuple[str, str]], history_id: str | None = None) -> int:
+    """Store (gid, sentence_text) pairs once per user; returns how many were new."""
+    if not hits:
+        return 0
+    now = datetime.datetime.utcnow().isoformat(timespec="seconds")
+    with connect() as conn:
+        before = conn.total_changes
+        conn.executemany(
+            "INSERT OR IGNORE INTO grammar_hits (user_id, gid, sentence_text, history_id, ts) VALUES (?, ?, ?, ?, ?)",
+            [(user_id, gid, text, history_id, now) for gid, text in hits],
+        )
+        return conn.total_changes - before
+
+
+def grammar_hit_counts(user_id: int) -> dict[str, int]:
+    """How many different sentences of this user showed each grammar point."""
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT gid, COUNT(*) AS n FROM grammar_hits WHERE user_id = ? GROUP BY gid", (user_id,)
+        ).fetchall()
+    return {row["gid"]: row["n"] for row in rows}
+
+
+def grammar_hit_sentences(user_id: int, gid: str, limit: int = 100) -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT sentence_text, history_id, ts FROM grammar_hits WHERE user_id = ? AND gid = ? ORDER BY ts DESC, id DESC LIMIT ?",
+            (user_id, gid, limit),
+        ).fetchall()
+    return [{"sentence": row["sentence_text"], "history_id": row["history_id"], "ts": row["ts"]} for row in rows]
 
 
 def _user_id_by_email(conn: sqlite3.Connection, email: str) -> int:

@@ -35,7 +35,7 @@ function initStudyWorkbench() {
         en: {
             pageTitle: 'French Breakdown & Shadowing - 1000H French',
             heading: 'Study & speaking practice',
-            navAria: 'Pages', navAudio: 'Audio Studio', navStudy: 'Study', navWrite: 'Write', navSpeak: 'Speak', navReview: 'Review', navListen: 'Listen',
+            navAria: 'Pages', navAudio: 'Audio Studio', navStudy: 'Study', navWrite: 'Write', navSpeak: 'Speak', navReview: 'Review', navListen: 'Listen', navGrammar: 'Grammar map',
             account: 'Account', login: 'Log in', trialBadgeTitle: 'Account validity',
             reviewBtn: 'Review', reviewBtnTitle: "Today's review (listen · speak · fill in)", dueBadgeTitle: 'Cards due today',
             connectionSettings: 'Connection', connectionNotVerified: 'Connection not verified yet', notVerified: 'Not verified',
@@ -118,6 +118,7 @@ function initStudyWorkbench() {
             showBreakdown: 'Show the breakdown', hideBreakdown: 'Hide the breakdown',
             memoryHook: 'Memory hook:',
             tabBuildup: 'Steps', tabWords: 'Words', tabGrammar: 'Grammar', tabPron: 'Sounds', tabExplain: 'Explain it', glossLabel: 'Word by word',
+            structureAria: 'Sentence structure: tap a part to see its role', structureBlock: { N: 'Noun group', V: 'Verb', S: 'Sentence building' }, grammarMapLink: 'Grammar map',
             thWord: '① Word / phrase (Forme & Audio)', thEnglish: '② English explanation (Anglais)', thChinese: '③ Chinese meaning & usage (Chinois)',
             transcribing: 'Transcribing…', dictationLogin: 'Speech recognition requires logging in first.',
             transcribeFailed: (status) => `Transcription failed (HTTP ${status})`, notHeard: "Didn't catch that. Please try again.",
@@ -172,7 +173,7 @@ function initStudyWorkbench() {
         zh: {
             pageTitle: '法语拆解与跟读复述 - 1000H French',
             heading: '学习与开口练习',
-            navAria: '页面切换', navAudio: '音频工作台', navStudy: '拆解与复述', navWrite: '写作', navSpeak: '口语', navReview: '今日复习', navListen: '开车听',
+            navAria: '页面切换', navAudio: '音频工作台', navStudy: '拆解与复述', navWrite: '写作', navSpeak: '口语', navReview: '今日复习', navListen: '开车听', navGrammar: '语法地图',
             account: '账号', login: '登录', trialBadgeTitle: '账号有效期',
             reviewBtn: '复习', reviewBtnTitle: '今日复习（听 · 说 · 填）', dueBadgeTitle: '今天待复习卡片数',
             connectionSettings: '连接设置', connectionNotVerified: '连接尚未验证', notVerified: '未验证',
@@ -255,6 +256,7 @@ function initStudyWorkbench() {
             showBreakdown: '展开这句的解析', hideBreakdown: '收起这句的解析',
             memoryHook: '记忆钩子：',
             tabBuildup: '一步步搭', tabWords: '逐词剖析', tabGrammar: '语法考点', tabPron: '发音重点', tabExplain: '自己讲', glossLabel: '逐词对照',
+            structureAria: '句子结构：点一块看它的作用', structureBlock: { N: '名词组', V: '动词', S: '句子怎么组织' }, grammarMapLink: '语法地图',
             thWord: '① 词汇 / 词组短语 (Forme & Audio)', thEnglish: '② 英文简明解释 (Anglais)', thChinese: '③ 中文释义与语法搭配 (Chinois)',
             transcribing: '识别中…', dictationLogin: '语音识别需要先登录。',
             transcribeFailed: (status) => `识别失败（HTTP ${status}）`, notHeard: '没听清，再说一次试试。',
@@ -1430,6 +1432,7 @@ function initStudyWorkbench() {
                     <button class="btn-speak-round" type="button" title="${T.listenSentence}" aria-label="${T.readSentenceAria}">
                         <i data-lucide="volume-2"></i>
                     </button>
+                    ${window.FrenchPlayback ? window.FrenchPlayback.toggleHtml('btn-step-repeat btn-head-repeat') : ''}
                     <button class="btn-range-select" type="button" data-range-toggle aria-pressed="false" title="${T.selectWordsTitle}" aria-label="${T.selectWordsAria}">
                         <i data-lucide="text-select"></i>
                     </button>
@@ -1440,6 +1443,69 @@ function initStudyWorkbench() {
                 </div>
             </header>
         `;
+    }
+
+    // Sentence structure bar: the sentence in N (noun group) / V (verb) / S (sentence building)
+    // chunks; a tap shows the chunk's role and its grammar point, linked to the grammar map
+    const STRUCTURE_BLOCKS = ['N', 'V', 'S'];
+    function structureSpans(structure) {
+        return (Array.isArray(structure) ? structure : [])
+            .filter(span => span && typeof span.text === 'string' && span.text.trim() && STRUCTURE_BLOCKS.includes(span.block));
+    }
+
+    function structureBarHtml(structure) {
+        const spans = structureSpans(structure);
+        if (!spans.length) return '';
+        return `
+            <div class="structure-bar" role="group" aria-label="${T.structureAria}">
+                <div class="structure-track" lang="fr">
+                    ${spans.map((span, i) => `<button class="structure-span" type="button" data-block="${span.block}" data-span="${i}" aria-expanded="false"
+                        aria-label="${escapeHtml(`${span.text} · ${T.structureBlock[span.block]}${span.role ? ` · ${span.role}` : ''}`)}">${escapeHtml(span.text)}</button>`).join('')}
+                </div>
+                <div class="structure-legend">
+                    ${STRUCTURE_BLOCKS.map(b => `<span class="structure-key" data-block="${b}">${T.structureBlock[b]}</span>`).join('')}
+                    <a class="structure-map-link" href="/grammar">${T.grammarMapLink}</a>
+                </div>
+                <div class="structure-detail" hidden></div>
+            </div>
+        `;
+    }
+
+    function structureDetailHtml(span) {
+        const name = span.gid ? pick(span.gid_zh, span.gid_en) : '';
+        return `
+            <span class="structure-detail-block" data-block="${span.block}">${T.structureBlock[span.block]}</span>
+            ${span.role ? `<strong class="structure-detail-role">${escapeHtml(span.role)}</strong>` : ''}
+            ${span.detail ? `<span class="structure-detail-text" lang="fr">${escapeHtml(span.detail)}</span>` : ''}
+            ${name ? `<a class="structure-gid-chip" data-block="${escapeHtml((span.gid || '').charAt(0))}" href="/grammar#${encodeURIComponent(span.gid)}">${escapeHtml(name)}</a>` : ''}
+        `;
+    }
+
+    function bindStructureBar(card, structure) {
+        const bar = card.querySelector('.structure-bar');
+        if (!bar) return;
+        const spans = structureSpans(structure);
+        const detail = bar.querySelector('.structure-detail');
+        bar.querySelectorAll('.structure-span').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const wasOpen = btn.getAttribute('aria-expanded') === 'true';
+                bar.querySelectorAll('.structure-span').forEach(other => {
+                    other.setAttribute('aria-expanded', 'false');
+                    other.classList.remove('is-active');
+                });
+                const span = spans[Number(btn.dataset.span)];
+                if (wasOpen || !span) {
+                    detail.hidden = true;
+                    detail.innerHTML = '';
+                    return;
+                }
+                btn.setAttribute('aria-expanded', 'true');
+                btn.classList.add('is-active');
+                detail.innerHTML = structureDetailHtml(span);
+                detail.hidden = false;
+            });
+        });
     }
 
     // Answer options ("A.", "B.") are labels: older analyses kept them as sentences of their own
@@ -1819,6 +1885,7 @@ function initStudyWorkbench() {
                     { id: 'explain', label: T.tabExplain, html: feynmanSelfTestHtml },
                 ].filter(Boolean);
                 const bodyHtml = `
+                    ${structureBarHtml(s.structure)}
                     <div class="card-tabs-bar" role="tablist">
                         ${tabs.map((t, i) => `
                             <button class="card-tab-btn ${i === 0 ? 'active' : ''}" data-tab="${t.id}" type="button" role="tab" aria-selected="${i === 0}">${t.label}</button>
@@ -1900,6 +1967,7 @@ function initStudyWorkbench() {
 
             sentencesContainer.appendChild(card);
             attachSentenceCardEvents(card, sentenceText, transZh, transEn);
+            bindStructureBar(card, s.structure);
         });
 
         refreshIcons();
@@ -2313,6 +2381,14 @@ function initStudyWorkbench() {
             playFrenchSpeech(targetSentence, () => {
                 heroSpeakBtn.disabled = false;
             });
+        });
+
+        // 1b. Sentence Repeat: switching it on loops this sentence right away (off stops the loop)
+        const headRepeatBtn = card.querySelector('.btn-head-repeat');
+        if (headRepeatBtn) headRepeatBtn.addEventListener('click', () => {
+            setTimeout(() => {
+                if (window.FrenchPlayback && window.FrenchPlayback.repeat()) playFrenchSpeech(targetSentence);
+            }, 0);
         });
 
         // 2. Token Pronunciation Buttons

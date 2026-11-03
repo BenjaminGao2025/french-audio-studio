@@ -21,7 +21,7 @@
             return {details, summary, body};
         }
         const practice = disclosure('practice-menu', label('专项练习', 'Practice'));
-        for (const href of ['/write', '/speak', '/listen', '/']) {
+        for (const href of ['/write', '/speak', '/listen', '/grammar', '/']) {
             const link = nav.querySelector(`a[href="${href}"]`);
             if (link) practice.body.append(link);
         }

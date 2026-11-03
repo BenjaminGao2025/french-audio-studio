@@ -8,7 +8,7 @@
 const VERSION = '__ASSET_VERSION__';
 const STATIC_CACHE = `static-${VERSION}`;
 const PAGE_CACHE = `pages-${VERSION}`;
-const PAGES = new Set(['/', '/study', '/review', '/listen', '/speak', '/write', '/coach', '/home', '/privacy', '/for-institutions']);
+const PAGES = new Set(['/', '/study', '/review', '/listen', '/speak', '/write', '/coach', '/grammar', '/home', '/privacy', '/for-institutions']);
 
 self.addEventListener('install', () => self.skipWaiting());
 

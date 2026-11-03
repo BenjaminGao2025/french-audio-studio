@@ -31,11 +31,13 @@ from pydantic import BaseModel, Field
 import auth_db
 import episodes
 import game
+import grammar
 import routers.app_shell
 import routers.auth
 import routers.comprehension
 import routers.cockpit
 import routers.game
+import routers.grammar
 import routers.history
 import routers.srs
 import srs
@@ -200,7 +202,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 # Account, history, SRS-data and game routes live in routers/. The AI-backed routes (transform,
 # analyze, episodes, write, speak, ...) stay in this module: tests patch tts_service._post_chat and
 # friends, and a handler only sees such a patch when it looks the name up here.
-for _routes in (routers.auth, routers.history, routers.srs, routers.game, routers.comprehension, routers.cockpit, routers.app_shell):
+for _routes in (routers.auth, routers.history, routers.srs, routers.game, routers.grammar, routers.comprehension, routers.cockpit, routers.app_shell):
     app.include_router(_routes.router)
 
 
@@ -918,7 +920,7 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
         + ACCENT_RULE +
         "- Put the corrected text in \"sentence\" and put the text exactly as it was written in \"accent_fixed_from\". "
         "If you restored nothing, \"accent_fixed_from\" is \"\".\n"
-        "- Every other field uses the corrected text too: alignment, build_up, words, grammar_points, pronunciation_tips. Never write the typo there.\n"
+        "- Every other field uses the corrected text too: alignment, build_up, words, grammar_points, structure, pronunciation_tips. Never write the typo there.\n"
         "- À is the preposition à with a capital letter. It is not the verb a. In the word table use lemma 'à' and type 'small linking word', "
         "and say in why that À is the preposition à.\n"
         "- Give À its meaning in the phrase: À Paris = in Paris, À 8 heures = at 8 o'clock. "
@@ -974,6 +976,23 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
         "- Format each tip starting with the clean French word or liaison phrase being taught, followed by a colon: 'French word: simple explanation'. Example: \"'informations': the starting 'in-' is the nasal vowel [ɛ̃] (like 'vin' or 'matin'), not English 'in'\".\n"
         "- Do NOT write phrases like \"'in-' in 'informations':\" before the colon; always put the clean French word before the colon.\n"
         "- Always enclose the French words or phonetic representations in single quotes, e.g. \"'leurs diplômes': The 's' in 'leurs' is silent before consonant 'diplômes'\".\n\n"
+        "Sentence structure (a colour bar under the sentence):\n"
+        "- \"structure\": the sentence cut into chunks, left to right, together covering the whole sentence. Punctuation may be left out, except a ? that makes a question.\n"
+        "- Each chunk: text (the exact words), block, role, detail, gid.\n"
+        "- block: N = noun group (nouns, articles, adjectives, pronouns), V = verb (the conjugated verb with its auxiliary, an infinitive), "
+        "S = how the sentence is built (negation words, question words, prepositions, conjunctions, relative pronouns, il y a, c'est).\n"
+        "- role: 2–8 Chinese characters, e.g. 主语代词, 谓语动词, 否定, 介词. detail: short Chinese with the French forms: "
+        "a verb is 'infinitive · person · tense' (pouvoir · tu · 直陈式现在时), a noun group is gender and number (la + table · 阴性单数).\n"
+        "- gid: the id from the list below that this chunk shows (it may be from another block), or null. Never invent an id.\n"
+        "- \"grammar_ids\": 1–6 ids from the list that this sentence shows, most useful first.\n"
+        "- Example: 'Tu peux m\'aider ?' → \"structure\": ["
+        '{"text": "Tu", "block": "N", "role": "主语代词", "detail": "tu · 第二人称单数", "gid": "N.pronoun.subject"}, '
+        '{"text": "peux", "block": "V", "role": "情态动词", "detail": "pouvoir · tu · 直陈式现在时", "gid": "V.present.pouvoir"}, '
+        '{"text": "m\'", "block": "N", "role": "宾语代词", "detail": "me → m\' · 放在不定式前", "gid": "S.order.object_pronoun"}, '
+        '{"text": "aider", "block": "V", "role": "不定式", "detail": "aider · 动词 + 不定式", "gid": "V.verb_infinitive"}, '
+        '{"text": "?", "block": "S", "role": "语调疑问", "detail": "句末升调，语序不变", "gid": "S.question.intonation"}], '
+        '"grammar_ids": ["V.present.pouvoir", "V.verb_infinitive", "S.order.object_pronoun", "S.question.intonation", "N.pronoun.subject"]\n'
+        "Grammar point ids:\n" + grammar.prompt_inventory() + "\n\n"
         "Output JSON format strictly matching this schema:\n"
         "{\n"
         '  "sentences": [\n'
@@ -1015,6 +1034,13 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
         '        {"title": "Passive: est autorisée par = is authorized by", "explanation": "est autorisée par works like English is authorized by.", "hook": "Same word order as English."},\n'
         '        {"title": "Describing words go after the noun", "explanation": "French names the thing first, then says what kind: les autorités canadiennes.", "hook": "Exceptions are short common words: beau, jeune, bon, grand, petit…"}\n'
         "      ],\n"
+        '      "structure": [\n'
+        '        {"text": "Aucune dispense", "block": "N", "role": "主语", "detail": "aucune + dispense · 阴性单数", "gid": "S.neg.aucun"},\n'
+        '        {"text": "n\'est autorisée", "block": "V", "role": "谓语（被动）", "detail": "être · elle · 直陈式现在时 + 过去分词 autorisée", "gid": "V.passive"},\n'
+        '        {"text": "par", "block": "S", "role": "介词", "detail": "par = 由、被，引出做事的人", "gid": null},\n'
+        '        {"text": "les autorités canadiennes", "block": "N", "role": "施动者", "detail": "les + autorités + canadiennes · 阴性复数 · 形容词在后", "gid": "N.adj.position"}\n'
+        "      ],\n"
+        '      "grammar_ids": ["S.neg.aucun", "V.passive", "N.adj.position", "N.adj.agreement", "S.elision"],\n'
         '      "pronunciation_tips": [\n'
         '        "\'les autorités\': link the \'s\' to make a /z/ sound → \'lé-zo-to-ri-té\'",\n'
         '        "\'autorisée\': \'s\' between two vowels sounds like /z/",\n'
@@ -1150,6 +1176,9 @@ def _parse_analysis_json(raw_text: str, fallback_text: str) -> dict:
                 raw_tips = s.get("pronunciation_tips", [])
                 clean_tips = [str(tip).strip() for tip in raw_tips if str(tip).strip()]
 
+                structure = grammar.clean_structure(s.get("structure"), sentence_text)
+                grammar_ids = grammar.clean_grammar_ids(s.get("grammar_ids"), structure)
+
                 trans_en = str(s.get("translation_en") or "")
                 trans_zh = str(s.get("translation_zh") or s.get("translation_cn") or "")
 
@@ -1181,6 +1210,8 @@ def _parse_analysis_json(raw_text: str, fallback_text: str) -> dict:
                     "words": clean_words,
                     "tokens": legacy_tokens,
                     "grammar_points": clean_grammar,
+                    "structure": structure,
+                    "grammar_ids": grammar_ids,
                     "pronunciation_tips": clean_tips,
                 })
             else:
@@ -1937,6 +1968,11 @@ async def study():
 @app.get("/review")
 async def review_page():
     return _html_page("review.html")
+
+
+@app.get("/grammar")
+async def grammar_page():
+    return _html_page("grammar.html")
 
 
 @app.post("/api/analyze")
