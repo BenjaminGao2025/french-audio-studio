@@ -2512,6 +2512,13 @@ a.nav-deck-btn {
     line-height: 1.5;
 }
 
+.sentence-accent-note {
+    margin: 2px 0 0;
+    color: var(--muted);
+    font-size: var(--text-xs);
+    line-height: 1.5;
+}
+
 /* Words always pronounce; the arrow and empty heading space open/close the card. */
 
 .sentence-translation {

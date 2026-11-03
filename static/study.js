@@ -146,6 +146,7 @@ function initStudyWorkbench() {
             analyzingStatus: 'The AI is splitting the text into sentences, chunks and collocations and analysing them. Please wait...',
             cleaningStatus: 'Checking your text for French sentences to study...',
             cleanedInput: (n) => `Extracted ${n} French sentences from your text.`,
+            accentFixedNote: (original) => `Source reads “${original}”, corrected`,
             photoStatusAria: 'Photo reading progress',
             photoSteps: { compress: 'Compress photo', upload: 'Upload', read: 'Read French', found: 'Items found', analyze: 'Analyse' },
             photoCompressing: 'Compressing photo…',
@@ -282,6 +283,7 @@ function initStudyWorkbench() {
             analyzingStatus: '正在调用 LLM 进行全句切分与意群搭配深度三列解析，请稍候...',
             cleaningStatus: '正在检查文本中的法语句子…',
             cleanedInput: (n) => `已从你的文本中提取 ${n} 句法语`,
+            accentFixedNote: (original) => `原文写作 ${original}，已更正`,
             photoStatusAria: '照片识别进度',
             photoSteps: { compress: '压缩图片', upload: '上传', read: '识别法语', found: '识别结果', analyze: '分析' },
             photoCompressing: '压缩图片…',
@@ -1382,9 +1384,29 @@ function initStudyWorkbench() {
         `;
     }
 
+    // Extraction restores accents before the analysis, which then has nothing to report: the
+    // wording it replaced comes from here. A fix and its original have the same length.
+    function withAccentNotes(sentences, fixes) {
+        return sentences.map(s => {
+            const text = s.sentence || s.original || '';
+            if (s.accent_fixed_from || !text) return s;
+            for (const fix of fixes) {
+                const at = fix.fr.indexOf(text);
+                const original = at === -1 ? text : fix.accent_fixed_from.slice(at, at + text.length);
+                if (original !== text) return { ...s, accent_fixed_from: original };
+            }
+            return s;
+        });
+    }
+
+    function accentNoteHtml(original, sentenceText) {
+        if (!original || original === sentenceText) return '';
+        return `<p class="sentence-accent-note">${T.accentFixedNote(escapeHtml(original))}</p>`;
+    }
+
     // The header is the same whether the sentence is open or closed: one line of French
     // (the largest text on the page), its translation, and the sentence actions.
-    function sentenceHeadHtml({ sentenceText, transEn, transZh, idx, total, open, label = '' }) {
+    function sentenceHeadHtml({ sentenceText, transEn, transZh, idx, total, open, label = '', accentFixedFrom = '' }) {
         const isMulti = total > 1;
         const primary = EN ? pick(transZh, transEn) : transEn;
         const secondary = !EN && transZh ? transZh : '';
@@ -1399,6 +1421,7 @@ function initStudyWorkbench() {
                 <div class="sentence-head-text">
                     ${label ? `<span class="sentence-label">${escapeHtml(label)}</span>` : ''}
                     <p class="sentence-french-text" lang="fr">${renderInteractiveWordsHtml(sentenceText)}</p>
+                    ${accentNoteHtml(accentFixedFrom, sentenceText)}
                     ${primary ? `<p class="sentence-translation">${escapeHtml(primary)}</p>` : ''}
                     ${secondary ? `<p class="sentence-translation translation-cn">${escapeHtml(secondary)}</p>` : ''}
                 </div>
@@ -1503,7 +1526,7 @@ function initStudyWorkbench() {
             const card = document.createElement('article');
             card.className = open ? 'sentence-card is-open' : 'sentence-card';
             card.dataset.index = idx;
-            const headHtml = sentenceHeadHtml({ sentenceText, transEn, transZh, idx, total: sentences.length, open, label: s.label });
+            const headHtml = sentenceHeadHtml({ sentenceText, transEn, transZh, idx, total: sentences.length, open, label: s.label, accentFixedFrom: s.accent_fixed_from });
 
             // Shared Shadowing & Scoring HTML
             const shadowingHtml = `
@@ -3141,7 +3164,7 @@ function initStudyWorkbench() {
             if (!res.ok) return null;
             const data = await readJsonSafely(res);
             if (!data || !data.changed || typeof data.cleaned !== 'string' || !data.cleaned.trim()) return null;
-            return { cleaned: data.cleaned, count: Number(data.count) || 0 };
+            return { cleaned: data.cleaned, count: Number(data.count) || 0, accentFixes: data.accent_fixes || [] };
         } catch (_) {
             return null;
         }
@@ -3240,6 +3263,7 @@ function initStudyWorkbench() {
             if (signal.aborted) throw new DOMException('cancelled', 'AbortError');
             const analysisText = cleaned ? cleaned.cleaned : text;
             const cleanNote = cleaned ? T.cleanedInput(cleaned.count) : '';
+            const accentFixes = [...(fromPhoto ? photoAccentFixes : []), ...(cleaned ? cleaned.accentFixes : [])];
 
             // Short parts, two at a time: thinking models need ~30 s per sentence, and a
             // single request for a long text would hit the 100 s limit of the tunnel.
@@ -3274,7 +3298,7 @@ function initStudyWorkbench() {
             if (signal.aborted) throw new DOMException('cancelled', 'AbortError');
             // Every part failing is a real failure, not a partial result
             if (failedParts.length === parts.length) throw failedParts[0];
-            const sentences = results.flat();
+            const sentences = withAccentNotes(results.flat(), accentFixes);
 
             renderStudyDeck(sentences);
             saveHistoryItem(analysisText, sentences);
@@ -3361,6 +3385,7 @@ function initStudyWorkbench() {
     // the panel is is-working, is-success, is-failed or is-cancelled.
     const PHOTO_STEPS = ['compress', 'upload', 'read', 'found', 'analyze'];
     let photoReadTimer = null;
+    let photoAccentFixes = [];
 
     function photoStepItem(step) {
         return photoStatus.querySelector(`[data-step="${step}"]`);
@@ -3440,6 +3465,7 @@ function initStudyWorkbench() {
             const data = await readJsonSafely(res);
             if (!res.ok) throw new Error(data.detail?.message || data.detail || T.photoFailed);
             setPhotoStep('found', T.photoFound(data.count), T.photoSteps.read);
+            photoAccentFixes = (data.items || []).filter(item => item.accent_fixed_from);
             frenchInput.value = data.text;
             frenchInput.scrollTop = 0;
             updateFrenchInput();
