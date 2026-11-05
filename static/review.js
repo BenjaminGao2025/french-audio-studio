@@ -18,8 +18,15 @@
     const LEGACY_DECK_KEY = 'frenchStudio.ankiDeck';
     const LEGACY_IMPORTED_KEY = 'frenchStudio.ankiDeck.importedAt';
     const LEARN_AHEAD_MS = 20 * 60 * 1000;
-    // Canadian French voices: every playback picks one at random
+    // Canadian French voices: the same text always gets the same voice (FNV-1a hash of the
+    // trimmed text, as in study.js)
     const VOICES = ['fr-CA-SylvieNeural', 'fr-CA-JeanNeural', 'fr-CA-AntoineNeural'];
+    function voiceFor(text) {
+        const key = String(text || '').trim();
+        let h = 0x811c9dc5;
+        for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619) >>> 0;
+        return VOICES[h % VOICES.length];
+    }
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition || null;
 
 
@@ -438,7 +445,7 @@
     }
 
     function ttsUrl(text) {
-        return `/tts?text=${encodeURIComponent(text.trim())}&voice=${VOICES[Math.floor(Math.random() * VOICES.length)]}`;
+        return `/tts?text=${encodeURIComponent(text.trim())}&voice=${voiceFor(text)}`;
     }
 
     // With Repeat on (playback.js) the same text plays again until stopped; word lookups play once

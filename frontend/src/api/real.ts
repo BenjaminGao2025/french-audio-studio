@@ -22,10 +22,14 @@ import type * as T from "./types";
 // /tts accepts 1-600 characters (tts_service.py TTS_SNIPPET_MAX_CHARS).
 const TTS_MAX_CHARS = 600;
 
-/** Canadian French voices: every playback picks one at random. */
+/** Canadian French voices: the same text always gets the same voice (FNV-1a hash of the trimmed text, as in study.js). */
 export const CA_VOICES = ["fr-CA-SylvieNeural", "fr-CA-JeanNeural", "fr-CA-AntoineNeural"] as const;
-export const randomFrenchVoice = (): string =>
-  CA_VOICES[Math.floor(Math.random() * CA_VOICES.length)]!;
+export function frenchVoiceFor(text: string): string {
+  const key = text.trim();
+  let h = 0x811c9dc5;
+  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619) >>> 0;
+  return CA_VOICES[h % CA_VOICES.length]!;
+}
 
 export const real = {
   auth: {
@@ -162,10 +166,10 @@ export const real = {
     sentences: () => request<T.ShadowSentence[]>("/api/shadow/sentences"),
   },
   speech: {
-    synthesize: (text: string, voice = randomFrenchVoice(), rate: "-30%" | "-20%" | "0%" = "0%") =>
+    synthesize: (text: string, voice = frenchVoiceFor(text), rate: "-30%" | "-20%" | "0%" = "0%") =>
       request<T.SpeechResult>("/api/speech", { method: "POST", body: { text, voice, rate } }),
     /** null when /tts would reject the text (empty or too long), so callers disable playback. */
-    ttsUrl: (text: string, voice = randomFrenchVoice()): string | null =>
+    ttsUrl: (text: string, voice = frenchVoiceFor(text)): string | null =>
       text.trim() && text.length <= TTS_MAX_CHARS
         ? `/tts?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voice)}`
         : null,

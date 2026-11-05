@@ -690,13 +690,19 @@ function initStudyWorkbench() {
         }
     }
 
-    // Canadian French voices: every playback picks one at random
+    // Canadian French voices: the same text always gets the same voice (FNV-1a hash of the
+    // trimmed text), so replays, slow replays and the prefetch share one cached clip
     const CA_VOICES = ['fr-CA-SylvieNeural', 'fr-CA-JeanNeural', 'fr-CA-AntoineNeural'];
-    const randomFrenchVoice = () => CA_VOICES[Math.floor(Math.random() * CA_VOICES.length)];
+    function frenchVoiceFor(text) {
+        const key = String(text || '').trim();
+        let h = 0x811c9dc5;
+        for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619) >>> 0;
+        return CA_VOICES[h % CA_VOICES.length];
+    }
 
     // One clip, Edge TTS with Web Speech as the fallback; onDone runs when it finishes by itself
     function playClip(cleanText, onDone, onInterrupt, owner) {
-        const audio = new Audio(`/tts?text=${encodeURIComponent(cleanText)}&voice=${randomFrenchVoice()}`);
+        const audio = new Audio(`/tts?text=${encodeURIComponent(cleanText)}&voice=${frenchVoiceFor(cleanText)}`);
         currentActiveAudio = audio;
         let done = false;
         window.FrenchAudio.bind(audio, () => { done = true; onInterrupt(); }, owner);
@@ -1994,8 +2000,7 @@ function initStudyWorkbench() {
             while (texts.length && run === audioPrefetchRun) {
                 const text = texts.shift();
                 try {
-                    // One random voice per text: warming all three would triple the speech quota
-                    await fetch(`/tts?text=${encodeURIComponent(text)}&voice=${randomFrenchVoice()}`);
+                    await fetch(`/tts?text=${encodeURIComponent(text)}&voice=${frenchVoiceFor(text)}`);
                 } catch (_) { /* best effort */ }
             }
         };
