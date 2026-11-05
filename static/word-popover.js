@@ -766,8 +766,15 @@
         // to extend it (a tap still opens one word). Pages that have their own selection UI
         // (read-selection.js) switch this off with selectionPopover: false.
         function showSelectedPhrase() {
-            if (options.selectionPopover === false) return;
             const selection = root.getSelection();
+            // Selecting other text (a drag on another word) is not a tap, so it opens nothing: the
+            // card still open for the previous word would sit over the new selection as if it were
+            // its meaning. It closes, unless the selection is the open word itself (double click).
+            if (isOpen() && selection && selection.rangeCount > 0 && !selection.isCollapsed) {
+                const node = selection.getRangeAt(0).commonAncestorContainer;
+                if (!pop.contains(node) && !(activeEl && activeEl.contains(node))) close();
+            }
+            if (options.selectionPopover === false) return;
             const range = selection && selection.rangeCount > 0 && !selection.isCollapsed ? selection.getRangeAt(0) : null;
             const selected = range ? frenchTextOf(range).replace(/\s+/g, ' ').trim() : '';
             if (!selected || !selected.includes(' ')) { lastPhrase = ''; return; }

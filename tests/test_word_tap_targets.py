@@ -27,6 +27,9 @@ class WordTapTargetTests(unittest.TestCase):
     def test_french_click_handlers_in_jsdom(self):
         self._node("tests/test_french_clicks.cjs")
 
+    def test_selection_closes_stale_popover_in_jsdom(self):
+        self._node("tests/test_selection_closes_popover.cjs")
+
     def test_read_selection_is_wired_into_the_study_page(self):
         html = _read("static/study.html")
         js = _read("static/study.js")
