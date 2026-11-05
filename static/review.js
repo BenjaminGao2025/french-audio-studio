@@ -18,7 +18,8 @@
     const LEGACY_DECK_KEY = 'frenchStudio.ankiDeck';
     const LEGACY_IMPORTED_KEY = 'frenchStudio.ankiDeck.importedAt';
     const LEARN_AHEAD_MS = 20 * 60 * 1000;
-    const VOICE = 'fr-FR-DeniseNeural';
+    // Canadian French voices: every playback picks one at random
+    const VOICES = ['fr-CA-SylvieNeural', 'fr-CA-JeanNeural', 'fr-CA-AntoineNeural'];
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition || null;
 
 
@@ -437,7 +438,7 @@
     }
 
     function ttsUrl(text) {
-        return `/tts?text=${encodeURIComponent(text.trim())}&voice=${VOICE}`;
+        return `/tts?text=${encodeURIComponent(text.trim())}&voice=${VOICES[Math.floor(Math.random() * VOICES.length)]}`;
     }
 
     // With Repeat on (playback.js) the same text plays again until stopped; word lookups play once

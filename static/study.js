@@ -690,9 +690,13 @@ function initStudyWorkbench() {
         }
     }
 
+    // Canadian French voices: every playback picks one at random
+    const CA_VOICES = ['fr-CA-SylvieNeural', 'fr-CA-JeanNeural', 'fr-CA-AntoineNeural'];
+    const randomFrenchVoice = () => CA_VOICES[Math.floor(Math.random() * CA_VOICES.length)];
+
     // One clip, Edge TTS with Web Speech as the fallback; onDone runs when it finishes by itself
     function playClip(cleanText, onDone, onInterrupt, owner) {
-        const audio = new Audio(`/tts?text=${encodeURIComponent(cleanText)}&voice=fr-FR-DeniseNeural`);
+        const audio = new Audio(`/tts?text=${encodeURIComponent(cleanText)}&voice=${randomFrenchVoice()}`);
         currentActiveAudio = audio;
         let done = false;
         window.FrenchAudio.bind(audio, () => { done = true; onInterrupt(); }, owner);
@@ -1990,7 +1994,8 @@ function initStudyWorkbench() {
             while (texts.length && run === audioPrefetchRun) {
                 const text = texts.shift();
                 try {
-                    await fetch(`/tts?text=${encodeURIComponent(text)}&voice=fr-FR-DeniseNeural`);
+                    // One random voice per text: warming all three would triple the speech quota
+                    await fetch(`/tts?text=${encodeURIComponent(text)}&voice=${randomFrenchVoice()}`);
                 } catch (_) { /* best effort */ }
             }
         };

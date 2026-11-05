@@ -22,6 +22,11 @@ import type * as T from "./types";
 // /tts accepts 1-600 characters (tts_service.py TTS_SNIPPET_MAX_CHARS).
 const TTS_MAX_CHARS = 600;
 
+/** Canadian French voices: every playback picks one at random. */
+export const CA_VOICES = ["fr-CA-SylvieNeural", "fr-CA-JeanNeural", "fr-CA-AntoineNeural"] as const;
+export const randomFrenchVoice = (): string =>
+  CA_VOICES[Math.floor(Math.random() * CA_VOICES.length)]!;
+
 export const real = {
   auth: {
     login: (email: string, password: string) =>
@@ -157,10 +162,10 @@ export const real = {
     sentences: () => request<T.ShadowSentence[]>("/api/shadow/sentences"),
   },
   speech: {
-    synthesize: (text: string, voice = "fr-FR-DeniseNeural", rate: "-30%" | "-20%" | "0%" = "0%") =>
+    synthesize: (text: string, voice = randomFrenchVoice(), rate: "-30%" | "-20%" | "0%" = "0%") =>
       request<T.SpeechResult>("/api/speech", { method: "POST", body: { text, voice, rate } }),
     /** null when /tts would reject the text (empty or too long), so callers disable playback. */
-    ttsUrl: (text: string, voice = "fr-FR-DeniseNeural"): string | null =>
+    ttsUrl: (text: string, voice = randomFrenchVoice()): string | null =>
       text.trim() && text.length <= TTS_MAX_CHARS
         ? `/tts?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voice)}`
         : null,
