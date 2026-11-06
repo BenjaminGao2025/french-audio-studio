@@ -1,14 +1,13 @@
-import testenv  # noqa: F401  (must run before the app is imported)
-
 import unittest
 import uuid
 from unittest.mock import AsyncMock, patch
 
+import testenv  # noqa: F401  (must run before the app is imported)
 from fastapi.testclient import TestClient
 
 import auth_db
-import tts_service
 import services.asr
+import tts_service
 import web_common
 
 
@@ -43,18 +42,26 @@ class TranscribeTests(unittest.TestCase):
         )
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json()["text"], "à partir de 是固定搭配")
-        transcribe.assert_called_once_with(b"\x1a\x45\xdf\xa3webm-bytes", "À partir de lundi.", "Exemples d'épreuves du TCF")
+        transcribe.assert_called_once_with(
+            b"\x1a\x45\xdf\xa3webm-bytes", "À partir de lundi.", "Exemples d'épreuves du TCF"
+        )
 
     def test_missing_model_returns_503(self):
-        with patch.object(services.asr, "ASR_MODEL_DIR", web_common.BASE_DIR / "no-such-model"), \
-                patch.object(services.asr, "_asr_model", None):
+        with (
+            patch.object(services.asr, "ASR_MODEL_DIR", web_common.BASE_DIR / "no-such-model"),
+            patch.object(services.asr, "_asr_model", None),
+        ):
             res = self.client.post("/api/transcribe", content=b"OggSabc", headers=_login_headers())
         self.assertEqual(res.status_code, 503)
         self.assertEqual(res.json()["detail"]["code"], "asr_unavailable")
 
     @patch("services.ai.post_chat", new_callable=AsyncMock)
     def test_fix_uses_sentence_and_falls_back_on_runaway_output(self, post_chat):
-        body = {"sentence": "À partir de lundi.", "context": "Exemples d'épreuves du TCF", "text": "a part or die 是固定搭配"}
+        body = {
+            "sentence": "À partir de lundi.",
+            "context": "Exemples d'épreuves du TCF",
+            "text": "a part or die 是固定搭配",
+        }
         post_chat.return_value = ({}, "à partir de 是固定搭配")
         res = self.client.post("/api/transcribe/fix", json=body, headers=testenv.session_headers())
         self.assertEqual(res.json()["text"], "à partir de 是固定搭配")
@@ -80,7 +87,9 @@ class CleanSegmentsTests(unittest.TestCase):
 
     def test_drops_noise_and_repetition_but_keeps_speech(self):
         clean = services.asr._clean_asr_segments
-        self.assertEqual(clean([("嗯嗯", 0.8, -1.2, 1.0), ("这句话是说学生要准时。", 0.02, -0.2, 1.3)]), "这句话是说学生要准时。")
+        self.assertEqual(
+            clean([("嗯嗯", 0.8, -1.2, 1.0), ("这句话是说学生要准时。", 0.02, -0.2, 1.3)]), "这句话是说学生要准时。"
+        )
         self.assertEqual(clean([("好的好的好的好的好的好的好的", 0.1, -0.4, 3.1)]), "")
         long_real = "字幕这个词在这里不相关，我想说的是 portant sur 的意思是关于，后面跟的是名词短语。"
         self.assertEqual(clean([(long_real, 0.01, -0.3, 1.3)]), long_real)

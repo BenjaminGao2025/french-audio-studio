@@ -3,6 +3,7 @@
 The SPA lived in frontend/ and was taken offline on 2026-10-21. Its source, build and the
 cockpit/comprehension backends are kept on the `archive/react-spa` branch.
 """
+
 from __future__ import annotations
 
 from fastapi import APIRouter

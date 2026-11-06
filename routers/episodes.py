@@ -1,4 +1,5 @@
 """Listen-while-driving episodes: AI-written stories rendered to MP3 + LRC/SRT in the background."""
+
 from __future__ import annotations
 
 import asyncio
@@ -23,8 +24,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-_episode_lock = asyncio.Lock()           # render one episode at a time
-_episode_users: set[int] = set()          # users with an episode currently generating
+_episode_lock = asyncio.Lock()  # render one episode at a time
+_episode_users: set[int] = set()  # users with an episode currently generating
 STORY_SPEAKERS = {"A", "B", "N"}
 
 
@@ -102,11 +103,13 @@ def _parse_story(raw_text: str) -> dict | None:
         fr = re.sub(r"\s+", " ", str(line.get("fr") or "")).strip()
         speaker = str(line.get("speaker") or "N").strip().upper()[:1]
         if fr and len(fr) <= 300:
-            lines.append({
-                "speaker": speaker if speaker in STORY_SPEAKERS else "N",
-                "fr": fr,
-                "en": re.sub(r"\s+", " ", str(line.get("en") or "")).strip()[:300],
-            })
+            lines.append(
+                {
+                    "speaker": speaker if speaker in STORY_SPEAKERS else "N",
+                    "fr": fr,
+                    "en": re.sub(r"\s+", " ", str(line.get("en") or "")).strip()[:300],
+                }
+            )
     if len(lines) < 4:
         return None
     return {"title_en": str(data.get("title_en") or "").strip()[:80], "lines": lines[:16]}
@@ -211,8 +214,14 @@ async def _generate_episode(
             stories = []
             if api_key:
                 stories = await _write_stories(
-                    api_key, episodes.story_vocabulary(review), [m["sentence"] for m in review[:8]], model,
-                    count=plan["stories"], level=level, request=request, focus=adjust.get("focus", ""),
+                    api_key,
+                    episodes.story_vocabulary(review),
+                    [m["sentence"] for m in review[:8]],
+                    model,
+                    count=plan["stories"],
+                    level=level,
+                    request=request,
+                    focus=adjust.get("focus", ""),
                 )
             number = await run_in_threadpool(episodes.episode_number, user_id)
             title = episodes.clean_title(
@@ -221,10 +230,15 @@ async def _generate_episode(
             segments = episodes.build_script(number, review, buildups, stories, style)
             duration = await episodes.render(segments, episodes.episodes_dir() / episode_id, title)
             await run_in_threadpool(
-                episodes.update_episode, episode_id,
-                status="ready", title=title, duration=duration,
+                episodes.update_episode,
+                episode_id,
+                status="ready",
+                title=title,
+                duration=duration,
                 sentences_json=json.dumps(list(dict.fromkeys(m["key"] for m in review + buildups))),
-                settings_json=json.dumps({**settings, "level": level, "minutes": minutes, "adjust": adjust}, ensure_ascii=False),
+                settings_json=json.dumps(
+                    {**settings, "level": level, "minutes": minutes, "adjust": adjust}, ensure_ascii=False
+                ),
             )
             # A remake replaces the episode it was made from, once the new one is ready
             if replace_id and replace_id != episode_id:
@@ -248,7 +262,9 @@ def list_episodes_api(authorization: str | None = Header(default=None)):
     return {
         "episodes": episodes.list_episodes(user_id),
         "hours": hours,
-        "recommended_level": ((coach.get_profile(user_id) or {}).get("profile", {}).get("levels", {}).get("listen", "A1")).replace("A0", "A1"),
+        "recommended_level": (
+            (coach.get_profile(user_id) or {}).get("profile", {}).get("levels", {}).get("listen", "A1")
+        ).replace("A0", "A1"),
         "levels": list(episodes.LEVELS),
         "lengths": list(episodes.LENGTHS),
     }
@@ -281,7 +297,9 @@ async def create_episode_api(
             episodes.get_episode(user_id, req.replace_id)
         except KeyError:
             raise HTTPException(status_code=404, detail={"message": "要替换的节目不存在。"})
-    level = req.level or ((coach.get_profile(user_id) or {}).get("profile", {}).get("levels", {}).get("listen", "A1")).replace("A0", "A1")
+    level = req.level or (
+        (coach.get_profile(user_id) or {}).get("profile", {}).get("levels", {}).get("listen", "A1")
+    ).replace("A0", "A1")
     settings = {"level": level, "minutes": req.minutes, "request": req.request.strip()}
     episode = await run_in_threadpool(episodes.create_episode, user_id, settings)
     _episode_users.add(user_id)
@@ -296,9 +314,7 @@ def delete_episode_api(episode_id: str, authorization: str | None = Header(defau
 
 
 @router.get("/episodes/{episode_id}.{ext}")
-async def episode_file(
-    request: Request, episode_id: str, ext: str, download: bool = Query(default=False)
-):
+async def episode_file(request: Request, episode_id: str, ext: str, download: bool = Query(default=False)):
     # <audio src> and download links send the same-origin HttpOnly session cookie.
     user_id = _require_user_id(request.headers.get("authorization"), request)
     if not re.fullmatch(r"[0-9a-f]{32}", episode_id) or ext not in {"mp3", "srt", "lrc"}:

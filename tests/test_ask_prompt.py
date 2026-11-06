@@ -47,10 +47,12 @@ def test_kept_rules_are_still_there():
 
 
 def test_history_turns_are_mapped_to_messages():
-    messages = _payload(history=[
-        {"role": "learner", "content": "Why l' here?"},
-        {"role": "tutor", "content": "l' = la before a vowel sound."},
-    ])["messages"]
+    messages = _payload(
+        history=[
+            {"role": "learner", "content": "Why l' here?"},
+            {"role": "tutor", "content": "l' = la before a vowel sound."},
+        ]
+    )["messages"]
     assert [m["role"] for m in messages] == ["system", "user", "assistant", "user"]
     assert messages[1]["content"] == "Why l' here?"
     assert messages[2]["content"] == "l' = la before a vowel sound."

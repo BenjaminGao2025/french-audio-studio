@@ -1,4 +1,5 @@
 """Writing practice (TCF EE) routes; both feedback rounds run in the background."""
+
 from __future__ import annotations
 
 import logging
@@ -18,9 +19,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-async def _generate_write_feedback_1(
-    user_id: int, attempt_id: str, api_key: str | None, model: str
-) -> None:
+async def _generate_write_feedback_1(user_id: int, attempt_id: str, api_key: str | None, model: str) -> None:
     if not api_key:
         writing.set_attempt_feedback_1(attempt_id, {}, error=ai.TRIAL_ENDED_MESSAGE)
         return
@@ -32,9 +31,7 @@ async def _generate_write_feedback_1(
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
         async with httpx.AsyncClient(timeout=ai.UPSTREAM_TIMEOUT_SECONDS) as client:
             _, raw_text = await ai.post_chat(client, payload, headers)
-        feedback = writing.parse_round1_feedback(
-            raw_text, attempt["text_1"], attempt["task"], attempt["subject"]
-        )
+        feedback = writing.parse_round1_feedback(raw_text, attempt["text_1"], attempt["task"], attempt["subject"])
         writing.set_attempt_feedback_1(attempt_id, feedback)
         coach.writing_evidence(user_id, writing.get_attempt(user_id, attempt_id))
     except Exception as exc:
@@ -42,9 +39,7 @@ async def _generate_write_feedback_1(
         writing.set_attempt_feedback_1(attempt_id, {}, error=ai.feedback_error_message(exc))
 
 
-async def _generate_write_feedback_2(
-    user_id: int, attempt_id: str, api_key: str | None, model: str
-) -> None:
+async def _generate_write_feedback_2(user_id: int, attempt_id: str, api_key: str | None, model: str) -> None:
     if not api_key:
         writing.set_attempt_feedback_2(attempt_id, {}, error=ai.TRIAL_ENDED_MESSAGE)
         return
@@ -69,8 +64,9 @@ def write_tasks(authorization: str | None = Header(default=None)):
     user_id = _require_user_id(authorization)
     hours = game.state(user_id, 0)["hours_total"]
     stored = coach.get_profile(user_id)
-    rec_level = (stored["profile"]["levels"].get("write", "A1") if stored else "A1")
-    if rec_level == "A0": rec_level = "A1"
+    rec_level = stored["profile"]["levels"].get("write", "A1") if stored else "A1"
+    if rec_level == "A0":
+        rec_level = "A1"
     rec_task = "T1" if rec_level in ("A1", "A2") else ("T2" if rec_level == "B1" else "T3")
     return {
         "recommended_task": rec_task,
@@ -97,9 +93,7 @@ async def write_new_subject(
 ):
     _require_user_id(authorization)
     api_key = ai.upstream_key(authorization)
-    payload = writing.build_new_subject_payload(
-        req.task, req.level, req.theme, ai.AGY_MODEL
-    )
+    payload = writing.build_new_subject_payload(req.task, req.level, req.theme, ai.AGY_MODEL)
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     async with httpx.AsyncClient(timeout=ai.UPSTREAM_TIMEOUT_SECONDS) as client:
         _, raw_text = await ai.post_chat(client, payload, headers)
@@ -127,9 +121,7 @@ async def create_write_attempt(
         if exc.status_code == 429:
             raise
         api_key = None
-    attempt = writing.create_attempt(
-        user_id, req.task, req.subject, req.level, req.text.strip(), req.seconds
-    )
+    attempt = writing.create_attempt(user_id, req.task, req.subject, req.level, req.text.strip(), req.seconds)
     run_in_background(_generate_write_feedback_1(user_id, attempt["id"], api_key, req.model))
     return attempt
 

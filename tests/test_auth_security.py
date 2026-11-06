@@ -1,4 +1,5 @@
 """Password storage, sign-in rate limits, the trusted client IP and once-per-database schema setup."""
+
 import hashlib
 import sqlite3
 import unittest

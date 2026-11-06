@@ -1,4 +1,5 @@
 """HTML pages (PWA head + asset version), the landing waitlist, favicon, service worker and manifest."""
+
 from __future__ import annotations
 
 import hashlib
@@ -56,7 +57,9 @@ def _with_pwa(html: str) -> str:
 def _html_page(name: str) -> HTMLResponse:
     html = _with_pwa((STATIC_DIR / name).read_text(encoding="utf-8"))
     if "__PERSONAL_PRACTICE__" in html:
-        html = html.replace("__PERSONAL_PRACTICE__", (STATIC_DIR / "personal-practice.html").read_text(encoding="utf-8"))
+        html = html.replace(
+            "__PERSONAL_PRACTICE__", (STATIC_DIR / "personal-practice.html").read_text(encoding="utf-8")
+        )
     return HTMLResponse(
         html.replace("__ASSET_VERSION__", ASSET_VERSION),
         headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
@@ -70,9 +73,7 @@ async def asset_version():
 
 
 # Hosts (e.g. the product domain) whose "/" shows the public site instead of the audio workbench
-LANDING_HOSTS = {
-    host.strip().lower() for host in os.getenv("LANDING_HOSTS", "").split(",") if host.strip()
-}
+LANDING_HOSTS = {host.strip().lower() for host in os.getenv("LANDING_HOSTS", "").split(",") if host.strip()}
 
 
 def _invite_redirect(request: Request) -> RedirectResponse | None:
@@ -193,11 +194,11 @@ async def speak_page():
     return _html_page("speak.html")
 
 
-@router.get('/coach')
+@router.get("/coach")
 async def coach_page():
-    return _html_page('coach.html')
+    return _html_page("coach.html")
 
 
-@router.get('/homework')
+@router.get("/homework")
 async def homework_page():
-    return RedirectResponse('/study?mode=personal',status_code=302)
+    return RedirectResponse("/study?mode=personal", status_code=302)

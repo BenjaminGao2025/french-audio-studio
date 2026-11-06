@@ -1,4 +1,5 @@
 """Spaced repetition routes: sentence notes and FSRS cards, per logged-in user."""
+
 from __future__ import annotations
 
 from typing import Any, Literal
@@ -143,9 +144,7 @@ def srs_review_card(
 ):
     user_id = _require_user_id(authorization)
     try:
-        card = srs.review_card(
-            user_id, card_id, req.rating, req.duration_ms, req.score, req.answer
-        )
+        card = srs.review_card(user_id, card_id, req.rating, req.duration_ms, req.score, req.answer)
     except KeyError:
         raise HTTPException(status_code=404, detail={"message": "卡片不存在。"})
     coach.record(user_id, "review", f"{coach.date_for(user_id)}:{card_id}", {"rating": req.rating}, 0)

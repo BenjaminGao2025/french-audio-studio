@@ -1,5 +1,6 @@
 """The studio transform: turn a request into French (generate / translate / express / polish), then check
 the result is French only and proofread it when needed."""
+
 from __future__ import annotations
 
 import re
@@ -37,9 +38,7 @@ LOCALE_INSTRUCTIONS = {
     "fr-CA": "Canadian French",
 }
 
-NON_FRENCH_SCRIPT_RE = re.compile(
-    r"[\u3400-\u4dbf\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]"
-)
+NON_FRENCH_SCRIPT_RE = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]")
 UPSTREAM_META_RE = re.compile(
     r"\b(cannot perform|tool actions?|i will provide|here is the translation|"
     r"je traduis le texte|voici la traduction|texte traduit)\b",
@@ -51,9 +50,7 @@ TRAILING_OFFER_RE = re.compile(
     r"[^.!?]*(?:[.!?]|$)\s*$",
     re.IGNORECASE,
 )
-TASK_CLASSIFICATION_RE = re.compile(
-    r"\b(generate|translate|express|polish)\b", re.IGNORECASE
-)
+TASK_CLASSIFICATION_RE = re.compile(r"\b(generate|translate|express|polish)\b", re.IGNORECASE)
 CHINESE_GENERATE_RE = re.compile(
     r"(?:请|请你|帮我|给我|我要|我想|我需要|能否|可以).{0,48}"
     r"(?:写|创作|生成|介绍|解释|说明|讲解|概述|总结|列出|编写|设计|制作|"
@@ -83,9 +80,7 @@ REQUESTED_WORD_RANGE_RE = re.compile(
     r"(?:个)?(?:单词|词|mots?|words?)",
     re.IGNORECASE,
 )
-FRENCH_WORD_RE = re.compile(
-    r"[A-Za-zÀ-ÖØ-öø-ÿŒœ]+(?:[’'-][A-Za-zÀ-ÖØ-öø-ÿŒœ]+)*"
-)
+FRENCH_WORD_RE = re.compile(r"[A-Za-zÀ-ÖØ-öø-ÿŒœ]+(?:[’'-][A-Za-zÀ-ÖØ-öø-ÿŒœ]+)*")
 TaskMode = Literal["auto", "generate", "translate", "express", "polish"]
 ResolvedTaskMode = Literal["generate", "translate", "express", "polish"]
 QualityCheck = Literal["passed", "proofread"]
@@ -144,9 +139,7 @@ def _infer_task_mode_locally(value: str) -> ResolvedTaskMode | None:
         return "generate"
 
     rough_markers = ROUGH_SPEECH_RE.findall(text)
-    starts_as_rough_speech = bool(
-        re.match(r"^\s*(?:嗯|呃|额|那个|就是|um+\b|uh+\b)", text, re.IGNORECASE)
-    )
+    starts_as_rough_speech = bool(re.match(r"^\s*(?:嗯|呃|额|那个|就是|um+\b|uh+\b)", text, re.IGNORECASE))
     if starts_as_rough_speech or len(rough_markers) >= 2:
         return "express"
 
@@ -176,10 +169,7 @@ def _generation_length_instruction(value: str) -> str:
         return ""
     minimum, maximum = requested_range
     target = (minimum + maximum) // 2
-    return (
-        f"length target {target} French words; final count must stay between "
-        f"{minimum} and {maximum} words"
-    )
+    return f"length target {target} French words; final count must stay between {minimum} and {maximum} words"
 
 
 def _classification_payload(request: TransformRequest) -> dict:
@@ -232,10 +222,7 @@ def _proofread_payload(
             },
             {
                 "role": "user",
-                "content": (
-                    f"Original user input:\n{_normalized_text(request.text)}\n\n"
-                    f"Draft to review:\n{candidate}"
-                ),
+                "content": (f"Original user input:\n{_normalized_text(request.text)}\n\nDraft to review:\n{candidate}"),
             },
         ],
         "stream": False,
@@ -243,9 +230,7 @@ def _proofread_payload(
     }
 
 
-def _build_messages(
-    request: TransformRequest, task_mode: ResolvedTaskMode
-) -> list[dict[str, str]]:
+def _build_messages(request: TransformRequest, task_mode: ResolvedTaskMode) -> list[dict[str, str]]:
     source_text = _normalized_text(request.text)
     if task_mode == "translate":
         system_prompt = (
@@ -332,9 +317,7 @@ def _validate_model_result(
                 "message": "模型返回了内部说明而不是法语正文，已拒绝该结果。",
             },
         )
-    requested_range = (
-        _requested_word_range(request.text) if task_mode == "generate" else None
-    )
+    requested_range = _requested_word_range(request.text) if task_mode == "generate" else None
     if requested_range:
         word_count = _french_word_count(result)
         minimum, maximum = requested_range
@@ -343,9 +326,7 @@ def _validate_model_result(
                 status_code=502,
                 detail={
                     "code": "word_count_out_of_range",
-                    "message": (
-                        f"生成结果为 {word_count} 词，没有满足 {minimum}–{maximum} 词的要求。"
-                    ),
+                    "message": (f"生成结果为 {word_count} 词，没有满足 {minimum}–{maximum} 词的要求。"),
                 },
             )
     return result
@@ -357,8 +338,7 @@ def _contract_retry_payload(payload: dict, error_code: str) -> dict:
         source_prompt = "\n".join(str(message.get("content", "")) for message in messages)
         length_instruction = _generation_length_instruction(source_prompt)
         messages[0]["content"] += (
-            f" Strict retry: {length_instruction}. Count the finished French words before "
-            "returning the answer."
+            f" Strict retry: {length_instruction}. Count the finished French words before returning the answer."
         )
     else:
         messages[0]["content"] += (
@@ -383,9 +363,7 @@ async def request_french_transform(
             else:
                 classification_payload = _classification_payload(request)
                 for classification_attempt in range(2):
-                    _, classification = await ai.post_chat(
-                        client, classification_payload, headers
-                    )
+                    _, classification = await ai.post_chat(client, classification_payload, headers)
                     try:
                         resolved_task_mode = _parse_task_classification(classification)
                         break
@@ -398,8 +376,7 @@ async def request_french_transform(
                                     {
                                         "role": "user",
                                         "content": (
-                                            "Return one lowercase word only: generate, translate, "
-                                            "express, or polish."
+                                            "Return one lowercase word only: generate, translate, express, or polish."
                                         ),
                                     },
                                 ],
@@ -428,24 +405,16 @@ async def request_french_transform(
 
         quality_check: QualityCheck = "passed"
         proofread_model = ai.DEFAULT_MODEL
-        proofread_payload = _proofread_payload(
-            request, resolved_task_mode, result
-        )
+        proofread_payload = _proofread_payload(request, resolved_task_mode, result)
         for proofread_attempt in range(2):
-            proofread_body, raw_proofread = await ai.post_chat(
-                client, proofread_payload, headers
-            )
+            proofread_body, raw_proofread = await ai.post_chat(client, proofread_payload, headers)
             try:
-                result = _validate_model_result(
-                    raw_proofread, request, resolved_task_mode
-                )
+                result = _validate_model_result(raw_proofread, request, resolved_task_mode)
             except HTTPException as exc:
                 detail = exc.detail if isinstance(exc.detail, dict) else {}
                 error_code = str(detail.get("code") or "invalid_proofread_output")
                 if proofread_attempt == 0:
-                    proofread_payload = _contract_retry_payload(
-                        proofread_payload, error_code
-                    )
+                    proofread_payload = _contract_retry_payload(proofread_payload, error_code)
                     continue
                 if result:
                     break

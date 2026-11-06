@@ -1,5 +1,6 @@
 """Sentence analysis for the study page: the prompt, and parsing the model's JSON into sentences,
 tokens, chunks and tips."""
+
 from __future__ import annotations
 
 import json
@@ -24,12 +25,56 @@ class AnalyzeRequest(BaseModel):
 
 
 TRIVIAL_SINGLE_WORDS = {
-    "je", "tu", "il", "elle", "on", "nous", "vous", "ils", "elles",
-    "ce", "c'", "c’", "ça", "de", "d'", "d’", "à", "au", "aux",
-    "dans", "en", "par", "pour", "avec", "sans", "sous",
-    "un", "une", "des", "du", "le", "la", "les", "l'", "l’",
-    "et", "ou", "mais", "donc", "or", "ni", "car",
-    "ne", "pas", "y", "se", "s'", "s’", "me", "te",
+    "je",
+    "tu",
+    "il",
+    "elle",
+    "on",
+    "nous",
+    "vous",
+    "ils",
+    "elles",
+    "ce",
+    "c'",
+    "c’",
+    "ça",
+    "de",
+    "d'",
+    "d’",
+    "à",
+    "au",
+    "aux",
+    "dans",
+    "en",
+    "par",
+    "pour",
+    "avec",
+    "sans",
+    "sous",
+    "un",
+    "une",
+    "des",
+    "du",
+    "le",
+    "la",
+    "les",
+    "l'",
+    "l’",
+    "et",
+    "ou",
+    "mais",
+    "donc",
+    "or",
+    "ni",
+    "car",
+    "ne",
+    "pas",
+    "y",
+    "se",
+    "s'",
+    "s’",
+    "me",
+    "te",
 }
 
 
@@ -70,7 +115,7 @@ def _attach_option_labels(sentences: list[dict]) -> list[dict]:
         prefix = OPTION_PREFIX_RE.match(text)
         if prefix:
             label = label or prefix.group(1)
-            text = text[prefix.end():]
+            text = text[prefix.end() :]
             item = {**item, "sentence": text, "original": text}
             for key in ("translation_en", "translation_zh", "translation_cn", "accent_fixed_from"):
                 if item.get(key):
@@ -86,7 +131,8 @@ def _filter_sentence_tokens(tokens: list[dict]) -> list[dict]:
         return filtered
     # Fallback if every single token was filtered out: keep content words with letters
     fallback = [
-        tok for tok in tokens
+        tok
+        for tok in tokens
         if re.search(r"[a-zA-ZÀ-ÿ]", tok.get("token", "")) and not re.fullmatch(r"[\d\s.,]+", tok.get("token", ""))
     ]
     return fallback or tokens
@@ -158,7 +204,7 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
         '- Forms, signs, certificates and titles often leave out words like "this" and "is".\n'
         "- When a sentence leaves out words, show the short version and the full sentence one after the other.\n"
         "- Put the missing words in [brackets] in the full sentence, in both French and English.\n"
-        '- Then add one short sentence, for example: "Forms often leave out \'this\' and \'is\'. Like a label."\n'
+        "- Then add one short sentence, for example: \"Forms often leave out 'this' and 'is'. Like a label.\"\n"
         "- Include this in grammar_points when a phrase leaves out words.\n\n"
         "Good and bad explanation examples:\n"
         "BAD (too abstract, too long):\n"
@@ -167,17 +213,17 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
         "Short version: Attestation valable\n"
         "Full sentence: [Cette] attestation [est] valable.\n"
         "English: [This] certificate [is] valid.\n"
-        "Forms often leave out \"this\" and \"is\". Like a label.\n\n"
+        'Forms often leave out "this" and "is". Like a label.\n\n'
         "BAD:\n"
         "\"negative particle (elided to n' before a vowel; pairs with 'aucune' for negation)\"\n\n"
         "GOOD:\n"
         "ne becomes n' before a vowel: ne + est → n'est.\n"
-        "Here it works with aucune to mean \"no\".\n\n"
+        'Here it works with aucune to mean "no".\n\n'
         "Answer options:\n"
         "- A label like 'A.', 'B.', '1.' or 'a)' before an answer option is not a sentence. Never return it as its own sentence; leave it out of \"sentence\" and put it in \"label\" (e.g. \"label\": \"A\") of the sentence it marks.\n\n"
-        + ACCENT_RULE +
-        "- Put the corrected text in \"sentence\" and put the text exactly as it was written in \"accent_fixed_from\". "
-        "If you restored nothing, \"accent_fixed_from\" is \"\".\n"
+        + ACCENT_RULE
+        + '- Put the corrected text in "sentence" and put the text exactly as it was written in "accent_fixed_from". '
+        'If you restored nothing, "accent_fixed_from" is "".\n'
         "- Every other field uses the corrected text too: alignment, build_up, words, grammar_points, structure, pronunciation_tips. Never write the typo there.\n"
         "- À is the preposition à with a capital letter. It is not the verb a. In the word table use lemma 'à' and type 'small linking word', "
         "and say in why that À is the preposition à.\n"
@@ -210,7 +256,7 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
         "se / s' = oneself / each other, or nothing in English (s'appeler = to be called); dont = whose / of which; "
         "ne … que = only, not a negation; ce que / ce qu' = what, not 'that which'.\n"
         "- Then one short sentence on where French and English order differ. If they are the same, say so.\n"
-        "- For very short phrases of 4 words or fewer where word order is identical to English, you may leave \"alignment\": [] and \"order_note\": \"\".\n\n"
+        '- For very short phrases of 4 words or fewer where word order is identical to English, you may leave "alignment": [] and "order_note": "".\n\n'
         "Build-up (layers):\n"
         "- CRITICAL RULE FOR SHORT SENTENCES: If the sentence or phrase has 5 words or fewer (e.g. 'Délivrance des résultats', 'Bonjour tout le monde', 'Merci beaucoup', short titles/headings), DO NOT create a build-up! Return empty array: \"build_up\": []. Do NOT artificially split short phrases.\n"
         "- For longer sentences (more than 5 words), build it like a tree: trunk first, then branches.\n"
@@ -235,15 +281,15 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
         "- Do NOT write phrases like \"'in-' in 'informations':\" before the colon; always put the clean French word before the colon.\n"
         "- Always enclose the French words or phonetic representations in single quotes, e.g. \"'leurs diplômes': The 's' in 'leurs' is silent before consonant 'diplômes'\".\n\n"
         "Sentence structure (a colour bar under the sentence):\n"
-        "- \"structure\": the sentence cut into chunks, left to right, together covering the whole sentence. Punctuation may be left out, except a ? that makes a question.\n"
+        '- "structure": the sentence cut into chunks, left to right, together covering the whole sentence. Punctuation may be left out, except a ? that makes a question.\n'
         "- Each chunk: text (the exact words), block, role, detail, gid.\n"
         "- block: N = noun group (nouns, articles, adjectives, pronouns), V = verb (the conjugated verb with its auxiliary, an infinitive), "
         "S = how the sentence is built (negation words, question words, prepositions, conjunctions, relative pronouns, il y a, c'est).\n"
         "- role: 2–8 Chinese characters, e.g. 主语代词, 谓语动词, 否定, 介词. detail: short Chinese with the French forms: "
         "a verb is 'infinitive · person · tense' (pouvoir · tu · 直陈式现在时), a noun group is gender and number (la + table · 阴性单数).\n"
         "- gid: the id from the list below that this chunk shows (it may be from another block), or null. Never invent an id.\n"
-        "- \"grammar_ids\": 1–6 ids from the list that this sentence shows, most useful first.\n"
-        "- Example: 'Tu peux m\'aider ?' → \"structure\": ["
+        '- "grammar_ids": 1–6 ids from the list that this sentence shows, most useful first.\n'
+        "- Example: 'Tu peux m'aider ?' → \"structure\": ["
         '{"text": "Tu", "block": "N", "role": "主语代词", "detail": "tu · 第二人称单数", "gid": "N.pronoun.subject"}, '
         '{"text": "peux", "block": "V", "role": "情态动词", "detail": "pouvoir · tu · 直陈式现在时", "gid": "V.present.pouvoir"}, '
         '{"text": "m\'", "block": "N", "role": "宾语代词", "detail": "me → m\' · 放在不定式前", "gid": "S.order.object_pronoun"}, '
@@ -300,10 +346,10 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
         "      ],\n"
         '      "grammar_ids": ["S.neg.aucun", "V.passive", "N.adj.position", "N.adj.agreement", "S.elision"],\n'
         '      "pronunciation_tips": [\n'
-        '        "\'les autorités\': link the \'s\' to make a /z/ sound → \'lé-zo-to-ri-té\'",\n'
-        '        "\'autorisée\': \'s\' between two vowels sounds like /z/",\n'
-        '        "\'canadiennes\': the ending \'-nes\' sounds like /n/"\n'
-        '      ]\n'
+        "        \"'les autorités': link the 's' to make a /z/ sound → 'lé-zo-to-ri-té'\",\n"
+        "        \"'autorisée': 's' between two vowels sounds like /z/\",\n"
+        "        \"'canadiennes': the ending '-nes' sounds like /n/\"\n"
+        "      ]\n"
         "    }\n"
         "  ]\n"
         "}\n"
@@ -313,7 +359,10 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
         "model": ai.AGY_MODEL,
         "messages": [
             {"role": "system", "content": prompt},
-            {"role": "user", "content": f"Explain this French text for an A1–A2 learner in valid JSON strictly following the schema:\n\n{request.text}"},
+            {
+                "role": "user",
+                "content": f"Explain this French text for an A1–A2 learner in valid JSON strictly following the schema:\n\n{request.text}",
+            },
         ],
         "response_format": {"type": "json_object"},
         "stream": False,
@@ -340,8 +389,8 @@ def _parse_analysis_json(raw_text: str, fallback_text: str) -> dict:
         first_bracket = candidate.find("[")
         last_bracket = candidate.rfind("]")
 
-        is_object = (first_brace != -1 and last_brace > first_brace)
-        is_array = (first_bracket != -1 and last_bracket > first_bracket)
+        is_object = first_brace != -1 and last_brace > first_brace
+        is_array = first_bracket != -1 and last_bracket > first_bracket
 
         if is_object and (not is_array or first_brace < first_bracket):
             json_substr = candidate[first_brace : last_brace + 1]
@@ -363,7 +412,12 @@ def _parse_analysis_json(raw_text: str, fallback_text: str) -> dict:
     elif isinstance(parsed_data, dict):
         if "sentences" in parsed_data and isinstance(parsed_data["sentences"], list):
             sentences_raw = parsed_data["sentences"]
-        elif "sentence" in parsed_data or "original" in parsed_data or "alignment" in parsed_data or "words" in parsed_data:
+        elif (
+            "sentence" in parsed_data
+            or "original" in parsed_data
+            or "alignment" in parsed_data
+            or "words" in parsed_data
+        ):
             sentences_raw = [parsed_data]
 
     if sentences_raw:
@@ -371,16 +425,13 @@ def _parse_analysis_json(raw_text: str, fallback_text: str) -> dict:
         for s in sentences_raw:
             if not isinstance(s, dict):
                 continue
-            is_v2 = (
-                s.get("schemaVersion") == 2
-                or "words" in s
-                or "build_up" in s
-                or "alignment" in s
-            )
+            is_v2 = s.get("schemaVersion") == 2 or "words" in s or "build_up" in s or "alignment" in s
             sentence_text = str(s.get("sentence") or s.get("original") or "").strip()
             if not sentence_text:
                 continue
-            fixed_from = _accent_fixed_from(sentence_text, s.get("accent_fixed_from")) or _accent_source_of(sentence_text, fallback_text)
+            fixed_from = _accent_fixed_from(sentence_text, s.get("accent_fixed_from")) or _accent_source_of(
+                sentence_text, fallback_text
+            )
             accent_note = {"accent_fixed_from": fixed_from} if fixed_from else {}
 
             if is_v2:
@@ -390,17 +441,19 @@ def _parse_analysis_json(raw_text: str, fallback_text: str) -> dict:
                     if isinstance(w, dict):
                         fr = str(w.get("fr") or w.get("token") or "").strip()
                         if fr:
-                            clean_words.append({
-                                "fr": fr,
-                                "ipa": format_friendly_phonetic(str(w.get("ipa") or w.get("phonetic") or "")),
-                                "lemma": str(w.get("lemma") or fr),
-                                "type": str(w.get("type") or w.get("pos") or ""),
-                                "meaning": str(w.get("meaning") or w.get("explanation_en") or ""),
-                                "meaning_zh": str(w.get("meaning_zh") or w.get("explanation_cn") or ""),
-                                "why": str(w.get("why") or ""),
-                                "english_link": str(w.get("english_link") or ""),
-                                "false_friend": bool(w.get("false_friend", False)),
-                            })
+                            clean_words.append(
+                                {
+                                    "fr": fr,
+                                    "ipa": format_friendly_phonetic(str(w.get("ipa") or w.get("phonetic") or "")),
+                                    "lemma": str(w.get("lemma") or fr),
+                                    "type": str(w.get("type") or w.get("pos") or ""),
+                                    "meaning": str(w.get("meaning") or w.get("explanation_en") or ""),
+                                    "meaning_zh": str(w.get("meaning_zh") or w.get("explanation_cn") or ""),
+                                    "why": str(w.get("why") or ""),
+                                    "english_link": str(w.get("english_link") or ""),
+                                    "false_friend": bool(w.get("false_friend", False)),
+                                }
+                            )
 
                 raw_alignment = s.get("alignment", [])
                 clean_alignment = []
@@ -453,25 +506,27 @@ def _parse_analysis_json(raw_text: str, fallback_text: str) -> dict:
                     for w in clean_words
                 ]
 
-                valid_sentences.append({
-                    "schemaVersion": 2,
-                    "label": str(s.get("label") or "").strip()[:3],
-                    "sentence": sentence_text,
-                    "original": sentence_text,
-                    **accent_note,
-                    "translation_en": trans_en,
-                    "translation_zh": trans_zh,
-                    "translation_cn": trans_zh,
-                    "alignment": clean_alignment,
-                    "order_note": str(s.get("order_note", "")),
-                    "build_up": clean_buildup,
-                    "words": clean_words,
-                    "tokens": legacy_tokens,
-                    "grammar_points": clean_grammar,
-                    "structure": structure,
-                    "grammar_ids": grammar_ids,
-                    "pronunciation_tips": clean_tips,
-                })
+                valid_sentences.append(
+                    {
+                        "schemaVersion": 2,
+                        "label": str(s.get("label") or "").strip()[:3],
+                        "sentence": sentence_text,
+                        "original": sentence_text,
+                        **accent_note,
+                        "translation_en": trans_en,
+                        "translation_zh": trans_zh,
+                        "translation_cn": trans_zh,
+                        "alignment": clean_alignment,
+                        "order_note": str(s.get("order_note", "")),
+                        "build_up": clean_buildup,
+                        "words": clean_words,
+                        "tokens": legacy_tokens,
+                        "grammar_points": clean_grammar,
+                        "structure": structure,
+                        "grammar_ids": grammar_ids,
+                        "pronunciation_tips": clean_tips,
+                    }
+                )
             else:
                 # Legacy V1
                 raw_tokens = s.get("tokens", [])
@@ -480,35 +535,35 @@ def _parse_analysis_json(raw_text: str, fallback_text: str) -> dict:
                     if isinstance(tok, dict) and "token" in tok:
                         t_str = str(tok.get("token", "")).strip()
                         if t_str:
-                            clean_tokens.append({
-                                "token": t_str,
-                                "lemma": str(tok.get("lemma", t_str)),
-                                "pos": str(tok.get("pos", "")),
-                                "phonetic": format_friendly_phonetic(str(tok.get("phonetic", ""))),
-                                "explanation_en": str(tok.get("explanation_en", "")),
-                                "explanation_cn": str(tok.get("explanation_cn", "")),
-                            })
+                            clean_tokens.append(
+                                {
+                                    "token": t_str,
+                                    "lemma": str(tok.get("lemma", t_str)),
+                                    "pos": str(tok.get("pos", "")),
+                                    "phonetic": format_friendly_phonetic(str(tok.get("phonetic", ""))),
+                                    "explanation_en": str(tok.get("explanation_en", "")),
+                                    "explanation_cn": str(tok.get("explanation_cn", "")),
+                                }
+                            )
                 filtered_tokens = _filter_sentence_tokens(clean_tokens)
-                valid_sentences.append({
-                    "schemaVersion": 1,
-                    "original": sentence_text,
-                    "sentence": sentence_text,
-                    **accent_note,
-                    "translation_en": str(s.get("translation_en", "")),
-                    "translation_cn": str(s.get("translation_cn", "")),
-                    "translation_zh": str(s.get("translation_cn", "")),
-                    "tokens": filtered_tokens,
-                })
+                valid_sentences.append(
+                    {
+                        "schemaVersion": 1,
+                        "original": sentence_text,
+                        "sentence": sentence_text,
+                        **accent_note,
+                        "translation_en": str(s.get("translation_en", "")),
+                        "translation_cn": str(s.get("translation_cn", "")),
+                        "translation_zh": str(s.get("translation_cn", "")),
+                        "tokens": filtered_tokens,
+                    }
+                )
         valid_sentences = _attach_option_labels(valid_sentences)
         if valid_sentences:
             return {"sentences": valid_sentences}
 
     # Fallback heuristic segmenter (only if upstream LLM completely failed)
-    raw_sentences = [
-        sent.strip()
-        for sent in re.split(r"(?<=[.!?。！？])\s+", fallback_text)
-        if sent.strip()
-    ]
+    raw_sentences = [sent.strip() for sent in re.split(r"(?<=[.!?。！？])\s+", fallback_text) if sent.strip()]
     if not raw_sentences:
         raw_sentences = [fallback_text.strip()]
 
@@ -528,31 +583,33 @@ def _parse_analysis_json(raw_text: str, fallback_text: str) -> dict:
             }
             for word in raw_words
         ]
-        fallback_sentences.append({
-            "schemaVersion": 2,
-            "sentence": sent,
-            "original": sent,
-            "translation_en": "",
-            "translation_zh": "",
-            "translation_cn": "",
-            "alignment": [{"fr": w["fr"], "en": ""} for w in fallback_words],
-            "order_note": "",
-            "build_up": [{"fr": sent, "en": "", "new": "Original sentence"}],
-            "words": fallback_words,
-            "tokens": [
-                {
-                    "token": w["fr"],
-                    "lemma": w["lemma"],
-                    "pos": w["type"],
-                    "phonetic": "",
-                    "explanation_en": w["meaning"],
-                    "explanation_cn": "",
-                }
-                for w in fallback_words
-            ],
-            "grammar_points": [],
-            "pronunciation_tips": [],
-        })
+        fallback_sentences.append(
+            {
+                "schemaVersion": 2,
+                "sentence": sent,
+                "original": sent,
+                "translation_en": "",
+                "translation_zh": "",
+                "translation_cn": "",
+                "alignment": [{"fr": w["fr"], "en": ""} for w in fallback_words],
+                "order_note": "",
+                "build_up": [{"fr": sent, "en": "", "new": "Original sentence"}],
+                "words": fallback_words,
+                "tokens": [
+                    {
+                        "token": w["fr"],
+                        "lemma": w["lemma"],
+                        "pos": w["type"],
+                        "phonetic": "",
+                        "explanation_en": w["meaning"],
+                        "explanation_cn": "",
+                    }
+                    for w in fallback_words
+                ],
+                "grammar_points": [],
+                "pronunciation_tips": [],
+            }
+        )
     return {"sentences": fallback_sentences}
 
 

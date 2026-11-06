@@ -4,6 +4,7 @@ Every analysed sentence may carry "structure": ordered spans coloured N (noun gr
 S (how the sentence is built), each optionally tied to an inventory id, plus "grammar_ids". The
 analyzer's output is untrusted, so everything here is validated against the inventory.
 """
+
 from __future__ import annotations
 
 import json
@@ -29,8 +30,7 @@ BY_ID: dict[str, dict[str, Any]] = {p["id"]: p for p in POINTS}
 def prompt_inventory() -> str:
     """One line per block: "N: N.gender (noun gender); ..." — ids plus a short English name."""
     return "\n".join(
-        f"{block}: " + "; ".join(f"{p['id']} ({p['en']})" for p in POINTS if p["block"] == block)
-        for block in BLOCKS
+        f"{block}: " + "; ".join(f"{p['id']} ({p['en']})" for p in POINTS if p["block"] == block) for block in BLOCKS
     )
 
 

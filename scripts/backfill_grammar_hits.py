@@ -16,6 +16,7 @@ It needs the same OUTPUT_DIR and AUTH_SECRET as the service (auth_db refuses to 
 secret). Writes are INSERT OR IGNORE into grammar_hits only, so running it twice is harmless and
 no existing table or row is changed.
 """
+
 from __future__ import annotations
 
 import argparse

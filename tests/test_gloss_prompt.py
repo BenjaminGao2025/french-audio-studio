@@ -1,6 +1,6 @@
-import testenv  # must run before the app is imported
-
 import json
+
+import testenv  # must run before the app is imported
 
 import analysis
 

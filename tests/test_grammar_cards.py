@@ -1,16 +1,15 @@
-import testenv  # noqa: F401  (must run before the app is imported)
-
 import json
 import unittest
 import uuid
 from unittest.mock import AsyncMock, patch
 
+import testenv  # noqa: F401  (must run before the app is imported)
 from fastapi.testclient import TestClient
 
 import auth_db
+import routers.tutor
 import srs
 import tts_service
-import routers.tutor
 
 GOOD = {
     "prompt_fr": "Les étudiants ____ un diplôme peuvent s'inscrire.",
@@ -22,7 +21,11 @@ GOOD = {
 REQUEST = {
     "sentence": "Elle comprend 40 questions portant sur des documents et ayant des objectifs différents.",
     "translation_zh": "它包含40道题。",
-    "grammar": {"title": "-ant words work like English -ing words", "explanation": "ayant = having.", "hook": "-ant = -ing"},
+    "grammar": {
+        "title": "-ant words work like English -ing words",
+        "explanation": "ayant = having.",
+        "hook": "-ant = -ing",
+    },
 }
 
 

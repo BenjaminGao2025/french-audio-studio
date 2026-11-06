@@ -1,4 +1,5 @@
 """Study input: pull the French lines worth studying out of a pasted lesson or a photographed page."""
+
 from __future__ import annotations
 
 import base64
@@ -30,9 +31,7 @@ MARKDOWN_RE = re.compile(
     r"\*\*|__|~~|```|`|^#{1,6}\s|^\s*[-*+•]\s|^\s*\d+[.)]\s|\|",
     re.MULTILINE,
 )
-_EXTRACT_PREFIX_RE = re.compile(
-    r"^(?:[-*+•]\s+|\d+[.)]\s+|#{1,6}\s+|>\s*)"
-)
+_EXTRACT_PREFIX_RE = re.compile(r"^(?:[-*+•]\s+|\d+[.)]\s+|#{1,6}\s+|>\s*)")
 _EXTRACT_MARKUP_RE = re.compile(r"\*\*|__|~~|`|^#{1,6}\s*|\s*\|")
 
 
@@ -75,10 +74,9 @@ def _clean_input_payload(text: str) -> dict:
         "- Keep the original order of the text.\n"
         "- Do not translate, shorten or invent French. Copy it exactly, except for missing accents.\n"
         "- Drop markdown, Chinese/English explanations, headings and labels.\n"
-        "- A conjugation table row becomes one short French line: \"| je | parle | parlais |\" "
-        "gives \"je parle\". Emit each cell as part of a short phrase, not a lone verb form.\n"
-        "- No numbering, no bullets, no blank lines, no commentary.\n"
-        + analysis.ACCENT_RULE
+        '- A conjugation table row becomes one short French line: "| je | parle | parlais |" '
+        'gives "je parle". Emit each cell as part of a short phrase, not a lone verb form.\n'
+        "- No numbering, no bullets, no blank lines, no commentary.\n" + analysis.ACCENT_RULE
     )
     return {
         "model": ai.AGY_MODEL,
@@ -97,14 +95,12 @@ def _clean_input_payload(text: str) -> dict:
 
 async def request_clean_input(text: str, api_key: str) -> dict:
     """{cleaned, count, changed}. Any failure falls back to the text as typed."""
-    unchanged = {"cleaned": text, "count": len([l for l in text.splitlines() if l.strip()]), "changed": False}
+    unchanged = {"cleaned": text, "count": len([line for line in text.splitlines() if line.strip()]), "changed": False}
     if not needs_input_cleaning(text):
         return unchanged
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     try:
-        async with httpx.AsyncClient(
-            timeout=min(CLEAN_INPUT_TIMEOUT_SECONDS, ai.UPSTREAM_TIMEOUT_SECONDS)
-        ) as client:
+        async with httpx.AsyncClient(timeout=min(CLEAN_INPUT_TIMEOUT_SECONDS, ai.UPSTREAM_TIMEOUT_SECONDS)) as client:
             _, raw_text = await ai.post_chat(client, _clean_input_payload(text), headers)
     except Exception:  # upstream 5xx/4xx, timeout, network, bad body: keep today's behaviour
         logger.warning("clean-input: upstream call failed, using the text as typed", exc_info=True)
@@ -117,7 +113,9 @@ async def request_clean_input(text: str, api_key: str) -> dict:
         return unchanged
     result = {"cleaned": cleaned, "count": len(lines), "changed": True}
     # The reply is plain lines, so the original comes from the pasted text itself
-    fixes = [{"fr": line, "accent_fixed_from": found} for line in lines if (found := analysis._accent_source_of(line, text))]
+    fixes = [
+        {"fr": line, "accent_fixed_from": found} for line in lines if (found := analysis._accent_source_of(line, text))
+    ]
     return {**result, "accent_fixes": fixes} if fixes else result
 
 
@@ -147,7 +145,7 @@ PHOTO_SYSTEM_PROMPT = (
     '- kind "grammar": turn a grammar point or table into short French lines, one per item, for '
     'example "le père / les pères" or "l\'oncle", with a gloss that explains the point.\n'
     '- gloss: "English / 中文" meaning of the item, or "" when there is nothing useful to add.\n'
-    '- fr holds French only: no numbering, no bullets, no markdown, no translation.\n'
+    "- fr holds French only: no numbering, no bullets, no markdown, no translation.\n"
     "- Drop every English-only line, for example instructions and English sentences to translate. "
     "They may give you context but are never items.\n"
     '- Drop exercise headers and section labels such as "EXERCICE", "Traduisez !", "NOTEZ", '
@@ -233,10 +231,12 @@ def parse_photo_items(raw_text: str) -> list[dict] | None:
         seen.add(fr.casefold())
         gloss = raw.get("gloss")
         fixed_from = analysis._accent_fixed_from(fr, raw.get("accent_fixed_from"))
-        items.append({
-            "kind": raw.get("kind") if raw.get("kind") in PHOTO_KINDS else "sentence",
-            "fr": fr,
-            "gloss": " ".join(gloss.split()) if isinstance(gloss, str) else "",
-            **({"accent_fixed_from": fixed_from} if fixed_from else {}),
-        })
+        items.append(
+            {
+                "kind": raw.get("kind") if raw.get("kind") in PHOTO_KINDS else "sentence",
+                "fr": fr,
+                "gloss": " ".join(gloss.split()) if isinstance(gloss, str) else "",
+                **({"accent_fixed_from": fixed_from} if fixed_from else {}),
+            }
+        )
     return items

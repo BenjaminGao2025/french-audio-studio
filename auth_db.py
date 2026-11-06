@@ -254,12 +254,10 @@ def _generate_token(user_id: int, email: str, session_id: str) -> str:
     # Token valid for 90 days, and only while its session (device) still exists
     exp = (datetime.datetime.utcnow() + datetime.timedelta(days=90)).timestamp()
     payload = {"sub": user_id, "email": email, "sid": session_id, "exp": int(exp)}
-    payload_b64 = base64.urlsafe_b64encode(
-        json.dumps(payload, separators=(",", ":")).encode("utf-8")
-    ).decode("utf-8").rstrip("=")
-    sig = hmac.new(
-        AUTH_SECRET.encode("utf-8"), payload_b64.encode("utf-8"), hashlib.sha256
-    ).hexdigest()
+    payload_b64 = (
+        base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode("utf-8")).decode("utf-8").rstrip("=")
+    )
+    sig = hmac.new(AUTH_SECRET.encode("utf-8"), payload_b64.encode("utf-8"), hashlib.sha256).hexdigest()
     return f"{payload_b64}.{sig}"
 
 
@@ -295,9 +293,7 @@ def _signed_payload(token: str) -> dict[str, Any] | None:
         return None
     try:
         payload_b64, sig = token.split(".", 1)
-        expected_sig = hmac.new(
-            AUTH_SECRET.encode("utf-8"), payload_b64.encode("utf-8"), hashlib.sha256
-        ).hexdigest()
+        expected_sig = hmac.new(AUTH_SECRET.encode("utf-8"), payload_b64.encode("utf-8"), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(sig, expected_sig):
             return None
 
@@ -372,9 +368,7 @@ def consume_invite(code: str) -> None:
         _consume_invite(conn, code)
 
 
-def register_user(
-    email: str, password: str, device: str = "", invite_code: str | None = None
-) -> dict[str, Any]:
+def register_user(email: str, password: str, device: str = "", invite_code: str | None = None) -> dict[str, Any]:
     clean_email = email.strip().lower()
     if not clean_email or not re.match(r"^[^@]+@[^@]+\.[^@]+$", clean_email):
         raise ValueError("请输入有效的邮箱地址。")
@@ -591,14 +585,16 @@ def get_history_records(
                 payload = json.loads(r["payload_json"])
             except Exception:
                 payload = {}
-            results.append({
-                "id": r["id"],
-                "user_id": r["user_id"],
-                "type": r["record_type"],
-                "text": clean_text,
-                "created_at": r["created_at"],
-                **payload,
-            })
+            results.append(
+                {
+                    "id": r["id"],
+                    "user_id": r["user_id"],
+                    "type": r["record_type"],
+                    "text": clean_text,
+                    "created_at": r["created_at"],
+                    **payload,
+                }
+            )
             if len(results) >= limit:
                 break
 
@@ -683,9 +679,7 @@ def grammar_hit_sentences(user_id: int, gid: str, limit: int = 100) -> list[dict
 
 
 def _user_id_by_email(conn: sqlite3.Connection, email: str) -> int:
-    row = conn.execute(
-        "SELECT id FROM users WHERE email = ?", (email.strip().lower(),)
-    ).fetchone()
+    row = conn.execute("SELECT id FROM users WHERE email = ?", (email.strip().lower(),)).fetchone()
     if not row:
         raise SystemExit(f"No user with email {email!r}.")
     return row[0]

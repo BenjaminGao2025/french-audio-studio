@@ -4,6 +4,7 @@ This module only assembles the app: static files, security headers, startup reco
 routers. Routes live in routers/, outside services (AI gateway, TTS, ASR) in services/, and the
 learning logic in the top-level modules (srs, writing, speaking, episodes, ...). See ARCHITECTURE.md.
 """
+
 from __future__ import annotations
 
 import logging
@@ -42,29 +43,42 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 # Order matters only where paths overlap; this is the order the routes were declared in before the
 # split, so every request still resolves to the same handler.
 for _routes in (
-    routers.auth, routers.history, routers.srs, routers.game, routers.grammar, routers.app_shell,
-    routers.studio, routers.pages, routers.tutor, routers.episodes, routers.writing, routers.speaking,
-    routers.coach, routers.homework,
+    routers.auth,
+    routers.history,
+    routers.srs,
+    routers.game,
+    routers.grammar,
+    routers.app_shell,
+    routers.studio,
+    routers.pages,
+    routers.tutor,
+    routers.episodes,
+    routers.writing,
+    routers.speaking,
+    routers.coach,
+    routers.homework,
 ):
     app.include_router(_routes.router)
 
 
-CONTENT_SECURITY_POLICY = "; ".join([
-    "default-src 'self'",
-    # Cloudflare Web Analytics beacon is injected by the tunnel/CDN, not by our pages
-    "script-src 'self' https://unpkg.com/lucide@1.34.0/ https://static.cloudflareinsights.com",
-    "style-src 'self' 'unsafe-inline'",  # style="" attributes in markup; scripts stay strict
-    "img-src 'self' data: blob:",
-    "media-src 'self' blob:",
-    "font-src 'self' data:",
-    "connect-src 'self' https://cloudflareinsights.com",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "frame-ancestors 'none'",
-    "worker-src 'self'",  # /sw.js (installable app)
-    "manifest-src 'self'",
-])
+CONTENT_SECURITY_POLICY = "; ".join(
+    [
+        "default-src 'self'",
+        # Cloudflare Web Analytics beacon is injected by the tunnel/CDN, not by our pages
+        "script-src 'self' https://unpkg.com/lucide@1.34.0/ https://static.cloudflareinsights.com",
+        "style-src 'self' 'unsafe-inline'",  # style="" attributes in markup; scripts stay strict
+        "img-src 'self' data: blob:",
+        "media-src 'self' blob:",
+        "font-src 'self' data:",
+        "connect-src 'self' https://cloudflareinsights.com",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+        "worker-src 'self'",  # /sw.js (installable app)
+        "manifest-src 'self'",
+    ]
+)
 
 
 @app.middleware("http")

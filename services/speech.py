@@ -1,4 +1,5 @@
 """Edge TTS synthesis into outputs/: supported voices, cache-friendly file names, safe file serving."""
+
 from __future__ import annotations
 
 import datetime
@@ -42,9 +43,7 @@ def _timestamp() -> str:
     return f"{now}_{uuid.uuid4().hex}"
 
 
-def safe_timestamp(
-    value: str | None, text: str | None = None, voice: str | None = None
-) -> str:
+def safe_timestamp(value: str | None, text: str | None = None, voice: str | None = None) -> str:
     if value and re.fullmatch(r"[0-9A-Za-z_-]{1,48}", value):
         return value
     if text and voice and len(text) <= TTS_SNIPPET_MAX_CHARS:
@@ -67,7 +66,9 @@ def validate_voice(voice: str) -> str:
 def snippet_cached(text: str, voice: str, rate: float = 1.0) -> bool:
     try:
         content = _normalized_text(text)
-        stamp = safe_timestamp(None, text=content, voice=validate_voice(voice) if rate == 1 else f"{validate_voice(voice)}@{rate:g}")
+        stamp = safe_timestamp(
+            None, text=content, voice=validate_voice(voice) if rate == 1 else f"{validate_voice(voice)}@{rate:g}"
+        )
     except HTTPException:
         return False
     base = OUTPUT_DIR / f"TTS_{voice}_{stamp}"
@@ -79,9 +80,11 @@ async def create_speech_files(
 ) -> tuple[str, str]:
     content = _normalized_text(text)
     selected_voice = validate_voice(voice)
-    if not .5 <= rate <= 1.5:
+    if not 0.5 <= rate <= 1.5:
         raise HTTPException(422, "Rate must be between 0.5 and 1.5")
-    job_timestamp = safe_timestamp(timestamp, text=content, voice=selected_voice if rate == 1 else f"{selected_voice}@{rate:g}")
+    job_timestamp = safe_timestamp(
+        timestamp, text=content, voice=selected_voice if rate == 1 else f"{selected_voice}@{rate:g}"
+    )
     safe_voice = selected_voice.replace("/", "_").replace("\\", "_")
     base_filename = f"TTS_{safe_voice}_{job_timestamp}"
     audio_filename = f"{base_filename}.mp3"
@@ -95,8 +98,11 @@ async def create_speech_files(
         tmp_suffix = f".{uuid.uuid4().hex[:8]}.part"
         tmp_audio = audio_path.with_name(audio_filename + tmp_suffix)
         tmp_srt = srt_path.with_name(srt_filename + tmp_suffix)
-        communicate = (edge_tts.Communicate(content, selected_voice) if rate == 1 else
-                       edge_tts.Communicate(content, selected_voice, rate=f"{round((rate - 1) * 100):+d}%"))
+        communicate = (
+            edge_tts.Communicate(content, selected_voice)
+            if rate == 1
+            else edge_tts.Communicate(content, selected_voice, rate=f"{round((rate - 1) * 100):+d}%")
+        )
         submaker = edge_tts.SubMaker()
         try:
             with tmp_audio.open("wb") as audio_file:
@@ -115,9 +121,7 @@ async def create_speech_files(
     return audio_filename, srt_filename
 
 
-def output_file(
-    filename: str, download: bool = False, cache_seconds: int = 0
-) -> FileResponse:
+def output_file(filename: str, download: bool = False, cache_seconds: int = 0) -> FileResponse:
     if Path(filename).name != filename or Path(filename).suffix not in {".mp3", ".srt"}:
         raise HTTPException(status_code=404, detail="文件不存在。")
     path = OUTPUT_DIR / filename

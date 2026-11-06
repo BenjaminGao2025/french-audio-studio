@@ -6,13 +6,13 @@ import subprocess
 import unittest
 from unittest.mock import AsyncMock, patch
 
+import testenv  # noqa: F401  (sets up the isolated env before tts_service is imported)
 from fastapi.testclient import TestClient
 
-import testenv  # noqa: F401  (sets up the isolated env before tts_service is imported)
-import tts_service
 import analysis
 import intake
 import services.ai
+import tts_service
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 PHOTO = "data:image/jpeg;base64," + base64.b64encode(b"\xff\xd8\xff\xe0" + b"\x00" * 64).decode()
@@ -150,7 +150,9 @@ class AnalysisFieldTests(unittest.TestCase):
     def test_endpoint_returns_the_field(self):
         reply = analysis_reply(sentence="À Paris", accent_fixed_from="A Paris")
         with chat_reply(reply):
-            r = TestClient(tts_service.app).post("/api/analyze", json={"text": "A Paris"}, headers=testenv.session_headers())
+            r = TestClient(tts_service.app).post(
+                "/api/analyze", json={"text": "A Paris"}, headers=testenv.session_headers()
+            )
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual(r.json()["sentences"][0]["accent_fixed_from"], "A Paris")
 
@@ -165,7 +167,9 @@ class ExtractionFieldTests(unittest.TestCase):
             ]
         }
         with chat_reply(json.dumps(reply, ensure_ascii=False)):
-            r = TestClient(tts_service.app).post("/api/photo-extract", json={"image": PHOTO}, headers=testenv.session_headers())
+            r = TestClient(tts_service.app).post(
+                "/api/photo-extract", json={"image": PHOTO}, headers=testenv.session_headers()
+            )
         self.assertEqual(r.status_code, 200, r.text)
         data = r.json()
         self.assertEqual(data["text"], "À pied\nJe parle.\nA vélo")
@@ -176,7 +180,9 @@ class ExtractionFieldTests(unittest.TestCase):
     def test_clean_input_reports_the_fixed_lines(self):
         lesson = "## 选项\n- A pied\n- A l'heure\n- Je parle.\n"
         with chat_reply("À pied\nÀ l'heure\nJe parle.\n"):
-            r = TestClient(tts_service.app).post("/api/clean-input", json={"text": lesson}, headers=testenv.session_headers())
+            r = TestClient(tts_service.app).post(
+                "/api/clean-input", json={"text": lesson}, headers=testenv.session_headers()
+            )
         self.assertEqual(r.status_code, 200, r.text)
         data = r.json()
         self.assertEqual(data["cleaned"], "À pied\nÀ l'heure\nJe parle.")
@@ -190,7 +196,9 @@ class ExtractionFieldTests(unittest.TestCase):
 
     def test_clean_input_shape_is_unchanged_without_a_fix(self):
         with chat_reply("Je parle.\n"):
-            r = TestClient(tts_service.app).post("/api/clean-input", json={"text": "## 例句\nJe parle."}, headers=testenv.session_headers())
+            r = TestClient(tts_service.app).post(
+                "/api/clean-input", json={"text": "## 例句\nJe parle."}, headers=testenv.session_headers()
+            )
         self.assertEqual(r.json(), {"cleaned": "Je parle.", "count": 1, "changed": True})
 
 
@@ -210,7 +218,9 @@ class AccentPageTests(unittest.TestCase):
         node = shutil.which("node")
         if not node:
             self.skipTest("node is needed")
-        result = subprocess.run([node, "tests/test_accent_fix.cjs"], cwd=ROOT, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(
+            [node, "tests/test_accent_fix.cjs"], cwd=ROOT, capture_output=True, text=True, timeout=30
+        )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 

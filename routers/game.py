@@ -1,4 +1,5 @@
 """Progress HUD routes: study time, weekly targets and streaks (see game.py)."""
+
 from __future__ import annotations
 
 from typing import Literal

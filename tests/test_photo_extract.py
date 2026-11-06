@@ -8,14 +8,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
-from fastapi.testclient import TestClient
-
-import testenv  # noqa: F401  (sets up the isolated env before tts_service is imported)
-import tts_service
 import fastapi
 import httpx
+import testenv  # noqa: F401  (sets up the isolated env before tts_service is imported)
+from fastapi.testclient import TestClient
+
 import intake
 import services.ai
+import tts_service
 import web_common
 
 JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 64
@@ -277,19 +277,32 @@ class PhotoExtractPageTests(unittest.TestCase):
     def test_step_strings_exist_in_both_languages(self):
         js = Path(web_common.STATIC_DIR, "study.js").read_text(encoding="utf-8")
         keys = (
-            "photoStatusAria", "photoSteps", "photoCompressing", "photoUploading", "photoUploaded",
-            "photoReading", "photoFound", "photoAnalyzing", "photoAllDone", "photoStepFailed",
-            "photoCancelled", "photoNetworkError",
+            "photoStatusAria",
+            "photoSteps",
+            "photoCompressing",
+            "photoUploading",
+            "photoUploaded",
+            "photoReading",
+            "photoFound",
+            "photoAnalyzing",
+            "photoAllDone",
+            "photoStepFailed",
+            "photoCancelled",
+            "photoNetworkError",
         )
         for key in keys:
             with self.subTest(key=key):
                 self.assertEqual(js.count(f"{key}:"), 2)
         strings = (
-            "Compressing photo…", "压缩图片…",
-            "`Uploading ${percent}%`", "`上传中 ${percent}%`",
-            "`Uploaded, reading French… (${seconds}s)`", "`上传成功，正在识别法语（已等 ${seconds} 秒）`",
+            "Compressing photo…",
+            "压缩图片…",
+            "`Uploading ${percent}%`",
+            "`上传中 ${percent}%`",
+            "`Uploaded, reading French… (${seconds}s)`",
+            "`上传成功，正在识别法语（已等 ${seconds} 秒）`",
             "`识别出 ${n} 条`",
-            "`Analysing part ${part} of ${total}`", "`正在分析第 ${part}/${total} 段`",
+            "`Analysing part ${part} of ${total}`",
+            "`正在分析第 ${part}/${total} 段`",
         )
         for text in strings:
             self.assertIn(text, js)

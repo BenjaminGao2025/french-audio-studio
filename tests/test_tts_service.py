@@ -1,21 +1,20 @@
-import testenv  # noqa: F401  (must run before the app is imported)
-
 import asyncio
 import json
 import unittest
 import uuid
 from unittest.mock import AsyncMock, Mock, patch
 
+import fastapi
+import testenv  # noqa: F401  (must run before the app is imported)
 from fastapi.testclient import TestClient
 
-import auth_db
-import tts_service
 import analysis
-import fastapi
+import auth_db
 import routers.pages
 import services.ai
 import services.speech
 import transform
+import tts_service
 import web_common
 
 
@@ -207,23 +206,18 @@ class FrenchAudioStudioTests(unittest.TestCase):
 
     def test_local_auto_mode_recognizes_creation_brief(self):
         result = transform._infer_task_mode_locally(
-            "我想用简短的法语，了解一下什么是保守主义。"
-            "100到150个单词，简单一点，适合初学者。"
+            "我想用简短的法语，了解一下什么是保守主义。100到150个单词，简单一点，适合初学者。"
         )
 
         self.assertEqual(result, "generate")
 
     def test_local_auto_mode_recognizes_rough_spoken_thoughts(self):
-        result = transform._infer_task_mode_locally(
-            "嗯就是我明天下班以后可能想去买点菜，然后顺便去趟银行。"
-        )
+        result = transform._infer_task_mode_locally("嗯就是我明天下班以后可能想去买点菜，然后顺便去趟银行。")
 
         self.assertEqual(result, "express")
 
     def test_local_auto_mode_recognizes_existing_french(self):
-        result = transform._infer_task_mode_locally(
-            "Je va à le bibliothèque cette après midi."
-        )
+        result = transform._infer_task_mode_locally("Je va à le bibliothèque cette après midi.")
 
         self.assertEqual(result, "polish")
 
@@ -297,17 +291,13 @@ class FrenchAudioStudioTests(unittest.TestCase):
             messages[0]["content"].lower(),
         )
         with self.assertRaises(fastapi.HTTPException) as context:
-            transform._validate_model_result(
-                " ".join(["bonjour"] * 99), request, "generate"
-            )
+            transform._validate_model_result(" ".join(["bonjour"] * 99), request, "generate")
 
         self.assertEqual(
             context.exception.detail["code"],
             "word_count_out_of_range",
         )
-        valid = transform._validate_model_result(
-            " ".join(["bonjour"] * 100), request, "generate"
-        )
+        valid = transform._validate_model_result(" ".join(["bonjour"] * 100), request, "generate")
         self.assertEqual(transform._french_word_count(valid), 100)
 
     def test_upstream_5xx_is_retried_once(self):
@@ -320,9 +310,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
         client = AsyncMock()
         client.post.side_effect = [failed_response, successful_response]
 
-        body, text = asyncio.run(
-            services.ai.post_chat(client, {"messages": []}, {"Authorization": "Bearer key"})
-        )
+        body, text = asyncio.run(services.ai.post_chat(client, {"messages": []}, {"Authorization": "Bearer key"}))
 
         self.assertEqual(text, "Bonjour.")
         self.assertEqual(body["model"], "gpt-6.1-sol-thinking")
@@ -333,31 +321,17 @@ class FrenchAudioStudioTests(unittest.TestCase):
         bad_response = Mock(status_code=200)
         bad_response.json.return_value = {
             "model": "gpt-6.1-sol-thinking",
-            "choices": [
-                {
-                    "message": {
-                        "content": "保守主义 est une idée."
-                    }
-                }
-            ],
+            "choices": [{"message": {"content": "保守主义 est une idée."}}],
         }
         good_response = Mock(status_code=200)
         good_response.json.return_value = {
             "model": "gpt-6.1-sol-thinking",
-            "choices": [
-                {
-                    "message": {
-                        "content": "Le conservatisme est une idée."
-                    }
-                }
-            ],
+            "choices": [{"message": {"content": "Le conservatisme est une idée."}}],
         }
         proofread_response = Mock(status_code=200)
         proofread_response.json.return_value = {
             "model": "gemini-3.8-flash",
-            "choices": [
-                {"message": {"content": "Le conservatisme est une idée."}}
-            ],
+            "choices": [{"message": {"content": "Le conservatisme est une idée."}}],
         }
         client = AsyncMock()
         client.post.side_effect = [bad_response, good_response, proofread_response]
@@ -387,9 +361,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertEqual(len(retry_payload["messages"]), 2)
 
     @patch("httpx.AsyncClient")
-    def test_invalid_grok_draft_does_not_block_quality_finalizer(
-        self, async_client_class
-    ):
+    def test_invalid_grok_draft_does_not_block_quality_finalizer(self, async_client_class):
         bad_response = Mock(status_code=200)
         bad_response.json.return_value = {
             "model": "gpt-6.1-sol-thinking",
@@ -424,9 +396,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertEqual(client.post.await_count, 3)
 
     @patch("httpx.AsyncClient")
-    def test_valid_grok_result_survives_failed_proofreader(
-        self, async_client_class
-    ):
+    def test_valid_grok_result_survives_failed_proofreader(self, async_client_class):
         grok_response = Mock(status_code=200)
         grok_response.json.return_value = {
             "model": "gpt-6.1-sol-thinking",
@@ -469,20 +439,12 @@ class FrenchAudioStudioTests(unittest.TestCase):
         transform_response = Mock(status_code=200)
         transform_response.json.return_value = {
             "model": "gpt-6.1-sol-thinking",
-            "choices": [
-                {
-                    "message": {
-                        "content": "Le conservatisme est une idée."
-                    }
-                }
-            ],
+            "choices": [{"message": {"content": "Le conservatisme est une idée."}}],
         }
         proofread_response = Mock(status_code=200)
         proofread_response.json.return_value = {
             "model": "gemini-3.8-flash",
-            "choices": [
-                {"message": {"content": "Le conservatisme est une idée."}}
-            ],
+            "choices": [{"message": {"content": "Le conservatisme est une idée."}}],
         }
         client = AsyncMock()
         client.post.side_effect = [
@@ -519,9 +481,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
 
     @patch("transform._infer_task_mode_locally", return_value=None)
     @patch("httpx.AsyncClient")
-    def test_auto_mode_asks_model_when_local_rules_are_ambiguous(
-        self, async_client_class, _local_classifier
-    ):
+    def test_auto_mode_asks_model_when_local_rules_are_ambiguous(self, async_client_class, _local_classifier):
         classification_response = Mock(status_code=200)
         classification_response.json.return_value = {
             "model": "gpt-6.1-sol-thinking",
@@ -642,11 +602,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
     def test_non_french_script_detection(self):
         self.assertTrue(transform._contains_non_french_script("Bonjour, \u4f60\u597d"))
         self.assertTrue(transform._contains_non_french_script("\uc548\ub155, bonjour"))
-        self.assertFalse(
-            transform._contains_non_french_script(
-                "A : Apr\u00e8s le travail, on va boire un caf\u00e9 ?"
-            )
-        )
+        self.assertFalse(transform._contains_non_french_script("A : Apr\u00e8s le travail, on va boire un caf\u00e9 ?"))
 
     def test_code_fence_is_removed_from_model_text(self):
         self.assertEqual(
@@ -656,17 +612,14 @@ class FrenchAudioStudioTests(unittest.TestCase):
 
     def test_trailing_model_offer_is_removed(self):
         cleaned = transform._clean_model_text(
-            "Le conservatisme change lentement. "
-            "Si tu veux, je peux aussi te donner des exemples simples."
+            "Le conservatisme change lentement. Si tu veux, je peux aussi te donner des exemples simples."
         )
 
         self.assertEqual(cleaned, "Le conservatisme change lentement.")
 
     def test_french_block_is_extracted_from_explanatory_text(self):
         self.assertEqual(
-            transform._clean_model_text(
-                "Source ignored. <FRENCH>Je vais \u00e0 la biblioth\u00e8que.</FRENCH>"
-            ),
+            transform._clean_model_text("Source ignored. <FRENCH>Je vais \u00e0 la biblioth\u00e8que.</FRENCH>"),
             "Je vais \u00e0 la biblioth\u00e8que.",
         )
 
@@ -737,15 +690,31 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertEqual(data["sentences"][0]["tokens"][0]["lemma"], "aller")
 
     def test_option_labels_join_the_sentence_they_mark(self):
-        raw = json.dumps({"sentences": [
-            {"schemaVersion": 2, "sentence": "A.", "translation_en": "A.", "words": []},
-            {"schemaVersion": 2, "sentence": "C'est une taille 42.", "translation_en": "It's a size 42.", "words": []},
-            {"schemaVersion": 2, "sentence": "B. Elle ne coûte pas cher.", "translation_en": "B. It is not expensive.", "words": []},
-            {"schemaVersion": 2, "sentence": "Oui, elle est rouge.", "label": "C", "words": []},
-        ]})
+        raw = json.dumps(
+            {
+                "sentences": [
+                    {"schemaVersion": 2, "sentence": "A.", "translation_en": "A.", "words": []},
+                    {
+                        "schemaVersion": 2,
+                        "sentence": "C'est une taille 42.",
+                        "translation_en": "It's a size 42.",
+                        "words": [],
+                    },
+                    {
+                        "schemaVersion": 2,
+                        "sentence": "B. Elle ne coûte pas cher.",
+                        "translation_en": "B. It is not expensive.",
+                        "words": [],
+                    },
+                    {"schemaVersion": 2, "sentence": "Oui, elle est rouge.", "label": "C", "words": []},
+                ]
+            }
+        )
         parsed = analysis._parse_analysis_json(raw, "x")["sentences"]
-        self.assertEqual([(p["label"], p["sentence"]) for p in parsed], [
-            ("A", "C'est une taille 42."), ("B", "Elle ne coûte pas cher."), ("C", "Oui, elle est rouge.")])
+        self.assertEqual(
+            [(p["label"], p["sentence"]) for p in parsed],
+            [("A", "C'est une taille 42."), ("B", "Elle ne coûte pas cher."), ("C", "Oui, elle est rouge.")],
+        )
         self.assertEqual(parsed[1]["translation_en"], "It is not expensive.")
 
     def test_parse_analysis_json_handles_code_fences(self):
@@ -774,22 +743,56 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertIn("evaluateFrenchPronunciation", response.text)
 
     def test_parse_analysis_json_handles_direct_list_and_filters_punct_and_trivial(self):
-        raw = json.dumps([
-            {
-                "original": "Elle comprend 40 questions portant sur des documents de la vie quotidienne.",
-                "translation_en": "She understands 40 questions.",
-                "translation_cn": "她理解40个问题。",
-                "tokens": [
-                    {"token": "Elle", "lemma": "elle", "pos": "pron.", "explanation_en": "she", "explanation_cn": "她"},
-                    {"token": "comprend", "lemma": "comprendre", "pos": "v.", "explanation_en": "includes", "explanation_cn": "包含"},
-                    {"token": "40", "lemma": "40", "pos": "num.", "explanation_en": "forty", "explanation_cn": "四十"},
-                    {"token": "portant sur", "lemma": "porter sur", "pos": "loc. verb.", "explanation_en": "dealing with", "explanation_cn": "涉及"},
-                    {"token": "de la vie quotidienne", "lemma": "de la vie quotidienne", "pos": "loc. adj.", "explanation_en": "of daily life", "explanation_cn": "日常生活的"},
-                    {"token": ".", "lemma": ".", "pos": "punct", "explanation_en": "", "explanation_cn": ""},
-                ]
-            }
-        ])
-        parsed = analysis._parse_analysis_json(raw, "Elle comprend 40 questions portant sur des documents de la vie quotidienne.")
+        raw = json.dumps(
+            [
+                {
+                    "original": "Elle comprend 40 questions portant sur des documents de la vie quotidienne.",
+                    "translation_en": "She understands 40 questions.",
+                    "translation_cn": "她理解40个问题。",
+                    "tokens": [
+                        {
+                            "token": "Elle",
+                            "lemma": "elle",
+                            "pos": "pron.",
+                            "explanation_en": "she",
+                            "explanation_cn": "她",
+                        },
+                        {
+                            "token": "comprend",
+                            "lemma": "comprendre",
+                            "pos": "v.",
+                            "explanation_en": "includes",
+                            "explanation_cn": "包含",
+                        },
+                        {
+                            "token": "40",
+                            "lemma": "40",
+                            "pos": "num.",
+                            "explanation_en": "forty",
+                            "explanation_cn": "四十",
+                        },
+                        {
+                            "token": "portant sur",
+                            "lemma": "porter sur",
+                            "pos": "loc. verb.",
+                            "explanation_en": "dealing with",
+                            "explanation_cn": "涉及",
+                        },
+                        {
+                            "token": "de la vie quotidienne",
+                            "lemma": "de la vie quotidienne",
+                            "pos": "loc. adj.",
+                            "explanation_en": "of daily life",
+                            "explanation_cn": "日常生活的",
+                        },
+                        {"token": ".", "lemma": ".", "pos": "punct", "explanation_en": "", "explanation_cn": ""},
+                    ],
+                }
+            ]
+        )
+        parsed = analysis._parse_analysis_json(
+            raw, "Elle comprend 40 questions portant sur des documents de la vie quotidienne."
+        )
         self.assertIn("sentences", parsed)
         tokens = parsed["sentences"][0]["tokens"]
         token_names = [t["token"] for t in tokens]
@@ -801,7 +804,6 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertIn("comprend", token_names)
         self.assertIn("portant sur", token_names)
         self.assertIn("de la vie quotidienne", token_names)
-
 
     def test_auth_register_and_login_flow(self):
         test_email = _unique_email("test_user")
@@ -946,8 +948,6 @@ class FrenchAudioStudioTests(unittest.TestCase):
         res_empty = self.client.get("/api/history", headers=headers)
         self.assertEqual(res_empty.json()["count"], 0)
 
-
-
     def test_history_requires_login(self):
         self.assertEqual(self.client.get("/api/history").status_code, 401)
         self.assertEqual(self.client.delete("/api/history").status_code, 401)
@@ -966,9 +966,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/history", headers=bob).json()["count"], 0)
         hijack = {**record, "text": "Hijacked by Bob"}
         self.client.post("/api/history", json=hijack, headers=bob)
-        self.assertFalse(
-            self.client.delete("/api/history/hist_shared_id", headers=bob).json()["success"]
-        )
+        self.assertFalse(self.client.delete("/api/history/hist_shared_id", headers=bob).json()["success"])
         self.client.delete("/api/history", headers=bob)
 
         alice_records = self.client.get("/api/history", headers=alice).json()["records"]
@@ -993,9 +991,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_speech_requires_login(self):
-        response = self.client.post(
-            "/api/speech", json={"text": "Bonjour.", "voice": "fr-FR-DeniseNeural"}
-        )
+        response = self.client.post("/api/speech", json={"text": "Bonjour.", "voice": "fr-FR-DeniseNeural"})
         self.assertEqual(response.status_code, 401)
 
     @patch("services.speech.create_speech_files", new_callable=AsyncMock)
@@ -1026,9 +1022,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertNotIn("fas_session", self.client.cookies)
         email = _unique_email()
         auth_db.register_user(email, "password123")
-        logged_in = self.client.post(
-            "/api/auth/login", json={"email": email, "password": "password123"}
-        )
+        logged_in = self.client.post("/api/auth/login", json={"email": email, "password": "password123"})
         self.assertEqual(logged_in.status_code, 200)
         with patch("services.speech.create_speech_files", new_callable=AsyncMock) as create_mock:
             path = web_common.OUTPUT_DIR / "TTS_fr-FR-DeniseNeural_snip_cookie.mp3"
@@ -1067,9 +1061,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
     def test_session_token_without_server_key_returns_503(self):
         headers = self._login_headers()
         with patch.object(services.ai, "SERVER_WEB2API_KEY", ""):
-            response = self.client.post(
-                "/api/analyze", json={"text": "Bonjour."}, headers=headers
-            )
+            response = self.client.post("/api/analyze", json={"text": "Bonjour."}, headers=headers)
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json()["detail"]["code"], "server_key_missing")
 

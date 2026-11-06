@@ -41,8 +41,10 @@ class Batch2Tests(unittest.TestCase):
 
     def test_ai_endpoint_rate_limited_via_http(self):
         headers, _ = self._user()
-        with patch.dict(web_common.RATE_LIMITS, {"ai": (1.0, 0.0001)}), \
-                patch("routers.tutor.request_word_lookup", new_callable=AsyncMock, return_value={"word": "x"}):
+        with (
+            patch.dict(web_common.RATE_LIMITS, {"ai": (1.0, 0.0001)}),
+            patch("routers.tutor.request_word_lookup", new_callable=AsyncMock, return_value={"word": "x"}),
+        ):
             self.assertEqual(self.client.get("/api/lookup?word=bonjour", headers=headers).status_code, 200)
             res = self.client.get("/api/lookup?word=salut", headers=headers)
         self.assertEqual(res.status_code, 429)

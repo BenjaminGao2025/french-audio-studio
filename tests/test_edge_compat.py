@@ -1,11 +1,10 @@
-import testenv  # noqa: F401  (must run before the app is imported)
-
 import asyncio
 import unittest
 from unittest.mock import patch
 
 import aiohttp
 import edge_tts
+import testenv  # noqa: F401  (must run before the app is imported)
 from edge_tts import communicate
 
 import edge_compat
@@ -39,8 +38,7 @@ class EdgeCompatTests(unittest.TestCase):
                 out.append(m)
             return out
 
-        with patch.object(edge_compat, "_original_stream", flaky), \
-                patch.object(edge_compat, "RETRY_DELAYS", (0, 0)):
+        with patch.object(edge_compat, "_original_stream", flaky), patch.object(edge_compat, "RETRY_DELAYS", (0, 0)):
             out = asyncio.run(run())
         self.assertEqual(len(calls), 2)
         self.assertEqual(out[0]["data"], b"mp3")
@@ -54,8 +52,7 @@ class EdgeCompatTests(unittest.TestCase):
             async for _ in edge_tts.Communicate("Bonjour", "fr-FR-DeniseNeural").stream():
                 pass
 
-        with patch.object(edge_compat, "_original_stream", always), \
-                patch.object(edge_compat, "RETRY_DELAYS", (0, 0)):
+        with patch.object(edge_compat, "_original_stream", always), patch.object(edge_compat, "RETRY_DELAYS", (0, 0)):
             with self.assertRaises(aiohttp.ClientResponseError):
                 asyncio.run(run())
 

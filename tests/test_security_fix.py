@@ -1,14 +1,13 @@
-import testenv  # noqa: F401  (must run before the app is imported)
-
 import unittest
 from unittest.mock import MagicMock
 
+import fastapi
+import testenv  # noqa: F401  (must run before the app is imported)
 from fastapi.testclient import TestClient
 
-import tts_service
-import fastapi
 import services.ai
 import services.speech
+import tts_service
 import web_common
 
 AI_ROUTES = [
@@ -54,6 +53,7 @@ class SecurityFixTests(unittest.TestCase):
 
     def test_snippet_name_is_keyed(self):
         import hashlib
+
         name = services.speech.safe_timestamp(None, text="Bonjour", voice="fr-FR-DeniseNeural")
         plain = hashlib.sha256(b"fr-FR-DeniseNeural:Bonjour").hexdigest()[:16]
         self.assertTrue(name.startswith("snip_"))
@@ -66,6 +66,7 @@ class SecurityFixTests(unittest.TestCase):
             r.headers = {"x-forwarded-proto": proto}
             r.url.scheme = "http"
             return r
+
         self.assertTrue(web_common._cookie_secure(req("127.0.0.1", "https")))
         self.assertFalse(web_common._cookie_secure(req("203.0.113.9", "https")))
 

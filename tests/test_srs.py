@@ -1,9 +1,8 @@
-import testenv  # noqa: F401  (must run before the app is imported)
-
 import datetime
 import unittest
 import uuid
 
+import testenv  # noqa: F401  (must run before the app is imported)
 from fastapi.testclient import TestClient
 
 import auth_db
@@ -26,9 +25,7 @@ class StudyDayTests(unittest.TestCase):
         self.assertEqual(start, datetime.datetime(2026, 9, 29, 8, 0, tzinfo=UTC))
 
         later = datetime.datetime(2026, 9, 30, 9, 0, tzinfo=UTC)  # 05:00 EDT
-        self.assertEqual(
-            srs.study_day_start(later, 240), datetime.datetime(2026, 9, 30, 8, 0, tzinfo=UTC)
-        )
+        self.assertEqual(srs.study_day_start(later, 240), datetime.datetime(2026, 9, 30, 8, 0, tzinfo=UTC))
 
 
 class TargetMatchTests(unittest.TestCase):
@@ -137,14 +134,26 @@ class SrsStoreTests(unittest.TestCase):
         self.assertEqual(srs.lookup_notes(self.user_id, ["Au revoir."]), [])
 
     def test_import_legacy_cards(self):
-        result = srs.import_legacy_cards(self.user_id, [
-            {"token": "dispense", "sentence": "Aucune dispense n'est autorisée.", "sentence_cn": "不允许任何豁免。",
-             "explanation_en": "exemption", "phonetic": "[dispɑ̃s]"},
-            {"token": "aucune … ne", "sentence": "Aucune dispense n'est autorisée.",
-             "explanation_cn": "\U0001F4A1 aucune 已经表示否定", "hook": "Aucun problème!"},
-            {"token": "ouvrés"},
-            {"token": "  "},
-        ])
+        result = srs.import_legacy_cards(
+            self.user_id,
+            [
+                {
+                    "token": "dispense",
+                    "sentence": "Aucune dispense n'est autorisée.",
+                    "sentence_cn": "不允许任何豁免。",
+                    "explanation_en": "exemption",
+                    "phonetic": "[dispɑ̃s]",
+                },
+                {
+                    "token": "aucune … ne",
+                    "sentence": "Aucune dispense n'est autorisée.",
+                    "explanation_cn": "\U0001f4a1 aucune 已经表示否定",
+                    "hook": "Aucun problème!",
+                },
+                {"token": "ouvrés"},
+                {"token": "  "},
+            ],
+        )
         self.assertEqual(result, {"imported": 3, "skipped": 1})
         notes = srs.lookup_notes(self.user_id, ["Aucune dispense n'est autorisée.", "ouvrés"])
         cards = sorted((c["mode"], c["target"]) for n in notes for c in n["cards"])
@@ -188,15 +197,19 @@ class ImportanceAndWordsTests(unittest.TestCase):
         card_id = note["cards"][0]["id"]
         self.assertEqual(note["cards"][0]["importance"], 4)
         from fastapi.testclient import TestClient
+
         client = TestClient(tts_service.app)
         res = client.post("/api/srs/importance", headers=self.headers, json={"card_ids": [card_id], "importance": 2})
         self.assertEqual(res.json(), {"updated": 1})
         words = client.get("/api/srs/words", headers=self.headers).json()["words"]
         self.assertEqual([(w["text"], w["importance"]) for w in words], [("Voici", 2)])
-        self.assertEqual(client.get("/api/srs/queue?min_importance=3", headers=self.headers).json()["counts"]["total"], 0)
+        self.assertEqual(
+            client.get("/api/srs/queue?min_importance=3", headers=self.headers).json()["counts"]["total"], 0
+        )
 
     def client_post(self, body):
         from fastapi.testclient import TestClient
+
         return TestClient(tts_service.app).post("/api/srs/notes", headers=self.headers, json=body).json()
 
     def test_old_database_gets_importance_column(self):
@@ -207,9 +220,11 @@ class ImportanceAndWordsTests(unittest.TestCase):
 
         path = Path(tempfile.mkdtemp()) / "users.db"
         with sqlite3.connect(path) as conn:
-            conn.execute("CREATE TABLE srs_cards (id TEXT PRIMARY KEY, note_id TEXT NOT NULL, user_id INTEGER NOT NULL, "
-                         "mode TEXT NOT NULL, target TEXT NOT NULL DEFAULT '', target_json TEXT NOT NULL DEFAULT '{}', "
-                         "fsrs_json TEXT NOT NULL, due TEXT NOT NULL, is_new INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL)")
+            conn.execute(
+                "CREATE TABLE srs_cards (id TEXT PRIMARY KEY, note_id TEXT NOT NULL, user_id INTEGER NOT NULL, "
+                "mode TEXT NOT NULL, target TEXT NOT NULL DEFAULT '', target_json TEXT NOT NULL DEFAULT '{}', "
+                "fsrs_json TEXT NOT NULL, due TEXT NOT NULL, is_new INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL)"
+            )
             conn.execute("INSERT INTO srs_cards VALUES ('c1', 'n1', 1, 'listen', '', '{}', '{}', 'x', 1, 'x')")
         with patch("auth_db._get_db_path", return_value=path):
             srs.init_db()
@@ -227,12 +242,16 @@ class SrsApiTests(unittest.TestCase):
         self.assertEqual(self.client.post("/api/srs/notes", json={"sentence": "x"}).status_code, 401)
 
     def test_add_review_and_list_flow(self):
-        res = self.client.post("/api/srs/notes", headers=self.headers, json={
-            "sentence": "Les étudiants doivent être ponctuels.",
-            "translation_zh": "学生们必须准时。",
-            "modes": ["listen", "speak"],
-            "targets": [{"text": "ponctuels", "meta": {"meaning_zh": "准时的"}}],
-        })
+        res = self.client.post(
+            "/api/srs/notes",
+            headers=self.headers,
+            json={
+                "sentence": "Les étudiants doivent être ponctuels.",
+                "translation_zh": "学生们必须准时。",
+                "modes": ["listen", "speak"],
+                "targets": [{"text": "ponctuels", "meta": {"meaning_zh": "准时的"}}],
+            },
+        )
         self.assertEqual(res.status_code, 200)
         self.assertEqual(len(res.json()["cards"]), 3)
 
@@ -242,7 +261,8 @@ class SrsApiTests(unittest.TestCase):
         self.assertEqual(card["mode"], "listen")
 
         reviewed = self.client.post(
-            f"/api/srs/cards/{card['id']}/review", headers=self.headers,
+            f"/api/srs/cards/{card['id']}/review",
+            headers=self.headers,
             json={"rating": 3, "duration_ms": 5000},
         )
         self.assertEqual(reviewed.status_code, 200)
@@ -255,7 +275,8 @@ class SrsApiTests(unittest.TestCase):
         self.assertEqual(len(listed), 3)
 
         lookup = self.client.post(
-            "/api/srs/notes/lookup", headers=self.headers,
+            "/api/srs/notes/lookup",
+            headers=self.headers,
             json={"sentences": ["Les étudiants doivent être ponctuels."]},
         ).json()["notes"]
         self.assertEqual(len(lookup), 1)
@@ -269,8 +290,13 @@ class SrsApiTests(unittest.TestCase):
 class ChooseCardsTests(unittest.TestCase):
     def setUp(self):
         self.user_id, _ = _new_user()
-        note = srs.add_note(self.user_id, "Nous les acceptons.", translation_en="We accept them.",
-                            modes=["listen", "speak"], targets=[{"text": "acceptons"}])
+        note = srs.add_note(
+            self.user_id,
+            "Nous les acceptons.",
+            translation_en="We accept them.",
+            modes=["listen", "speak"],
+            targets=[{"text": "acceptons"}],
+        )
         self.cards = {c["mode"]: c["id"] for c in note["cards"]}
 
     def test_queue_can_hold_one_card_type(self):
@@ -405,4 +431,3 @@ class CardBalanceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

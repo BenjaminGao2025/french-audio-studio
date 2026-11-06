@@ -1,4 +1,5 @@
 """Imported first by every test module: isolate the app from real data and secrets."""
+
 import os
 import tempfile
 import unittest
@@ -16,7 +17,9 @@ os.environ["RATE_AUTH_EMAIL_BURST"] = "100000"
 def session_headers() -> dict:
     """A real logged-in session: raw strings are no longer accepted as upstream API keys."""
     import uuid
+
     import auth_db
+
     token = auth_db.register_user(f"t_{uuid.uuid4().hex[:12]}@example.com", "password123")["token"]
     return {"Authorization": f"Bearer {token}"}
 
@@ -26,9 +29,11 @@ def function_tests(namespace: dict):
 
     Usage, at the end of a pytest-style test module: load_tests = testenv.function_tests(globals())
     """
+
     def load_tests(loader, standard_tests, pattern):
         for name, fn in namespace.items():
             if name.startswith("test_") and callable(fn) and not isinstance(fn, type):
                 standard_tests.addTest(unittest.FunctionTestCase(fn, description=f"{namespace['__name__']}.{name}"))
         return standard_tests
+
     return load_tests

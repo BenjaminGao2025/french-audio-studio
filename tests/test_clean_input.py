@@ -1,12 +1,12 @@
 from unittest.mock import AsyncMock, patch
 
+import fastapi
+import testenv  # sets up the isolated env before tts_service is imported
 from fastapi.testclient import TestClient
 
-import testenv  # sets up the isolated env before tts_service is imported
-import tts_service
-import fastapi
 import intake
 import services.ai
+import tts_service
 
 BEN_SAMPLE = (
     "两点你都说对了。**一个动词的写法由「人称」和「时态」共同决定。**\n"
@@ -18,11 +18,7 @@ BEN_SAMPLE = (
     "Je mangeais quand il est arrivé.\n"
 )
 
-PURE_FRENCH = (
-    "Je mangeais quand il est arrivé.\n"
-    "Demain, je mangerai une pomme.\n"
-    "Elle parle français tous les jours."
-)
+PURE_FRENCH = "Je mangeais quand il est arrivé.\nDemain, je mangerai une pomme.\nElle parle français tous les jours."
 
 
 def post(path, body, headers):
@@ -42,14 +38,7 @@ def test_heuristic_accepts_clean_french():
 
 
 def test_post_process_drops_markdown_cjk_and_duplicates():
-    raw = (
-        "**Je mangeais quand il est arrivé.**\n"
-        "中文解释：未完成过去时\n"
-        "---\n"
-        "1. je parle\n"
-        "je parle\n"
-        "| tu | parles |\n"
-    )
+    raw = "**Je mangeais quand il est arrivé.**\n中文解释：未完成过去时\n---\n1. je parle\nje parle\n| tu | parles |\n"
     assert intake.clean_extracted_lines(raw) == [
         "Je mangeais quand il est arrivé.",
         "je parle",

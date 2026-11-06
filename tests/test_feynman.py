@@ -1,9 +1,8 @@
-import testenv  # noqa: F401  (must run before the app is imported)
-
 import json
 import unittest
 from unittest.mock import AsyncMock, patch
 
+import testenv  # noqa: F401  (must run before the app is imported)
 from fastapi.testclient import TestClient
 
 import tts_service
@@ -26,13 +25,25 @@ class FeynmanTests(unittest.TestCase):
 
     @patch("services.ai.post_chat", new_callable=AsyncMock)
     def test_feedback_is_parsed_and_learner_text_is_sent(self, post_chat):
-        post_chat.return_value = ({}, "```json\n" + json.dumps({
-            "verdict": "partial",
-            "got_right": ["意思说对了：不允许豁免"],
-            "gaps": ["aucune 本身就是否定，不能再加 pas"],
-            "variation": {"ok": False, "corrected": "Aucune dispense n'est autorisée.", "note": "aucune 不和 pas 连用"},
-            "follow_up": "为什么这里没有 pas？",
-        }, ensure_ascii=False) + "\n```")
+        post_chat.return_value = (
+            {},
+            "```json\n"
+            + json.dumps(
+                {
+                    "verdict": "partial",
+                    "got_right": ["意思说对了：不允许豁免"],
+                    "gaps": ["aucune 本身就是否定，不能再加 pas"],
+                    "variation": {
+                        "ok": False,
+                        "corrected": "Aucune dispense n'est autorisée.",
+                        "note": "aucune 不和 pas 连用",
+                    },
+                    "follow_up": "为什么这里没有 pas？",
+                },
+                ensure_ascii=False,
+            )
+            + "\n```",
+        )
         res = self.client.post("/api/feynman", json=REQUEST, headers=testenv.session_headers())
         self.assertEqual(res.status_code, 200)
         data = res.json()
@@ -49,12 +60,19 @@ class FeynmanTests(unittest.TestCase):
 
     @patch("services.ai.post_chat", new_callable=AsyncMock)
     def test_variation_is_dropped_when_learner_wrote_none(self, post_chat):
-        post_chat.return_value = ({}, json.dumps({
-            "verdict": "weird", "got_right": "not a list", "gaps": [], "variation": {"ok": True}, "follow_up": "",
-        }))
-        res = self.client.post(
-            "/api/feynman", json={**REQUEST, "variation": ""}, headers=testenv.session_headers()
+        post_chat.return_value = (
+            {},
+            json.dumps(
+                {
+                    "verdict": "weird",
+                    "got_right": "not a list",
+                    "gaps": [],
+                    "variation": {"ok": True},
+                    "follow_up": "",
+                }
+            ),
         )
+        res = self.client.post("/api/feynman", json={**REQUEST, "variation": ""}, headers=testenv.session_headers())
         data = res.json()
         self.assertEqual(data["verdict"], "partial")
         self.assertEqual(data["got_right"], [])
@@ -90,10 +108,15 @@ class AskTests(unittest.TestCase):
 
     @patch("services.ai.post_chat", new_callable=AsyncMock)
     def test_answer_uses_sentence_and_history(self, post_chat):
-        post_chat.return_value = ({}, "## Answer\n**de + la** stays **de la**. No change.\nExample: de la ville = of the city.")
+        post_chat.return_value = (
+            {},
+            "## Answer\n**de + la** stays **de la**. No change.\nExample: de la ville = of the city.",
+        )
         res = self.client.post("/api/ask", json=ASK, headers=testenv.session_headers())
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.json()["answer"], "Answer\nde + la stays de la. No change.\nExample: de la ville = of the city.")
+        self.assertEqual(
+            res.json()["answer"], "Answer\nde + la stays de la. No change.\nExample: de la ville = of the city."
+        )
 
         messages = post_chat.call_args.args[1]["messages"]
         self.assertIn("Exemples d'épreuves du TCF", messages[0]["content"])

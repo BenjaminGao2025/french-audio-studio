@@ -1,4 +1,5 @@
 """Per-user grammar map: which inventory points the learner has met in their own analysed sentences."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Header, HTTPException

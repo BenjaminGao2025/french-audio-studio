@@ -1,13 +1,13 @@
-import testenv  # noqa: F401
 import unittest
 from unittest.mock import AsyncMock, patch
 
+import testenv  # noqa: F401
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 import auth_db
-import tts_service
 import services.ai
+import tts_service
 
 
 class EtymologyApiTests(unittest.TestCase):
@@ -50,9 +50,7 @@ class EtymologyApiTests(unittest.TestCase):
         chat = AsyncMock()
         with patch.object(services.ai, "post_chat", chat):
             for headers in ({}, {"Authorization": "Bearer invalid-session"}):
-                response = self.client.post(
-                    "/api/etymology", headers=headers, json={"word": "étymo-login-hit"}
-                )
+                response = self.client.post("/api/etymology", headers=headers, json={"word": "étymo-login-hit"})
                 self.assertEqual(response.status_code, 401)
         chat.assert_not_awaited()
 
@@ -96,9 +94,7 @@ class EtymologyApiTests(unittest.TestCase):
 
     def test_upstream_failure_is_not_cached_and_can_retry(self):
         key_word = "étymo-upstream-fail"
-        chat = AsyncMock(
-            side_effect=HTTPException(status_code=502, detail={"message": "AGY unavailable"})
-        )
+        chat = AsyncMock(side_effect=HTTPException(status_code=502, detail={"message": "AGY unavailable"}))
         headers = testenv.session_headers()
         with patch.object(services.ai, "post_chat", chat):
             self.assertEqual(

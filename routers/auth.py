@@ -1,4 +1,5 @@
 """Account routes: register, login, session cookie, logout, signed-in devices."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Header, HTTPException, Request
@@ -46,10 +47,22 @@ def _limit_attempts(request: Request, email: str) -> None:
 def _device_label(user_agent: str) -> str:
     """A short, human name for the device a login came from, e.g. "Chrome · Android"."""
     ua = user_agent or ""
-    browsers = [("Edg/", "Edge"), ("MicroMessenger", "WeChat"), ("Firefox/", "Firefox"),
-                ("CriOS", "Chrome"), ("Chrome/", "Chrome"), ("Safari/", "Safari")]
-    systems = [("iPhone", "iPhone"), ("iPad", "iPad"), ("Android", "Android"),
-               ("Windows", "Windows"), ("Mac OS X", "Mac"), ("Linux", "Linux")]
+    browsers = [
+        ("Edg/", "Edge"),
+        ("MicroMessenger", "WeChat"),
+        ("Firefox/", "Firefox"),
+        ("CriOS", "Chrome"),
+        ("Chrome/", "Chrome"),
+        ("Safari/", "Safari"),
+    ]
+    systems = [
+        ("iPhone", "iPhone"),
+        ("iPad", "iPad"),
+        ("Android", "Android"),
+        ("Windows", "Windows"),
+        ("Mac OS X", "Mac"),
+        ("Linux", "Linux"),
+    ]
     browser = next((name for key, name in browsers if key in ua), "")
     system = next((name for key, name in systems if key in ua), "")
     return " · ".join(part for part in (browser, system) if part) or "Unknown device"
@@ -119,9 +132,7 @@ async def list_devices(request: Request, authorization: str | None = Header(defa
     token = _session_value(authorization, request)
     user_id = _require_user_id(authorization, request)
     current = (auth_db.verify_token(token) or {}).get("sid")
-    devices = [
-        {**session, "current": session["id"] == current} for session in auth_db.list_sessions(user_id)
-    ]
+    devices = [{**session, "current": session["id"] == current} for session in auth_db.list_sessions(user_id)]
     return {"devices": devices, "max_devices": auth_db.MAX_DEVICES}
 
 

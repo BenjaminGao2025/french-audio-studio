@@ -1,5 +1,3 @@
-import testenv  # noqa: F401  (must run before the app is imported)
-
 import asyncio
 import json
 import unittest
@@ -8,21 +6,27 @@ from unittest.mock import AsyncMock, patch
 
 import av
 import numpy as np
+import testenv  # noqa: F401  (must run before the app is imported)
 from fastapi.testclient import TestClient
 
 import auth_db
 import episodes
-import srs
-import tts_service
 import routers.episodes
 import routers.pages
+import srs
+import tts_service
 
 SENTENCES = [
-    {"sentence": "Les cours commencent lundi matin.", "translation_en": "Classes start on Monday morning.",
-     "build_up": [{"fr": "Les cours commencent.", "en": "Classes start."},
-                  {"fr": "Les cours commencent lundi.", "en": "Classes start on Monday."},
-                  {"fr": "Les cours commencent lundi matin.", "en": "Classes start on Monday morning."}],
-     "words": [{"fr": "cours"}, {"fr": "commencent"}, {"fr": "lundi"}, {"fr": "matin"}]},
+    {
+        "sentence": "Les cours commencent lundi matin.",
+        "translation_en": "Classes start on Monday morning.",
+        "build_up": [
+            {"fr": "Les cours commencent.", "en": "Classes start."},
+            {"fr": "Les cours commencent lundi.", "en": "Classes start on Monday."},
+            {"fr": "Les cours commencent lundi matin.", "en": "Classes start on Monday morning."},
+        ],
+        "words": [{"fr": "cours"}, {"fr": "commencent"}, {"fr": "lundi"}, {"fr": "matin"}],
+    },
     {"sentence": "Objectifs", "translation_en": "Goals", "words": [{"fr": "Objectifs"}]},
     {"sentence": "Sans traduction anglaise.", "translation_en": "", "words": []},
 ]
@@ -31,8 +35,9 @@ SENTENCES = [
 def _user_with_material() -> int:
     user_id = auth_db.register_user(f"ep_{uuid.uuid4().hex[:10]}@example.com", "password123")["user"]["id"]
     auth_db.save_history_record(f"h_{uuid.uuid4().hex}", "study", "texte", {"sentences": SENTENCES}, user_id)
-    srs.add_note(user_id, "Bon courage.", "加油", "Good luck.", modes=["listen"],
-                 targets=[{"text": "courage", "meta": {}}])
+    srs.add_note(
+        user_id, "Bon courage.", "加油", "Good luck.", modes=["listen"], targets=[{"text": "courage", "meta": {}}]
+    )
     return user_id
 
 
@@ -42,12 +47,15 @@ async def fake_synth(text: str, voice: str, rate: str = "+0%") -> np.ndarray:
     return (np.sin(2 * np.pi * 220 * t) * 3000).astype(np.int16)
 
 
-STORY = {"title_en": "At the test centre", "lines": [
-    {"speaker": "A", "fr": "Bonjour, je viens pour le TCF.", "en": "Hello, I am here for the TCF."},
-    {"speaker": "B", "fr": "Les cours commencent lundi.", "en": "Classes start on Monday."},
-    {"speaker": "A", "fr": "Merci beaucoup.", "en": "Thank you very much."},
-    {"speaker": "B", "fr": "Bon courage !", "en": "Good luck!"},
-]}
+STORY = {
+    "title_en": "At the test centre",
+    "lines": [
+        {"speaker": "A", "fr": "Bonjour, je viens pour le TCF.", "en": "Hello, I am here for the TCF."},
+        {"speaker": "B", "fr": "Les cours commencent lundi.", "en": "Classes start on Monday."},
+        {"speaker": "A", "fr": "Merci beaucoup.", "en": "Thank you very much."},
+        {"speaker": "B", "fr": "Bon courage !", "en": "Good luck!"},
+    ],
+}
 
 
 class MaterialTests(unittest.TestCase):
@@ -66,9 +74,18 @@ class MaterialTests(unittest.TestCase):
         self.assertEqual([b["sentence"] for b in buildups], ["Les cours commencent lundi matin."])
 
     def test_a1_gives_the_meaning_before_the_french(self):
-        item = {"key": "k", "sentence": "Je viens de me réveiller.", "en": "I just woke up.", "build_up": [], "words": [], "in_deck": True}
+        item = {
+            "key": "k",
+            "sentence": "Je viens de me réveiller.",
+            "en": "I just woke up.",
+            "build_up": [],
+            "words": [],
+            "in_deck": True,
+        }
         script = episodes.build_script(1, [item], [], [], episodes.episode_style("A1"))
-        lines = [(seg.voice == episodes.EN_VOICE, seg.rate) for seg in script if seg.text in (item["sentence"], item["en"])]
+        lines = [
+            (seg.voice == episodes.EN_VOICE, seg.rate) for seg in script if seg.text in (item["sentence"], item["en"])
+        ]
         self.assertEqual(lines, [(True, "+0%"), (False, "-30%"), (False, "-30%"), (False, "+0%"), (False, "+0%")])
         # A2 keeps "try first": French, then the English
         script = episodes.build_script(1, [item], [], [], episodes.episode_style("A2"))
@@ -84,7 +101,14 @@ class MaterialTests(unittest.TestCase):
         self.assertTrue(any("Part two" in t for t in english))
         self.assertTrue(any("At the test centre" in t for t in english))
         self.assertTrue(any(seg.shadow and seg.rate == episodes.SLOW_RATE for seg in script))
-        long_item = {"key": "k", "sentence": " ".join(["mot"] * 20), "en": "words", "build_up": [], "words": [], "in_deck": True}
+        long_item = {
+            "key": "k",
+            "sentence": " ".join(["mot"] * 20),
+            "en": "words",
+            "build_up": [],
+            "words": [],
+            "in_deck": True,
+        }
         slow_long = [seg for seg in episodes.build_script(1, [long_item], [], []) if seg.rate == episodes.SLOW_RATE]
         self.assertFalse(slow_long[0].shadow)
         story_voices = {seg.voice for seg in script if seg.text == "Merci beaucoup."}
@@ -169,8 +193,10 @@ class JobAndApiTests(unittest.TestCase):
     def test_generate_episode_job_end_to_end(self):
         user_id = _user_with_material()
         episode = episodes.create_episode(user_id)
-        with patch("episodes.synthesize", side_effect=fake_synth), \
-                patch("routers.episodes._write_stories", new_callable=AsyncMock, return_value=[STORY]):
+        with (
+            patch("episodes.synthesize", side_effect=fake_synth),
+            patch("routers.episodes._write_stories", new_callable=AsyncMock, return_value=[STORY]),
+        ):
             asyncio.run(routers.episodes._generate_episode(user_id, episode["id"], "k", "gemini-3.8-flash"))
         ready = episodes.get_episode(user_id, episode["id"])
         self.assertEqual(ready["status"], "ready", ready["error"])
@@ -194,9 +220,20 @@ class JobAndApiTests(unittest.TestCase):
 
         other = auth_db._generate_token(user_id + 999, "y@example.com", auth_db._start_session(user_id + 999, "test"))
         # someone else's episode is not served, even with a valid session
-        self.assertEqual(self.client.get(f"/episodes/{episode['id']}.mp3", headers={"Authorization": f"Bearer {other}"}).status_code, 404)
-        self.assertFalse(self.client.delete(f"/api/episodes/{episode['id']}", headers={"Authorization": f"Bearer {other}"}).json()["success"])
-        self.assertTrue(self.client.delete(f"/api/episodes/{episode['id']}", headers={"Authorization": f"Bearer {token}"}).json()["success"])
+        self.assertEqual(
+            self.client.get(f"/episodes/{episode['id']}.mp3", headers={"Authorization": f"Bearer {other}"}).status_code,
+            404,
+        )
+        self.assertFalse(
+            self.client.delete(f"/api/episodes/{episode['id']}", headers={"Authorization": f"Bearer {other}"}).json()[
+                "success"
+            ]
+        )
+        self.assertTrue(
+            self.client.delete(f"/api/episodes/{episode['id']}", headers={"Authorization": f"Bearer {token}"}).json()[
+                "success"
+            ]
+        )
         self.assertEqual(self.client.get(f"/episodes/{episode['id']}.mp3", headers=auth).status_code, 404)
 
     def test_settings_are_saved_and_a_remake_replaces_the_old_episode(self):
@@ -206,8 +243,11 @@ class JobAndApiTests(unittest.TestCase):
         old = episodes.create_episode(user_id, {"level": "A1", "minutes": 20})
         episodes.update_episode(old["id"], status="ready", title="Episode 1")
         with patch("routers.episodes._generate_episode", new_callable=AsyncMock) as job:
-            res = self.client.post("/api/episodes", headers=headers,
-                                   json={"level": "B1", "minutes": 45, "request": "more numbers", "replace_id": old["id"]})
+            res = self.client.post(
+                "/api/episodes",
+                headers=headers,
+                json={"level": "B1", "minutes": 45, "request": "more numbers", "replace_id": old["id"]},
+            )
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json()["settings"], {"level": "B1", "minutes": 45, "request": "more numbers"})
         self.assertEqual(job.await_args.args[5], old["id"])
@@ -218,11 +258,25 @@ class JobAndApiTests(unittest.TestCase):
         self.assertEqual(listed["lengths"], [20, 30, 45, 60])
 
         new = episodes.create_episode(user_id, {"level": "B1", "minutes": 45, "request": "more numbers"})
-        with patch("episodes.synthesize", side_effect=fake_synth), \
-                patch("routers.episodes._read_episode_request", new_callable=AsyncMock, return_value={"speed": "slower", "focus": "numbers"}), \
-                patch("routers.episodes._write_stories", new_callable=AsyncMock, return_value=[STORY]) as stories:
-            asyncio.run(routers.episodes._generate_episode(user_id, new["id"], "k", "gemini-3.8-flash",
-                                                      {"level": "B1", "minutes": 45, "request": "more numbers"}, old["id"]))
+        with (
+            patch("episodes.synthesize", side_effect=fake_synth),
+            patch(
+                "routers.episodes._read_episode_request",
+                new_callable=AsyncMock,
+                return_value={"speed": "slower", "focus": "numbers"},
+            ),
+            patch("routers.episodes._write_stories", new_callable=AsyncMock, return_value=[STORY]) as stories,
+        ):
+            asyncio.run(
+                routers.episodes._generate_episode(
+                    user_id,
+                    new["id"],
+                    "k",
+                    "gemini-3.8-flash",
+                    {"level": "B1", "minutes": 45, "request": "more numbers"},
+                    old["id"],
+                )
+            )
         ready = episodes.get_episode(user_id, new["id"])
         self.assertEqual(ready["status"], "ready", ready["error"])
         self.assertEqual(ready["settings"]["adjust"], {"speed": "slower", "focus": "numbers"})

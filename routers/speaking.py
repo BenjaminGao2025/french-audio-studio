@@ -1,4 +1,5 @@
 """Speaking practice (TCF EO) routes: tasks, role-play replies and both feedback rounds."""
+
 from __future__ import annotations
 
 import logging
@@ -19,9 +20,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-async def _generate_speak_feedback_1(
-    user_id: int, attempt_id: str, api_key: str | None, model: str
-) -> None:
+async def _generate_speak_feedback_1(user_id: int, attempt_id: str, api_key: str | None, model: str) -> None:
     if not api_key:
         speaking.set_attempt_feedback_1(attempt_id, {}, error=ai.TRIAL_ENDED_MESSAGE)
         return
@@ -45,9 +44,7 @@ async def _generate_speak_feedback_1(
         speaking.set_attempt_feedback_1(attempt_id, {}, error=ai.feedback_error_message(exc))
 
 
-async def _generate_speak_feedback_2(
-    user_id: int, attempt_id: str, api_key: str | None, model: str
-) -> None:
+async def _generate_speak_feedback_2(user_id: int, attempt_id: str, api_key: str | None, model: str) -> None:
     if not api_key:
         speaking.set_attempt_feedback_2(attempt_id, {}, error=ai.TRIAL_ENDED_MESSAGE)
         return
@@ -96,9 +93,7 @@ async def speak_roleplay_reply(
 ):
     _require_user_id(authorization)
     api_key = ai.upstream_key(authorization)
-    payload = speaking.build_roleplay_reply_payload(
-        req.scenario, req.history, req.user_utterance, ai.AGY_MODEL
-    )
+    payload = speaking.build_roleplay_reply_payload(req.scenario, req.history, req.user_utterance, ai.AGY_MODEL)
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     async with httpx.AsyncClient(timeout=ai.UPSTREAM_TIMEOUT_SECONDS) as client:
         _, raw_text = await ai.post_chat(client, payload, headers)

@@ -1,4 +1,5 @@
 """Paths, limits and request helpers shared by the routers and services (sessions, cookies, user id)."""
+
 from __future__ import annotations
 
 import asyncio
@@ -133,7 +134,8 @@ RATE_LIMITS: dict[str, tuple[float, float]] = {
     # while leaving room for a family behind one IP and a few mistyped passwords.
     "auth_ip": (float(os.getenv("RATE_AUTH_IP_BURST", "20")), float(os.getenv("RATE_AUTH_IP_PER_HOUR", "30")) / 3600),
     "auth_email": (
-        float(os.getenv("RATE_AUTH_EMAIL_BURST", "8")), float(os.getenv("RATE_AUTH_EMAIL_PER_HOUR", "6")) / 3600
+        float(os.getenv("RATE_AUTH_EMAIL_BURST", "8")),
+        float(os.getenv("RATE_AUTH_EMAIL_PER_HOUR", "6")) / 3600,
     ),
     "waitlist": (5.0, 5 / 3600),
 }
@@ -153,7 +155,11 @@ def rate_limit(key: object, bucket: str) -> None:
             _rate_buckets[(key, bucket)] = (tokens, now)
             raise HTTPException(
                 status_code=429,
-                detail={"code": "rate_limited", "message": f"操作太频繁了，请等 {wait} 秒后再试。", "retry_after": wait},
+                detail={
+                    "code": "rate_limited",
+                    "message": f"操作太频繁了，请等 {wait} 秒后再试。",
+                    "retry_after": wait,
+                },
                 headers={"Retry-After": str(wait)},
             )
         _rate_buckets[(key, bucket)] = (tokens - 1, now)

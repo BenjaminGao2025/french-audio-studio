@@ -13,6 +13,7 @@ Import this module once, before any synthesis. It
 - retries a refused/throttled handshake (the new host answers 429 to bursts)
   a couple of times with backoff, but only before any audio was produced.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -29,8 +30,7 @@ logger = logging.getLogger(__name__)
 LEGACY_WSS_URL = _communicate.WSS_URL
 EDGE_WSS_URL = os.getenv(
     "EDGE_TTS_WSS_URL",
-    "wss://api.msedgeservices.com/tts/cognitiveservices/websocket/v1"
-    f"?Ocp-Apim-Subscription-Key={TRUSTED_CLIENT_TOKEN}",
+    f"wss://api.msedgeservices.com/tts/cognitiveservices/websocket/v1?Ocp-Apim-Subscription-Key={TRUSTED_CLIENT_TOKEN}",
 )
 RETRY_STATUSES = {403, 429, 500, 502, 503, 504}
 RETRY_DELAYS = (1.5, 4.0)

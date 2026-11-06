@@ -1,8 +1,10 @@
 """Every AGY call asks for low reasoning effort, and the default timeout stays short."""
+
 import asyncio
 from unittest.mock import AsyncMock, Mock, patch
 
 import testenv  # sets up the isolated env before tts_service is imported
+
 import services.ai
 
 
@@ -29,9 +31,7 @@ def test_post_chat_sends_low_reasoning_effort_by_default():
 def test_explicit_payload_reasoning_effort_is_not_overwritten():
     client = _client()
 
-    asyncio.run(
-        services.ai.post_chat(client, {"messages": [], "reasoning_effort": "high"}, {})
-    )
+    asyncio.run(services.ai.post_chat(client, {"messages": [], "reasoning_effort": "high"}, {}))
 
     assert _sent_payload(client)["reasoning_effort"] == "high"
 

@@ -1,4 +1,5 @@
 """Per-user history of audio and study records."""
+
 from __future__ import annotations
 
 import logging

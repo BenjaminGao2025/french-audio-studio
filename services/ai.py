@@ -1,5 +1,6 @@
 """The AGY gateway (OpenAI-compatible Gemini): which key to send upstream, per-user rate limits,
 and one chat call with a retry and learner-safe errors."""
+
 from __future__ import annotations
 
 import os
@@ -72,7 +73,11 @@ def feedback_error_message(exc: Exception) -> str:
     """Never show raw upstream errors to learners; details go to the log."""
     if isinstance(exc, HTTPException):
         detail = exc.detail
-        if isinstance(detail, dict) and detail.get("code") in {"trial_expired", "server_key_missing", "missing_api_key"}:
+        if isinstance(detail, dict) and detail.get("code") in {
+            "trial_expired",
+            "server_key_missing",
+            "missing_api_key",
+        }:
             return TRIAL_ENDED_MESSAGE
         if exc.status_code == 429:
             return "AI 服务繁忙，请稍后点「重试」。"
@@ -108,9 +113,7 @@ def upstream_error(response: httpx.Response) -> HTTPException:
     )
 
 
-async def post_chat(
-    client: httpx.AsyncClient, payload: dict, headers: dict[str, str]
-) -> tuple[dict, str]:
+async def post_chat(client: httpx.AsyncClient, payload: dict, headers: dict[str, str]) -> tuple[dict, str]:
     # Copy so the caller's dict stays untouched, and never override an explicit value.
     requested = dict(payload)
     effort = AGY_REASONING_EFFORT.lower()

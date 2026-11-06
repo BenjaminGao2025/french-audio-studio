@@ -1,14 +1,13 @@
-import testenv  # noqa: F401  (must run before the app is imported)
-
 import json
 import pathlib
 import struct
 import unittest
 
+import testenv  # noqa: F401  (must run before the app is imported)
 from fastapi.testclient import TestClient
 
-import tts_service
 import routers.pages
+import tts_service
 import web_common
 
 STATIC = pathlib.Path(web_common.STATIC_DIR)
@@ -43,8 +42,13 @@ class PwaTests(unittest.TestCase):
     def test_every_page_has_ios_app_tags(self):
         for path in ("/", "/study", "/review", "/listen"):
             html = self.client.get(path).text
-            for tag in ('rel="manifest"', 'apple-mobile-web-app-capable', 'rel="apple-touch-icon"',
-                        'viewport-fit=cover', '/static/pwa-register.js?v=' + routers.pages.ASSET_VERSION):
+            for tag in (
+                'rel="manifest"',
+                "apple-mobile-web-app-capable",
+                'rel="apple-touch-icon"',
+                "viewport-fit=cover",
+                "/static/pwa-register.js?v=" + routers.pages.ASSET_VERSION,
+            ):
                 self.assertIn(tag, html, (path, tag))
             self.assertEqual(html.count('rel="manifest"'), 1)
 

@@ -1,10 +1,9 @@
-import testenv  # noqa: F401
-
 import json
 import unittest
 import uuid
 from unittest.mock import AsyncMock, patch
 
+import testenv  # noqa: F401
 from fastapi.testclient import TestClient
 
 import auth_db
@@ -28,9 +27,7 @@ class SpeakingLogicTests(unittest.TestCase):
     def test_attempt_lifecycle(self):
         user_id = _create_user()
         subject = speaking.SUBJECTS["T1"][0]
-        attempt = speaking.create_attempt(
-            user_id, "T1", subject, "A1", "Bonjour, je m'appelle Thomas.", 20, 5.0
-        )
+        attempt = speaking.create_attempt(user_id, "T1", subject, "A1", "Bonjour, je m'appelle Thomas.", 20, 5.0)
         self.assertEqual(attempt["status"], "generating_1")
         self.assertEqual(attempt["user_id"], user_id)
         self.assertEqual(attempt["task"], "T1")
@@ -71,7 +68,11 @@ class SpeakingLogicTests(unittest.TestCase):
                 }
             ],
             "structures": [
-                {"french": "Je m'appelle… et j'habite à…", "english": "My name is... and I live in...", "usage": "Introduction"}
+                {
+                    "french": "Je m'appelle… et j'habite à…",
+                    "english": "My name is... and I live in...",
+                    "usage": "Introduction",
+                }
             ],
         }
         speaking.set_attempt_feedback_2(attempt["id"], fb2)
@@ -80,14 +81,17 @@ class SpeakingLogicTests(unittest.TestCase):
         self.assertEqual(len(final_att["feedback_2"]["structures"]), 1)
 
     def test_parse_round1_sanitizes_leaks_and_limits_errors(self):
-        raw = json.dumps({
-            "stats": {"duration_sec": 10, "wpm": 80.0},
-            "checklist": [],
-            "praise": "Bien parlé!",
-            "errors": [
-                {"span": "je suis allé", "type": "verb form", "hint": "Say 'suis venu' instead."},  # Leaked!
-            ] + [{"span": f"err_{i}", "type": "agreement", "hint": "Check rule"} for i in range(12)],
-        })
+        raw = json.dumps(
+            {
+                "stats": {"duration_sec": 10, "wpm": 80.0},
+                "checklist": [],
+                "praise": "Bien parlé!",
+                "errors": [
+                    {"span": "je suis allé", "type": "verb form", "hint": "Say 'suis venu' instead."},  # Leaked!
+                ]
+                + [{"span": f"err_{i}", "type": "agreement", "hint": "Check rule"} for i in range(12)],
+            }
+        )
         fb = speaking.parse_round1_feedback(raw, "transcript", "T1", speaking.SUBJECTS["T1"][0], 10.0, 80.0)
         self.assertLessEqual(len(fb["errors"]), 8)
         self.assertNotIn("Say", fb["errors"][0]["hint"])
@@ -132,13 +136,18 @@ class SpeakingEndpointTests(unittest.TestCase):
 
     @patch("services.ai.post_chat", new_callable=AsyncMock)
     def test_submit_speaking_attempt_and_poll(self, post_chat):
-        post_chat.return_value = ({}, json.dumps({
-            "stats": {"duration_sec": 12, "wpm": 75.0, "pace_note": "Steady pace"},
-            "checklist": [{"point": "Horaires", "covered": True, "note": "Demande faite"}],
-            "t2_questions": {"count": 2, "forms_ok": True, "note": "Good question structure"},
-            "praise": "Clear intonation.",
-            "errors": [{"span": "combien coûte", "type": "word order", "hint": "Check question word syntax"}],
-        }))
+        post_chat.return_value = (
+            {},
+            json.dumps(
+                {
+                    "stats": {"duration_sec": 12, "wpm": 75.0, "pace_note": "Steady pace"},
+                    "checklist": [{"point": "Horaires", "covered": True, "note": "Demande faite"}],
+                    "t2_questions": {"count": 2, "forms_ok": True, "note": "Good question structure"},
+                    "praise": "Clear intonation.",
+                    "errors": [{"span": "combien coûte", "type": "word order", "hint": "Check question word syntax"}],
+                }
+            ),
+        )
         scenario = speaking.SUBJECTS["T2"][0]
         res = self.client.post(
             "/api/speak/attempts",
@@ -162,22 +171,31 @@ class SpeakingEndpointTests(unittest.TestCase):
         self.assertEqual(poll_res.json()["feedback_1"]["praise"], "Clear intonation.")
 
         # Round 2
-        post_chat.return_value = ({}, json.dumps({
-            "fixed_errors": [{"span": "combien coûte", "fixed": True, "comment": "Perfect inversion"}],
-            "remaining_errors": [],
-            "corrected_transcript": "Bonjour, quels sont vos tarifs mensuels ?",
-            "sentences": [
+        post_chat.return_value = (
+            {},
+            json.dumps(
                 {
-                    "original": "Bonjour, quels sont vos tarifs mensuels ?",
-                    "corrected": "Bonjour, quels sont vos tarifs mensuels ?",
-                    "explanation": "Clear question.",
-                    "chunk": "quels sont vos tarifs",
+                    "fixed_errors": [{"span": "combien coûte", "fixed": True, "comment": "Perfect inversion"}],
+                    "remaining_errors": [],
+                    "corrected_transcript": "Bonjour, quels sont vos tarifs mensuels ?",
+                    "sentences": [
+                        {
+                            "original": "Bonjour, quels sont vos tarifs mensuels ?",
+                            "corrected": "Bonjour, quels sont vos tarifs mensuels ?",
+                            "explanation": "Clear question.",
+                            "chunk": "quels sont vos tarifs",
+                        }
+                    ],
+                    "structures": [
+                        {
+                            "french": "Quels sont vos tarifs pour… ?",
+                            "english": "What are your rates for...?",
+                            "usage": "Asking prices",
+                        }
+                    ],
                 }
-            ],
-            "structures": [
-                {"french": "Quels sont vos tarifs pour… ?", "english": "What are your rates for...?", "usage": "Asking prices"}
-            ],
-        }))
+            ),
+        )
         r2_res = self.client.post(
             f"/api/speak/attempts/{attempt_id}/round2",
             headers=self.auth,

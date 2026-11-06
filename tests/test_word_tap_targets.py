@@ -49,13 +49,15 @@ class WordTapTargetTests(unittest.TestCase):
         html = _read("static/study.html")
         js = _read("static/study.js")
         rs = _read("static/read-selection.js")
-        self.assertIn('read-selection.js?v=__ASSET_VERSION__', html)
+        self.assertIn("read-selection.js?v=__ASSET_VERSION__", html)
         self.assertIn("window.FrenchReadSelection.create({", js)
         # Selecting text shows the read bar instead of the phrase popover
         self.assertIn("selectionPopover: false,", js)
         # Reading goes through the page's own French speech (global audio controller)
         self.assertIn("speak: (text, onEnd) => playFrenchSpeech(text, onEnd),", js)
-        self.assertIn("meaning: (text, anchor, context) => wordPopover.show(text, anchor, context, { silent: true }),", js)
+        self.assertIn(
+            "meaning: (text, anchor, context) => wordPopover.show(text, anchor, context, { silent: true }),", js
+        )
         # A per-sentence "Select words" toggle starts range mode
         self.assertIn("data-range-toggle", js)
         self.assertIn("selectWordsTitle", js)

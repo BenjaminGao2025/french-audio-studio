@@ -14,6 +14,7 @@ Dry run by default: it lists what it would delete and how much space that frees.
 
 Reads OUTPUT_DIR like the service (default ./outputs). Opens the database read-only.
 """
+
 from __future__ import annotations
 
 import argparse

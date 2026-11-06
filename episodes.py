@@ -33,11 +33,11 @@ from typing import Any, Awaitable, Callable, Iterator
 
 import av
 import edge_tts
-import edge_compat  # noqa: F401  (Microsoft moved the synthesis host; must load before use)
 import numpy as np
 
 import auth_db
 import curriculum
+import edge_compat  # noqa: F401  (Microsoft moved the synthesis host; must load before use)
 import srs
 
 SAMPLE_RATE = 24000
@@ -100,6 +100,8 @@ def episode_plan(minutes: int, style: dict[str, Any], available: int) -> dict[st
     # Not enough studied sentences: a story (~3 min) stands in for ~5 review sentences (~35 s each)
     stories = max(1, round(2 * scale)) + math.ceil(max(0, wanted_review - review) * 35 / 180)
     return {"review": review, "buildups": round(BUILDUP_COUNT * scale), "stories": min(stories, MAX_STORIES)}
+
+
 STALE_AFTER = datetime.timedelta(minutes=30)
 TTS_CONCURRENCY = 4
 
@@ -110,8 +112,8 @@ class Segment:
     voice: str
     rate: str = "+0%"
     pause_after: float = 0.8
-    subtitle: str = ""      # shown in LRC/SRT; defaults to text
-    shadow: bool = False    # pause long enough to repeat the line aloud
+    subtitle: str = ""  # shown in LRC/SRT; defaults to text
+    shadow: bool = False  # pause long enough to repeat the line aloud
 
 
 # ---------------------------------------------------------------------------
@@ -202,9 +204,7 @@ def fail_interrupted_attempts(message: str) -> int:
 
 def get_episode(user_id: int, episode_id: str) -> dict[str, Any]:
     with _db() as conn:
-        row = conn.execute(
-            "SELECT * FROM episodes WHERE id = ? AND user_id = ?", (episode_id, user_id)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM episodes WHERE id = ? AND user_id = ?", (episode_id, user_id)).fetchone()
     if not row:
         raise KeyError(episode_id)
     return _row_payload(row)
@@ -212,17 +212,13 @@ def get_episode(user_id: int, episode_id: str) -> dict[str, Any]:
 
 def list_episodes(user_id: int) -> list[dict[str, Any]]:
     with _db() as conn:
-        rows = conn.execute(
-            "SELECT * FROM episodes WHERE user_id = ? ORDER BY created_at DESC", (user_id,)
-        ).fetchall()
+        rows = conn.execute("SELECT * FROM episodes WHERE user_id = ? ORDER BY created_at DESC", (user_id,)).fetchall()
     return [_row_payload(row) for row in rows]
 
 
 def delete_episode(user_id: int, episode_id: str) -> bool:
     with _db() as conn:
-        deleted = conn.execute(
-            "DELETE FROM episodes WHERE id = ? AND user_id = ?", (episode_id, user_id)
-        ).rowcount
+        deleted = conn.execute("DELETE FROM episodes WHERE id = ? AND user_id = ?", (episode_id, user_id)).rowcount
     if deleted:
         for ext in ("mp3", "srt", "lrc"):
             (episodes_dir() / f"{episode_id}.{ext}").unlink(missing_ok=True)
@@ -249,9 +245,17 @@ def learning_material(user_id: int) -> list[dict[str, Any]]:
 
     def entry(sentence: str) -> dict[str, Any]:
         key = srs.sentence_key(sentence)
-        return items.setdefault(key, {
-            "key": key, "sentence": sentence.strip(), "en": "", "build_up": [], "words": [], "in_deck": False,
-        })
+        return items.setdefault(
+            key,
+            {
+                "key": key,
+                "sentence": sentence.strip(),
+                "en": "",
+                "build_up": [],
+                "words": [],
+                "in_deck": False,
+            },
+        )
 
     with auth_db.connect() as conn:
         history = conn.execute(
@@ -269,7 +273,8 @@ def learning_material(user_id: int) -> list[dict[str, Any]]:
             if not item["build_up"]:
                 item["build_up"] = [
                     {"fr": str(b.get("fr") or "").strip(), "en": str(b.get("en") or "").strip()}
-                    for b in s.get("build_up") or [] if b.get("fr")
+                    for b in s.get("build_up") or []
+                    if b.get("fr")
                 ]
             for w in s.get("words") or []:
                 word = str(w.get("fr") or w.get("token") or "").strip()
@@ -392,7 +397,11 @@ def build_script(
         if not lines:
             continue
         label = "Part three" if index == 0 else "Next"
-        first_pass = ("First the meaning, then slow French." if meaning_first else "First with English.") if style["story_english"] else "First listen."
+        first_pass = (
+            ("First the meaning, then slow French." if meaning_first else "First with English.")
+            if style["story_english"]
+            else "First listen."
+        )
         say_en(f"{label}. {story.get('title_en') or 'A new story'}. {first_pass}", 1.2)
         for line in lines:
             voice = STORY_VOICES.get(line.get("speaker"), STORY_VOICES["N"])
@@ -427,9 +436,7 @@ def _decode_to_pcm(data: bytes) -> np.ndarray:
     container = av.open(io.BytesIO(data))
     resampler = av.AudioResampler(format="s16", layout="mono", rate=SAMPLE_RATE)
     chunks = [
-        frame.to_ndarray().reshape(-1)
-        for decoded in container.decode(audio=0)
-        for frame in resampler.resample(decoded)
+        frame.to_ndarray().reshape(-1) for decoded in container.decode(audio=0) for frame in resampler.resample(decoded)
     ]
     return np.concatenate(chunks) if chunks else np.zeros(0, np.int16)
 
@@ -536,9 +543,12 @@ def _assemble(
 
 def episode_number(user_id: int) -> int:
     with _db() as conn:
-        return conn.execute(
-            "SELECT COUNT(*) FROM episodes WHERE user_id = ? AND status = 'ready'", (user_id,)
-        ).fetchone()[0] + 1
+        return (
+            conn.execute("SELECT COUNT(*) FROM episodes WHERE user_id = ? AND status = 'ready'", (user_id,)).fetchone()[
+                0
+            ]
+            + 1
+        )
 
 
 def clean_title(text: str) -> str:
@@ -550,27 +560,41 @@ def material_for_level(material, level):
     Short clauses with complex conjunctions are excluded too. Standalone build-up
     steps are eligible; advanced original sentences never silently pass through.
     """
-    if level not in ('A1', 'A2'):
+    if level not in ("A1", "A2"):
         return material
-    limit = 7 if level == 'A1' else 12
+    limit = 7 if level == "A1" else 12
     complex_words = re.compile(r"\b(dont|lequel|laquelle|cependant|néanmoins|quoique|puisque|lorsque)\b", re.I)
     # Beginner history must also use familiar everyday vocabulary. This is
     # intentionally conservative: skipped material remains available at higher levels.
-    known = set(re.findall(r"[a-zà-ÿœ]+", ' '.join(line[0] for lesson in curriculum.LESSONS for line in lesson['lines']).lower()))
-    known.update("je tu il elle on nous vous ils elles le la les un une des de du au aux en à et ou avec pour sans dans sur sous chez ce cette ces mon ma mes ton ta tes son sa ses notre votre leur leurs suis es est sommes êtes sont ai as a avons avez ont vais vas va allons allez vont peux peut pouvons pouvez peuvent veux veut voulons voulez veulent bonjour salut merci oui non pas plus très bien grand petite petits petites beau belle bon bonne jour demain aujourd hui soir matin heure heures ici là nom m appelle français anglais chinois canadien canada france paris aime manger boire prendre aller faire voir venir parler lire écrire livre eau thé lait pain chien chat ami amie amis travail école travaillez heureux heureuse ans deux trois quatre cinq six sept huit neuf dix lundi mardi mercredi jeudi vendredi samedi dimanche mois année maison appartement ville petit café famille libre apprendre parle travaille étudie étudiant étudiante".split())
+    known = set(
+        re.findall(
+            r"[a-zà-ÿœ]+", " ".join(line[0] for lesson in curriculum.LESSONS for line in lesson["lines"]).lower()
+        )
+    )
+    known.update(
+        "je tu il elle on nous vous ils elles le la les un une des de du au aux en à et ou avec pour sans dans sur sous chez ce cette ces mon ma mes ton ta tes son sa ses notre votre leur leurs suis es est sommes êtes sont ai as a avons avez ont vais vas va allons allez vont peux peut pouvons pouvez peuvent veux veut voulons voulez veulent bonjour salut merci oui non pas plus très bien grand petite petits petites beau belle bon bonne jour demain aujourd hui soir matin heure heures ici là nom m appelle français anglais chinois canadien canada france paris aime manger boire prendre aller faire voir venir parler lire écrire livre eau thé lait pain chien chat ami amie amis travail école travaillez heureux heureuse ans deux trois quatre cinq six sept huit neuf dix lundi mardi mercredi jeudi vendredi samedi dimanche mois année maison appartement ville petit café famille libre apprendre parle travaille étudie étudiant étudiante".split()
+    )
+
     def fits(text):
         words = re.findall(r"[a-zà-ÿœ]+", text.lower())
-        simple = level != 'A1' or sum(w not in known for w in words) <= 1
-        return simple and 2 <= len(text.split()) <= limit and not complex_words.search(text) and not any(p in text for p in (';', ':'))
-    result=[]
+        simple = level != "A1" or sum(w not in known for w in words) <= 1
+        return (
+            simple
+            and 2 <= len(text.split()) <= limit
+            and not complex_words.search(text)
+            and not any(p in text for p in (";", ":"))
+        )
+
+    result = []
     for original in material:
-        item=dict(original)
-        steps=[step for step in item.get('build_up',[]) if fits(step.get('fr',''))]
-        if not fits(item['sentence']):
-            if not steps: continue
-            item['sentence']=steps[-1]['fr']
-            item['en']=steps[-1].get('en','')
-            item['key']=srs.sentence_key(item['sentence'])
-        item['build_up']=steps
+        item = dict(original)
+        steps = [step for step in item.get("build_up", []) if fits(step.get("fr", ""))]
+        if not fits(item["sentence"]):
+            if not steps:
+                continue
+            item["sentence"] = steps[-1]["fr"]
+            item["en"] = steps[-1].get("en", "")
+            item["key"] = srs.sentence_key(item["sentence"])
+        item["build_up"] = steps
         result.append(item)
     return result

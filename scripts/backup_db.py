@@ -9,6 +9,7 @@ Safe while the service is running: the backup API copies a consistent snapshot e
 These copies sit on the same disk as the database; copy outputs/backups/ elsewhere for real
 off-machine backups.
 """
+
 from __future__ import annotations
 
 import argparse

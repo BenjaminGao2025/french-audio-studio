@@ -1,4 +1,5 @@
 """Old /app bookmarks keep working after the React SPA was archived."""
+
 import unittest
 
 import testenv  # noqa: F401  (sets AUTH_SECRET / OUTPUT_DIR before the app is imported)

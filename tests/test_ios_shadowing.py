@@ -26,7 +26,9 @@ class IosShadowingTests(unittest.TestCase):
         self.assertEqual(audio[4:8], b"ftyp")
         self.assertTrue(services.asr.looks_like_audio(audio))
         token = auth_db.register_user(f"ios_{uuid.uuid4().hex[:10]}@example.com", "password123")["token"]
-        with patch("services.asr._transcribe_sync", return_value={"text": "Je viens de Pékin, en Chine.", "duration": 2.6}) as asr:
+        with patch(
+            "services.asr._transcribe_sync", return_value={"text": "Je viens de Pékin, en Chine.", "duration": 2.6}
+        ) as asr:
             res = self.client.post(
                 "/api/transcribe?language=fr",
                 content=audio,

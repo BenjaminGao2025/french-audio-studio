@@ -1,9 +1,8 @@
-import testenv  # noqa: F401  (must run before the app is imported)
-
 import unittest
 import uuid
 from unittest.mock import patch
 
+import testenv  # noqa: F401  (must run before the app is imported)
 from fastapi.testclient import TestClient
 
 import auth_db

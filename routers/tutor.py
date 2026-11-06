@@ -1,4 +1,5 @@
 """Tutor routes: Feynman checks, speech-to-text, Ask (and save an answer as a card), lookup, etymology."""
+
 from __future__ import annotations
 
 import json
@@ -46,8 +47,6 @@ TUTOR_ENGLISH_STYLE = (
 )
 
 
-
-
 def _feynman_payload(request: FeynmanRequest) -> dict:
     prompt = (
         "You are a patient French tutor. The learner is A1–A2, native language Chinese.\n"
@@ -66,8 +65,8 @@ def _feynman_payload(request: FeynmanRequest) -> dict:
         "(answerable in one line). Do not give the answer in the question.\n"
         "5. verdict: solid (main meaning and key grammar are right), partial, or missing (mostly wrong or empty).\n\n"
         "The learner may write in Chinese, English or both. Your feedback is always in simple English.\n"
-        + TUTOR_ENGLISH_STYLE +
-        "Each item is one or two short sentences.\n"
+        + TUTOR_ENGLISH_STYLE
+        + "Each item is one or two short sentences.\n"
         "Output valid JSON only:\n"
         '{"verdict": "partial", "got_right": ["..."], "gaps": ["..."], '
         '"variation": {"ok": false, "corrected": "...", "note": "..."}, "follow_up": "..."}'
@@ -220,9 +219,7 @@ async def fix_transcript(
     api_key = ai.upstream_key(authorization)
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     async with httpx.AsyncClient(timeout=ai.UPSTREAM_TIMEOUT_SECONDS) as client:
-        _, raw_text = await ai.post_chat(
-            client, _transcript_fix_payload(request), headers
-        )
+        _, raw_text = await ai.post_chat(client, _transcript_fix_payload(request), headers)
     fixed = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip().strip("`").strip()
     # A correction must stay close to the original; otherwise keep what was heard.
     if not fixed or len(fixed) > len(request.text) * 1.6 + 40:
@@ -264,15 +261,16 @@ def _ask_payload(request: AskRequest) -> dict:
         "- If their message answers a question you asked earlier, say clearly if it is right, "
         "and fix it if not.\n"
         "- At most 90 words. Plain text only: no markdown, no headings, no tables. "
-        "You may use short lines like 'de + la = de la'.\n"
-        + TUTOR_ENGLISH_STYLE
+        "You may use short lines like 'de + la = de la'.\n" + TUTOR_ENGLISH_STYLE
     )
     messages = [{"role": "system", "content": system}]
     for turn in request.history[-12:]:
-        messages.append({
-            "role": "user" if turn.role == "learner" else "assistant",
-            "content": turn.content,
-        })
+        messages.append(
+            {
+                "role": "user" if turn.role == "learner" else "assistant",
+                "content": turn.content,
+            }
+        )
     messages.append({"role": "user", "content": request.question})
     return {
         "model": ai.AGY_MODEL,
@@ -338,7 +336,7 @@ async def ask_to_card(request: AskCardRequest, authorization: str | None = Heade
         _, raw_text = await ai.post_chat(client, _ask_point_payload(request), headers)
     cleaned = re.sub(r"<think>[\s\S]*?</think>", "", raw_text)
     try:
-        point = json.loads(cleaned[cleaned.find("{"): cleaned.rfind("}") + 1])
+        point = json.loads(cleaned[cleaned.find("{") : cleaned.rfind("}") + 1])
         grammar = GrammarPointIn(
             title=str(point.get("title") or "").strip()[:300],
             explanation=str(point.get("explanation") or "").strip()[:1000],
@@ -476,12 +474,15 @@ async def etymology_word(
     payload = {
         "model": ai.AGY_MODEL,
         "messages": [
-            {"role": "system", "content": (
-                "你是严谨的法语词源老师。用简体中文纯文本解释所给原形词的词根/构词、"
-                "词源（如拉丁语来源，已知才写）和恰好一条简短记忆钩子。"
-                "不确定时明确说不确定，不编造词源；区分真实词源和记忆联想。"
-                "只解释原形词，便于同词族复用。总计约120个汉字以内，最多4短行，不用Markdown。"
-            )},
+            {
+                "role": "system",
+                "content": (
+                    "你是严谨的法语词源老师。用简体中文纯文本解释所给原形词的词根/构词、"
+                    "词源（如拉丁语来源，已知才写）和恰好一条简短记忆钩子。"
+                    "不确定时明确说不确定，不编造词源；区分真实词源和记忆联想。"
+                    "只解释原形词，便于同词族复用。总计约120个汉字以内，最多4短行，不用Markdown。"
+                ),
+            },
             {"role": "user", "content": f"法语原形词：{key}"},
         ],
         "stream": False,
@@ -557,7 +558,10 @@ def _parse_grammar_exercise(raw_text: str) -> dict | None:
     item["prompt_fr"] = re.sub(r"_{2,}", "____", item["prompt_fr"], count=1)
     # The sentence with the blank filled must be the full sentence (ignoring case/spacing)
     filled = item["prompt_fr"].replace("____", item["answer"])
-    squash = lambda text: re.sub(r"\s+", " ", text).strip().lower()
+
+    def squash(text):
+        return re.sub(r"\s+", " ", text).strip().lower()
+
     if squash(filled) != squash(item["full_fr"]):
         return None
     return item

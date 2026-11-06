@@ -1,4 +1,5 @@
 """Studio routes: models, transform, speech files, analysis, cleaning pasted text and photos, /tts snippets."""
+
 from __future__ import annotations
 
 from typing import Literal
@@ -98,9 +99,7 @@ async def test_connection(
         model=request.model,
         task_mode="translate",
     )
-    text, model, _, quality_check, proofread_model = await transform.request_french_transform(
-        sample_request, api_key
-    )
+    text, model, _, quality_check, proofread_model = await transform.request_french_transform(sample_request, api_key)
     return {
         "connected": True,
         "requested_model": request.model,
@@ -119,9 +118,7 @@ async def transform_to_french(
     authorization: str | None = Header(default=None),
 ):
     api_key = ai.upstream_key(authorization)
-    text, model, task_mode, quality_check, proofread_model = (
-        await transform.request_french_transform(request, api_key)
-    )
+    text, model, task_mode, quality_check, proofread_model = await transform.request_french_transform(request, api_key)
     return {
         "text": text,
         "model": model,
@@ -139,9 +136,7 @@ async def generate_speech(
     authorization: str | None = Header(default=None),
 ):
     rate_limit(_require_user_id(authorization), "speech")
-    audio_filename, srt_filename = await speech.create_speech_files(
-        request.text, request.voice
-    )
+    audio_filename, srt_filename = await speech.create_speech_files(request.text, request.voice)
     return {
         "audio_url": f"/files/{audio_filename}",
         "srt_url": f"/files/{srt_filename}",
@@ -152,9 +147,7 @@ async def generate_speech(
 
 
 @router.get("/files/{filename}")
-async def get_output_file(
-    request: Request, filename: str, download: bool = Query(default=False)
-):
+async def get_output_file(request: Request, filename: str, download: bool = Query(default=False)):
     # <audio src> sends the same-origin HttpOnly session cookie; API clients may use Bearer.
     _require_user_id(request.headers.get("authorization"), request)
     return speech.output_file(filename, download=download)
@@ -177,7 +170,7 @@ async def generate_tts(
     voice: str = "fr-FR-DeniseNeural",
     format: Literal["mp3", "srt"] = "mp3",
     download: bool = False,
-    rate: float = Query(default=1.0, ge=.5, le=1.5),
+    rate: float = Query(default=1.0, ge=0.5, le=1.5),
 ):
     # <audio> cannot send an Authorization header. Same-origin cookie is the credential.
     # Anonymous calls used to be an open Edge-TTS proxy on the public site.
@@ -187,7 +180,10 @@ async def generate_tts(
     if not speech.snippet_cached(text, voice, rate):  # cache hits (prefetch, replays) are free
         rate_limit(user_id, "speech")
     # Snippets are cached by (voice, text) hash, so the same URL always returns the same audio.
-    audio_filename, srt_filename = (await speech.create_speech_files(text, voice) if rate == 1 else
-                                    await speech.create_speech_files(text, voice, rate=rate))
+    audio_filename, srt_filename = (
+        await speech.create_speech_files(text, voice)
+        if rate == 1
+        else await speech.create_speech_files(text, voice, rate=rate)
+    )
     filename = srt_filename if format == "srt" else audio_filename
     return speech.output_file(filename, download=download, cache_seconds=30 * 86400)

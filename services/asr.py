@@ -1,4 +1,5 @@
 """Local speech-to-text (faster-whisper on CPU): loaded lazily, one transcription at a time, bounded queue."""
+
 from __future__ import annotations
 
 import io
@@ -16,9 +17,7 @@ from web_common import BASE_DIR
 logger = logging.getLogger(__name__)
 
 
-ASR_MODEL_DIR = Path(
-    os.getenv("ASR_MODEL_DIR", str(BASE_DIR / "models" / "faster-whisper-large-v3-turbo"))
-)
+ASR_MODEL_DIR = Path(os.getenv("ASR_MODEL_DIR", str(BASE_DIR / "models" / "faster-whisper-large-v3-turbo")))
 ASR_CPU_THREADS = int(os.getenv("ASR_CPU_THREADS", "8"))
 ASR_MAX_BYTES = 15 * 1024 * 1024
 
@@ -60,9 +59,7 @@ def _clean_asr_segments(segments: list[tuple[str, float, float, float]]) -> str:
     return joined
 
 
-def _transcribe_sync(
-    audio: bytes, sentence: str, context: str = "", language: str = "zh"
-) -> dict:
+def _transcribe_sync(audio: bytes, sentence: str, context: str = "", language: str = "zh") -> dict:
     global _asr_model
     with _asr_lock:
         if _asr_model is None:
@@ -91,9 +88,9 @@ def _transcribe_sync(
             initial_prompt=prompt,
             condition_on_previous_text=False,
         )
-        text = _clean_asr_segments([
-            (seg.text, seg.no_speech_prob, seg.avg_logprob, seg.compression_ratio) for seg in segments
-        ])
+        text = _clean_asr_segments(
+            [(seg.text, seg.no_speech_prob, seg.avg_logprob, seg.compression_ratio) for seg in segments]
+        )
     return {"text": text, "duration": round(info.duration, 1)}
 
 
@@ -104,10 +101,10 @@ _asr_waiting = 0
 def looks_like_audio(data: bytes) -> bool:
     head = data[:16]
     return (
-        head.startswith(b"\x1a\x45\xdf\xa3")          # webm / matroska
+        head.startswith(b"\x1a\x45\xdf\xa3")  # webm / matroska
         or head.startswith(b"OggS")
         or (head.startswith(b"RIFF") and head[8:12] == b"WAVE")
-        or head[4:8] == b"ftyp"                         # mp4 / m4a (Safari)
+        or head[4:8] == b"ftyp"  # mp4 / m4a (Safari)
         or head.startswith(b"ID3")
         or head.startswith(b"fLaC")
         or (len(head) > 1 and head[0] == 0xFF and (head[1] & 0xE0) == 0xE0)  # mp3 / aac frame
@@ -134,9 +131,7 @@ async def _transcribe_admitted(audio: bytes, sentence: str, context: str, langua
     try:
         if language == "zh":
             return await run_in_threadpool(_transcribe_sync, audio, sentence.strip(), context.strip())
-        return await run_in_threadpool(
-            _transcribe_sync, audio, sentence.strip(), context.strip(), language=language
-        )
+        return await run_in_threadpool(_transcribe_sync, audio, sentence.strip(), context.strip(), language=language)
     except HTTPException:
         raise
     except Exception as exc:
