@@ -623,7 +623,8 @@
         async function show(rawWord, element, context = {}, navigation = {}) {
             if (!element) return;
             const word = (rawWord || '').replace(/^[^\wÀ-ÿ]+|[^\wÀ-ÿ]+$/g, '').trim();
-            if (!word || word.length > 40 || (!/[a-zA-ZÀ-ÿ]/.test(word) && !frenchNumberReading(word))) return;
+            // 200 matches the selection bar's Meaning cap (short phrases and clause-sized chunks)
+            if (!word || word.length > 200 || (!/[a-zA-ZÀ-ÿ]/.test(word) && !frenchNumberReading(word))) return;
             const rect = element.getBoundingClientRect();
             if (!rect || (rect.width === 0 && rect.height === 0)) return;
 

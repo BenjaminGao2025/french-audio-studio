@@ -34,8 +34,9 @@
 
     // A pointer that moved further than this between press and click was dragging, not tapping
     const DRAG_PX = 8;
-    // Longest text the word popover accepts, so also the longest "Meaning" request
-    const MEANING_MAX = 40;
+    // Longest phrase Meaning will look up (matches word-popover show() / etymology-sized lookups).
+    // The Meaning button itself stays visible whenever Read is; longer text is capped at action time.
+    const MEANING_MAX = 200;
     const SETTLE_MS = 300;
     const WORD_CHAR = /[\p{L}\p{N}'’-]/u;
     const HAS_LETTER = /[\p{L}\p{N}]/u;
@@ -230,7 +231,9 @@
             els.hint.hidden = !hint;
             els.hint.textContent = hint;
             els.read.hidden = !text;
-            els.meaning.hidden = !(text && options.meaning && text.length <= MEANING_MAX);
+            // Always offer Meaning next to Read. Long phrases are capped when opening the popover,
+            // not by hiding the button (a 45-char selection used to lose Meaning at the old 40 cap).
+            els.meaning.hidden = !(text && options.meaning);
             els.done.hidden = !rangeLine;
             bar.classList.toggle('is-range', Boolean(rangeLine));
             bar.classList.toggle('has-text', Boolean(text));
@@ -372,9 +375,10 @@
         doc.addEventListener('pointerdown', pressBar, true);
         // Handles are dragged by the system, which sends no touch events: wait until they settle
         doc.addEventListener('selectionchange', () => {
-            // While the finger/pointer is on the bar, keep it up even if the OS cleared the selection
+            // While the finger/pointer is on the bar, keep it up even if the OS cleared the selection.
+            // Do not hide the bar here: on phones selectionchange fires while handles settle, and
+            // hiding for up to 1s made a valid selection look like it had no toolbar.
             if (rangeLine || mouseHeld || pressing) return;
-            if (state && state.source === 'native') { bar.hidden = true; }
             scheduleEvaluate(touching ? 1000 : SETTLE_MS);
         });
         // Keep the text selected while the bar is pressed (and no focus change on desktop)
@@ -424,12 +428,16 @@
                 const anchorBox = anchorBoxFor(picked);
                 const range = picked.range;
                 const ctx = context(picked);
+                // Cap for the popover/lookup; the button was still shown for longer selections
+                const text = picked.text.length > MEANING_MAX
+                    ? picked.text.slice(0, MEANING_MAX).replace(/\s+\S*$/, '').trim() || picked.text.slice(0, MEANING_MAX)
+                    : picked.text;
                 bar.hidden = true;
                 // coversRange() lets the popover tell this selection from a new one: it stays
                 // open while the phrase it explains is still selected (one range holds the other)
                 const holds = (outer, inner) => outer.compareBoundaryPoints(Range.START_TO_START, inner) <= 0
                     && outer.compareBoundaryPoints(Range.END_TO_END, inner) >= 0;
-                options.meaning(picked.text, {
+                options.meaning(text, {
                     getBoundingClientRect: () => anchorBox,
                     coversRange: (other) => { try { return Boolean(range && other && (holds(range, other) || holds(other, range))); } catch (err) { return false; } },
                 }, ctx);
