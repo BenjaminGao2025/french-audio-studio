@@ -59,10 +59,13 @@
         return selection && !selection.isCollapsed ? selection.toString().trim() : '';
     }
 
-    // Whether a click is a real tap: it ended where it began, and nothing is selected. A click
-    // without a position (keyboard Enter, element.click()) is a tap on whatever it targets.
+    // A drag (moved too far) is never a tap. isTap also requires no selected text, so it stays
+    // false while the Read/Meaning bar is up; word hits use isDrag + dismiss instead.
+    function isDrag(e) {
+        return Boolean(e && e.detail !== 0 && pressed && Math.hypot(e.clientX - pressed.x, e.clientY - pressed.y) > DRAG_PX);
+    }
     function isTap(e) {
-        if (e && e.detail !== 0 && pressed && Math.hypot(e.clientX - pressed.x, e.clientY - pressed.y) > DRAG_PX) return false;
+        if (isDrag(e)) return false;
         return !selectedText();
     }
 
@@ -255,6 +258,14 @@
             setPlaying(false);
         }
 
+        function dismissSelection() {
+            hide();
+            const selection = root.getSelection && root.getSelection();
+            if (selection) selection.removeAllRanges();
+        }
+        dismissActive = dismissSelection;
+
+
         function setPlaying(on) {
             els.read.classList.toggle('is-playing', on);
             els.read.setAttribute('aria-busy', String(on));
@@ -446,10 +457,17 @@
         bar.addEventListener('pointerup', runBarAction);
         bar.addEventListener('click', runBarAction);
         // The bar is hidden by the time the click that ends a touch on Meaning is dispatched, so
-        // that click lands on whatever was under the bar (a word: it opens that word's popover
-        // and speaks it, replacing the meaning). Swallow it.
+        // that click can land on the word under the bar. Swallow only clicks near the bar's last
+        // box — a tap on a different word elsewhere must still open that word.
         doc.addEventListener('click', (e) => {
             if (!actedAt || Date.now() - actedAt >= GHOST_MS || bar.contains(e.target)) return;
+            const box = remembered && remembered.barBox;
+            if (box) {
+                const pad = 12;
+                const hit = e.clientX >= box.left - pad && e.clientX <= box.right + pad
+                    && e.clientY >= box.top - pad && e.clientY <= box.bottom + pad;
+                if (!hit) return;
+            }
             actedAt = 0;
             e.stopImmediatePropagation();
             e.preventDefault();
@@ -577,5 +595,7 @@
         };
     }
 
-    root.FrenchReadSelection = { create, isTap, snapRange };
+    let dismissActive = () => {};
+    root.FrenchReadSelection = { create, isTap, isDrag, snapRange, dismiss: () => dismissActive() };
+
 })(window);

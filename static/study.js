@@ -3211,10 +3211,15 @@ function initStudyWorkbench() {
     // a word that is still hidden.
     const WORD_TAP_SLOP = 22;  // half of the 44px minimum touch size
     function wordAtTap(e) {
-        // A click that ends a drag or a selection is not a tap, whatever it lands on
-        if (!window.FrenchReadSelection.isTap(e)) return null;
+        // A drag is not a tap. A painted selection used to make isTap false and block every word
+        // lookup while the Read/Meaning bar was up — a direct hit on another word must still open it.
+        if (window.FrenchReadSelection.isDrag && window.FrenchReadSelection.isDrag(e)) return null;
         const direct = e.target.closest('.interactive-word');
-        if (direct) return direct;
+        if (direct) {
+            if (window.FrenchReadSelection.dismiss) window.FrenchReadSelection.dismiss();
+            return direct;
+        }
+        if (!window.FrenchReadSelection.isTap(e)) return null;
         const line = e.target.closest('.sentence-french-text, .buildup-fr-text');
         if (!line || e.detail === 0 || line.closest('.is-blind-mode') || e.target.closest('button, a')) return null;
         return window.FrenchWordPopover.nearestElement(line.querySelectorAll('.interactive-word'), e.clientX, e.clientY, WORD_TAP_SLOP);
