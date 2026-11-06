@@ -7,11 +7,10 @@ older records have none and are skipped, so re-analysing a text is the way to li
 
 Dry run by default: it only reads the database (read-only connection) and prints what it would add.
 
-    # inside the production container (the script is not in the image, copy it in first)
-    docker cp scripts/backfill_grammar_hits.py tts-service:/app/backfill_grammar_hits.py
-    docker exec tts-service python backfill_grammar_hits.py                  # dry run
-    docker exec tts-service python backfill_grammar_hits.py --apply          # write
-    docker exec tts-service python backfill_grammar_hits.py --user you@example.com --apply
+    # inside the production container (scripts/ ships in the image)
+    docker exec tts-service python scripts/backfill_grammar_hits.py                  # dry run
+    docker exec tts-service python scripts/backfill_grammar_hits.py --apply          # write
+    docker exec tts-service python scripts/backfill_grammar_hits.py --user you@example.com --apply
 
 It needs the same OUTPUT_DIR and AUTH_SECRET as the service (auth_db refuses to load without the
 secret). Writes are INSERT OR IGNORE into grammar_hits only, so running it twice is harmless and

@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY *.py ./
 COPY routers /app/routers
 COPY services /app/services
+COPY scripts /app/scripts
 COPY data /app/data
 COPY static /app/static
 
