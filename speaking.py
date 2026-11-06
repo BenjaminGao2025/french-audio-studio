@@ -709,7 +709,6 @@ def parse_round1_feedback(
 
 def build_round2_payload(attempt: dict[str, Any], model: str) -> dict[str, Any]:
     task = attempt["task"]
-    subject = attempt["subject"]
     transcript_1 = attempt["transcript_1"]
     feedback_1 = attempt.get("feedback_1") or {}
     errors_1 = feedback_1.get("errors") or []

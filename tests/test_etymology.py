@@ -29,7 +29,7 @@ class EtymologyApiTests(unittest.TestCase):
             chat.assert_awaited_once()
             self.assertEqual(
                 chat.call_args.args[1]["model"],
-                tts_service._map_upstream_model(tts_service.DEFAULT_MODEL),
+                tts_service.AGY_MODEL,
             )
             self.assertEqual(auth_db.get_etymology("empêcher"), first.json()["text"])
 
