@@ -280,8 +280,8 @@ class StudyMarkupTests(unittest.TestCase):
 
     def test_structure_and_grammar_map_in_jsdom(self):
         node = shutil.which("node")
-        if not node or not (ROOT / "frontend/node_modules/jsdom").exists():
-            self.skipTest("node and the frontend's jsdom are needed")
+        if not node or not (ROOT / "node_modules/jsdom").exists():
+            self.skipTest("node and jsdom (npm ci at the repo root) are needed")
         result = subprocess.run([node, "tests/test_grammar_structure.cjs"], cwd=ROOT, capture_output=True, text=True, timeout=90)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 

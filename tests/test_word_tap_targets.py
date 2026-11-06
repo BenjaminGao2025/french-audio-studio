@@ -13,8 +13,8 @@ def _read(path):
 class WordTapTargetTests(unittest.TestCase):
     def _node(self, script):
         node = shutil.which("node")
-        if not node or not (ROOT / "frontend/node_modules/jsdom").exists():
-            self.skipTest("node and the frontend's jsdom are needed")
+        if not node or not (ROOT / "node_modules/jsdom").exists():
+            self.skipTest("node and jsdom (npm ci at the repo root) are needed")
         result = subprocess.run([node, script], cwd=ROOT, capture_output=True, text=True, timeout=90)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 

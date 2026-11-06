@@ -5,7 +5,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { JSDOM } = require('../frontend/node_modules/jsdom');
+const { JSDOM } = require('jsdom');
 const read = name => fs.readFileSync(path.join(__dirname, '../static', name), 'utf8');
 
 const dom = new JSDOM('<p lang="fr"><span class="interactive-word" id="s">sûreté,</span> et la résistance <span class="interactive-word" id="o">l\'oppression.</span></p>',

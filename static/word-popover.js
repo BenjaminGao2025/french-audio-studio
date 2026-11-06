@@ -639,8 +639,10 @@
             updateBack();
 
             target = element;
-            // 700ms covers iOS synthetic mouse events after pointerup and chrome show/hide scroll
-            settleUntil = Date.now() + 700;
+            // 700ms covers iOS synthetic mouse events after pointerup and chrome show/hide scroll.
+            // Only a Meaning card (an anchor with coversRange) is opened by a selection gesture; a
+            // word card must still close at once when the user selects a different word.
+            settleUntil = element && typeof element.coversRange === 'function' ? Date.now() + 700 : 0;
             pop.hidden = false;
             pop.style.display = 'flex';
             if (activeEl && activeEl !== element && activeEl.classList) activeEl.classList.remove('is-active-word');
