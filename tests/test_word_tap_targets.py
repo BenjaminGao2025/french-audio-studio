@@ -30,6 +30,9 @@ class WordTapTargetTests(unittest.TestCase):
     def test_selection_closes_stale_popover_in_jsdom(self):
         self._node("tests/test_selection_closes_popover.cjs")
 
+    def test_meaning_tap_survives_selection_clear_in_jsdom(self):
+        self._node("tests/test_meaning_tap.cjs")
+
     def test_read_selection_is_wired_into_the_study_page(self):
         html = _read("static/study.html")
         js = _read("static/study.js")
@@ -40,7 +43,7 @@ class WordTapTargetTests(unittest.TestCase):
         self.assertIn("selectionPopover: false,", js)
         # Reading goes through the page's own French speech (global audio controller)
         self.assertIn("speak: (text, onEnd) => playFrenchSpeech(text, onEnd),", js)
-        self.assertIn("meaning: (text, anchor, context) => wordPopover.show(text, anchor, context),", js)
+        self.assertIn("meaning: (text, anchor, context) => wordPopover.show(text, anchor, context, { silent: true }),", js)
         # A per-sentence "Select words" toggle starts range mode
         self.assertIn("data-range-toggle", js)
         self.assertIn("selectWordsTitle", js)

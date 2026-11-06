@@ -326,18 +326,27 @@
         const touchEnded = (e) => { touching = false; if (!rangeLine && !bar.contains(e.target)) scheduleEvaluate(SETTLE_MS); };
         doc.addEventListener('touchend', touchEnded, { passive: true });
         doc.addEventListener('touchcancel', touchEnded, { passive: true });
-        // Handles are dragged by the system, which sends no touch events: wait until they settle
-        doc.addEventListener('selectionchange', () => {
-            if (rangeLine || mouseHeld || pressing) return;
-            if (state && state.source === 'native') { bar.hidden = true; }
-            scheduleEvaluate(touching ? 1000 : SETTLE_MS);
-        });
-        doc.addEventListener('pointerdown', (e) => {
+        // Mark the bar pressed as early as possible (before selectionchange can hide it).
+        // preventDefault on touch keeps the system from clearing the selection under the finger;
+        // for mouse, mousedown below still does that without blocking click.
+        const pressBar = (e) => {
             if (!bar.contains(e.target)) return;
             pressing = true;
             clearTimeout(pressTimer);
             pressTimer = setTimeout(() => { pressing = false; }, 800);
-        }, true);
+            if (e.cancelable && (e.type === 'touchstart' || e.pointerType === 'touch' || e.pointerType === 'pen')) {
+                e.preventDefault();
+            }
+        };
+        bar.addEventListener('touchstart', pressBar, { capture: true, passive: false });
+        doc.addEventListener('pointerdown', pressBar, true);
+        // Handles are dragged by the system, which sends no touch events: wait until they settle
+        doc.addEventListener('selectionchange', () => {
+            // While the finger/pointer is on the bar, keep it up even if the OS cleared the selection
+            if (rangeLine || mouseHeld || pressing) return;
+            if (state && state.source === 'native') { bar.hidden = true; }
+            scheduleEvaluate(touching ? 1000 : SETTLE_MS);
+        });
         // Keep the text selected while the bar is pressed (and no focus change on desktop)
         bar.addEventListener('mousedown', (e) => e.preventDefault());
         root.addEventListener('scroll', schedulePlace, { passive: true });
@@ -353,11 +362,19 @@
             return options.contextFor && anchor ? options.contextFor(anchor) || {} : {};
         }
 
-        bar.addEventListener('click', (e) => {
+        // pointerup runs the action even when touchstart.preventDefault suppressed the click,
+        // or when the OS cleared the selection mid-tap. click remains for keyboard activation.
+        let actedAt = 0;
+        const runBarAction = (e) => {
             const button = e.target.closest('[data-rs]');
-            if (!button) return;
+            if (!button || button.disabled) return;
+            if (e.type === 'pointerup' && e.button !== 0) return;
+            // One shot per gesture: pointerup then the synthetic click must not double-fire
+            if (e.type === 'click' && Date.now() - actedAt < 500) return;
             e.stopPropagation();
             pressing = false;
+            clearTimeout(pressTimer);
+            if (e.type === 'pointerup') actedAt = Date.now();
             const action = button.dataset.rs;
             if (action === 'done') { if (rangeLine) exitRange(); else hide(); return; }
             if (!state) return;
@@ -372,11 +389,15 @@
                 const range = state.range;
                 const text = state.text;
                 const ctx = context();
-                // The popover takes this spot; the selection (or range) stays as it is
+                // Snapshot the box before the selection can collapse further
+                const box = range && range.getBoundingClientRect ? range.getBoundingClientRect() : { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
+                const anchorBox = (box && (box.width > 0 || box.height > 0)) ? box : { left: 12, top: 80, right: 200, bottom: 110, width: 188, height: 30 };
                 bar.hidden = true;
-                options.meaning(text, { getBoundingClientRect: () => range.getBoundingClientRect() }, ctx);
+                options.meaning(text, { getBoundingClientRect: () => anchorBox }, ctx);
             }
-        });
+        };
+        bar.addEventListener('pointerup', runBarAction);
+        bar.addEventListener('click', runBarAction);
 
         // ---- Range mode: tap the first word, then the last ------------------------------------------
         let rangeLine = null;

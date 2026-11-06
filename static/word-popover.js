@@ -594,9 +594,10 @@
                 sentence_cn: context.sentence_cn || item.sentence_cn || '',
             });
 
+            const silent = Boolean(navigation.silent);
             const number = frenchNumberReading(word);
             if (number) {
-                speak(number.spoken);
+                if (!silent) speak(number.spoken);
                 render(withContext({
                     token: word, speech: number.spoken, lemma: word, pos: number.pos, phonetic: '',
                     explanation_cn: EN ? '' : `${T.readAs}${number.spoken}`,
@@ -607,8 +608,11 @@
 
             const lower = word.toLowerCase();
             const elided = (lower.match(ELISION_RE) || [])[2];
-            // Elided forms such as "l'" are read as their full word
-            speak((word.endsWith("'") || word.endsWith('’')) ? (BASIC_FRENCH_WORDS[lower]?.lemma || word) : word);
+            // Elided forms such as "l'" are read as their full word.
+            // Meaning from the selection bar passes silent: true so it only opens the card.
+            if (!silent) {
+                speak((word.endsWith("'") || word.endsWith('’')) ? (BASIC_FRENCH_WORDS[lower]?.lemma || word) : word);
+            }
 
             // 1. The page's own data (sentence analysis, fixed expressions, the card being reviewed)
             // A nested word must resolve individually, rather than being redirected back to

@@ -533,7 +533,7 @@ function initStudyWorkbench() {
             return card ? card.querySelector('.sentence-french-text') : null;
         },
         speak: (text, onEnd) => playFrenchSpeech(text, onEnd),
-        meaning: (text, anchor, context) => wordPopover.show(text, anchor, context),
+        meaning: (text, anchor, context) => wordPopover.show(text, anchor, context, { silent: true }),
         contextFor: sentenceContextFor,
         openWord: () => wordPopover.activeElement(),
     });
