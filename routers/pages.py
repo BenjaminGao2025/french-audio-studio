@@ -20,9 +20,9 @@ router = APIRouter()
 
 def _asset_version() -> str:
     digest = hashlib.sha256()
-    for path in sorted(STATIC_DIR.iterdir()):
-        if path.suffix in {".js", ".css"}:
-            digest.update(path.name.encode("utf-8"))
+    for path in sorted(STATIC_DIR.rglob("*")):
+        if path.is_file() and path.suffix in {".js", ".css"}:
+            digest.update(path.relative_to(STATIC_DIR).as_posix().encode("utf-8"))
             digest.update(path.read_bytes())
     return digest.hexdigest()[:12]
 

@@ -65,7 +65,7 @@ CONTENT_SECURITY_POLICY = "; ".join(
     [
         "default-src 'self'",
         # Cloudflare Web Analytics beacon is injected by the tunnel/CDN, not by our pages
-        "script-src 'self' https://unpkg.com/lucide@1.34.0/ https://static.cloudflareinsights.com",
+        "script-src 'self' https://static.cloudflareinsights.com",
         "style-src 'self' 'unsafe-inline'",  # style="" attributes in markup; scripts stay strict
         "img-src 'self' data: blob:",
         "media-src 'self' blob:",

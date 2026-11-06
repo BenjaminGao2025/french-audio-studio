@@ -72,3 +72,42 @@ class PwaTests(unittest.TestCase):
         csp = self.client.get("/study").headers["content-security-policy"]
         self.assertIn("worker-src 'self'", csp)
         self.assertIn("manifest-src 'self'", csp)
+
+    def test_lucide_is_local_versioned_and_served_on_every_page(self):
+        paths = (
+            "/",
+            "/study",
+            "/review",
+            "/listen",
+            "/speak",
+            "/write",
+            "/coach",
+            "/grammar",
+            "/home",
+            "/account",
+            "/privacy",
+            "/for-institutions",
+        )
+        script = "/static/vendor/lucide.min.js?v=" + routers.pages.ASSET_VERSION
+        for path in paths:
+            response = self.client.get(path)
+            self.assertIn(script, response.text, path)
+            self.assertNotIn("unpkg.com", response.headers["content-security-policy"])
+        response = self.client.get(script)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("lucide", response.text[:200].lower())
+
+    def test_asset_version_includes_nested_scripts(self):
+        import tempfile
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            vendor = root / "vendor"
+            vendor.mkdir()
+            script = vendor / "lucide.min.js"
+            script.write_text("one", encoding="utf-8")
+            with patch.object(routers.pages, "STATIC_DIR", root):
+                first = routers.pages._asset_version()
+                script.write_text("two", encoding="utf-8")
+                self.assertNotEqual(first, routers.pages._asset_version())
