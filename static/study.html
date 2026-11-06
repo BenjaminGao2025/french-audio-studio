@@ -289,7 +289,7 @@
         </div>
     </div>
 
-    <!-- User Account Auth Modal (login only; sign-up is closed) -->
+    <!-- User Account Auth Modal (login; sign-up needs an invite code) -->
     <div id="auth-modal" class="modal-backdrop" hidden>
         <div class="modal-dialog modal-auth-dialog" role="dialog" aria-labelledby="auth-modal-title" aria-modal="true">
             <header class="modal-header">
@@ -316,12 +316,17 @@
                             <label for="auth-password" data-i18n="password">密码</label>
                             <input id="auth-password" type="password" placeholder="请输入密码（至少 6 位）" data-i18n-placeholder="passwordPlaceholder" required autocomplete="current-password">
                         </div>
+                        <div id="auth-invite-field" class="connection-field" hidden>
+                            <label for="auth-invite" data-i18n="inviteCode">邀请码</label>
+                            <input id="auth-invite" type="text" placeholder="请输入邀请码" data-i18n-placeholder="invitePlaceholder" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="64">
+                        </div>
                         <div id="auth-error-msg" class="auth-error-msg" hidden role="alert"></div>
                         <div class="auth-actions">
                             <button id="auth-submit-btn" class="btn btn-primary btn-full" type="submit">
                                 <i data-lucide="sparkles" aria-hidden="true"></i>
                                 <span id="auth-submit-label" data-i18n="login">登录</span>
                             </button>
+                            <button id="auth-switch-btn" class="btn btn-full auth-switch-btn" type="button" data-i18n="haveInvite">有邀请码？注册</button>
                         </div>
                     </form>
                 </div>
@@ -343,6 +348,10 @@
                             <ul id="profile-device-list" class="device-list"></ul>
                         </div>
                         <div class="profile-actions">
+                            <a id="membership-link" class="btn btn-secondary btn-full" href="/account">
+                                <i data-lucide="crown" aria-hidden="true"></i>
+                                <span data-i18n="membership">会员</span>
+                            </a>
                             <button id="logout-btn" class="btn btn-secondary btn-full" type="button">
                                 <i data-lucide="log-out" aria-hidden="true"></i>
                                 <span data-i18n="logout">退出当前账号</span>

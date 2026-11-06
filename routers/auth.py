@@ -22,6 +22,10 @@ class AuthRequest(BaseModel):
     password: str
 
 
+class RegisterRequest(AuthRequest):
+    invite_code: str = ""
+
+
 def _auth_response(payload: dict, request: Request) -> JSONResponse:
     response = JSONResponse(payload)
     token = payload.get("token")
@@ -43,12 +47,16 @@ def _device_label(user_agent: str) -> str:
 
 
 @router.post("/api/auth/register")
-async def register_account(req: AuthRequest, request: Request):
-    if not auth_db.ALLOW_REGISTRATION:
+async def register_account(req: RegisterRequest, request: Request):
+    # Closed sign-up still lets people in with an invite code; a bad code is a 400 below
+    invite = req.invite_code.strip()
+    if not auth_db.ALLOW_REGISTRATION and not invite:
         raise HTTPException(status_code=403, detail={"message": "本站暂不开放注册。"})
     device = _device_label(request.headers.get("user-agent", ""))
     try:
-        return _auth_response(auth_db.register_user(req.email, req.password, device), request)
+        return _auth_response(
+            auth_db.register_user(req.email, req.password, device, invite_code=invite or None), request
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail={"message": str(e)})
 

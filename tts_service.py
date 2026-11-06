@@ -16,6 +16,7 @@ import unicodedata
 import uuid
 from pathlib import Path
 from typing import Annotated, Any, Literal
+from urllib.parse import urlencode
 
 import edge_tts
 import edge_compat  # noqa: F401  (Microsoft moved the synthesis host; must load before use)
@@ -1764,15 +1765,30 @@ LANDING_HOSTS = {
 }
 
 
+def _invite_redirect(request: Request) -> RedirectResponse | None:
+    """Invite links (?invite=CODE) open the sign-up form on /study with the code filled in."""
+    invite = request.query_params.get("invite", "").strip()
+    if not invite:
+        return None
+    return RedirectResponse("/study?" + urlencode({"invite": invite[:64]}), status_code=302)
+
+
 @app.get("/")
 async def root(request: Request):
+    if redirect := _invite_redirect(request):
+        return redirect
     host = request.headers.get("host", "").split(":")[0].lower()
     return _html_page("landing.html" if host in LANDING_HOSTS else "index.html")
 
 
 @app.get("/home")
-async def landing_page():
-    return _html_page("landing.html")
+async def landing_page(request: Request):
+    return _invite_redirect(request) or _html_page("landing.html")
+
+
+@app.get("/account")
+async def account_page():
+    return _html_page("account.html")
 
 
 @app.get("/for-institutions")

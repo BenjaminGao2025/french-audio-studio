@@ -112,3 +112,19 @@
     .steps, .feature-grid { grid-template-columns: 1fr; }
     .demo-drills li { grid-template-columns: 60px 1fr; }
 }
+
+/* Membership page (/account): plans are shown, payment is not open yet */
+.account-title { margin-bottom: var(--space-6) !important; font-size: var(--text-title) !important; }
+.current-plan { display: grid; gap: var(--space-2); justify-items: start; max-width: 560px; padding: var(--space-6); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); }
+.current-plan-label { color: var(--muted); font-size: var(--text-sm); font-weight: 600; }
+.current-plan-email { font-weight: 700; overflow-wrap: anywhere; }
+.current-plan-status { font-size: 17px; }
+.current-plan .btn { margin-top: var(--space-2); text-decoration: none; }
+.plans-title { margin-top: var(--space-12) !important; }
+.plan-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 280px)); gap: var(--space-6); margin-bottom: var(--space-6); }
+.plan-card { display: grid; gap: var(--space-3); padding: var(--space-6); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); }
+.plan-price { font-size: 22px; font-weight: 700; }
+.plan-desc { color: var(--muted); font-size: 15px; }
+.plan-cta { justify-content: center; min-height: 44px; }
+.plan-cta:disabled { cursor: not-allowed; opacity: 0.7; }
+@media (max-width: 640px) { .plan-grid { grid-template-columns: 1fr; } }

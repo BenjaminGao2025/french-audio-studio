@@ -64,6 +64,11 @@ function initStudyWorkbench() {
             authTitle: 'Log in',
             authNotice: 'Once you log in, the server calls the AI models for you, review cards sync between your phone and computer, and your history is saved in the cloud.',
             email: 'Email', password: 'Password', passwordPlaceholder: 'Password (at least 6 characters)', logout: 'Log out',
+            registerTitle: 'Sign up with an invite', register: 'Sign up', inviteCode: 'Invite code', invitePlaceholder: 'Enter your invite code',
+            registerNotice: 'New accounts get a free 60-day trial. Sign-up is by invite only for now.',
+            haveInvite: 'Have an invite code? Sign up', haveAccount: 'Already have an account? Log in',
+            needInvite: 'Please enter your invite code.', registerSuccess: 'Account created. Your 60-day free trial has started.',
+            membership: 'Membership',
             devicesTitle: 'Signed-in devices (up to 3)', thisDevice: 'This device', signOutDevice: 'Sign out',
             lastActive: (when) => `Last active ${when}`,
             signedOutElsewhere: 'This device was signed out: an account can be signed in on up to 3 devices. Please log in again.',
@@ -202,6 +207,11 @@ function initStudyWorkbench() {
             authTitle: '登录账号',
             authNotice: '登录后：由服务器调用大模型、复习卡片在手机和电脑之间同步、历史记录云端保存。',
             email: '电子邮箱', password: '密码', passwordPlaceholder: '请输入密码（至少 6 位）', logout: '退出当前账号',
+            registerTitle: '邀请码注册', register: '注册', inviteCode: '邀请码', invitePlaceholder: '请输入邀请码',
+            registerNotice: '新账号免费试用 60 天。目前凭邀请码注册。',
+            haveInvite: '有邀请码？注册', haveAccount: '已有账号？登录',
+            needInvite: '请填写邀请码。', registerSuccess: '注册成功！60 天免费试用已开始。',
+            membership: '会员',
             devicesTitle: '已登录设备（最多 3 台）', thisDevice: '当前设备', signOutDevice: '退出',
             lastActive: (when) => `最近使用 ${when}`,
             signedOutElsewhere: '这台设备已退出登录：账号最多同时登录 3 台设备。请重新登录。',
@@ -435,6 +445,10 @@ function initStudyWorkbench() {
     const authErrorMsg = document.getElementById('auth-error-msg');
     const authSubmitBtn = document.getElementById('auth-submit-btn');
     const authSubmitLabel = document.getElementById('auth-submit-label');
+    const authModalTitle = document.getElementById('auth-modal-title');
+    const authInviteField = document.getElementById('auth-invite-field');
+    const authInviteInput = document.getElementById('auth-invite');
+    const authSwitchBtn = document.getElementById('auth-switch-btn');
     const profileEmail = document.getElementById('profile-email');
     const profileBadge = document.getElementById('profile-badge');
     const logoutBtn = document.getElementById('logout-btn');
@@ -2940,7 +2954,7 @@ function initStudyWorkbench() {
     }
 
     // -------------------------------------------------------------------------
-    // 6. User Account (login only; sign-up is closed for this personal tool)
+    // 6. User Account (login; sign-up needs an invite code while registration is closed)
     // -------------------------------------------------------------------------
     const userTokenKey = 'frenchStudio.userToken';
     let currentAuthTab = 'login';
@@ -3010,8 +3024,14 @@ function initStudyWorkbench() {
 
     function switchAuthTab(tab) {
         currentAuthTab = tab;
+        const registering = tab === 'register';
         if (authErrorMsg) authErrorMsg.hidden = true;
-        if (authSubmitLabel) authSubmitLabel.textContent = T.login;
+        if (authSubmitLabel) authSubmitLabel.textContent = registering ? T.register : T.login;
+        if (authModalTitle) authModalTitle.textContent = registering ? T.registerTitle : T.authTitle;
+        if (authTabNotice) authTabNotice.textContent = registering ? T.registerNotice : T.authNotice;
+        if (authInviteField) authInviteField.hidden = !registering;
+        if (authSwitchBtn) authSwitchBtn.textContent = registering ? T.haveAccount : T.haveInvite;
+        if (authPasswordInput) authPasswordInput.autocomplete = registering ? 'new-password' : 'current-password';
         refreshIcons();
     }
 
@@ -3075,17 +3095,27 @@ function initStudyWorkbench() {
         const email = authEmailInput ? authEmailInput.value.trim() : '';
         const password = authPasswordInput ? authPasswordInput.value.trim() : '';
         if (!email || !password) return;
+        const registering = currentAuthTab === 'register';
+        const inviteCode = authInviteInput ? authInviteInput.value.trim() : '';
+        if (registering && !inviteCode) {
+            if (authErrorMsg) {
+                authErrorMsg.textContent = T.needInvite;
+                authErrorMsg.hidden = false;
+            }
+            return;
+        }
 
         if (authErrorMsg) authErrorMsg.hidden = true;
         if (authSubmitBtn) authSubmitBtn.disabled = true;
 
-        const endpoint = '/api/auth/login';
+        const endpoint = registering ? '/api/auth/register' : '/api/auth/login';
+        const payload = registering ? { email, password, invite_code: inviteCode } : { email, password };
 
         try {
             const res = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password }),
+                body: JSON.stringify(payload),
             });
             const data = await readJsonSafely(res);
             if (!res.ok) {
@@ -3101,7 +3131,8 @@ function initStudyWorkbench() {
                 .map(btn => ({ sentence: btn.dataset.sentence }));
             refreshSrsStates(renderedSentences);
             statusMessage.className = 'status-message status-success';
-            statusMessage.textContent = T.loginSuccess;
+            statusMessage.textContent = registering ? T.registerSuccess : T.loginSuccess;
+            if (registering) switchAuthTab('login');
             // Sent here from /write or /speak after a 401: go back (same-origin paths only)
             const nextPath = new URLSearchParams(window.location.search).get('next');
             if (nextPath && /^\/[A-Za-z]/.test(nextPath)) window.location.href = nextPath;
@@ -3679,6 +3710,9 @@ function initStudyWorkbench() {
         });
     }
     if (authForm) authForm.addEventListener('submit', handleAuthSubmit);
+    if (authSwitchBtn) {
+        authSwitchBtn.addEventListener('click', () => switchAuthTab(currentAuthTab === 'register' ? 'login' : 'register'));
+    }
     if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
 
     // Initialize Unified History
@@ -3772,7 +3806,15 @@ function initStudyWorkbench() {
         // Saved on another device: it arrives with the server's history
         else window.FrenchHistory.pull().then(() => { const item = findRestore(); if (item) window.FrenchHistory.onRestoreStudy(item); });
     }
-    if (urlParams.get('login') === '1') {
+    // Invite link (/study?invite=CODE): open sign-up with the code filled in, unless already signed in
+    const inviteParam = (urlParams.get('invite') || '').trim();
+    if (inviteParam) {
+        if (authInviteInput) authInviteInput.value = inviteParam;
+        currentAuthTab = 'register';
+        checkCurrentUser().then(() => {
+            if (!localStorage.getItem(userTokenKey)) openAuthModal();
+        });
+    } else if (urlParams.get('login') === '1') {
         checkCurrentUser().then(() => {
             if (!localStorage.getItem(userTokenKey)) openAuthModal();
         });

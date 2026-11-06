@@ -293,6 +293,7 @@ h2 {
     background-position: calc(100% - 15px) 16px, calc(100% - 10px) 16px;
 }
 
+input[type="email"],
 input[type="password"],
 input[type="text"] {
     width: 100%;
@@ -305,6 +306,7 @@ input[type="text"] {
     outline: none;
 }
 
+input[type="email"]:focus,
 input[type="password"]:focus,
 input[type="text"]:focus,
 select:focus,

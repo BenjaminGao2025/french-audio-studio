@@ -12,6 +12,7 @@ import hmac
 import json
 import os
 import re
+import secrets
 import sqlite3
 import uuid
 from contextlib import contextmanager
@@ -98,6 +99,14 @@ def init_db() -> None:
                 word TEXT NOT NULL,
                 lemma TEXT NOT NULL,
                 text TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS invite_codes (
+                code TEXT PRIMARY KEY,
+                label TEXT NOT NULL DEFAULT '',
+                max_uses INTEGER,
+                use_count INTEGER NOT NULL DEFAULT 0,
+                disabled INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL
             );
             """
@@ -242,12 +251,78 @@ def _signed_payload(token: str) -> dict[str, Any] | None:
         return None
 
 
-def register_user(email: str, password: str, device: str = "") -> dict[str, Any]:
+INVITE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no 0/O or 1/I, easy to read aloud on a livestream
+INVITE_LENGTH = 10
+
+
+def _clean_invite(code: str | None) -> str:
+    return (code or "").strip().upper()
+
+
+def create_invite(label: str = "", max_uses: int | None = None) -> dict[str, Any]:
+    """A new shareable invite code; max_uses None or 0 means unlimited."""
+    code = "".join(secrets.choice(INVITE_ALPHABET) for _ in range(INVITE_LENGTH))
+    row = {
+        "code": code,
+        "label": (label or "").strip(),
+        "max_uses": max_uses if max_uses and max_uses > 0 else None,
+        "use_count": 0,
+        "disabled": 0,
+        "created_at": _now_iso(),
+    }
+    with connect() as conn:
+        conn.execute(
+            "INSERT INTO invite_codes (code, label, max_uses, use_count, disabled, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (row["code"], row["label"], row["max_uses"], 0, 0, row["created_at"]),
+        )
+    return row
+
+
+def list_invites() -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute("SELECT * FROM invite_codes ORDER BY created_at, code").fetchall()
+    return [dict(row) for row in rows]
+
+
+def peek_invite(code: str) -> dict[str, Any] | None:
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM invite_codes WHERE code = ?", (_clean_invite(code),)).fetchone()
+    return dict(row) if row else None
+
+
+def _consume_invite(conn: sqlite3.Connection, code: str) -> None:
+    """Use one invite inside the caller's transaction, so a failed sign-up rolls it back."""
+    clean = _clean_invite(code)
+    cursor = conn.execute(
+        """
+        UPDATE invite_codes SET use_count = use_count + 1
+        WHERE code = ? AND disabled = 0 AND (max_uses IS NULL OR max_uses <= 0 OR use_count < max_uses)
+        """,
+        (clean,),
+    )
+    if cursor.rowcount == 1:
+        return
+    row = conn.execute("SELECT disabled FROM invite_codes WHERE code = ?", (clean,)).fetchone()
+    if not row or row["disabled"]:
+        raise ValueError("邀请码无效，请检查后重试。")
+    raise ValueError("这个邀请码的名额已用完。")
+
+
+def consume_invite(code: str) -> None:
+    with connect() as conn:
+        _consume_invite(conn, code)
+
+
+def register_user(
+    email: str, password: str, device: str = "", invite_code: str | None = None
+) -> dict[str, Any]:
     clean_email = email.strip().lower()
     if not clean_email or not re.match(r"^[^@]+@[^@]+\.[^@]+$", clean_email):
         raise ValueError("请输入有效的邮箱地址。")
     if len(password) < 6:
         raise ValueError("密码长度至少需 6 位。")
+    if not ALLOW_REGISTRATION and not _clean_invite(invite_code):
+        raise ValueError("本站暂不开放注册，请使用邀请码。")
 
     init_db()
     salt = uuid.uuid4().hex
@@ -260,6 +335,8 @@ def register_user(email: str, password: str, device: str = "") -> dict[str, Any]
     try:
         with connect() as conn:
             cursor = conn.cursor()
+            if _clean_invite(invite_code):
+                _consume_invite(conn, invite_code)
             cursor.execute(
                 """
                 INSERT INTO users (email, password_hash, salt, created_at, trial_expires_at, plan, status)
@@ -564,6 +641,8 @@ def _admin_cli(argv: list[str]) -> None:
     python auth_db.py set-plan you@example.com pro
     python auth_db.py claim-anonymous-history you@example.com
     python auth_db.py list-waitlist
+    python auth_db.py create-invite --label xhs-live [--max-uses 50]
+    python auth_db.py list-invites
     """
     import argparse
     import getpass
@@ -576,7 +655,26 @@ def _admin_cli(argv: list[str]) -> None:
     plan_parser.add_argument("plan", choices=["trial", "pro"])
     sub.add_parser("claim-anonymous-history").add_argument("email")
     sub.add_parser("list-waitlist")
+    invite_parser = sub.add_parser("create-invite")
+    invite_parser.add_argument("--label", default="")
+    invite_parser.add_argument("--max-uses", type=int, default=None, help="omit or 0 for unlimited")
+    sub.add_parser("list-invites")
     args = parser.parse_args(argv)
+
+    if args.command == "create-invite":
+        invite = create_invite(args.label, args.max_uses)
+        limit = invite["max_uses"] or "unlimited"
+        print(f"{invite['code']}\tlabel={invite['label'] or '-'}\tmax_uses={limit}")
+        return
+
+    if args.command == "list-invites":
+        invites = list_invites()
+        for row in invites:
+            limit = row["max_uses"] or "unlimited"
+            state = "disabled" if row["disabled"] else "active"
+            print(f"{row['code']}\t{row['created_at']}\t{row['label'] or '-'}\t{row['use_count']}/{limit}\t{state}")
+        print(f"{len(invites)} invites.")
+        return
 
     if args.command == "list-waitlist":
         with connect() as conn:

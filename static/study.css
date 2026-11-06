@@ -1063,7 +1063,15 @@
 }
 
 .auth-actions {
+    display: grid;
+    gap: 8px;
     margin-top: 6px;
+}
+
+.auth-switch-btn {
+    background: transparent;
+    border-color: transparent;
+    color: var(--primary);
 }
 
 .btn-full {
@@ -1124,7 +1132,13 @@
 }
 
 .profile-actions {
+    display: grid;
+    gap: 8px;
     margin-top: 6px;
+}
+
+.profile-actions a.btn {
+    text-decoration: none;
 }
 
 .profile-devices h5 {
