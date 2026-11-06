@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from pydantic import Field
 
 import auth_db
-from web_common import SIGNED_OUT_DETAIL, rate_limit
+from web_common import SIGNED_OUT_DETAIL, _bearer_value, rate_limit
 
 # Every AI call goes to the AGY (Antigravity) adapter: an OpenAI-compatible Gemini gateway.
 AGY_BASE_URL = os.getenv("AGY_BASE_URL", "http://127.0.0.1:8645/v1").rstrip("/")
@@ -34,58 +34,33 @@ SERVER_WEB2API_KEY = os.getenv("WEB2API_API_KEY", "")
 def upstream_key(authorization: str | None) -> str:
     """The key to send upstream for this request: the server's own, for a signed-in, active user.
 
-    Also spends one token of the user's "ai" rate-limit bucket.
+    Also spends one token of the user's "ai" rate-limit bucket. A token that is not a valid session is
+    never forwarded as an API key (that once made every AI endpoint an anonymous proxy to the gateway).
     """
-    if not authorization:
-        raise HTTPException(
-            status_code=401,
-            detail={
-                "code": "missing_api_key",
-                "message": "请先登录账号。",
-            },
-        )
-    parts = authorization.split(" ", 1)
-    token = parts[1].strip() if len(parts) == 2 and parts[0].lower() == "bearer" else authorization.strip()
+    token = _bearer_value(authorization)  # same parsing as every other signed-in route
     if not token:
+        raise HTTPException(status_code=401, detail={"code": "missing_api_key", "message": "请先登录账号。"})
+    user_payload = auth_db.verify_token(token)
+    if not user_payload:
+        if auth_db.is_signed_out_token(token):
+            raise HTTPException(status_code=401, detail=SIGNED_OUT_DETAIL)
+        raise HTTPException(status_code=401, detail={"code": "login_required", "message": "请先登录账号。"})
+    rate_limit(int(user_payload["sub"]), "ai")
+    user_info = auth_db.get_user_status(user_payload["sub"])
+    if not user_info or not user_info.get("is_valid"):
         raise HTTPException(
-            status_code=401,
+            status_code=403,
+            detail={"code": "trial_expired", "message": "您的 60 天免费试用期已结束，请联系站长续期。"},
+        )
+    if not SERVER_WEB2API_KEY:
+        raise HTTPException(
+            status_code=503,
             detail={
-                "code": "missing_api_key",
-                "message": "请先登录账号。",
+                "code": "server_key_missing",
+                "message": "服务器尚未配置上游 API Key（WEB2API_API_KEY），请联系站长。",
             },
         )
-
-    # Check if this token is an internal user session token
-    if auth_db.is_signed_out_token(token):
-        raise HTTPException(status_code=401, detail=SIGNED_OUT_DETAIL)
-    user_payload = auth_db.verify_token(token)
-    if user_payload:
-        rate_limit(int(user_payload["sub"]), "ai")
-        user_info = auth_db.get_user_status(user_payload["sub"])
-        if not user_info or not user_info.get("is_valid"):
-            raise HTTPException(
-                status_code=403,
-                detail={
-                    "code": "trial_expired",
-                    "message": "您的 60 天免费试用期已结束，请联系站长续期。",
-                },
-            )
-        if not SERVER_WEB2API_KEY:
-            raise HTTPException(
-                status_code=503,
-                detail={
-                    "code": "server_key_missing",
-                    "message": "服务器尚未配置上游 API Key（WEB2API_API_KEY），请联系站长。",
-                },
-            )
-        return SERVER_WEB2API_KEY
-
-    # Security: a token that is not a valid session must never be forwarded upstream
-    # as an API key (that made every AI endpoint an anonymous proxy to the local web2api).
-    raise HTTPException(
-        status_code=401,
-        detail={"code": "login_required", "message": "请先登录账号。"},
-    )
+    return SERVER_WEB2API_KEY
 
 
 TRIAL_ENDED_MESSAGE = "试用已结束：AI 批改暂时不可用。请联系站长续期后再试。"
