@@ -437,7 +437,10 @@
             }
             if (action === 'meaning' && options.meaning) {
                 const anchorBox = anchorBoxFor(picked);
-                const range = picked.range;
+                // Clone: a live Selection range mutates when the OS adjusts/clears the selection,
+                // which made coversRange fail ~600ms later and auto-close the Meaning card.
+                let range = null;
+                try { range = picked.range ? picked.range.cloneRange() : null; } catch (err) { range = null; }
                 const ctx = context(picked);
                 // Cap for the popover/lookup; the button was still shown for longer selections
                 const text = picked.text.length > MEANING_MAX

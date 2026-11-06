@@ -425,6 +425,10 @@
         let target = null;
         const trail = [];
         let lookupGeneration = 0;
+        // Ignore auto-close from the opening gesture (synthetic mousedown under the bar,
+        // mobile chrome scroll, selection handle settle) for a short window after show().
+        let settleUntil = 0;
+        const settling = () => Date.now() < settleUntil;
         let etymologyGeneration = 0;
 
         function resetEtymology() {
@@ -635,6 +639,8 @@
             updateBack();
 
             target = element;
+            // 700ms covers iOS synthetic mouse events after pointerup and chrome show/hide scroll
+            settleUntil = Date.now() + 700;
             pop.hidden = false;
             pop.style.display = 'flex';
             if (activeEl && activeEl !== element && activeEl.classList) activeEl.classList.remove('is-active-word');
@@ -826,9 +832,10 @@
             // card still open for the previous word would sit over the new selection as if it were
             // its meaning. It closes, unless the selection is the open word itself (double click)
             // or still the phrase the selection bar's Meaning opened it for (anchor.coversRange).
-            if (isOpen() && selection && selection.rangeCount > 0 && !selection.isCollapsed) {
+            if (isOpen() && selection && selection.rangeCount > 0 && !selection.isCollapsed && !settling()) {
                 const node = selection.getRangeAt(0).commonAncestorContainer;
                 const ownAnchor = Boolean(target && typeof target.coversRange === 'function' && target.coversRange(selection.getRangeAt(0)));
+                // Meaning anchors have no activeEl; keep the card unless the user selected a different span
                 if (!pop.contains(node) && !(activeEl && activeEl.contains(node)) && !ownAnchor) close();
             }
             if (options.selectionPopover === false) return;
@@ -857,9 +864,13 @@
         // Touch selections have no mouseup: wait until the selection handles settle
         document.addEventListener('selectionchange', () => { if (!mouseHeld) scheduleSelection(600); });
         document.addEventListener('mousedown', (e) => {
+            // After Meaning, the bar is already hidden; the synthetic mousedown can land between
+            // word chips and would close the card we just opened.
+            if (settling()) return;
             if (isOpen() && !pop.contains(e.target) && !(wordSelector && e.target.closest(wordSelector))) close();
         });
-        root.addEventListener('scroll', () => { if (isOpen()) close(); }, { passive: true });
+        // Mobile browser chrome show/hide fires scroll; ignore briefly after open
+        root.addEventListener('scroll', () => { if (isOpen() && !settling()) close(); }, { passive: true });
         root.addEventListener('resize', () => { if (isOpen()) position(); }, { passive: true });
         // Capture phase, so these keys win over the page's own shortcuts while the popover is open
         document.addEventListener('keydown', (e) => {
