@@ -153,6 +153,10 @@
 
         // What the bar acts on: {text, range, source: 'native' | 'range'}
         let state = null;
+        // The last text the bar offered, with its box and the bar's own box snapshotted while
+        // they were on screen. A phone can clear the selection (and hide the bar through another
+        // path) during the tap on the bar; the action still runs on what the user saw.
+        let remembered = null;
         let pressing = false;
         let pressTimer = null;
         let mouseHeld = false;
@@ -187,6 +191,31 @@
             const left = Math.max(margin, Math.min((box.left + box.right) / 2 - width / 2, vw - width - margin));
             bar.style.left = `${Math.round(left)}px`;
             bar.style.top = `${Math.round(top)}px`;
+            if (remembered && state.text === remembered.text) {
+                remembered.box = snapshot(box);
+                remembered.barBox = snapshot({ left, top, right: left + width, bottom: top + height, width, height });
+            }
+        }
+
+        const usable = (r) => Boolean(r && (r.width > 0 || r.height > 0));
+        const snapshot = (r) => (usable(r) ? { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height } : null);
+
+        function rememberText(next) {
+            if (!next || !next.text) return;
+            remembered = { text: next.text, range: next.range, box: null, barBox: null };
+            if (next.range) remembered.box = snapshot(geometry(next.range).box);
+        }
+
+        // Where the popover goes: the live text if it still has a box, else the box it had,
+        // else where the bar was, else the top of the screen (show() ignores a 0x0 anchor)
+        function anchorBoxFor(picked) {
+            let live = null;
+            try { live = picked.range ? geometry(picked.range).box : null; } catch (err) { live = null; }
+            const box = snapshot(live) || picked.box || picked.barBox;
+            if (box) return box;
+            const width = Math.min(240, Math.max(120, (root.innerWidth || 320) - 24));
+            const left = Math.max(12, ((root.innerWidth || 320) - width) / 2);
+            return { left, top: 80, right: left + width, bottom: 110, width, height: 30 };
         }
 
         function schedulePlace() {
@@ -210,6 +239,7 @@
         function show(next) {
             clearTimeout(hideTimer);
             state = next;
+            rememberText(next);
             bar.hidden = false;
             render();
             place();
@@ -357,47 +387,65 @@
         });
 
         // ---- Actions ----------------------------------------------------------------------------
-        function context() {
-            const anchor = state && state.range ? elementOf(state.range.startContainer) : null;
-            return options.contextFor && anchor ? options.contextFor(anchor) || {} : {};
+        function context(picked) {
+            let anchor = null;
+            try { anchor = picked.range ? elementOf(picked.range.startContainer) : null; } catch (err) { anchor = null; }
+            return options.contextFor && anchor && anchor.isConnected ? options.contextFor(anchor) || {} : {};
         }
 
         // pointerup runs the action even when touchstart.preventDefault suppressed the click,
         // or when the OS cleared the selection mid-tap. click remains for keyboard activation.
+        const GHOST_MS = 600;
         let actedAt = 0;
         const runBarAction = (e) => {
             const button = e.target.closest('[data-rs]');
             if (!button || button.disabled) return;
             if (e.type === 'pointerup' && e.button !== 0) return;
             // One shot per gesture: pointerup then the synthetic click must not double-fire
-            if (e.type === 'click' && Date.now() - actedAt < 500) return;
+            if (e.type === 'click' && Date.now() - actedAt < GHOST_MS) { e.stopPropagation(); e.preventDefault(); return; }
             e.stopPropagation();
             pressing = false;
             clearTimeout(pressTimer);
             if (e.type === 'pointerup') actedAt = Date.now();
             const action = button.dataset.rs;
             if (action === 'done') { if (rangeLine) exitRange(); else hide(); return; }
-            if (!state) return;
+            // The live state can be gone by now (selection cleared, bar hidden mid-tap): act on
+            // the text the bar was showing
+            const picked = state && state.text ? state : remembered;
+            if (!picked || !picked.text) return;
             if (action === 'read') {
                 // Starting a clip first ends the previous one, whose end callback must not reset this button
                 const mine = ++playToken;
-                options.speak(state.text, () => { if (mine === playToken) setPlaying(false); });
+                options.speak(picked.text, () => { if (mine === playToken) setPlaying(false); });
                 setPlaying(true);
                 return;
             }
             if (action === 'meaning' && options.meaning) {
-                const range = state.range;
-                const text = state.text;
-                const ctx = context();
-                // Snapshot the box before the selection can collapse further
-                const box = range && range.getBoundingClientRect ? range.getBoundingClientRect() : { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
-                const anchorBox = (box && (box.width > 0 || box.height > 0)) ? box : { left: 12, top: 80, right: 200, bottom: 110, width: 188, height: 30 };
+                const anchorBox = anchorBoxFor(picked);
+                const range = picked.range;
+                const ctx = context(picked);
                 bar.hidden = true;
-                options.meaning(text, { getBoundingClientRect: () => anchorBox }, ctx);
+                // coversRange() lets the popover tell this selection from a new one: it stays
+                // open while the phrase it explains is still selected (one range holds the other)
+                const holds = (outer, inner) => outer.compareBoundaryPoints(Range.START_TO_START, inner) <= 0
+                    && outer.compareBoundaryPoints(Range.END_TO_END, inner) >= 0;
+                options.meaning(picked.text, {
+                    getBoundingClientRect: () => anchorBox,
+                    coversRange: (other) => { try { return Boolean(range && other && (holds(range, other) || holds(other, range))); } catch (err) { return false; } },
+                }, ctx);
             }
         };
         bar.addEventListener('pointerup', runBarAction);
         bar.addEventListener('click', runBarAction);
+        // The bar is hidden by the time the click that ends a touch on Meaning is dispatched, so
+        // that click lands on whatever was under the bar (a word: it opens that word's popover
+        // and speaks it, replacing the meaning). Swallow it.
+        doc.addEventListener('click', (e) => {
+            if (!actedAt || Date.now() - actedAt >= GHOST_MS || bar.contains(e.target)) return;
+            actedAt = 0;
+            e.stopImmediatePropagation();
+            e.preventDefault();
+        }, true);
 
         // ---- Range mode: tap the first word, then the last ------------------------------------------
         let rangeLine = null;

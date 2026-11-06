@@ -773,10 +773,12 @@
             const selection = root.getSelection();
             // Selecting other text (a drag on another word) is not a tap, so it opens nothing: the
             // card still open for the previous word would sit over the new selection as if it were
-            // its meaning. It closes, unless the selection is the open word itself (double click).
+            // its meaning. It closes, unless the selection is the open word itself (double click)
+            // or still the phrase the selection bar's Meaning opened it for (anchor.coversRange).
             if (isOpen() && selection && selection.rangeCount > 0 && !selection.isCollapsed) {
                 const node = selection.getRangeAt(0).commonAncestorContainer;
-                if (!pop.contains(node) && !(activeEl && activeEl.contains(node))) close();
+                const ownAnchor = Boolean(target && typeof target.coversRange === 'function' && target.coversRange(selection.getRangeAt(0)));
+                if (!pop.contains(node) && !(activeEl && activeEl.contains(node)) && !ownAnchor) close();
             }
             if (options.selectionPopover === false) return;
             const range = selection && selection.rangeCount > 0 && !selection.isCollapsed ? selection.getRangeAt(0) : null;

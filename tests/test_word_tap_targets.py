@@ -33,6 +33,9 @@ class WordTapTargetTests(unittest.TestCase):
     def test_meaning_tap_survives_selection_clear_in_jsdom(self):
         self._node("tests/test_meaning_tap.cjs")
 
+    def test_meaning_uses_remembered_selection_in_jsdom(self):
+        self._node("tests/test_meaning_remembered.cjs")
+
     def test_read_selection_is_wired_into_the_study_page(self):
         html = _read("static/study.html")
         js = _read("static/study.js")
