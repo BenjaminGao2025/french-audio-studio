@@ -1,11 +1,11 @@
-import testenv  # noqa: F401  (must run before the app is imported)
+import testenv  # must run before the app is imported
 
-import tts_service
+import routers.tutor
 
 
 def _payload(**overrides) -> dict:
     fields = {"sentence": "J'aime l'histoire.", "question": "Is it singular?"}
-    return tts_service._ask_payload(tts_service.AskRequest(**{**fields, **overrides}))
+    return routers.tutor._ask_payload(routers.tutor.AskRequest(**{**fields, **overrides}))
 
 
 def _system() -> str:
@@ -43,7 +43,7 @@ def test_kept_rules_are_still_there():
     assert "If their message answers a question you asked earlier" in s
     assert "At most 90 words" in s
     assert "Plain text only" in s
-    assert tts_service.TUTOR_ENGLISH_STYLE in s
+    assert routers.tutor.TUTOR_ENGLISH_STYLE in s
 
 
 def test_history_turns_are_mapped_to_messages():
@@ -69,3 +69,6 @@ def test_return_shape_is_unchanged():
     assert set(payload) == {"model", "messages", "stream", "temperature"}
     assert payload["stream"] is False
     assert payload["temperature"] == 0.3
+
+
+load_tests = testenv.function_tests(globals())

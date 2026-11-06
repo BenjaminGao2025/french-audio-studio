@@ -1,9 +1,9 @@
 """Every AGY call asks for low reasoning effort, and the default timeout stays short."""
 import asyncio
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
-import testenv  # noqa: F401  (sets up the isolated env before tts_service is imported)
-import tts_service as host
+import testenv  # sets up the isolated env before tts_service is imported
+import services.ai
 
 
 def _client() -> AsyncMock:
@@ -21,7 +21,7 @@ def _sent_payload(client: AsyncMock) -> dict:
 def test_post_chat_sends_low_reasoning_effort_by_default():
     client = _client()
 
-    asyncio.run(host._post_chat(client, {"messages": []}, {}))
+    asyncio.run(services.ai.post_chat(client, {"messages": []}, {}))
 
     assert _sent_payload(client)["reasoning_effort"] == "low"
 
@@ -30,7 +30,7 @@ def test_explicit_payload_reasoning_effort_is_not_overwritten():
     client = _client()
 
     asyncio.run(
-        host._post_chat(client, {"messages": [], "reasoning_effort": "high"}, {})
+        services.ai.post_chat(client, {"messages": [], "reasoning_effort": "high"}, {})
     )
 
     assert _sent_payload(client)["reasoning_effort"] == "high"
@@ -39,37 +39,40 @@ def test_explicit_payload_reasoning_effort_is_not_overwritten():
 def test_caller_payload_is_not_mutated():
     payload = {"messages": []}
 
-    asyncio.run(host._post_chat(_client(), payload, {}))
+    asyncio.run(services.ai.post_chat(_client(), payload, {}))
 
     assert payload == {"messages": []}
 
 
-def test_reasoning_effort_omitted_when_off(monkeypatch):
-    monkeypatch.setattr(host, "AGY_REASONING_EFFORT", "off")
+def test_reasoning_effort_omitted_when_off():
     client = _client()
 
-    asyncio.run(host._post_chat(client, {"messages": []}, {}))
+    with patch.object(services.ai, "AGY_REASONING_EFFORT", "off"):
+        asyncio.run(services.ai.post_chat(client, {"messages": []}, {}))
 
     assert "reasoning_effort" not in _sent_payload(client)
 
 
-def test_reasoning_effort_omitted_when_none(monkeypatch):
-    monkeypatch.setattr(host, "AGY_REASONING_EFFORT", "none")
+def test_reasoning_effort_omitted_when_none():
     client = _client()
 
-    asyncio.run(host._post_chat(client, {"messages": []}, {}))
+    with patch.object(services.ai, "AGY_REASONING_EFFORT", "none"):
+        asyncio.run(services.ai.post_chat(client, {"messages": []}, {}))
 
     assert "reasoning_effort" not in _sent_payload(client)
 
 
-def test_reasoning_effort_omitted_when_empty(monkeypatch):
-    monkeypatch.setattr(host, "AGY_REASONING_EFFORT", "")
+def test_reasoning_effort_omitted_when_empty():
     client = _client()
 
-    asyncio.run(host._post_chat(client, {"messages": []}, {}))
+    with patch.object(services.ai, "AGY_REASONING_EFFORT", ""):
+        asyncio.run(services.ai.post_chat(client, {"messages": []}, {}))
 
     assert "reasoning_effort" not in _sent_payload(client)
 
 
 def test_default_upstream_timeout_is_90():
-    assert host.UPSTREAM_TIMEOUT_SECONDS == 90
+    assert services.ai.UPSTREAM_TIMEOUT_SECONDS == 90
+
+
+load_tests = testenv.function_tests(globals())

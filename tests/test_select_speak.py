@@ -1,3 +1,6 @@
+import testenv
+
+
 def _read(path):
     with open(path, encoding="utf-8") as fh:
         return fh.read()
@@ -48,3 +51,6 @@ def test_each_step_has_a_repeat_toggle_next_to_listen():
     assert "window.FrenchPlayback.toggleHtml('btn-step-repeat')" in js
     css = _read("static/study.css")
     assert ".btn-repeat-toggle.btn-step-repeat > span { display: none; }" in css
+
+
+load_tests = testenv.function_tests(globals())

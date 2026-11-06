@@ -6,6 +6,9 @@ from unittest.mock import MagicMock
 from fastapi.testclient import TestClient
 
 import tts_service
+import fastapi
+import services.ai
+import services.speech
 import web_common
 
 AI_ROUTES = [
@@ -15,7 +18,7 @@ AI_ROUTES = [
     ("post", "/api/transcribe/fix", {"text": "bonjour", "sentence": "Bonjour"}),
     ("post", "/api/ask", {"sentence": "Bonjour", "question": "why"}),
     ("get", "/api/lookup?word=bonjour", None),
-    ("post", "/api/connection/test", {"model": tts_service.DEFAULT_MODEL}),
+    ("post", "/api/connection/test", {"model": services.ai.DEFAULT_MODEL}),
 ]
 
 
@@ -35,13 +38,13 @@ class SecurityFixTests(unittest.TestCase):
                     self.fail(f"{path}: validation ran before auth? body may be wrong")
 
     def test_raw_token_is_never_returned_as_api_key(self):
-        with self.assertRaises(tts_service.HTTPException) as ctx:
-            tts_service._authorization_token("Bearer raw-key")
+        with self.assertRaises(fastapi.HTTPException) as ctx:
+            services.ai.upstream_key("Bearer raw-key")
         self.assertEqual(ctx.exception.status_code, 401)
 
     def test_files_require_login(self):
         name = "TTS_fr-FR-DeniseNeural_sec_test.mp3"
-        (tts_service.OUTPUT_DIR / name).write_bytes(b"ID3test")
+        (web_common.OUTPUT_DIR / name).write_bytes(b"ID3test")
         self.assertEqual(self.client.get(f"/files/{name}").status_code, 401)
         ok = self.client.get(f"/files/{name}", headers=testenv.session_headers())
         self.assertEqual(ok.status_code, 200)
@@ -51,7 +54,7 @@ class SecurityFixTests(unittest.TestCase):
 
     def test_snippet_name_is_keyed(self):
         import hashlib
-        name = tts_service._safe_timestamp(None, text="Bonjour", voice="fr-FR-DeniseNeural")
+        name = services.speech.safe_timestamp(None, text="Bonjour", voice="fr-FR-DeniseNeural")
         plain = hashlib.sha256(b"fr-FR-DeniseNeural:Bonjour").hexdigest()[:16]
         self.assertTrue(name.startswith("snip_"))
         self.assertNotIn(plain, name)

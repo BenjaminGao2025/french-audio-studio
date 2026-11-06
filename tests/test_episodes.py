@@ -14,6 +14,8 @@ import auth_db
 import episodes
 import srs
 import tts_service
+import routers.episodes
+import routers.pages
 
 SENTENCES = [
     {"sentence": "Les cours commencent lundi matin.", "translation_en": "Classes start on Monday morning.",
@@ -152,7 +154,7 @@ class JobAndApiTests(unittest.TestCase):
     def test_listen_page_is_served(self):
         res = self.client.get("/listen")
         self.assertEqual(res.status_code, 200)
-        self.assertIn(f"/static/listen.js?v={tts_service.ASSET_VERSION}", res.text)
+        self.assertIn(f"/static/listen.js?v={routers.pages.ASSET_VERSION}", res.text)
 
     def test_endpoints_require_login(self):
         self.assertEqual(self.client.get("/api/episodes").status_code, 401)
@@ -160,16 +162,16 @@ class JobAndApiTests(unittest.TestCase):
         self.assertEqual(self.client.get("/episodes/not-an-id.mp3").status_code, 401)
 
     def test_story_parser_validates_lines(self):
-        self.assertEqual(tts_service._parse_story(json.dumps(STORY))["lines"][1]["speaker"], "B")
-        self.assertIsNone(tts_service._parse_story(json.dumps({"lines": STORY["lines"][:2]})))
-        self.assertIsNone(tts_service._parse_story("nope"))
+        self.assertEqual(routers.episodes._parse_story(json.dumps(STORY))["lines"][1]["speaker"], "B")
+        self.assertIsNone(routers.episodes._parse_story(json.dumps({"lines": STORY["lines"][:2]})))
+        self.assertIsNone(routers.episodes._parse_story("nope"))
 
     def test_generate_episode_job_end_to_end(self):
         user_id = _user_with_material()
         episode = episodes.create_episode(user_id)
         with patch("episodes.synthesize", side_effect=fake_synth), \
-                patch("tts_service._write_stories", new_callable=AsyncMock, return_value=[STORY]):
-            asyncio.run(tts_service._generate_episode(user_id, episode["id"], "k", "gemini-3.8-flash"))
+                patch("routers.episodes._write_stories", new_callable=AsyncMock, return_value=[STORY]):
+            asyncio.run(routers.episodes._generate_episode(user_id, episode["id"], "k", "gemini-3.8-flash"))
         ready = episodes.get_episode(user_id, episode["id"])
         self.assertEqual(ready["status"], "ready", ready["error"])
         self.assertEqual(ready["title"], "Episode 1 · At the test centre")
@@ -203,7 +205,7 @@ class JobAndApiTests(unittest.TestCase):
         headers = {"Authorization": f"Bearer {token}"}
         old = episodes.create_episode(user_id, {"level": "A1", "minutes": 20})
         episodes.update_episode(old["id"], status="ready", title="Episode 1")
-        with patch("tts_service._generate_episode", new_callable=AsyncMock) as job:
+        with patch("routers.episodes._generate_episode", new_callable=AsyncMock) as job:
             res = self.client.post("/api/episodes", headers=headers,
                                    json={"level": "B1", "minutes": 45, "request": "more numbers", "replace_id": old["id"]})
         self.assertEqual(res.status_code, 200)
@@ -217,9 +219,9 @@ class JobAndApiTests(unittest.TestCase):
 
         new = episodes.create_episode(user_id, {"level": "B1", "minutes": 45, "request": "more numbers"})
         with patch("episodes.synthesize", side_effect=fake_synth), \
-                patch("tts_service._read_episode_request", new_callable=AsyncMock, return_value={"speed": "slower", "focus": "numbers"}), \
-                patch("tts_service._write_stories", new_callable=AsyncMock, return_value=[STORY]) as stories:
-            asyncio.run(tts_service._generate_episode(user_id, new["id"], "k", "gemini-3.8-flash",
+                patch("routers.episodes._read_episode_request", new_callable=AsyncMock, return_value={"speed": "slower", "focus": "numbers"}), \
+                patch("routers.episodes._write_stories", new_callable=AsyncMock, return_value=[STORY]) as stories:
+            asyncio.run(routers.episodes._generate_episode(user_id, new["id"], "k", "gemini-3.8-flash",
                                                       {"level": "B1", "minutes": 45, "request": "more numbers"}, old["id"]))
         ready = episodes.get_episode(user_id, new["id"])
         self.assertEqual(ready["status"], "ready", ready["error"])
@@ -231,16 +233,16 @@ class JobAndApiTests(unittest.TestCase):
 
     def test_episode_request_is_read_into_style_changes(self):
         reply = (None, '{"speed": "slower", "english": "less", "focus": "numbers and dates", "extra": 1}')
-        with patch("tts_service._post_chat", new_callable=AsyncMock, return_value=reply):
-            adjust = asyncio.run(tts_service._read_episode_request("k", "too fast, more numbers, less English"))
+        with patch("services.ai.post_chat", new_callable=AsyncMock, return_value=reply):
+            adjust = asyncio.run(routers.episodes._read_episode_request("k", "too fast, more numbers, less English"))
         self.assertEqual(adjust, {"speed": "slower", "english": "less", "focus": "numbers and dates"})
-        with patch("tts_service._post_chat", new_callable=AsyncMock, return_value=(None, "not json")):
-            self.assertEqual(asyncio.run(tts_service._read_episode_request("k", "hm")), {})
+        with patch("services.ai.post_chat", new_callable=AsyncMock, return_value=(None, "not json")):
+            self.assertEqual(asyncio.run(routers.episodes._read_episode_request("k", "hm")), {})
 
     def test_job_without_material_fails_cleanly(self):
         user_id = auth_db.register_user(f"empty_{uuid.uuid4().hex[:10]}@example.com", "password123")["user"]["id"]
         episode = episodes.create_episode(user_id)
-        asyncio.run(tts_service._generate_episode(user_id, episode["id"], None, "gemini-3.8-flash"))
+        asyncio.run(routers.episodes._generate_episode(user_id, episode["id"], None, "gemini-3.8-flash"))
         failed = episodes.get_episode(user_id, episode["id"])
         self.assertEqual(failed["status"], "failed")
         self.assertIn("No studied sentences", failed["error"])

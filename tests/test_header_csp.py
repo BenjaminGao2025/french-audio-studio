@@ -1,4 +1,4 @@
-import testenv  # noqa: F401
+import testenv
 import tts_service
 
 
@@ -15,3 +15,6 @@ def test_header_controls_stay_on_one_row():
     assert ".topbar-actions, .site-nav { flex-wrap: nowrap; }" in css
     js = open("static/i18n.js", encoding="utf-8").read()
     assert "button.setAttribute('aria-label', button.title);" in js
+
+
+load_tests = testenv.function_tests(globals())

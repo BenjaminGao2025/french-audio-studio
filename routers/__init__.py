@@ -1,1 +1,1 @@
-"""HTTP routers split out of tts_service.py (each exposes `router`)."""
+"""HTTP layer: one APIRouter per feature, included by tts_service.py in a fixed order."""

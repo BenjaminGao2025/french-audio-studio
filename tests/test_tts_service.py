@@ -10,6 +10,13 @@ from fastapi.testclient import TestClient
 
 import auth_db
 import tts_service
+import analysis
+import fastapi
+import routers.pages
+import services.ai
+import services.speech
+import transform
+import web_common
 
 
 def _unique_email(prefix: str = "user") -> str:
@@ -29,7 +36,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ok")
-        self.assertEqual(response.json()["model"], tts_service.DEFAULT_MODEL)
+        self.assertEqual(response.json()["model"], services.ai.DEFAULT_MODEL)
 
     def test_transform_requires_api_key(self):
         response = self.client.post(
@@ -49,7 +56,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertEqual([item["id"] for item in response.json()["models"]], ["gemini-3.8-flash"])
 
     @patch(
-        "tts_service.request_french_transform",
+        "transform.request_french_transform",
         new_callable=AsyncMock,
         return_value=(
             "A : Bonjour !",
@@ -91,7 +98,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertEqual(transform_mock.await_args.args[0].task_mode, "translate")
 
     @patch(
-        "tts_service.request_french_transform",
+        "transform.request_french_transform",
         new_callable=AsyncMock,
         return_value=(
             "J'apprends le fran\u00e7ais.",
@@ -117,14 +124,14 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertEqual(transform_mock.await_args.args[0].task_mode, "translate")
 
     def test_prompt_contains_selected_style_level_and_locale(self):
-        request = tts_service.TransformRequest(
+        request = transform.TransformRequest(
             text="A: How are you?",
             style="formal",
             level="C1-C2",
             locale="fr-CA",
         )
 
-        messages = tts_service._build_messages(request, "express")
+        messages = transform._build_messages(request, "express")
 
         self.assertIn("Canadian French", messages[0]["content"])
         self.assertIn("C1-C2", messages[0]["content"])
@@ -135,7 +142,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertNotIn("<TASK>", messages[0]["content"])
 
     def test_faithful_translation_uses_minimal_person_preserving_prompt(self):
-        request = tts_service.TransformRequest(
+        request = transform.TransformRequest(
             text="我今天下午去图书馆。",
             style="formal",
             level="C1-C2",
@@ -143,7 +150,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
             task_mode="translate",
         )
 
-        messages = tts_service._build_messages(request, "translate")
+        messages = transform._build_messages(request, "translate")
 
         self.assertEqual(
             messages[0]["content"],
@@ -158,12 +165,12 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertNotIn("formal", messages[1]["content"])
 
     def test_generate_mode_treats_source_as_a_brief(self):
-        request = tts_service.TransformRequest(
+        request = transform.TransformRequest(
             text="Write a 100-word beginner explanation of conservatism.",
             task_mode="generate",
         )
 
-        messages = tts_service._build_messages(request, "generate")
+        messages = transform._build_messages(request, "generate")
 
         self.assertIn("write the requested content", messages[0]["content"])
         self.assertIn("not a translation", messages[0]["content"])
@@ -174,12 +181,12 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertNotIn("TASK:", messages[1]["content"])
 
     def test_quality_finalizer_receives_source_and_grok_draft(self):
-        request = tts_service.TransformRequest(
+        request = transform.TransformRequest(
             text="我今天下午去图书馆。",
             task_mode="translate",
         )
 
-        payload = tts_service._proofread_payload(
+        payload = transform._proofread_payload(
             request,
             "translate",
             "Je vais au bibliotheque cet après-midi.",
@@ -194,12 +201,12 @@ class FrenchAudioStudioTests(unittest.TestCase):
         )
 
     def test_auto_mode_extracts_model_task_classification(self):
-        result = tts_service._parse_task_classification("generate")
+        result = transform._parse_task_classification("generate")
 
         self.assertEqual(result, "generate")
 
     def test_local_auto_mode_recognizes_creation_brief(self):
-        result = tts_service._infer_task_mode_locally(
+        result = transform._infer_task_mode_locally(
             "我想用简短的法语，了解一下什么是保守主义。"
             "100到150个单词，简单一点，适合初学者。"
         )
@@ -207,31 +214,31 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertEqual(result, "generate")
 
     def test_local_auto_mode_recognizes_rough_spoken_thoughts(self):
-        result = tts_service._infer_task_mode_locally(
+        result = transform._infer_task_mode_locally(
             "嗯就是我明天下班以后可能想去买点菜，然后顺便去趟银行。"
         )
 
         self.assertEqual(result, "express")
 
     def test_local_auto_mode_recognizes_existing_french(self):
-        result = tts_service._infer_task_mode_locally(
+        result = transform._infer_task_mode_locally(
             "Je va à le bibliothèque cette après midi."
         )
 
         self.assertEqual(result, "polish")
 
     def test_local_auto_mode_defaults_plain_source_text_to_translation(self):
-        result = tts_service._infer_task_mode_locally("我今天下午去图书馆。")
+        result = transform._infer_task_mode_locally("我今天下午去图书馆。")
 
         self.assertEqual(result, "translate")
 
     def test_auto_prompt_includes_concise_rules_for_every_task(self):
-        request = tts_service.TransformRequest(
+        request = transform.TransformRequest(
             text="请写一段简单的法语介绍保守主义。",
             task_mode="auto",
         )
 
-        payload = tts_service._classification_payload(request)
+        payload = transform._classification_payload(request)
         messages = payload["messages"]
 
         self.assertIn("Return exactly one lowercase word", messages[0]["content"])
@@ -242,8 +249,8 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertEqual(payload["temperature"], 0)
 
     def test_auto_mode_rejects_missing_task_classification(self):
-        with self.assertRaises(tts_service.HTTPException) as context:
-            tts_service._parse_task_classification("I cannot decide.")
+        with self.assertRaises(fastapi.HTTPException) as context:
+            transform._parse_task_classification("I cannot decide.")
 
         self.assertEqual(context.exception.status_code, 502)
         self.assertEqual(
@@ -252,8 +259,8 @@ class FrenchAudioStudioTests(unittest.TestCase):
         )
 
     def test_multiple_task_classifications_are_rejected(self):
-        with self.assertRaises(tts_service.HTTPException) as context:
-            tts_service._parse_task_classification("generate or translate")
+        with self.assertRaises(fastapi.HTTPException) as context:
+            transform._parse_task_classification("generate or translate")
 
         self.assertEqual(
             context.exception.detail["code"],
@@ -261,13 +268,13 @@ class FrenchAudioStudioTests(unittest.TestCase):
         )
 
     def test_model_result_rejects_untranslated_source_script(self):
-        request = tts_service.TransformRequest(
+        request = transform.TransformRequest(
             text="请介绍保守主义",
             task_mode="auto",
         )
 
-        with self.assertRaises(tts_service.HTTPException) as context:
-            tts_service._validate_model_result(
+        with self.assertRaises(fastapi.HTTPException) as context:
+            transform._validate_model_result(
                 "<FRENCH>保守主义 est une idée.</FRENCH>",
                 request,
             )
@@ -278,19 +285,19 @@ class FrenchAudioStudioTests(unittest.TestCase):
         )
 
     def test_requested_word_range_is_extracted_and_enforced(self):
-        request = tts_service.TransformRequest(
+        request = transform.TransformRequest(
             text="请用法语写一篇100到150个单词的介绍。",
             task_mode="generate",
         )
 
-        self.assertEqual(tts_service._requested_word_range(request.text), (100, 150))
-        messages = tts_service._build_messages(request, "generate")
+        self.assertEqual(transform._requested_word_range(request.text), (100, 150))
+        messages = transform._build_messages(request, "generate")
         self.assertIn(
             "length target 125 french words",
             messages[0]["content"].lower(),
         )
-        with self.assertRaises(tts_service.HTTPException) as context:
-            tts_service._validate_model_result(
+        with self.assertRaises(fastapi.HTTPException) as context:
+            transform._validate_model_result(
                 " ".join(["bonjour"] * 99), request, "generate"
             )
 
@@ -298,10 +305,10 @@ class FrenchAudioStudioTests(unittest.TestCase):
             context.exception.detail["code"],
             "word_count_out_of_range",
         )
-        valid = tts_service._validate_model_result(
+        valid = transform._validate_model_result(
             " ".join(["bonjour"] * 100), request, "generate"
         )
-        self.assertEqual(tts_service._french_word_count(valid), 100)
+        self.assertEqual(transform._french_word_count(valid), 100)
 
     def test_upstream_5xx_is_retried_once(self):
         failed_response = Mock(status_code=500)
@@ -314,14 +321,14 @@ class FrenchAudioStudioTests(unittest.TestCase):
         client.post.side_effect = [failed_response, successful_response]
 
         body, text = asyncio.run(
-            tts_service._post_chat(client, {"messages": []}, {"Authorization": "Bearer key"})
+            services.ai.post_chat(client, {"messages": []}, {"Authorization": "Bearer key"})
         )
 
         self.assertEqual(text, "Bonjour.")
         self.assertEqual(body["model"], "gpt-6.1-sol-thinking")
         self.assertEqual(client.post.await_count, 2)
 
-    @patch("tts_service.httpx.AsyncClient")
+    @patch("httpx.AsyncClient")
     def test_contract_failure_retries_once(self, async_client_class):
         bad_response = Mock(status_code=200)
         bad_response.json.return_value = {
@@ -356,12 +363,12 @@ class FrenchAudioStudioTests(unittest.TestCase):
         client.post.side_effect = [bad_response, good_response, proofread_response]
         async_client_class.return_value.__aenter__ = AsyncMock(return_value=client)
         async_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
-        request = tts_service.TransformRequest(
+        request = transform.TransformRequest(
             text="请介绍保守主义",
             task_mode="generate",
         )
 
-        result = asyncio.run(tts_service.request_french_transform(request, "test-key"))
+        result = asyncio.run(transform.request_french_transform(request, "test-key"))
 
         self.assertEqual(
             result,
@@ -379,7 +386,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertIn("Strict retry", retry_payload["messages"][0]["content"])
         self.assertEqual(len(retry_payload["messages"]), 2)
 
-    @patch("tts_service.httpx.AsyncClient")
+    @patch("httpx.AsyncClient")
     def test_invalid_grok_draft_does_not_block_quality_finalizer(
         self, async_client_class
     ):
@@ -397,12 +404,12 @@ class FrenchAudioStudioTests(unittest.TestCase):
         client.post.side_effect = [bad_response, bad_response, final_response]
         async_client_class.return_value.__aenter__ = AsyncMock(return_value=client)
         async_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
-        request = tts_service.TransformRequest(
+        request = transform.TransformRequest(
             text="嗯，我明天可能去银行。",
             task_mode="express",
         )
 
-        result = asyncio.run(tts_service.request_french_transform(request, "test-key"))
+        result = asyncio.run(transform.request_french_transform(request, "test-key"))
 
         self.assertEqual(
             result,
@@ -416,7 +423,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
         )
         self.assertEqual(client.post.await_count, 3)
 
-    @patch("tts_service.httpx.AsyncClient")
+    @patch("httpx.AsyncClient")
     def test_valid_grok_result_survives_failed_proofreader(
         self, async_client_class
     ):
@@ -438,12 +445,12 @@ class FrenchAudioStudioTests(unittest.TestCase):
         ]
         async_client_class.return_value.__aenter__ = AsyncMock(return_value=client)
         async_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
-        request = tts_service.TransformRequest(
+        request = transform.TransformRequest(
             text="嗯，我明天可能去银行。",
             task_mode="express",
         )
 
-        result = asyncio.run(tts_service.request_french_transform(request, "test-key"))
+        result = asyncio.run(transform.request_french_transform(request, "test-key"))
 
         self.assertEqual(
             result,
@@ -457,7 +464,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
         )
         self.assertEqual(client.post.await_count, 3)
 
-    @patch("tts_service.httpx.AsyncClient")
+    @patch("httpx.AsyncClient")
     def test_auto_mode_uses_local_intent_before_generating(self, async_client_class):
         transform_response = Mock(status_code=200)
         transform_response.json.return_value = {
@@ -484,12 +491,12 @@ class FrenchAudioStudioTests(unittest.TestCase):
         ]
         async_client_class.return_value.__aenter__ = AsyncMock(return_value=client)
         async_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
-        request = tts_service.TransformRequest(
+        request = transform.TransformRequest(
             text="请简单介绍保守主义",
             task_mode="auto",
         )
 
-        result = asyncio.run(tts_service.request_french_transform(request, "test-key"))
+        result = asyncio.run(transform.request_french_transform(request, "test-key"))
 
         self.assertEqual(
             result,
@@ -510,8 +517,8 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertIn("write the requested content", proofread_payload["messages"][0]["content"])
         self.assertIn("请简单介绍保守主义", proofread_payload["messages"][1]["content"])
 
-    @patch("tts_service._infer_task_mode_locally", return_value=None)
-    @patch("tts_service.httpx.AsyncClient")
+    @patch("transform._infer_task_mode_locally", return_value=None)
+    @patch("httpx.AsyncClient")
     def test_auto_mode_asks_model_when_local_rules_are_ambiguous(
         self, async_client_class, _local_classifier
     ):
@@ -538,17 +545,17 @@ class FrenchAudioStudioTests(unittest.TestCase):
         ]
         async_client_class.return_value.__aenter__ = AsyncMock(return_value=client)
         async_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
-        request = tts_service.TransformRequest(
+        request = transform.TransformRequest(
             text="我今天下午去图书馆。",
             task_mode="auto",
         )
 
-        result = asyncio.run(tts_service.request_french_transform(request, "test-key"))
+        result = asyncio.run(transform.request_french_transform(request, "test-key"))
 
         self.assertEqual(result[2], "translate")
         self.assertEqual(client.post.await_count, 3)
 
-    @patch("tts_service.httpx.AsyncClient")
+    @patch("httpx.AsyncClient")
     def test_polish_mode_is_also_reviewed(self, async_client_class):
         transform_response = Mock(status_code=200)
         transform_response.json.return_value = {
@@ -564,12 +571,12 @@ class FrenchAudioStudioTests(unittest.TestCase):
         client.post.side_effect = [transform_response, proofread_response]
         async_client_class.return_value.__aenter__ = AsyncMock(return_value=client)
         async_client_class.return_value.__aexit__ = AsyncMock(return_value=None)
-        request = tts_service.TransformRequest(
+        request = transform.TransformRequest(
             text="Je va à le bibliothèque.",
             task_mode="polish",
         )
 
-        result = asyncio.run(tts_service.request_french_transform(request, "test-key"))
+        result = asyncio.run(transform.request_french_transform(request, "test-key"))
 
         self.assertEqual(
             result,
@@ -586,12 +593,12 @@ class FrenchAudioStudioTests(unittest.TestCase):
     def test_every_model_name_is_answered_by_agy(self):
         # Old browsers may still send a Perplexity-era name: it is accepted, never a 422
         for name in ("gpt-6.1-sol-thinking", "claude-sonnet-5.5-thinking", "grok-4.7", "gemini-3.8-flash", "anything"):
-            request = tts_service.TransformRequest(text="Bonjour", model=name)
+            request = transform.TransformRequest(text="Bonjour", model=name)
             self.assertEqual(request.model, name)
-            self.assertEqual(tts_service._chat_payload(request, "polish")["model"], tts_service.AGY_MODEL)
-            self.assertEqual(tts_service._classification_payload(request)["model"], tts_service.AGY_MODEL)
+            self.assertEqual(transform._chat_payload(request, "polish")["model"], services.ai.AGY_MODEL)
+            self.assertEqual(transform._classification_payload(request)["model"], services.ai.AGY_MODEL)
 
-    @patch("tts_service._post_chat", new_callable=AsyncMock)
+    @patch("services.ai.post_chat", new_callable=AsyncMock)
     def test_old_browsers_with_legacy_model_names_get_no_422(self, post_chat):
         post_chat.return_value = ({}, '{"sentences": []}')
         for name in ("gpt-6.1-sol-thinking", "claude-sonnet-5.5", "grok-4.7", "grok-4.6"):
@@ -601,10 +608,10 @@ class FrenchAudioStudioTests(unittest.TestCase):
                 json={"text": "Bonjour.", "model": name},
             )
             self.assertEqual(res.status_code, 200, name)
-            self.assertEqual(post_chat.await_args.args[1]["model"], tts_service.AGY_MODEL)
+            self.assertEqual(post_chat.await_args.args[1]["model"], services.ai.AGY_MODEL)
 
     def test_episode_route_accepts_a_legacy_model_query(self):
-        with patch("tts_service._generate_episode", new_callable=AsyncMock):
+        with patch("routers.episodes._generate_episode", new_callable=AsyncMock):
             res = self.client.post(
                 "/api/episodes?model=gpt-6.1-sol-thinking",
                 headers=testenv.session_headers(),
@@ -618,8 +625,8 @@ class FrenchAudioStudioTests(unittest.TestCase):
             status_code=200,
             json=Mock(return_value={"choices": [{"message": {"content": "Bonjour."}}]}),
         )
-        asyncio.run(tts_service._post_chat(client, {"model": "gpt-6.1-sol-thinking"}, {}))
-        self.assertEqual(client.post.await_args.args[0], f"{tts_service.AGY_BASE_URL}/chat/completions")
+        asyncio.run(services.ai.post_chat(client, {"model": "gpt-6.1-sol-thinking"}, {}))
+        self.assertEqual(client.post.await_args.args[0], f"{services.ai.AGY_BASE_URL}/chat/completions")
 
     def test_rejected_server_key_is_not_reported_as_a_login_problem(self):
         client = AsyncMock()
@@ -627,28 +634,28 @@ class FrenchAudioStudioTests(unittest.TestCase):
             status_code=401,
             json=Mock(return_value={"error": {"code": "invalid_api_key", "message": "bad key"}}),
         )
-        with self.assertRaises(tts_service.HTTPException) as ctx:
-            asyncio.run(tts_service._post_chat(client, {"model": "gemini-3.8-flash"}, {}))
+        with self.assertRaises(fastapi.HTTPException) as ctx:
+            asyncio.run(services.ai.post_chat(client, {"model": "gemini-3.8-flash"}, {}))
         self.assertEqual(ctx.exception.status_code, 503)
         self.assertEqual(ctx.exception.detail["code"], "invalid_api_key")
 
     def test_non_french_script_detection(self):
-        self.assertTrue(tts_service._contains_non_french_script("Bonjour, \u4f60\u597d"))
-        self.assertTrue(tts_service._contains_non_french_script("\uc548\ub155, bonjour"))
+        self.assertTrue(transform._contains_non_french_script("Bonjour, \u4f60\u597d"))
+        self.assertTrue(transform._contains_non_french_script("\uc548\ub155, bonjour"))
         self.assertFalse(
-            tts_service._contains_non_french_script(
+            transform._contains_non_french_script(
                 "A : Apr\u00e8s le travail, on va boire un caf\u00e9 ?"
             )
         )
 
     def test_code_fence_is_removed_from_model_text(self):
         self.assertEqual(
-            tts_service._clean_model_text("```text\nBonjour.\n```"),
+            transform._clean_model_text("```text\nBonjour.\n```"),
             "Bonjour.",
         )
 
     def test_trailing_model_offer_is_removed(self):
-        cleaned = tts_service._clean_model_text(
+        cleaned = transform._clean_model_text(
             "Le conservatisme change lentement. "
             "Si tu veux, je peux aussi te donner des exemples simples."
         )
@@ -657,7 +664,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
 
     def test_french_block_is_extracted_from_explanatory_text(self):
         self.assertEqual(
-            tts_service._clean_model_text(
+            transform._clean_model_text(
                 "Source ignored. <FRENCH>Je vais \u00e0 la biblioth\u00e8que.</FRENCH>"
             ),
             "Je vais \u00e0 la biblioth\u00e8que.",
@@ -674,7 +681,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
 
     def test_version_endpoint_matches_pages(self):
         version = self.client.get("/api/version").json()["version"]
-        self.assertEqual(version, tts_service.ASSET_VERSION)
+        self.assertEqual(version, routers.pages.ASSET_VERSION)
         for path in ("/", "/study", "/review", "/listen"):
             self.assertIn(f'<meta name="asset-version" content="{version}">', self.client.get(path).text)
 
@@ -683,7 +690,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("法语拆解与跟读复述", response.text)
         self.assertNotIn("__ASSET_VERSION__", response.text)
-        self.assertIn(f"/static/study.js?v={tts_service.ASSET_VERSION}", response.text)
+        self.assertIn(f"/static/study.js?v={routers.pages.ASSET_VERSION}", response.text)
 
     def test_analyze_requires_api_key(self):
         response = self.client.post(
@@ -694,7 +701,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
         self.assertEqual(response.json()["detail"]["code"], "missing_api_key")
 
     @patch(
-        "tts_service.request_french_analysis",
+        "analysis.request_french_analysis",
         new_callable=AsyncMock,
         return_value={
             "sentences": [
@@ -736,28 +743,28 @@ class FrenchAudioStudioTests(unittest.TestCase):
             {"schemaVersion": 2, "sentence": "B. Elle ne coûte pas cher.", "translation_en": "B. It is not expensive.", "words": []},
             {"schemaVersion": 2, "sentence": "Oui, elle est rouge.", "label": "C", "words": []},
         ]})
-        parsed = tts_service._parse_analysis_json(raw, "x")["sentences"]
+        parsed = analysis._parse_analysis_json(raw, "x")["sentences"]
         self.assertEqual([(p["label"], p["sentence"]) for p in parsed], [
             ("A", "C'est une taille 42."), ("B", "Elle ne coûte pas cher."), ("C", "Oui, elle est rouge.")])
         self.assertEqual(parsed[1]["translation_en"], "It is not expensive.")
 
     def test_parse_analysis_json_handles_code_fences(self):
         raw = '```json\n{"sentences": [{"original": "Bonjour.", "translation_en": "Hello.", "translation_cn": "你好。", "tokens": []}]}\n```'
-        parsed = tts_service._parse_analysis_json(raw, "Bonjour.")
+        parsed = analysis._parse_analysis_json(raw, "Bonjour.")
         self.assertIn("sentences", parsed)
         self.assertEqual(parsed["sentences"][0]["original"], "Bonjour.")
 
     def test_parse_analysis_json_fallback_on_corrupt_output(self):
         raw = "Sorry I cannot output JSON today."
-        parsed = tts_service._parse_analysis_json(raw, "Bonjour le monde.")
+        parsed = analysis._parse_analysis_json(raw, "Bonjour le monde.")
         self.assertIn("sentences", parsed)
         self.assertEqual(len(parsed["sentences"]), 1)
         self.assertEqual(parsed["sentences"][0]["original"], "Bonjour le monde.")
         self.assertTrue(len(parsed["sentences"][0]["tokens"]) > 0)
 
     def test_safe_timestamp_snippets_hashing(self):
-        ts1 = tts_service._safe_timestamp(None, text="bonjour", voice="fr-FR-DeniseNeural")
-        ts2 = tts_service._safe_timestamp(None, text="bonjour", voice="fr-FR-DeniseNeural")
+        ts1 = services.speech.safe_timestamp(None, text="bonjour", voice="fr-FR-DeniseNeural")
+        ts2 = services.speech.safe_timestamp(None, text="bonjour", voice="fr-FR-DeniseNeural")
         self.assertEqual(ts1, ts2)
         self.assertTrue(ts1.startswith("snip_"))
 
@@ -782,7 +789,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
                 ]
             }
         ])
-        parsed = tts_service._parse_analysis_json(raw, "Elle comprend 40 questions portant sur des documents de la vie quotidienne.")
+        parsed = analysis._parse_analysis_json(raw, "Elle comprend 40 questions portant sur des documents de la vie quotidienne.")
         self.assertIn("sentences", parsed)
         tokens = parsed["sentences"][0]["tokens"]
         token_names = [t["token"] for t in tokens]
@@ -845,10 +852,10 @@ class FrenchAudioStudioTests(unittest.TestCase):
         token = reg["token"]
 
         # Passing user token into _authorization_token should resolve to SERVER_WEB2API_KEY
-        resolved = tts_service._authorization_token(f"Bearer {token}")
-        self.assertEqual(resolved, tts_service.SERVER_WEB2API_KEY)
+        resolved = services.ai.upstream_key(f"Bearer {token}")
+        self.assertEqual(resolved, services.ai.SERVER_WEB2API_KEY)
 
-    @patch("tts_service.request_word_lookup", new_callable=AsyncMock)
+    @patch("routers.tutor.request_word_lookup", new_callable=AsyncMock)
     def test_quick_lookup_endpoint(self, lookup_mock):
         lookup_mock.return_value = {
             "token": "bonjour",
@@ -991,9 +998,9 @@ class FrenchAudioStudioTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 401)
 
-    @patch("tts_service.create_speech_files", new_callable=AsyncMock)
+    @patch("services.speech.create_speech_files", new_callable=AsyncMock)
     def test_tts_snippet_is_content_cached(self, create_mock):
-        path = tts_service.OUTPUT_DIR / "TTS_fr-FR-DeniseNeural_snip_test.mp3"
+        path = web_common.OUTPUT_DIR / "TTS_fr-FR-DeniseNeural_snip_test.mp3"
         path.write_bytes(b"ID3")
         create_mock.return_value = (path.name, "unused.srt")
         response = self.client.get(
@@ -1023,8 +1030,8 @@ class FrenchAudioStudioTests(unittest.TestCase):
             "/api/auth/login", json={"email": email, "password": "password123"}
         )
         self.assertEqual(logged_in.status_code, 200)
-        with patch("tts_service.create_speech_files", new_callable=AsyncMock) as create_mock:
-            path = tts_service.OUTPUT_DIR / "TTS_fr-FR-DeniseNeural_snip_cookie.mp3"
+        with patch("services.speech.create_speech_files", new_callable=AsyncMock) as create_mock:
+            path = web_common.OUTPUT_DIR / "TTS_fr-FR-DeniseNeural_snip_cookie.mp3"
             path.write_bytes(b"ID3")
             create_mock.return_value = (path.name, "unused.srt")
             response = self.client.get("/tts", params={"text": "Bonjour"})
@@ -1035,8 +1042,8 @@ class FrenchAudioStudioTests(unittest.TestCase):
 
     def test_snippets_up_to_limit_use_stable_hash_names(self):
         long_text = "Phrase assez longue. " * 12  # ~250 chars, above the old 150 limit
-        a = tts_service._safe_timestamp(None, text=long_text, voice="fr-FR-DeniseNeural")
-        b = tts_service._safe_timestamp(None, text=long_text, voice="fr-FR-DeniseNeural")
+        a = services.speech.safe_timestamp(None, text=long_text, voice="fr-FR-DeniseNeural")
+        b = services.speech.safe_timestamp(None, text=long_text, voice="fr-FR-DeniseNeural")
         self.assertEqual(a, b)
         self.assertTrue(a.startswith("snip_"))
 
@@ -1046,8 +1053,8 @@ class FrenchAudioStudioTests(unittest.TestCase):
 
     def test_full_length_speech_names_are_unguessable(self):
         long_text = "a" * 601
-        a = tts_service._safe_timestamp(None, text=long_text, voice="fr-FR-DeniseNeural")
-        b = tts_service._safe_timestamp(None, text=long_text, voice="fr-FR-DeniseNeural")
+        a = services.speech.safe_timestamp(None, text=long_text, voice="fr-FR-DeniseNeural")
+        b = services.speech.safe_timestamp(None, text=long_text, voice="fr-FR-DeniseNeural")
         self.assertNotEqual(a, b)
         self.assertRegex(a, r"^[0-9]{8}_[0-9]{6}_[0-9a-f]{32}$")
 
@@ -1059,7 +1066,7 @@ class FrenchAudioStudioTests(unittest.TestCase):
 
     def test_session_token_without_server_key_returns_503(self):
         headers = self._login_headers()
-        with patch.object(tts_service, "SERVER_WEB2API_KEY", ""):
+        with patch.object(services.ai, "SERVER_WEB2API_KEY", ""):
             response = self.client.post(
                 "/api/analyze", json={"text": "Bonjour."}, headers=headers
             )

@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 import auth_db
 import routers.auth
 import tts_service
+import services.ai
 
 PHONE_UA = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Mobile Safari/537.36"
 
@@ -76,7 +77,7 @@ class DeviceLimitTests(unittest.TestCase):
         token = self._login()
         auth_db.end_session(auth_db._signed_payload(token)["sub"], auth_db._signed_payload(token)["sid"])
         with self.assertRaises(HTTPException) as caught:
-            tts_service._authorization_token(f"Bearer {token}")
+            services.ai.upstream_key(f"Bearer {token}")
         self.assertEqual(caught.exception.status_code, 401)
         self.assertEqual(caught.exception.detail["code"], "session_revoked")
 

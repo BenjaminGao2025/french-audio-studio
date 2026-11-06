@@ -114,7 +114,7 @@ class SpeakingEndpointTests(unittest.TestCase):
         self.assertIn("tasks", data)
         self.assertIn("subjects", data)
 
-    @patch("tts_service._post_chat", new_callable=AsyncMock)
+    @patch("services.ai.post_chat", new_callable=AsyncMock)
     def test_roleplay_reply(self, post_chat):
         post_chat.return_value = ({}, "Oui, notre centre sportif est ouvert de 7h à 22h tous les jours.")
         scenario = speaking.SUBJECTS["T2"][0]
@@ -130,7 +130,7 @@ class SpeakingEndpointTests(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertIn("ouvert de 7h", res.json()["reply"])
 
-    @patch("tts_service._post_chat", new_callable=AsyncMock)
+    @patch("services.ai.post_chat", new_callable=AsyncMock)
     def test_submit_speaking_attempt_and_poll(self, post_chat):
         post_chat.return_value = ({}, json.dumps({
             "stats": {"duration_sec": 12, "wpm": 75.0, "pace_note": "Steady pace"},

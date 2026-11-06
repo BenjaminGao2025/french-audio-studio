@@ -8,8 +8,10 @@ import unittest
 from fastapi.testclient import TestClient
 
 import tts_service
+import routers.pages
+import web_common
 
-STATIC = pathlib.Path(tts_service.STATIC_DIR)
+STATIC = pathlib.Path(web_common.STATIC_DIR)
 
 
 def _png_size(path):
@@ -42,7 +44,7 @@ class PwaTests(unittest.TestCase):
         for path in ("/", "/study", "/review", "/listen"):
             html = self.client.get(path).text
             for tag in ('rel="manifest"', 'apple-mobile-web-app-capable', 'rel="apple-touch-icon"',
-                        'viewport-fit=cover', '/static/pwa-register.js?v=' + tts_service.ASSET_VERSION):
+                        'viewport-fit=cover', '/static/pwa-register.js?v=' + routers.pages.ASSET_VERSION):
                 self.assertIn(tag, html, (path, tag))
             self.assertEqual(html.count('rel="manifest"'), 1)
 
@@ -52,7 +54,7 @@ class PwaTests(unittest.TestCase):
         self.assertIn("javascript", res.headers["content-type"])
         self.assertEqual(res.headers["cache-control"], "no-cache")
         src = res.text
-        self.assertIn(f"const VERSION = '{tts_service.ASSET_VERSION}';", src)
+        self.assertIn(f"const VERSION = '{routers.pages.ASSET_VERSION}';", src)
         self.assertNotIn("__ASSET_VERSION__", src)
         self.assertIn("self.skipWaiting()", src)
         self.assertIn("self.clients.claim()", src)

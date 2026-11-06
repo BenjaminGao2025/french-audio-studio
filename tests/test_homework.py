@@ -98,8 +98,8 @@ class HomeworkTests(unittest.TestCase):
             self.assertEqual(journal.practice(self.uid,self.entry['id'],'beat-two',30),5)
         self.assertEqual(journal.get(self.uid,self.entry['id'])['practice_seconds'],25)
 
-    @patch('tts_service.create_speech_files',new_callable=AsyncMock)
-    @patch('tts_service._post_chat',new_callable=AsyncMock)
+    @patch('services.speech.create_speech_files',new_callable=AsyncMock)
+    @patch('services.ai.post_chat',new_callable=AsyncMock)
     def test_personal_a1_generation_is_persisted(self,chat,speech):
         entry=journal.create(self.uid,'我是一名老师。我喜欢我的工作。')
         chat.return_value=({},json.dumps({'parts':[{'source':entry['native_text'],'french':'Je suis professeur. J’aime mon travail.'}]}))
@@ -120,8 +120,8 @@ class HomeworkTests(unittest.TestCase):
         self.assertNotIn('__PERSONAL_PRACTICE__',html)
         self.assertEqual(html.count('<h1'),1)
 
-    @patch('tts_service.create_speech_files',new_callable=AsyncMock)
-    @patch('tts_service._post_chat',new_callable=AsyncMock)
+    @patch('services.speech.create_speech_files',new_callable=AsyncMock)
+    @patch('services.ai.post_chat',new_callable=AsyncMock)
     def test_complete_ideas_are_preserved_in_parts_and_archive(self,chat,speech):
         native='我有两个孩子。我现在很焦虑。我在申请毕业工签。我需要照顾家人。'
         entry=journal.create(self.uid,native)
@@ -135,8 +135,8 @@ class HomeworkTests(unittest.TestCase):
         with zipfile.ZipFile(io.BytesIO(journal.archive(self.uid,entry['id'])[0])) as z:
             self.assertEqual(json.loads(z.read('parts.json')),parts)
 
-    @patch('tts_service.create_speech_files',new_callable=AsyncMock)
-    @patch('tts_service._post_chat',new_callable=AsyncMock)
+    @patch('services.speech.create_speech_files',new_callable=AsyncMock)
+    @patch('services.ai.post_chat',new_callable=AsyncMock)
     def test_omitted_source_is_rejected_before_speech(self,chat,speech):
         entry=journal.create(self.uid,'我有两个孩子。我正在申请毕业工签。')
         chat.return_value=({},json.dumps({'parts':[{'source':'我有两个孩子。','french':'J’ai deux enfants.'}]}))
@@ -144,8 +144,8 @@ class HomeworkTests(unittest.TestCase):
         self.assertEqual(r.status_code,422,r.text);speech.assert_not_called()
         self.assertEqual(journal.get(self.uid,entry['id'])['french'],'')
 
-    @patch('tts_service.create_speech_files',new_callable=AsyncMock)
-    @patch('tts_service._post_chat',new_callable=AsyncMock)
+    @patch('services.speech.create_speech_files',new_callable=AsyncMock)
+    @patch('services.ai.post_chat',new_callable=AsyncMock)
     def test_audio_retry_keeps_generated_french(self,chat,speech):
         entry=journal.create(self.uid,'我正在申请毕业工签。')
         parts=[{'source':entry['native_text'],'french':'Je demande un permis de travail.'}]
@@ -157,8 +157,8 @@ class HomeworkTests(unittest.TestCase):
         self.assertEqual(self.client.post(path,headers=self.auth,json={}).status_code,200)
         self.assertEqual(chat.call_count,1)
 
-    @patch('tts_service.create_speech_files',new_callable=AsyncMock)
-    @patch('tts_service._post_chat',new_callable=AsyncMock)
+    @patch('services.speech.create_speech_files',new_callable=AsyncMock)
+    @patch('services.ai.post_chat',new_callable=AsyncMock)
     def test_expand_old_summary_and_preserve_recorded_text(self,chat,speech):
         path=f'/api/homework/{self.entry["id"]}/prepare'
         part={'source':self.entry['native_text'],'french':'J’habite à Vancouver. J’apprends le français.'}
@@ -170,7 +170,7 @@ class HomeworkTests(unittest.TestCase):
         self.assertEqual(self.client.post(path,headers=self.auth,json={'expand':True}).status_code,422)
         self.assertEqual(chat.call_count,1)
 
-    @patch('tts_service.create_speech_files',new_callable=AsyncMock)
+    @patch('services.speech.create_speech_files',new_callable=AsyncMock)
     def test_private_part_audio_and_missing_file_repair(self,speech):
         parts=[{'source':self.entry['native_text'],'french':'J’habite à Vancouver.'}]
         journal.prepared(self.uid,self.entry['id'],parts[0]['french'],self.ref.name,parts)

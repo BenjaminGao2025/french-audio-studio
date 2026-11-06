@@ -14,6 +14,8 @@ from fastapi.testclient import TestClient
 import auth_db
 import grammar
 import tts_service
+import analysis
+import routers.pages
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 FIELDS = ("id", "block", "zh", "fr", "en", "explain_zh", "level", "focus")
@@ -35,7 +37,7 @@ def _analysis(sentence, structure=None, grammar_ids=None):
         s["structure"] = structure
     if grammar_ids is not None:
         s["grammar_ids"] = grammar_ids
-    return tts_service._parse_analysis_json(json.dumps({"sentences": [s]}), sentence)["sentences"][0]
+    return analysis._parse_analysis_json(json.dumps({"sentences": [s]}), sentence)["sentences"][0]
 
 
 class InventoryTests(unittest.TestCase):
@@ -105,7 +107,7 @@ class StructureValidationTests(unittest.TestCase):
         self.assertEqual(len(_analysis("Tu peux.", structure=too_many)["structure"]), grammar.MAX_SPANS)
 
     def test_prompt_lists_the_inventory_and_examples_use_real_ids(self):
-        prompt = tts_service._analyze_payload(tts_service.AnalyzeRequest(text="Tu peux m'aider ?"))["messages"][0]["content"]
+        prompt = analysis._analyze_payload(analysis.AnalyzeRequest(text="Tu peux m'aider ?"))["messages"][0]["content"]
         self.assertIn('"structure"', prompt)
         self.assertIn('"grammar_ids"', prompt)
         self.assertIn("Never invent an id.", prompt)
@@ -191,7 +193,7 @@ class GrammarPageTests(unittest.TestCase):
         self.assertEqual(res.headers["Content-Security-Policy"], tts_service.CONTENT_SECURITY_POLICY)
         self.assertIn("no-store", res.headers["Cache-Control"])
         html = res.text
-        v = tts_service.ASSET_VERSION
+        v = routers.pages.ASSET_VERSION
         for asset in ("grammar.js", "grammar.css", "i18n.js", "tokens.css", "header-ui.js"):
             self.assertIn(f"/static/{asset}?v={v}", html)
         self.assertNotIn("__ASSET_VERSION__", html)

@@ -132,7 +132,7 @@ class WritingEndpointTests(unittest.TestCase):
         self.assertIn("tasks", data)
         self.assertIn("subjects", data)
 
-    @patch("tts_service._post_chat", new_callable=AsyncMock)
+    @patch("services.ai.post_chat", new_callable=AsyncMock)
     def test_submit_attempt_and_poll(self, post_chat):
         # Mock Round 1 LLM response
         post_chat.return_value = ({}, json.dumps({

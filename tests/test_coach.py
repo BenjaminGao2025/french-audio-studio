@@ -84,7 +84,7 @@ class CoachTests(unittest.TestCase):
         self.assertEqual(coach.get_profile(self.uid)['profile']['weekday_minutes'],45)
         self.assertIn('Chinese hints',plan['interview_notes'])
 
-    @patch('tts_service._post_chat',new_callable=AsyncMock)
+    @patch('services.ai.post_chat',new_callable=AsyncMock)
     def test_llm_plan_and_review(self,chat):
         coach.save_profile(self.uid,profile())
         chat.return_value=({},json.dumps({'summary':'Short daily practice.','questions':['What is hard?'],'task_weights':{'listen':4}}))
@@ -94,7 +94,7 @@ class CoachTests(unittest.TestCase):
         self.assertEqual(review['last_review']['source'],'llm')
         self.assertFalse(review['review_due'])
 
-    @patch('tts_service._post_chat',new_callable=AsyncMock)
+    @patch('services.ai.post_chat',new_callable=AsyncMock)
     def test_prompt_example_weights_are_the_default_16_hour_split(self,chat):
         coach.save_profile(self.uid,profile())
         chat.return_value=({},json.dumps({'summary':'Short daily practice.','questions':[]}))
@@ -103,7 +103,7 @@ class CoachTests(unittest.TestCase):
         example=json.loads(re.search(r'"task_weights":(\{[^}]*\})',system).group(1))
         self.assertEqual(example,coach.DEFAULT_WEIGHTS)
 
-    @patch('tts_service._post_chat',new_callable=AsyncMock)
+    @patch('services.ai.post_chat',new_callable=AsyncMock)
     def test_llm_failure_preserves_baseline(self,chat):
         coach.save_profile(self.uid,profile());chat.side_effect=RuntimeError('offline')
         d=self.client.post('/api/coach/plan',headers=self.auth,json={'note':''}).json()

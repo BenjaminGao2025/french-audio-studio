@@ -8,9 +8,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY journal.py coach.py curriculum.py auth_db.py episodes.py game.py grammar.py speaking.py srs.py web_common.py writing.py edge_compat.py ./
-COPY tts_service.py .
+# Every top-level module is app code (tests, scripts and tools live in subfolders).
+COPY *.py ./
 COPY routers /app/routers
+COPY services /app/services
 COPY data /app/data
 COPY static /app/static
 

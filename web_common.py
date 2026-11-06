@@ -1,7 +1,9 @@
-"""Settings and request helpers shared by tts_service.py and the routers."""
+"""Paths, limits and request helpers shared by the routers and services (sessions, cookies, user id)."""
 from __future__ import annotations
 
+import asyncio
 import os
+from collections.abc import Coroutine
 from pathlib import Path
 
 from fastapi import HTTPException, Request
@@ -13,6 +15,7 @@ BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", str(BASE_DIR / "outputs"))).resolve()
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+MAX_TEXT_CHARS = int(os.getenv("MAX_TEXT_CHARS", "15000"))
 
 SIGNED_OUT_DETAIL = {
     "code": "session_revoked",
@@ -85,3 +88,22 @@ def _require_user_id(authorization: str | None, request: Request | None = None) 
             detail={"code": "login_required", "message": "请先登录账号。"},
         )
     return int(payload["sub"])
+
+
+def _normalized_text(value: str) -> str:
+    text = value.strip()
+    if not text:
+        raise HTTPException(status_code=422, detail="请输入需要处理的文本。")
+    return text
+
+
+# Strong references to fire-and-forget jobs (feedback rounds, episode renders): the event loop only
+# keeps weak ones, so an unreferenced task can be garbage-collected mid-run.
+_background_tasks: set[asyncio.Task] = set()
+
+
+def run_in_background(coro: Coroutine) -> asyncio.Task:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task

@@ -68,11 +68,10 @@ class CanadianVoiceTests(unittest.TestCase):
             self.assertEqual(b, voice_for(text), text)
 
     def test_server_accepts_the_voices(self):
-        src = _read("tts_service.py")
-        start = src.index("SUPPORTED_VOICES = {")
-        block = src[start:src.index("}", start)]
+        import services.speech
+
         for voice in CA:
-            self.assertIn(f'"{voice}"', block)
+            self.assertIn(voice, services.speech.SUPPORTED_VOICES)
 
 
 if __name__ == "__main__":
