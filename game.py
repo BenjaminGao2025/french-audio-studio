@@ -1,15 +1,23 @@
 """
-French Audio Studio - study time, weekly targets and streaks (the progress HUD).
+French Audio Studio - study time, XP and hero level ("the game").
 
 Built around the learner's own plan (TCF Canada, NCLC 7 = about B2 in all four skills):
+  * Hero level = effective study time: one level per hour (60 XP), level 1000 =
+    1000 hours, the "1000H" goal. NCLC 7 is about B2 in all four skills; B2 takes
+    about 480-620 guided hours from zero (Alliance Française / Cambridge planning
+    figures) plus TCF practice, so the first exam window comes around level
+    600-750 and 1000 leaves room to spare.
   * Effective time: focused study counts fully; listening in the car or while
     walking counts half (attention is on the road), a judgment call, not a study
-    result. 1000 effective hours is the "1000H" goal.
+    result.
+  * XP: 1 per effective minute (tracked in the app or logged by hand) up to 5
+    hours a day, half after that.
+    Reviews add Again 1 / Hard 2 / Good 4 / Easy 5, +3 for a card's first review,
+    a combo bonus while answers keep coming Good/Easy, and +10 for the day's
+    first Good/Easy ("First blood"). Clearing today's queue gives +20 once a day.
   * Targets are weekly (16 h = 960 min); the days follow the PRD's weekly template
     (weekdays 160 min, Saturday 120, Sunday 40), family days aim for nothing. Only
     weekdays count for the streak, and family days never break it.
-  * The HUD shows days studied in the last 7 days; XP, levels and the review kill feed
-    were dropped from the UI in 111d6c4 and from the server afterwards.
 """
 
 from __future__ import annotations
@@ -32,7 +40,7 @@ LANE_WEEK_TARGETS = {  # raw minutes per week (16 hours = 960 min in total, PRD 
 LANE_WEIGHTS = {"car": 0.5}
 LANES = tuple(LANE_WEEK_TARGETS)
 # Study time logged under a lane that no longer has a track. The rows stay in study_time, so the
-# hours and streak they earned are kept, but they belong to no lane or weekly target.
+# hours, XP and streak they earned are kept, but they belong to no lane or weekly target.
 RETIRED_LANES = frozenset({"course"})
 
 TCF_SKILL_LANES = {
@@ -53,10 +61,34 @@ WEEK_TARGET_MIN = round(sum(m * LANE_WEIGHTS.get(lane, 1) for lane, m in LANE_WE
 MAINTENANCE_WEEK_TARGET_MIN = 300  # May-Aug 2027 (new baby): 5 h a week
 MAINTENANCE = (datetime.date(2027, 5, 1), datetime.date(2027, 8, 31))
 DAY_TARGET_MIN = (160, 160, 160, 160, 160, 120, 40)  # Monday = 0; sums to WEEK_TARGET_MIN (PRD appendix C)
+DAY_FULL_XP_MIN = 300  # beyond 5 effective hours a day, XP is halved
 STREAK_MIN = 30  # minutes that make a weekday count for the streak
 
+# One level per hour (60 XP): level 1000 = 1000 hours, the "1000H" goal
+XP_PER_LEVEL = 60
+MAX_LEVEL = 1000
+
+RATING_XP = {1: 1, 2: 2, 3: 4, 4: 5}
+NEW_CARD_XP = 3
+FIRST_BLOOD_XP = 10
+WAVE_CLEARED_XP = 20
 MAX_HEARTBEAT_SECONDS = 120
 
+# Announcer lines for the kill feed: fixed phrases only, spoken once by TTS and cached
+CALLOUT_PHRASES = {
+    "kill": "Kill!",
+    "first_blood": "First blood!",
+    "double_kill": "Double kill!",
+    "triple_kill": "Triple kill!",
+    "ultra_kill": "Ultra kill!",
+    "rampage": "Rampage!",
+    "unstoppable": "Unstoppable!",
+    "godlike": "Godlike!",
+    "beyond_godlike": "Beyond godlike!",
+    "wave_cleared": "Wave cleared!",
+    "level_up": "Level up!",
+}
+CALLOUT_VOICE = {"voice": "en-US-ChristopherNeural", "rate": "-5%", "pitch": "-10Hz"}
 MAX_AUTO_SECONDS_PER_LANE_DAY = 8 * 3600
 
 _initialized_db_paths: set[str] = set()
@@ -140,6 +172,23 @@ def lane_week_targets(day: datetime.date) -> dict[str, int]:
     for lane in by_remainder[: total - sum(scaled.values())]:
         scaled[lane] += 1
     return scaled
+
+
+def level_threshold(level: int) -> int:
+    """Total XP needed to reach a level (level 0 is the start)."""
+    return max(0, min(MAX_LEVEL, level)) * XP_PER_LEVEL
+
+
+def level_for(xp: int) -> dict[str, Any]:
+    level = min(MAX_LEVEL, max(0, xp) // XP_PER_LEVEL)
+    start = level_threshold(level)
+    nxt = level_threshold(level + 1) if level < MAX_LEVEL else None
+    progress = 1.0 if nxt is None else (xp - start) / max(1, nxt - start)
+    return {"level": level, "level_xp": start, "next_level_xp": nxt, "progress": round(progress, 4)}
+
+
+def _day_minutes_xp(minutes: float) -> float:
+    return min(minutes, DAY_FULL_XP_MIN) + max(0.0, minutes - DAY_FULL_XP_MIN) / 2
 
 
 def _check_lane(lane: str) -> str:
@@ -226,9 +275,58 @@ def set_family_day(user_id: int, on: bool, tz_offset: int, now=None) -> None:
         conn.commit()
 
 
+def wave_cleared(user_id: int, tz_offset: int, now=None) -> int:
+    """Today's review queue is done. Returns the XP awarded (0 if already awarded today)."""
+    now = now or _now()
+    with _connect() as conn:
+        cursor = conn.execute(
+            "INSERT OR IGNORE INTO game_events (user_id, day, kind, created_at) VALUES (?, ?, 'wave_cleared', ?)",
+            (user_id, local_day(now, tz_offset).isoformat(), srs._iso(now)),
+        )
+        conn.commit()
+        return WAVE_CLEARED_XP if cursor.rowcount else 0
+
+
 # ---------------------------------------------------------------------------
 # Reading the game state
 # ---------------------------------------------------------------------------
+def _review_events(rows, tz_offset: int) -> list[dict[str, Any]]:
+    """XP, combo and first blood for every review, in time order."""
+    events = []
+    day = None
+    combo = 0
+    first_blood_done = False
+    for row in rows:
+        moment = datetime.datetime.fromisoformat(row["reviewed_at"])
+        this_day = local_day(moment, tz_offset)
+        if this_day != day:
+            day, combo, first_blood_done = this_day, 0, False
+        rating = int(row["rating"])
+        kill = rating >= 3
+        first_blood = False
+        if kill:
+            combo += 1
+            if not first_blood_done:
+                first_blood = first_blood_done = True
+        elif rating == 1:
+            combo = 0
+        xp = RATING_XP.get(rating, 0) + (NEW_CARD_XP if row["was_new"] else 0)
+        if kill and combo >= 2:
+            xp += min(combo - 1, 4)
+        if first_blood:
+            xp += FIRST_BLOOD_XP
+        events.append(
+            {
+                "day": this_day,
+                "rating": rating,
+                "kill": kill,
+                "death": rating == 1,
+                "combo": combo if kill else 0,
+                "first_blood": first_blood,
+                "xp": xp,
+            }
+        )
+    return events
 
 
 def _weekday_streak(active_days: set[datetime.date], family_days: set[datetime.date], today: datetime.date) -> int:
@@ -254,6 +352,9 @@ def state(user_id: int, tz_offset: int, now=None) -> dict[str, Any]:
     with _connect() as conn:
         time_rows = conn.execute(
             "SELECT id, day, lane, source, seconds, note FROM study_time WHERE user_id = ?", (user_id,)
+        ).fetchall()
+        review_rows = conn.execute(
+            "SELECT reviewed_at, rating, was_new FROM srs_reviews WHERE user_id = ? ORDER BY reviewed_at", (user_id,)
         ).fetchall()
         event_rows = conn.execute("SELECT day, kind FROM game_events WHERE user_id = ?", (user_id,)).fetchall()
 
@@ -282,7 +383,23 @@ def state(user_id: int, tz_offset: int, now=None) -> dict[str, Any]:
             week_effective += effective
 
     family_days = {datetime.date.fromisoformat(r["day"]) for r in event_rows if r["kind"] == "family_day"}
+    wave_days = {datetime.date.fromisoformat(r["day"]) for r in event_rows if r["kind"] == "wave_cleared"}
+    reviews = _review_events(review_rows, tz_offset)
+
+    xp = sum(_day_minutes_xp(m) for m in minutes_by_day.values())
+    xp += sum(event["xp"] for event in reviews)
+    xp += WAVE_CLEARED_XP * len(wave_days)
     learning = coach.progress(user_id, today)
+    xp += learning["xp"]
+    xp = int(round(xp))
+
+    today_reviews = [event for event in reviews if event["day"] == today]
+    combo_now = 0  # the running combo, so a reloaded page continues it
+    for event in today_reviews:
+        if event["kill"]:
+            combo_now = event["combo"]
+        elif event["death"]:
+            combo_now = 0
     total_minutes = sum(minutes_by_day.values())
     active_days = {day for day, minutes in minutes_by_day.items() if minutes >= STREAK_MIN}
     active_days.update(datetime.date.fromisoformat(d) for d in learning["completed_days"])
@@ -349,6 +466,9 @@ def state(user_id: int, tz_offset: int, now=None) -> dict[str, Any]:
     }
 
     return {
+        **level_for(xp),
+        "xp": xp,
+        "max_level": MAX_LEVEL,
         "learning": learning,
         "hours_total": round(total_minutes / 60, 1),
         "today": {
@@ -359,6 +479,12 @@ def state(user_id: int, tz_offset: int, now=None) -> dict[str, Any]:
             "weekend": weekend,
             "by_lane": {lane: round(value) for lane, value in today_lanes.items()},
             "logs": logs_today,
+            "kills": sum(1 for e in today_reviews if e["kill"]),
+            "deaths": sum(1 for e in today_reviews if e["death"]),
+            "best_combo": max((e["combo"] for e in today_reviews), default=0),
+            "combo": combo_now,
+            "first_blood": any(e["first_blood"] for e in today_reviews),
+            "wave_cleared": today in wave_days,
         },
         "week": {
             "number": week_number(today),
@@ -379,5 +505,21 @@ def state(user_id: int, tz_offset: int, now=None) -> dict[str, Any]:
 
 
 def review_feedback(user_id: int, tz_offset: int, now=None) -> dict[str, Any]:
-    """The progress totals after a review, so the HUD refreshes without another request."""
-    return {"state": state(user_id, tz_offset, now)}
+    """What the learner just earned with their latest review, plus the new totals."""
+    now = now or _now()
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT reviewed_at, rating, was_new FROM srs_reviews WHERE user_id = ? AND reviewed_at >= ? ORDER BY reviewed_at",
+            (user_id, srs._iso(srs.study_day_start(now, tz_offset))),
+        ).fetchall()
+    events = _review_events(rows, tz_offset)
+    last = events[-1] if events else {"xp": 0, "kill": False, "death": False, "combo": 0, "first_blood": False}
+    totals = state(user_id, tz_offset, now)
+    return {
+        "xp": last["xp"],
+        "kill": last["kill"],
+        "death": last["death"],
+        "combo": last["combo"],
+        "first_blood": last["first_blood"],
+        "state": totals,
+    }

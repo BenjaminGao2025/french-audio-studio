@@ -158,7 +158,7 @@ Compose 单独覆盖 `AGY_BASE_URL` 为 `http://127.0.0.1:3425/v1`、`AGY_MODEL`
 
 ## 🧭 前端与架构
 
-当前界面由 `static/` 中的 HTML、CSS 和原生 JavaScript 提供，无需构建步骤。旧 React SPA 已从当前代码移除，`/app` 及其子路径跳转到 `/study`；旧代码保存在 `archive/react-spa` 分支。更多实现细节见 [ARCHITECTURE.md](ARCHITECTURE.md)，界面规范见 [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)。
+当前界面由 `static/` 中的 HTML、CSS 和原生 JavaScript 提供，无需构建步骤。旧 React SPA（源码 `frontend/`，构建产物 `static/app/`）及其后端接口（`/api/today`、`/api/listening/*`、`/api/reading/*` 等）仍保留；`/app` 默认关闭并跳转到 `/study`，设置 `APP_SHELL_ENABLED=1` 后重新提供。更多实现细节见 [ARCHITECTURE.md](ARCHITECTURE.md)，界面规范见 [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)。
 
 ## 🧪 运行测试
 
@@ -174,7 +174,7 @@ CI 在 GitHub 托管的 runner 上运行 lint、Python 和 JavaScript 测试；�
 
 ## 💾 备份与清理
 
-部署时使用 SQLite 在线备份把 `outputs/users.db` 的一致快照保存到 `outputs/backups/`，默认保留 14 份；数据库尚不存在时跳过。备份与数据库在同一磁盘，应另行复制到异地并定期验证恢复。清理脚本只处理指定命名规则的旧短语音缓存与过期临时文件，不清理数据库引用的音频；默认预览，不自动运行：
+部署时使用 SQLite 在线备份把 `outputs/users.db` 的一致快照保存到 `outputs/backups/`，默认保留 14 份；找不到 `users.db` 时以非零状态退出（部署因此中止），不会在没有备份的情况下继续。备份与数据库在同一磁盘，应另行复制到异地并定期验证恢复。清理脚本只处理指定命名规则的旧短语音缓存与过期临时文件，不清理数据库引用的音频；找不到 `users.db` 时拒绝运行并以非零状态退出；默认预览，不自动运行：
 
 ```bash
 docker exec tts-service python scripts/prune_outputs.py              # 预览

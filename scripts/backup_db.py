@@ -21,10 +21,11 @@ import sys
 from pathlib import Path
 
 
-def backup(output_dir: Path, label: str = "", keep: int = 14) -> Path | None:
+def backup(output_dir: Path, label: str = "", keep: int = 14) -> Path:
+    """Raises FileNotFoundError when there is no users.db: a release must not go ahead unbacked."""
     source_path = output_dir / "users.db"
-    if not source_path.exists():
-        return None
+    if not source_path.is_file():
+        raise FileNotFoundError(f"No database at {source_path}")
     backups = output_dir / "backups"
     backups.mkdir(parents=True, exist_ok=True)
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -48,8 +49,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--keep", type=int, default=14, help="how many backups to keep")
     args = parser.parse_args(argv)
     output_dir = Path(os.getenv("OUTPUT_DIR", "./outputs")).resolve()
-    target = backup(output_dir, args.label, args.keep)
-    print(f"Backed up to {target}" if target else f"No database at {output_dir / 'users.db'}; nothing to back up")
+    try:
+        target = backup(output_dir, args.label, args.keep)
+    except FileNotFoundError as exc:
+        # A wrong OUTPUT_DIR or mount must fail the deploy step, not pass it with no backup.
+        print(f"ERROR: {exc}; nothing backed up", file=sys.stderr)
+        return 1
+    print(f"Backed up to {target}")
     return 0
 
 

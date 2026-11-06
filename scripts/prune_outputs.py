@@ -34,9 +34,13 @@ def output_dir() -> Path:
 
 
 def referenced_names(db_path: Path) -> set[str]:
-    """Every snippet file name mentioned in any row of any table."""
-    if not db_path.exists():
-        return set()
+    """Every snippet file name mentioned in any row of any table.
+
+    Raises FileNotFoundError without a database: with no references to protect, every old
+    snippet would look unreferenced (a wrong OUTPUT_DIR must never delete files still in use).
+    """
+    if not db_path.is_file():
+        raise FileNotFoundError(f"No database at {db_path}")
     names: set[str] = set()
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     try:
@@ -69,7 +73,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--apply", action="store_true", help="delete (default: dry run)")
     args = parser.parse_args(argv)
     directory = output_dir()
-    found = candidates(directory, args.days)
+    try:
+        found = candidates(directory, args.days)
+    except FileNotFoundError as exc:
+        print(f"ERROR: {exc}; refusing to prune without it", file=sys.stderr)
+        return 1
     total = sum(path.stat().st_size for path in found)
     for path in found:
         if args.apply:

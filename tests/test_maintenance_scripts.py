@@ -4,10 +4,12 @@ import importlib.util
 import io
 import os
 import sqlite3
+import subprocess
+import sys
 import tempfile
 import time
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -66,6 +68,27 @@ class PruneOutputsTests(unittest.TestCase):
         self.assertEqual(gone, {"old_snippet", "old_snippet_srt", "stale_part"})
         self.assertTrue((self.dir / "users.db").exists())
 
+    def test_missing_database_fails_and_deletes_nothing(self):
+        (self.dir / "users.db").unlink()
+        err = io.StringIO()
+        with patch.dict(os.environ, {"OUTPUT_DIR": str(self.dir)}), redirect_stderr(err):
+            self.assertEqual(self.prune.main(["--apply"]), 1)
+        self.assertIn("users.db", err.getvalue())
+        self.assertTrue(all(path.exists() for path in self.files.values()))
+        with self.assertRaises(FileNotFoundError):
+            self.prune.candidates(self.dir, 60)
+
+    def test_missing_database_exits_nonzero_from_the_command_line(self):
+        (self.dir / "users.db").unlink()
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "prune_outputs.py"), "--apply"],
+            env={**os.environ, "OUTPUT_DIR": str(self.dir)},
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue(all(path.exists() for path in self.files.values()))
+
 
 class BackupDbTests(unittest.TestCase):
     def test_backup_copies_the_database_and_keeps_the_newest(self):
@@ -89,9 +112,36 @@ class BackupDbTests(unittest.TestCase):
         copy.close()
         self.assertEqual(sorted(p.name for p in backups.iterdir()), ["users-20200103T000000Z.db", target.name])
 
-    def test_no_database_is_not_an_error(self):
+    def test_missing_database_is_an_error(self):
         backup_db = _load("backup_db")
-        self.assertIsNone(backup_db.backup(Path(tempfile.mkdtemp(prefix="backup-"))))
+        directory = Path(tempfile.mkdtemp(prefix="backup-"))
+        with self.assertRaises(FileNotFoundError):
+            backup_db.backup(directory)
+        err = io.StringIO()
+        with patch.dict(os.environ, {"OUTPUT_DIR": str(directory)}), redirect_stderr(err):
+            self.assertEqual(backup_db.main(["--label", "x"]), 1)
+        self.assertIn("users.db", err.getvalue())
+        self.assertFalse((directory / "backups").exists())
+
+    def test_missing_database_exits_nonzero_from_the_command_line(self):
+        directory = Path(tempfile.mkdtemp(prefix="backup-"))
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "backup_db.py"), "--label", "x"],
+            env={**os.environ, "OUTPUT_DIR": str(directory)},
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((directory / "backups").exists())
+
+    def test_main_succeeds_with_a_database(self):
+        backup_db = _load("backup_db")
+        directory = Path(tempfile.mkdtemp(prefix="backup-"))
+        sqlite3.connect(directory / "users.db").close()
+        out = io.StringIO()
+        with patch.dict(os.environ, {"OUTPUT_DIR": str(directory)}), redirect_stdout(out):
+            self.assertEqual(backup_db.main([]), 0)
+        self.assertEqual(len(list((directory / "backups").glob("users-*.db"))), 1)
 
 
 if __name__ == "__main__":

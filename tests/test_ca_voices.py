@@ -43,7 +43,7 @@ class CanadianVoiceTests(unittest.TestCase):
     """Study, review and app playback use a Canadian voice chosen by a stable hash of the text."""
 
     def test_sources_use_the_stable_canadian_voice(self):
-        for path in ("static/study.js", "static/review.js"):
+        for path in ("static/study.js", "static/review.js", "frontend/src/api/real.ts"):
             src = _read(path)
             self.assertNotIn("fr-FR-DeniseNeural", src, path)
             self.assertNotIn("Math.random", src, path)
@@ -73,6 +73,13 @@ class CanadianVoiceTests(unittest.TestCase):
         for text, (a, b) in zip(SAMPLES, json.loads(out.stdout)):
             self.assertEqual(a, voice_for(text), text)
             self.assertEqual(b, voice_for(text), text)
+
+    def test_built_app_matches_source(self):
+        built = "".join(p.read_text(encoding="utf-8") for p in (ROOT / "static/app/assets").glob("*.js"))
+        self.assertNotIn("fr-FR-DeniseNeural", built)
+        for voice in CA:
+            self.assertIn(voice, built)
+        self.assertIn("16777619", built)
 
     def test_server_accepts_the_voices(self):
         import services.speech

@@ -168,5 +168,6 @@ Study 的整句标题和每一步搭句使用同一套法语单词标记。单�
 
 词保持可选中：长按或拖选单个词/短语都会像点击一样打开词义弹窗（短语仍按短语查询和保存）。词设置 `touch-action: manipulation`（没有双击缩放和点击延迟），只绑一个 `click`，没有 touchend/pointerup 双触发。悬停高亮只在真正有悬停的鼠标上出现（避免手机点按后一直高亮）；点中的词只改背景与颜色，不改字重，避免弹窗打开时整行重排。词义弹窗避开整个所在文字块：词在上半部分时放在文字块上方，下半部分放在下方，换行句子的其他行在弹窗打开时仍可点。
 
+`/app` 单页应用的阅读拆解与听力揭晓步骤使用同一规则：`FrenchWords`（`frontend/src/components/fr/words.tsx`）把句子拆成可点的词，点按经全局 `audioController` 播放并展开释义卡片；样式 `.fr-word` 与旧页同构。SPA 没有短语选择功能，所以触屏上词不可选中，鼠标上仍可选中。想让句子更紧凑，只需调小两处 `--word-tap-height`，但低于 44px 就不再满足触控最小尺寸。
 
-验证：`node tools/word-tap-targets-check.cjs`（旧页，真实 Chromium 触屏模拟，逐像素测量命中带与死区、逐个点击词间空隙、长按选词、盲测静默、悬停高亮）、`node tests/test_word_tap_targets.cjs`（jsdom，`npm test` 会运行全部 jsdom 测试）。`tools/header-ui-check.cjs` 在本次改动前就失败（页头标签数 4≠3），与本次无关。
+验证：`node tools/word-tap-targets-check.cjs`（旧页，真实 Chromium 触屏模拟，逐像素测量命中带与死区、逐个点击词间空隙、长按选词、盲测静默、悬停高亮）、`node tools/spa-word-tap-check.cjs`（构建后的 `/app`）、`node tests/test_word_tap_targets.cjs`（jsdom）以及前端 vitest。`tools/header-ui-check.cjs` 在本次改动前就失败（页头标签数 4≠3），与本次无关。

@@ -6,6 +6,7 @@ import testenv  # noqa: F401  (must run before the app is imported)
 from fastapi.testclient import TestClient
 
 import auth_db
+import routers.srs
 import srs
 import tts_service
 
@@ -163,6 +164,55 @@ class SrsStoreTests(unittest.TestCase):
         )
         pattern = next(c for n in notes for c in n["cards"] if c["target"] == "aucune … ne")
         self.assertEqual(pattern["target_meta"]["meaning_zh"], "aucune 已经表示否定")
+
+
+class EnglishBackfillTests(unittest.TestCase):
+    def test_backfill_fills_missing_english_only(self):
+        import asyncio
+        import json
+        from unittest.mock import AsyncMock, patch
+
+        user_id, _ = _new_user()
+        keep = srs.add_note(user_id, "Bonjour.", "你好。", "Hello.", modes=["listen"])
+        old = srs.add_note(
+            user_id,
+            "Délivrance des résultats",
+            "成绩发放",
+            targets=[{"text": "Délivrance", "meta": {"meaning_zh": "发放"}}],
+        )
+        card_id = old["cards"][0]["id"]
+        missing = srs.missing_english(user_id)
+        self.assertEqual([n["id"] for n in missing["notes"]], [old["id"]])
+        self.assertEqual([c["id"] for c in missing["cards"]], [card_id])
+
+        replies = [
+            ({}, json.dumps({"items": [{"id": old["id"], "en": "Release of results"}, {"id": "bogus", "en": "x"}]})),
+            ({}, json.dumps({"items": [{"id": card_id, "en": "release, issuing"}]})),
+        ]
+        with patch("services.ai.post_chat", new_callable=AsyncMock, side_effect=replies):
+            result = asyncio.run(routers.srs.backfill_english(user_id, "k"))
+        self.assertEqual(result, {"missing_notes": 1, "missing_cards": 1, "updated": 2})
+        notes = {n["id"]: n for n in srs.lookup_notes(user_id, ["Bonjour.", "Délivrance des résultats"])}
+        self.assertEqual(notes[old["id"]]["translation_en"], "Release of results")
+        self.assertEqual(notes[keep["id"]]["translation_en"], "Hello.")
+        self.assertEqual(notes[old["id"]]["cards"][0]["target_meta"]["meaning_en"], "release, issuing")
+        self.assertEqual(srs.missing_english(user_id), {"notes": [], "cards": []})
+
+    def test_backfill_endpoint_requires_sign_in_and_uses_the_server_key(self):
+        from unittest.mock import AsyncMock, patch
+
+        client = TestClient(tts_service.app)
+        self.assertEqual(client.post("/api/srs/backfill-english").status_code, 401)
+        user_id, headers = _new_user()
+        expected = {"missing_notes": 0, "missing_cards": 0, "updated": 0}
+        with (
+            patch("services.ai.SERVER_WEB2API_KEY", "server-key"),
+            patch("routers.srs.backfill_english", new_callable=AsyncMock, return_value=expected) as run,
+        ):
+            res = client.post("/api/srs/backfill-english", headers=headers)
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json(), expected)
+        run.assert_awaited_once_with(user_id, "server-key")
 
 
 class ImportanceAndWordsTests(unittest.TestCase):

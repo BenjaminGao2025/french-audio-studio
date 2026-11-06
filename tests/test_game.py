@@ -1,6 +1,7 @@
 import datetime
 import unittest
 import uuid
+from unittest.mock import patch
 
 import testenv  # noqa: F401  (must run before the app is imported)
 from fastapi.testclient import TestClient
@@ -8,6 +9,7 @@ from fastapi.testclient import TestClient
 import auth_db
 import coach
 import game
+import routers.game
 import srs
 import tts_service
 
@@ -26,9 +28,19 @@ def _at(day: str, hour: int) -> datetime.datetime:
     return (local + datetime.timedelta(minutes=PDT)).replace(tzinfo=UTC)
 
 
-class PlanTests(unittest.TestCase):
-    def test_the_plan_is_16_hours_a_week(self):
+class LevelCurveTests(unittest.TestCase):
+    def test_levels_follow_study_hours(self):
+        # One level per hour: level 1000 = 1000 hours
+        self.assertEqual(game.level_threshold(0), 0)
+        self.assertEqual(game.level_threshold(game.MAX_LEVEL), 1000 * 60)
         self.assertEqual(game.WEEK_TARGET_MIN, 16 * 60)
+        self.assertEqual(game.level_for(59)["level"], 0)
+        info = game.level_for(5 * 60 + 30)
+        self.assertEqual(info["level"], 5)
+        self.assertEqual(info["next_level_xp"], 6 * 60)
+        self.assertEqual(info["progress"], 0.5)
+        self.assertEqual(game.level_for(10**9)["level"], game.MAX_LEVEL)
+        self.assertIsNone(game.level_for(10**9)["next_level_xp"])
 
     def test_plan_weeks(self):
         self.assertEqual(game.week_number(datetime.date(2026, 10, 4)), 0)
@@ -81,13 +93,13 @@ class StudyTimeTests(unittest.TestCase):
     def setUp(self):
         self.user_id, _ = _new_user()
 
-    def test_long_days_count_every_minute(self):
+    def test_minutes_beyond_five_hours_earn_half_xp(self):
         now = _at("2026-10-06", 10)  # a Tuesday
         game.log_time(self.user_id, "reading", 200, "", PDT, now)
         game.log_time(self.user_id, "listening", 200, "", PDT, now)
         state = game.state(self.user_id, PDT, now)
         self.assertEqual(state["today"]["minutes"], 400)
-        self.assertNotIn("xp", state)
+        self.assertEqual(state["xp"], 300 + 50)
         self.assertEqual(state["today"]["target"], 160)
         self.assertEqual(state["week"]["by_lane"]["reading"], 200)
 
@@ -152,6 +164,7 @@ class StudyTimeTests(unittest.TestCase):
         self.assertEqual(state["today"]["by_lane"]["car"], 60)
         self.assertEqual(state["today"]["minutes"], 30)
         self.assertEqual(state["week"]["minutes"], 30)
+        self.assertEqual(state["xp"], 30)
         self.assertEqual(state["today"]["target"], 120)  # Saturday
 
     def test_heartbeats_are_capped_and_land_on_the_study_day(self):
@@ -190,6 +203,12 @@ class StudyTimeTests(unittest.TestCase):
         game.set_family_day(self.user_id, True, PDT, now)
         self.assertEqual(game.state(self.user_id, PDT, now)["today"]["target"], 0)
 
+    def test_wave_cleared_pays_once_a_day(self):
+        now = _at("2026-10-06", 11)
+        self.assertEqual(game.wave_cleared(self.user_id, PDT, now), game.WAVE_CLEARED_XP)
+        self.assertEqual(game.wave_cleared(self.user_id, PDT, now), 0)
+        self.assertEqual(game.state(self.user_id, PDT, now)["xp"], game.WAVE_CLEARED_XP)
+
 
 class RetiredCourseLaneTests(unittest.TestCase):
     """Time logged under the old course lane stays in history but belongs to no lane or target."""
@@ -214,6 +233,7 @@ class RetiredCourseLaneTests(unittest.TestCase):
         state = game.state(self.user_id, PDT, self.now)
         self.assertEqual(state["today"]["minutes"], 120)
         self.assertEqual(state["hours_total"], 2.0)
+        self.assertEqual(state["xp"], 120)
         self.assertEqual(state["week"]["minutes"], 120)
         self.assertNotIn("course", state["today"]["by_lane"])
         self.assertNotIn("course", state["week"]["by_lane"])
@@ -318,14 +338,25 @@ class ReviewFeedbackTests(unittest.TestCase):
         srs.review_card(self.user_id, card_id, rating, now=now)
         return game.review_feedback(self.user_id, PDT, now)
 
-    def test_feedback_is_the_refreshed_progress(self):
-        feedback = self._review(self.cards[0], 3, 0)
-        self.assertEqual(set(feedback), {"state"})
-        self.assertIn("today", feedback["state"])
-        for gone in ("xp", "level", "max_level"):
-            self.assertNotIn(gone, feedback["state"])
-        for gone in ("kills", "deaths", "combo", "best_combo", "first_blood", "wave_cleared"):
-            self.assertNotIn(gone, feedback["state"]["today"])
+    def test_first_blood_combo_and_death(self):
+        first = self._review(self.cards[0], 3, 0)
+        self.assertTrue(first["kill"] and first["first_blood"])
+        self.assertEqual(first["combo"], 1)
+        self.assertEqual(first["xp"], 4 + game.NEW_CARD_XP + game.FIRST_BLOOD_XP)
+
+        second = self._review(self.cards[1], 4, 1)
+        self.assertEqual(second["combo"], 2)
+        self.assertFalse(second["first_blood"])
+        self.assertEqual(second["xp"], 5 + game.NEW_CARD_XP + 1)
+
+        death = self._review(self.cards[2], 1, 2)
+        self.assertTrue(death["death"])
+        self.assertEqual(death["combo"], 0)
+        self.assertEqual(death["state"]["today"]["kills"], 2)
+        self.assertEqual(death["state"]["today"]["deaths"], 1)
+        self.assertEqual(death["state"]["today"]["best_combo"], 2)
+        self.assertEqual(death["state"]["today"]["combo"], 0)
+        self.assertEqual(second["state"]["today"]["combo"], 2)
 
 
 class GameApiTests(unittest.TestCase):
@@ -360,12 +391,37 @@ class GameApiTests(unittest.TestCase):
         beat = self.client.post("/api/game/heartbeat", headers=self.headers, json={"lane": "course", "seconds": 60})
         self.assertEqual((log.status_code, beat.status_code), (422, 422))
 
-    def test_announcer_and_wave_endpoints_are_gone(self):
-        self.assertEqual(self.client.get("/api/game/callout/double_kill.mp3").status_code, 404)
-        res = self.client.post("/api/game/wave-cleared", headers=self.headers, json={"tz_offset": PDT})
-        self.assertIn(res.status_code, {404, 405})
+    def test_callouts_are_fixed_lines_generated_once(self):
+        self.assertEqual(self.client.get("/api/game/callout/hello.mp3").status_code, 404)
+        spoken = []
 
-    def test_review_response_carries_the_progress(self):
+        class FakeCommunicate:
+            def __init__(self, text, **kwargs):
+                spoken.append((text, kwargs["voice"]))
+
+            async def save(self, path):
+                with open(path, "wb") as handle:
+                    handle.write(b"ID3fake")
+
+        with patch.object(routers.game.edge_tts, "Communicate", FakeCommunicate):
+            first = self.client.get("/api/game/callout/double_kill.mp3")
+            second = self.client.get("/api/game/callout/double_kill.mp3")
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first.headers["content-type"], "audio/mpeg")
+        self.assertEqual(second.content, b"ID3fake")
+        self.assertEqual(spoken, [("Double kill!", game.CALLOUT_VOICE["voice"])])
+
+    def test_wave_cleared_endpoint_pays_once(self):
+        anon = self.client.post("/api/game/wave-cleared", json={"tz_offset": PDT})
+        self.assertEqual(anon.status_code, 401)
+        first = self.client.post("/api/game/wave-cleared", headers=self.headers, json={"tz_offset": PDT})
+        second = self.client.post("/api/game/wave-cleared", headers=self.headers, json={"tz_offset": PDT})
+        self.assertEqual((first.status_code, second.status_code), (200, 200))
+        self.assertEqual(first.json()["xp"], game.WAVE_CLEARED_XP)
+        self.assertEqual(second.json()["xp"], 0)
+        self.assertTrue(second.json()["state"]["today"]["wave_cleared"])
+
+    def test_review_response_carries_the_kill_feed(self):
         note = srs.add_note(self.user_id, "Bonjour.", targets=[{"text": "Bonjour"}])
         card_id = note["cards"][0]["id"]
         res = self.client.post(
@@ -373,7 +429,9 @@ class GameApiTests(unittest.TestCase):
         )
         self.assertEqual(res.status_code, 200)
         feed = res.json()["game"]
-        self.assertIn("days_studied_7d", feed["state"])
+        self.assertTrue(feed["kill"])
+        self.assertTrue(feed["first_blood"])
+        self.assertGreater(feed["state"]["xp"], 0)
 
 
 if __name__ == "__main__":

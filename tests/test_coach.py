@@ -83,7 +83,7 @@ class CoachTests(unittest.TestCase):
         for i in range(5):
             coach.record(self.uid, "write", str(i))
         self.assertEqual(coach.progress(self.uid)["xp"], 30)
-        self.assertNotIn("xp", game.state(self.uid, 0))
+        self.assertEqual(game.state(self.uid, 0)["xp"], 30)
         self.assertEqual(game.state(self.uid, 0)["hours_total"], 0)
 
     def test_revision_reward_requires_changed_text_and_successful_fix(self):

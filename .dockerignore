@@ -8,3 +8,10 @@ outputs/
 tests/
 models/
 frontend/
+node_modules/
+# Never in the build context: secrets, local agent state, tunnel config, untracked scratch modules
+.env
+.claude/
+config.yml
+*.db
+eb_common*

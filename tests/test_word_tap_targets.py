@@ -45,6 +45,9 @@ class WordTapTargetTests(unittest.TestCase):
     def test_meaning_popover_persists_through_settle_in_jsdom(self):
         self._node("tests/test_popover_persist.cjs")
 
+    def test_word_card_persists_through_settle_in_jsdom(self):
+        self._node("tests/test_word_card_settle.cjs")
+
     def test_read_selection_is_wired_into_the_study_page(self):
         html = _read("static/study.html")
         js = _read("static/study.js")

@@ -1,20 +1,62 @@
-"""Old /app links (the archived React SPA) land on the study page.
+"""Serves the React SPA built into static/app (source: frontend/).
 
-The SPA lived in frontend/ and was taken offline on 2026-10-21. Its source, build and the
-cockpit/comprehension backends are kept on the `archive/react-spa` branch.
+Set APP_SHELL_ENABLED=1 to serve it again; while off, every /app URL redirects to /study.
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter
-from fastapi.responses import RedirectResponse
+import os
+from pathlib import PurePosixPath
+
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+
+from web_common import STATIC_DIR
 
 router = APIRouter()
 
+# Single kill switch: the shell is taken offline by default, the build and this router stay.
+APP_SHELL_ENABLED = os.getenv("APP_SHELL_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
 APP_SHELL_FALLBACK = "/study"
+APP_DIR = (STATIC_DIR / "app").resolve()
+IMMUTABLE = "public, max-age=31536000, immutable"
+NO_STORE = "no-cache, no-store, must-revalidate"
+# Explicit types: the server sends nosniff, so a script or stylesheet must not depend on the
+# host's mime database.
+MEDIA_TYPES = {
+    ".js": "text/javascript",
+    ".css": "text/css",
+    ".woff2": "font/woff2",
+    ".woff": "font/woff",
+    ".ico": "image/x-icon",
+    ".svg": "image/svg+xml",
+    ".txt": "text/plain",
+}
 
 
 @router.api_route("/app", methods=["GET", "HEAD"], include_in_schema=False)
 @router.api_route("/app/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
-async def app_shell(path: str = "") -> RedirectResponse:
-    return RedirectResponse(APP_SHELL_FALLBACK, status_code=302)
+async def app_shell(path: str = ""):
+    if not APP_SHELL_ENABLED:
+        # Off: /app, /app/ and /app/anything all land on the page that still works.
+        return RedirectResponse(APP_SHELL_FALLBACK, status_code=302)
+    # A last segment with a dot (or anything under assets/) is a file: serve it or 404, never
+    # the shell, so a missing chunk is a real 404 instead of HTML served as JavaScript.
+    if path.startswith("assets/") or "." in PurePosixPath(path).name:
+        try:
+            target = (APP_DIR / path).resolve()
+            found = target.is_relative_to(APP_DIR) and target.is_file()
+        except (OSError, ValueError):  # NUL byte, name too long
+            found = False
+        if not found:
+            raise HTTPException(status_code=404, detail="文件不存在。")
+        headers = {"Cache-Control": IMMUTABLE} if path.startswith("assets/") else {}
+        return FileResponse(target, media_type=MEDIA_TYPES.get(target.suffix), headers=headers)
+    index = APP_DIR / "index.html"
+    if not index.is_file():
+        raise HTTPException(status_code=503, detail={"message": "前端尚未构建：cd frontend && npm run build"})
+    # No auth on the shell: the SPA redirects to /app/login on a 401 from the API.
+    return HTMLResponse(
+        index.read_text(encoding="utf-8"),
+        headers={"Cache-Control": NO_STORE, "Pragma": "no-cache", "Expires": "0"},
+    )

@@ -19,6 +19,8 @@ import episodes
 import routers.app_shell
 import routers.auth
 import routers.coach
+import routers.cockpit
+import routers.comprehension
 import routers.episodes
 import routers.game
 import routers.grammar
@@ -48,6 +50,8 @@ for _routes in (
     routers.srs,
     routers.game,
     routers.grammar,
+    routers.comprehension,
+    routers.cockpit,
     routers.app_shell,
     routers.studio,
     routers.pages,

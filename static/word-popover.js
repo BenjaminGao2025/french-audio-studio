@@ -429,6 +429,9 @@
         // mobile chrome scroll, selection handle settle) for a short window after show().
         let settleUntil = 0;
         const settling = () => Date.now() < settleUntil;
+        // A real press that started after show(): a drag that selects another word is deliberate,
+        // unlike the synthetic events of the opening gesture, so it may close a word card at once.
+        let pressedSinceShow = false;
         let etymologyGeneration = 0;
 
         function resetEtymology() {
@@ -639,10 +642,10 @@
             updateBack();
 
             target = element;
-            // 700ms covers iOS synthetic mouse events after pointerup and chrome show/hide scroll.
-            // Only a Meaning card (an anchor with coversRange) is opened by a selection gesture; a
-            // word card must still close at once when the user selects a different word.
-            settleUntil = element && typeof element.coversRange === 'function' ? Date.now() + 700 : 0;
+            // 700ms covers iOS synthetic mouse events after pointerup and chrome show/hide scroll,
+            // for word cards and Meaning cards alike.
+            settleUntil = Date.now() + 700;
+            pressedSinceShow = false;
             pop.hidden = false;
             pop.style.display = 'flex';
             if (activeEl && activeEl !== element && activeEl.classList) activeEl.classList.remove('is-active-word');
@@ -834,7 +837,11 @@
             // card still open for the previous word would sit over the new selection as if it were
             // its meaning. It closes, unless the selection is the open word itself (double click)
             // or still the phrase the selection bar's Meaning opened it for (anchor.coversRange).
-            if (isOpen() && selection && selection.rangeCount > 0 && !selection.isCollapsed && !settling()) {
+            // While settling, only a drag that began after a word card opened may close it; a
+            // Meaning card (anchor.coversRange) ignores selection changes until it has settled.
+            const meaningCard = Boolean(target && typeof target.coversRange === 'function');
+            const deliberate = pressedSinceShow && !meaningCard;
+            if (isOpen() && selection && selection.rangeCount > 0 && !selection.isCollapsed && (!settling() || deliberate)) {
                 const node = selection.getRangeAt(0).commonAncestorContainer;
                 const ownAnchor = Boolean(target && typeof target.coversRange === 'function' && target.coversRange(selection.getRangeAt(0)));
                 // Meaning anchors have no activeEl; keep the card unless the user selected a different span
@@ -857,7 +864,11 @@
             clearTimeout(selectionTimer);
             selectionTimer = setTimeout(showSelectedPhrase, delay);
         };
-        document.addEventListener('mousedown', (e) => { if (e.button === 0) mouseHeld = true; });
+        document.addEventListener('mousedown', (e) => {
+            if (e.button !== 0) return;
+            mouseHeld = true;
+            if (isOpen()) pressedSinceShow = true;
+        });
         document.addEventListener('mouseup', () => {
             if (!mouseHeld) return;
             mouseHeld = false;

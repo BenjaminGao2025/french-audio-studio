@@ -42,6 +42,16 @@
         'testament', 'tient', 'torrent', 'tourment', 'urgent', 'vent', 'vient', 'violent',
         'appartient', 'contient', 'maintient', 'parvient', 'provient', 'retient', 'soutient',
     ]);
+    // -mment verbs (nommer, consommer, programmer...): their -ent is silent like any 3rd person
+    // plural, unlike the -emment/-amment adverbs (évidemment, couramment).
+    const SILENT_MMENT = new Set([
+        'programment', 'reprogramment', 'deprogramment', 'enflamment', 'desenflamment',
+    ]);
+    // A grave è right before the final consonants (sèment, parsèment, diffèrent, lèvent) only
+    // occurs in verb forms: nouns and adverbs in -ement keep a plain e there (événement,
+    // complètement), so this decides before accents are stripped.
+    const VERB_GRAVE_ENT = /è[^aeiouyàâäéèêëîïôöùûüœæ]+ent$/;
+
     // Final -s / -x that is pronounced: dropping it would make "fils" match "fil"
     const PRONOUNCED_S = new Set([
         'autobus', 'bonus', 'bus', 'cactus', 'campus', 'fils', 'helas', 'index', 'iris', 'mars',
@@ -52,6 +62,7 @@
         if (!word) return '';
         let w = word.toLowerCase().trim();
         w = w.replace(/[.,/#!$%^&*;:{}=\-_`~()?"'’«»[\]]/g, '');
+        const graveVerb = VERB_GRAVE_ENT.test(w.normalize('NFC'));
         // Decompose accents for phonetic tolerance (e.g. é -> e, à -> a, ç -> c)
         w = w.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
@@ -60,12 +71,18 @@
         if ((w.endsWith('s') || w.endsWith('x')) && w.length >= 3 && !PRONOUNCED_S.has(w)) {
             w = w.slice(0, -1);
         }
-        // The verb ending -ent of the 3rd person plural is silent (autorisent -> autorise), but
-        // not in adverbs/nouns in -ement / -mment (lentement, évidemment, gouvernement) or the
-        // common words above (comment, moment, souvent, client, il vient).
-        if (w.endsWith('ent') && w.length >= 5 && !PRONOUNCED_ENT.has(w)
-                && !w.endsWith('ement') && !w.endsWith('mment')) {
-            w = w.slice(0, -2);
+        // The verb ending -ent of the 3rd person plural is silent (autorisent -> autorise,
+        // ils sèment -> sème, ils nomment -> nomme), but not in adverbs/nouns in -ement and
+        // -emment/-amment (lentement, gouvernement, évidemment, couramment) or the common words
+        // above (comment, moment, souvent, client, il vient).
+        if (w.endsWith('ent') && w.length >= 5) {
+            let silent;
+            if (graveVerb || SILENT_MMENT.has(w)) silent = true;
+            else if (PRONOUNCED_ENT.has(w)) silent = false;
+            else if (w.endsWith('emment') || w.endsWith('amment')) silent = false;
+            else if (w.endsWith('mment')) silent = true;
+            else silent = !w.endsWith('ement');
+            if (silent) w = w.slice(0, -2);
         }
         return w;
     }
