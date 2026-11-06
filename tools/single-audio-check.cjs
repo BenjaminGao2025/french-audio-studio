@@ -1,7 +1,7 @@
-// Run with node tools/single-audio-check.cjs (uses the frontend's jsdom).
+// Run with node tools/single-audio-check.cjs (needs `npm ci` at the repo root for jsdom).
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const { JSDOM } = require('../frontend/node_modules/jsdom');
+const { JSDOM } = require('jsdom');
 const dom = new JSDOM('<audio id="sentence"></audio><video></video>', { runScripts: 'outside-only' });
 const w = dom.window;
 const paused = new WeakMap();

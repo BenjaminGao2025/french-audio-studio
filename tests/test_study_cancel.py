@@ -1,3 +1,6 @@
+import testenv
+
+
 def test_study_analysis_can_be_cancelled():
     js = open("static/study.js", encoding="utf-8").read()
     assert "new AbortController()" in js
@@ -8,3 +11,6 @@ def test_study_analysis_can_be_cancelled():
     # A cancelled run must not render or save a partial result
     cancel_branch = js.split("analysisController.signal.aborted")[1].split("} else {")[0]
     assert "saveHistoryItem" not in cancel_branch and "renderStudyDeck" not in cancel_branch
+
+
+load_tests = testenv.function_tests(globals())

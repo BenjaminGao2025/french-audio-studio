@@ -1,4 +1,5 @@
 """Cockpit routes: today's plan, hours ledger, to-dos, daily review (see cockpit.py)."""
+
 from __future__ import annotations
 
 import datetime
@@ -63,9 +64,7 @@ def finish_block(block_id: str, request: Request, authorization: str | None = He
 
 
 @router.post("/api/today/blocks/{block_id}/skip")
-def skip_block(
-    block_id: str, req: SkipRequest, request: Request, authorization: str | None = Header(default=None)
-):
+def skip_block(block_id: str, req: SkipRequest, request: Request, authorization: str | None = Header(default=None)):
     return _block_call(cockpit.skip_block, _require_user_id(authorization, request), block_id, req.reason)
 
 
@@ -95,19 +94,20 @@ def complete_todo(todo_id: str, request: Request, authorization: str | None = He
 
 
 @router.post("/api/daily-reviews")
-def save_daily_review(
-    req: DailyReviewRequest, request: Request, authorization: str | None = Header(default=None)
-):
+def save_daily_review(req: DailyReviewRequest, request: Request, authorization: str | None = Header(default=None)):
     return cockpit.save_review(
         _require_user_id(authorization, request),
-        req.day.isoformat(), req.hard, req.solved, req.unsolved, req.tomorrow, req.mood,
+        req.day.isoformat(),
+        req.hard,
+        req.solved,
+        req.unsolved,
+        req.tomorrow,
+        req.mood,
     )
 
 
 @router.get("/api/daily-reviews")
-def get_daily_review(
-    request: Request, day: datetime.date, authorization: str | None = Header(default=None)
-):
+def get_daily_review(request: Request, day: datetime.date, authorization: str | None = Header(default=None)):
     return cockpit.get_review(_require_user_id(authorization, request), day.isoformat())
 
 

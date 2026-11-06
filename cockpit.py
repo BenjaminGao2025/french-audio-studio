@@ -60,13 +60,19 @@ PAST_SHADOWING = Slot("shadow", "shadowing", "Shadowing · past texts", 10, "/sh
 LISTENING = Slot("main1", "listening", "Main block 1 · Listening 3-step", 70, "/listening", "listening", "10:00")
 READING = Slot("main1", "reading", "Main block 1 · Intensive reading", 70, "/reading", "reading", "10:00")
 WRITING = Slot("main2", "writing", "Main block 2 · Writing T1 practice", 40, "/writing", "writing", "11:15")
-WRITING_REVISION = Slot("main2", "writing", "Main block 2 · Writing revision + second correction", 20, "/writing", "writing", "11:15")
+WRITING_REVISION = Slot(
+    "main2", "writing", "Main block 2 · Writing revision + second correction", 20, "/writing", "writing", "11:15"
+)
 # Intensive reading and shadowing are the two practices that replaced the old course block: Tuesday
 # main block 2 is the first, Thursday's the second (fixed, not flipped by week parity, so the weekly
 # minutes do not depend on the week); Wednesday ends with 20 minutes of reading and Friday has 40.
 # /reading supplies the shared analyzer breakdown through the Phase A passages API.
-INTENSIVE = Slot("main2", "intensive", "Main block 2 · Intensive reading (sentence breakdown)", 40, "/reading", "reading", "11:15")
-INTENSIVE_SHORT = Slot("main3", "intensive", "Main block 2 · Intensive reading (sentence breakdown)", 20, "/reading", "reading", "11:35")
+INTENSIVE = Slot(
+    "main2", "intensive", "Main block 2 · Intensive reading (sentence breakdown)", 40, "/reading", "reading", "11:15"
+)
+INTENSIVE_SHORT = Slot(
+    "main3", "intensive", "Main block 2 · Intensive reading (sentence breakdown)", 20, "/reading", "reading", "11:35"
+)
 SHADOWING = Slot("main2", "shadowing", "Main block 2 · Shadowing", 40, "/shadow", "speaking", "11:15")
 # The 5-minute wrap-up is outside the planned study minutes (PRD 6.1): the day's blocks add up to
 # game.DAY_TARGET_MIN without it.
@@ -95,9 +101,7 @@ MINIMAL_TEMPLATE: tuple[Slot, ...] = (
 )
 
 # PRD 13.2 #11: shown at the top of Today until done. id is deterministic, so seeding is idempotent.
-SEED_TODOS = (
-    ("placement", "完成分级测试 · Take the placement test", "2026-11-29"),
-)
+SEED_TODOS = (("placement", "完成分级测试 · Take the placement test", "2026-11-29"),)
 
 _initialized_db_paths: set[str] = set()
 
@@ -250,7 +254,19 @@ def _insert_blocks(
             INSERT INTO day_blocks (id, user_id, day, position, slot, kind, title, route, lane, start_time, planned_min)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (uuid.uuid4().hex, user_id, day, position, s.slot, s.kind, s.title, s.route, s.lane, s.start_time, s.planned_min),
+            (
+                uuid.uuid4().hex,
+                user_id,
+                day,
+                position,
+                s.slot,
+                s.kind,
+                s.title,
+                s.route,
+                s.lane,
+                s.start_time,
+                s.planned_min,
+            ),
         )
 
 
@@ -274,16 +290,24 @@ def _ensure_plan(conn: sqlite3.Connection, user_id: int, day: datetime.date, now
     # preserve every existing block's id, state and recorded duration.
     if not cursor.rowcount:
         slots = _template(day, minimal)
-        existing = conn.execute("SELECT id,slot,position FROM day_blocks WHERE user_id=? AND day=? ORDER BY position", (user_id, day.isoformat())).fetchall()
+        existing = conn.execute(
+            "SELECT id,slot,position FROM day_blocks WHERE user_id=? AND day=? ORDER BY position",
+            (user_id, day.isoformat()),
+        ).fetchall()
         present = {b["slot"] for b in existing}
         missing = [s for s in slots if s.kind in {"listening", "reading"} and s.slot not in present]
         if missing:
             _insert_blocks(conn, user_id, day.isoformat(), missing)
             order = {s.slot: i for i, s in enumerate(slots)}
-            rows = conn.execute("SELECT id,slot,position FROM day_blocks WHERE user_id=? AND day=? ORDER BY position", (user_id, day.isoformat())).fetchall()
+            rows = conn.execute(
+                "SELECT id,slot,position FROM day_blocks WHERE user_id=? AND day=? ORDER BY position",
+                (user_id, day.isoformat()),
+            ).fetchall()
             rows = sorted(rows, key=lambda b: order.get(b["slot"], -1))
             # Move out of the range first to satisfy the unique position index.
-            conn.execute("UPDATE day_blocks SET position=position+10000 WHERE user_id=? AND day=?", (user_id, day.isoformat()))
+            conn.execute(
+                "UPDATE day_blocks SET position=position+10000 WHERE user_id=? AND day=?", (user_id, day.isoformat())
+            )
             for position, block in enumerate(rows, 1):
                 conn.execute("UPDATE day_blocks SET position=? WHERE id=?", (position, block["id"]))
     return minimal
@@ -390,11 +414,14 @@ def set_minimal(user_id: int, on: bool, tz_offset: int = 0, now: datetime.dateti
                 "UPDATE day_plans SET minimal = ? WHERE user_id = ? AND day = ?", (int(on), user_id, day.isoformat())
             )
             conn.execute(
-                "DELETE FROM day_blocks WHERE user_id = ? AND day = ? AND status = 'planned'", (user_id, day.isoformat())
+                "DELETE FROM day_blocks WHERE user_id = ? AND day = ? AND status = 'planned'",
+                (user_id, day.isoformat()),
             )
             kept = {
                 r["slot"]
-                for r in conn.execute("SELECT slot FROM day_blocks WHERE user_id = ? AND day = ?", (user_id, day.isoformat()))
+                for r in conn.execute(
+                    "SELECT slot FROM day_blocks WHERE user_id = ? AND day = ?", (user_id, day.isoformat())
+                )
             }
             _insert_blocks(conn, user_id, day.isoformat(), _template(day, on), kept)
         return _today_payload(conn, user_id, day, on)

@@ -1,15 +1,22 @@
-import testenv  # noqa: F401  (must be first: isolates OUTPUT_DIR and secrets)
+"""The legacy React SPA at /app: off by default (redirects to /study), served again with
+APP_SHELL_ENABLED=1."""
 
+import os
 import re
+import subprocess
+import sys
 import unittest
 from html.parser import HTMLParser
 from pathlib import Path
 from unittest import mock
 
+import testenv  # noqa: F401  (sets AUTH_SECRET / OUTPUT_DIR before the app is imported)
 from fastapi.testclient import TestClient
 
 import tts_service
 from routers import app_shell
+
+ROOT = Path(__file__).resolve().parents[1]
 
 APP_DIR = Path(tts_service.STATIC_DIR) / "app"
 INDEX = APP_DIR / "index.html"
@@ -64,6 +71,32 @@ class AppShellDisabledTests(unittest.TestCase):
             with self.subTest(page=path.name):
                 self.assertNotIn('href="/app/', path.read_text(encoding="utf-8"))
                 self.assertNotIn("href='/app/", path.read_text(encoding="utf-8"))
+
+
+class AppShellToggleTests(unittest.TestCase):
+    """APP_SHELL_ENABLED is read once at import; only explicit truthy values turn the shell on."""
+
+    def _flag(self, value):
+        env = {k: v for k, v in os.environ.items() if k != "APP_SHELL_ENABLED"}
+        if value is not None:
+            env["APP_SHELL_ENABLED"] = value
+        out = subprocess.run(
+            [sys.executable, "-c", "from routers import app_shell; print(app_shell.APP_SHELL_ENABLED)"],
+            cwd=ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return out.stdout.strip()
+
+    def test_off_unless_explicitly_enabled(self):
+        for value in (None, "", "0", "false", "no", "off", "maybe"):
+            with self.subTest(value=value):
+                self.assertEqual(self._flag(value), "False")
+        for value in ("1", "true", "TRUE", "yes", "on", " On "):
+            with self.subTest(value=value):
+                self.assertEqual(self._flag(value), "True")
 
 
 class AppShellTests(unittest.TestCase):
@@ -138,9 +171,7 @@ class AppShellTests(unittest.TestCase):
             with self.subTest(path=path):
                 csp = self.client.get(path).headers["content-security-policy"]
                 self.assertEqual(csp, tts_service.CONTENT_SECURITY_POLICY)
-        script_src = next(
-            d for d in tts_service.CONTENT_SECURITY_POLICY.split("; ") if d.startswith("script-src")
-        )
+        script_src = next(d for d in tts_service.CONTENT_SECURITY_POLICY.split("; ") if d.startswith("script-src"))
         self.assertNotIn("'unsafe-inline'", script_src)
         self.assertNotIn("'unsafe-eval'", script_src)
 
@@ -149,7 +180,7 @@ class AppShellTests(unittest.TestCase):
             with self.subTest(path=path):
                 res = self.client.get(path)
                 self.assertEqual(res.status_code, 404)
-                self.assertNotIn("<div id=\"root\">", res.text)
+                self.assertNotIn('<div id="root">', res.text)
 
     def test_path_traversal_rejected(self):
         for path in (

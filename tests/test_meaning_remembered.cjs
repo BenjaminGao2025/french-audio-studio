@@ -6,7 +6,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { JSDOM } = require('../frontend/node_modules/jsdom');
+const { JSDOM } = require('jsdom');
 const read = name => fs.readFileSync(path.join(__dirname, '../static', name), 'utf8');
 
 const SENTENCE = 'Le passage peut être empêché par la neige.';
@@ -115,8 +115,10 @@ const dropSelectionMidTap = () => {
     assert.match(popover.element.querySelector('.popover-word').textContent, /peut.*empêché/);
     assert.equal(spoken.length, 0, 'Meaning stays silent');
 
-    // 2. The click that ends the tap lands on the word that was under the hidden bar
-    byWord('par').dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
+    // 2. The click that ends the tap lands on the word that was under the hidden bar. A real
+    // trailing click carries the tap's position, i.e. where the Meaning button was.
+    const ghostAt = { clientX: parseFloat(bar.style.left) + 4, clientY: parseFloat(bar.style.top) + 4 };
+    byWord('par').dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true, detail: 1, ...ghostAt }));
     await wait(20);
     assert.equal(spoken.length, 0, 'the trailing click does not open and speak the word under the bar');
     assert.match(popover.element.querySelector('.popover-word').textContent, /peut.*empêché/, 'phrase popover still shown');

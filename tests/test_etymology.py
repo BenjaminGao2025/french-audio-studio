@@ -1,11 +1,12 @@
-import testenv  # noqa: F401
 import unittest
 from unittest.mock import AsyncMock, patch
 
+import testenv  # noqa: F401
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 import auth_db
+import services.ai
 import tts_service
 
 
@@ -15,7 +16,7 @@ class EtymologyApiTests(unittest.TestCase):
 
     def test_shared_persistent_cache_skips_llm_and_upstream_key(self):
         chat = AsyncMock(return_value=({}, "<think>reasoning</think>构词：empêcher。\n记忆：被阻挡。"))
-        with patch.object(tts_service, "_post_chat", chat):
+        with patch.object(services.ai, "post_chat", chat):
             first = self.client.post(
                 "/api/etymology",
                 headers=testenv.session_headers(),
@@ -29,12 +30,12 @@ class EtymologyApiTests(unittest.TestCase):
             chat.assert_awaited_once()
             self.assertEqual(
                 chat.call_args.args[1]["model"],
-                tts_service._map_upstream_model(tts_service.DEFAULT_MODEL),
+                services.ai.AGY_MODEL,
             )
             self.assertEqual(auth_db.get_etymology("empêcher"), first.json()["text"])
 
             other_user = testenv.session_headers()
-            with patch.object(tts_service, "SERVER_WEB2API_KEY", ""):
+            with patch.object(services.ai, "SERVER_WEB2API_KEY", ""):
                 second = self.client.post(
                     "/api/etymology",
                     headers=other_user,
@@ -47,17 +48,15 @@ class EtymologyApiTests(unittest.TestCase):
     def test_login_required_even_on_cache_hit(self):
         auth_db.set_etymology("étymo-login-hit", "étymo-login-hit", "", "词源")
         chat = AsyncMock()
-        with patch.object(tts_service, "_post_chat", chat):
+        with patch.object(services.ai, "post_chat", chat):
             for headers in ({}, {"Authorization": "Bearer invalid-session"}):
-                response = self.client.post(
-                    "/api/etymology", headers=headers, json={"word": "étymo-login-hit"}
-                )
+                response = self.client.post("/api/etymology", headers=headers, json={"word": "étymo-login-hit"})
                 self.assertEqual(response.status_code, 401)
         chat.assert_not_awaited()
 
     def test_login_required_on_cache_miss(self):
         chat = AsyncMock()
-        with patch.object(tts_service, "_post_chat", chat):
+        with patch.object(services.ai, "post_chat", chat):
             response = self.client.post("/api/etymology", json={"word": "étymo-login-miss"})
             self.assertEqual(response.status_code, 401)
         chat.assert_not_awaited()
@@ -65,7 +64,7 @@ class EtymologyApiTests(unittest.TestCase):
     def test_word_fallback_and_blank_validation(self):
         chat = AsyncMock(return_value=({}, "词源：拉丁语。"))
         headers = testenv.session_headers()
-        with patch.object(tts_service, "_post_chat", chat):
+        with patch.object(services.ai, "post_chat", chat):
             for body in (
                 {"word": " ÉtymoUnique ", "lemma": " "},
                 {"word": "ÉTYMOUNIQUE"},
@@ -82,7 +81,7 @@ class EtymologyApiTests(unittest.TestCase):
         key_word = "étymo-empty-reply"
         chat = AsyncMock(return_value=({}, "<think>reasoning only</think>"))
         headers = testenv.session_headers()
-        with patch.object(tts_service, "_post_chat", chat):
+        with patch.object(services.ai, "post_chat", chat):
             self.assertEqual(
                 self.client.post("/api/etymology", headers=headers, json={"word": key_word}).status_code,
                 502,
@@ -95,11 +94,9 @@ class EtymologyApiTests(unittest.TestCase):
 
     def test_upstream_failure_is_not_cached_and_can_retry(self):
         key_word = "étymo-upstream-fail"
-        chat = AsyncMock(
-            side_effect=HTTPException(status_code=502, detail={"message": "AGY unavailable"})
-        )
+        chat = AsyncMock(side_effect=HTTPException(status_code=502, detail={"message": "AGY unavailable"}))
         headers = testenv.session_headers()
-        with patch.object(tts_service, "_post_chat", chat):
+        with patch.object(services.ai, "post_chat", chat):
             self.assertEqual(
                 self.client.post("/api/etymology", headers=headers, json={"word": key_word}).status_code,
                 502,

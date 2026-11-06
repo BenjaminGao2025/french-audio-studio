@@ -24,7 +24,10 @@ class StudyInputTests(unittest.TestCase):
     def test_programmatic_fills_all_refit_the_box(self):
         # Each write refreshes the height and the counter
         self.assertEqual(re.findall(r"frenchInput\.value = (.+);", self.js), ["text", "data.text"])
-        self.assertIn("frenchInput.value = data.text;\n            frenchInput.scrollTop = 0;\n            updateFrenchInput();", self.js)
+        self.assertIn(
+            "frenchInput.value = data.text;\n            frenchInput.scrollTop = 0;\n            updateFrenchInput();",
+            self.js,
+        )
         self.assertIn("window.addEventListener('resize', fitFrenchInput);", self.js)
         self.assertIn("document.addEventListener('study:modechange', fitFrenchInput);", self.js)
 

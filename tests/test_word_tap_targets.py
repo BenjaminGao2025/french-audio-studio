@@ -13,8 +13,8 @@ def _read(path):
 class WordTapTargetTests(unittest.TestCase):
     def _node(self, script):
         node = shutil.which("node")
-        if not node or not (ROOT / "frontend/node_modules/jsdom").exists():
-            self.skipTest("node and the frontend's jsdom are needed")
+        if not node or not (ROOT / "node_modules/jsdom").exists():
+            self.skipTest("node and jsdom (npm ci at the repo root) are needed")
         result = subprocess.run([node, script], cwd=ROOT, capture_output=True, text=True, timeout=90)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
@@ -45,17 +45,22 @@ class WordTapTargetTests(unittest.TestCase):
     def test_meaning_popover_persists_through_settle_in_jsdom(self):
         self._node("tests/test_popover_persist.cjs")
 
+    def test_word_card_persists_through_settle_in_jsdom(self):
+        self._node("tests/test_word_card_settle.cjs")
+
     def test_read_selection_is_wired_into_the_study_page(self):
         html = _read("static/study.html")
         js = _read("static/study.js")
         rs = _read("static/read-selection.js")
-        self.assertIn('read-selection.js?v=__ASSET_VERSION__', html)
+        self.assertIn("read-selection.js?v=__ASSET_VERSION__", html)
         self.assertIn("window.FrenchReadSelection.create({", js)
         # Selecting text shows the read bar instead of the phrase popover
         self.assertIn("selectionPopover: false,", js)
         # Reading goes through the page's own French speech (global audio controller)
         self.assertIn("speak: (text, onEnd) => playFrenchSpeech(text, onEnd),", js)
-        self.assertIn("meaning: (text, anchor, context) => wordPopover.show(text, anchor, context, { silent: true }),", js)
+        self.assertIn(
+            "meaning: (text, anchor, context) => wordPopover.show(text, anchor, context, { silent: true }),", js
+        )
         # A per-sentence "Select words" toggle starts range mode
         self.assertIn("data-range-toggle", js)
         self.assertIn("selectWordsTitle", js)

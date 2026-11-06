@@ -122,9 +122,35 @@ def target_in_sentence(sentence: str, target: str) -> bool:
 
 
 FUNCTION_WORDS = {
-    "à", "de", "du", "des", "le", "la", "les", "l'", "un", "une",
-    "et", "en", "au", "aux", "ce", "se", "ne", "pas", "que", "qui", "y",
-    "d'", "n'", "s'", "c'", "qu'", "j'", "m'", "t'",
+    "à",
+    "de",
+    "du",
+    "des",
+    "le",
+    "la",
+    "les",
+    "l'",
+    "un",
+    "une",
+    "et",
+    "en",
+    "au",
+    "aux",
+    "ce",
+    "se",
+    "ne",
+    "pas",
+    "que",
+    "qui",
+    "y",
+    "d'",
+    "n'",
+    "s'",
+    "c'",
+    "qu'",
+    "j'",
+    "m'",
+    "t'",
 }
 
 
@@ -165,7 +191,7 @@ def expand_function_word(sentence: str, token: str, extra: dict[str, Any] | None
                 if 2 <= sentence_word_count(p_clean) <= 4 and p_clean.lower() in clean_sentence.lower():
                     m = re.search(re.escape(p_clean), clean_sentence, re.IGNORECASE)
                     if m:
-                        return clean_sentence[m.start():m.end()]
+                        return clean_sentence[m.start() : m.end()]
                     return p_clean
         grammar = extra.get("grammar")
         if isinstance(grammar, list):
@@ -177,7 +203,7 @@ def expand_function_word(sentence: str, token: str, extra: dict[str, Any] | None
                     if re.search(r"(?i)\b" + re.escape(clean_token) + r"\b", cand):
                         m = re.search(re.escape(cand), clean_sentence, re.IGNORECASE)
                         if m:
-                            return clean_sentence[m.start():m.end()]
+                            return clean_sentence[m.start() : m.end()]
 
     # 2. Tokenize sentence into word match spans
     pattern = re.compile(r"[A-Za-zÀ-ÖØ-öø-ÿŒœ0-9]+['’]?|[A-Za-zÀ-ÖØ-öø-ÿŒœ0-9]+", re.IGNORECASE)
@@ -214,7 +240,12 @@ def expand_function_word(sentence: str, token: str, extra: dict[str, Any] | None
 
     if token_norm == "pas":
         if target_idx > 0:
-            start_i = max(0, target_idx - 2 if (target_idx >= 2 and matches[target_idx - 2].group().lower() == "ne") else target_idx - 1)
+            start_i = max(
+                0,
+                target_idx - 2
+                if (target_idx >= 2 and matches[target_idx - 2].group().lower() == "ne")
+                else target_idx - 1,
+            )
         end_i = target_idx
     elif token_norm == "ne":
         curr = target_idx
@@ -224,7 +255,13 @@ def expand_function_word(sentence: str, token: str, extra: dict[str, Any] | None
             if next_word in ("pas", "plus", "jamais", "rien", "que"):
                 break
             if not is_function_word(next_word):
-                if curr + 1 < total and matches[curr + 1].group().lower().replace("’", "'") in ("pas", "plus", "jamais", "rien", "que"):
+                if curr + 1 < total and matches[curr + 1].group().lower().replace("’", "'") in (
+                    "pas",
+                    "plus",
+                    "jamais",
+                    "rien",
+                    "que",
+                ):
                     curr += 1
                 break
         end_i = curr
@@ -255,7 +292,6 @@ def expand_function_word(sentence: str, token: str, extra: dict[str, Any] | None
     start_char = matches[start_i].start()
     end_char = matches[end_i].end()
     return clean_sentence[start_char:end_char].strip()
-
 
 
 def study_day_start(now: datetime.datetime, tz_offset_minutes: int) -> datetime.datetime:
@@ -313,9 +349,19 @@ def _card_payload(row: sqlite3.Row, now: datetime.datetime, with_preview: bool =
 
 def _clean_meta(meta: dict[str, Any] | None) -> dict[str, str]:
     allowed = (
-        "meaning_zh", "meaning_en", "lemma", "pos", "ipa", "hook",
+        "meaning_zh",
+        "meaning_en",
+        "lemma",
+        "pos",
+        "ipa",
+        "hook",
         # grammar cards
-        "rule", "prompt_fr", "answer", "hint", "full_fr", "full_en",
+        "rule",
+        "prompt_fr",
+        "answer",
+        "hint",
+        "full_fr",
+        "full_en",
     )
     return {key: str(meta[key]).strip() for key in allowed if meta and meta.get(key)}
 
@@ -349,8 +395,14 @@ def saved_words(user_id: int) -> list[dict[str, Any]]:
             (user_id,),
         ).fetchall()
     return [
-        {"text": r["target"], "card_id": r["id"], "note_id": r["note_id"],
-         "sentence": r["sentence"], "mode": r["mode"], "importance": r["importance"]}
+        {
+            "text": r["target"],
+            "card_id": r["id"],
+            "note_id": r["note_id"],
+            "sentence": r["sentence"],
+            "mode": r["mode"],
+            "importance": r["importance"],
+        }
         for r in rows
     ]
 
@@ -378,9 +430,7 @@ def add_note(
     now = _now()
 
     with _connect() as conn:
-        row = conn.execute(
-            "SELECT id FROM srs_notes WHERE user_id = ? AND sentence_key = ?", (user_id, key)
-        ).fetchone()
+        row = conn.execute("SELECT id FROM srs_notes WHERE user_id = ? AND sentence_key = ?", (user_id, key)).fetchone()
         if row:
             note_id = row["id"]
             conn.execute(
@@ -392,8 +442,10 @@ def add_note(
                 WHERE id = ?
                 """,
                 (
-                    translation_zh, translation_zh,
-                    translation_en, translation_en,
+                    translation_zh,
+                    translation_zh,
+                    translation_en,
+                    translation_en,
                     json.dumps(extra or {}, ensure_ascii=False),
                     json.dumps(extra or {}, ensure_ascii=False),
                     note_id,
@@ -408,8 +460,14 @@ def add_note(
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    note_id, user_id, clean_sentence, key, translation_zh.strip(),
-                    translation_en.strip(), json.dumps(extra or {}, ensure_ascii=False), _iso(now),
+                    note_id,
+                    user_id,
+                    clean_sentence,
+                    key,
+                    translation_zh.strip(),
+                    translation_en.strip(),
+                    json.dumps(extra or {}, ensure_ascii=False),
+                    _iso(now),
                 ),
             )
 
@@ -445,9 +503,16 @@ def add_note(
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
                 """,
                 (
-                    "card_" + uuid.uuid4().hex, note_id, user_id, mode, text,
-                    json.dumps(meta, ensure_ascii=False), json.dumps(fsrs_card.to_dict()),
-                    _iso(fsrs_card.due), _iso(now), importance,
+                    "card_" + uuid.uuid4().hex,
+                    note_id,
+                    user_id,
+                    mode,
+                    text,
+                    json.dumps(meta, ensure_ascii=False),
+                    json.dumps(fsrs_card.to_dict()),
+                    _iso(fsrs_card.due),
+                    _iso(now),
+                    importance,
                 ),
             )
         conn.commit()
@@ -456,14 +521,10 @@ def add_note(
 
 def get_note(user_id: int, note_id: str) -> dict[str, Any]:
     with _connect() as conn:
-        note = conn.execute(
-            "SELECT * FROM srs_notes WHERE id = ? AND user_id = ?", (note_id, user_id)
-        ).fetchone()
+        note = conn.execute("SELECT * FROM srs_notes WHERE id = ? AND user_id = ?", (note_id, user_id)).fetchone()
         if not note:
             raise KeyError(note_id)
-        cards = conn.execute(
-            "SELECT * FROM srs_cards WHERE note_id = ? ORDER BY created_at", (note_id,)
-        ).fetchall()
+        cards = conn.execute("SELECT * FROM srs_cards WHERE note_id = ? ORDER BY created_at", (note_id,)).fetchall()
     now = _now()
     return {
         "id": note["id"],
@@ -490,15 +551,11 @@ def lookup_notes(user_id: int, sentences: Iterable[str]) -> list[dict[str, Any]]
 
 def delete_card(user_id: int, card_id: str) -> bool:
     with _connect() as conn:
-        row = conn.execute(
-            "SELECT note_id FROM srs_cards WHERE id = ? AND user_id = ?", (card_id, user_id)
-        ).fetchone()
+        row = conn.execute("SELECT note_id FROM srs_cards WHERE id = ? AND user_id = ?", (card_id, user_id)).fetchone()
         if not row:
             return False
         conn.execute("DELETE FROM srs_cards WHERE id = ?", (card_id,))
-        remaining = conn.execute(
-            "SELECT COUNT(*) FROM srs_cards WHERE note_id = ?", (row["note_id"],)
-        ).fetchone()[0]
+        remaining = conn.execute("SELECT COUNT(*) FROM srs_cards WHERE note_id = ?", (row["note_id"],)).fetchone()[0]
         if remaining == 0:
             conn.execute("DELETE FROM srs_notes WHERE id = ?", (row["note_id"],))
         conn.commit()
@@ -507,9 +564,7 @@ def delete_card(user_id: int, card_id: str) -> bool:
 
 def delete_note(user_id: int, note_id: str) -> bool:
     with _connect() as conn:
-        deleted = conn.execute(
-            "DELETE FROM srs_notes WHERE id = ? AND user_id = ?", (note_id, user_id)
-        ).rowcount
+        deleted = conn.execute("DELETE FROM srs_notes WHERE id = ? AND user_id = ?", (note_id, user_id)).rowcount
         if deleted:
             conn.execute("DELETE FROM srs_cards WHERE note_id = ?", (note_id,))
         conn.commit()
@@ -603,7 +658,9 @@ def build_queue(
 
     learning.sort(key=lambda r: r["due"])
     reviews.sort(key=lambda r: (-r["importance"], r["due"]))
-    new_cards.sort(key=lambda r: (-r["importance"], r["note_created_at"], MODE_ORDER.get(r["mode"], 9), r["created_at"]))
+    new_cards.sort(
+        key=lambda r: (-r["importance"], r["note_created_at"], MODE_ORDER.get(r["mode"], 9), r["created_at"])
+    )
 
     queue = list(learning)
     seen_notes = set(touched_notes) | {row["note_id"] for row in learning}
@@ -650,9 +707,7 @@ def review_card(
 ) -> dict[str, Any]:
     now = now or _now()
     with _connect() as conn:
-        row = conn.execute(
-            "SELECT * FROM srs_cards WHERE id = ? AND user_id = ?", (card_id, user_id)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM srs_cards WHERE id = ? AND user_id = ?", (card_id, user_id)).fetchone()
         if not row:
             raise KeyError(card_id)
         card = Card.from_dict(json.loads(row["fsrs_json"]))
@@ -669,14 +724,19 @@ def review_card(
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                card_id, row["note_id"], user_id, rating, int(was_new), _iso(now),
-                duration_ms, score, (answer or "")[:500] or None,
+                card_id,
+                row["note_id"],
+                user_id,
+                rating,
+                int(was_new),
+                _iso(now),
+                duration_ms,
+                score,
+                (answer or "")[:500] or None,
             ),
         )
         conn.commit()
-        updated = conn.execute(
-            _CARD_WITH_NOTE_SQL + " AND c.id = ?", (user_id, card_id)
-        ).fetchone()
+        updated = conn.execute(_CARD_WITH_NOTE_SQL + " AND c.id = ?", (user_id, card_id)).fetchone()
     return _card_payload(updated, now, with_preview=True)
 
 
@@ -705,15 +765,18 @@ def missing_english(user_id: int) -> dict[str, list[dict[str, str]]]:
             "SELECT id, sentence, translation_zh FROM srs_notes WHERE user_id = ? AND translation_en = ''",
             (user_id,),
         ).fetchall()
-        cards = conn.execute(
-            _CARD_WITH_NOTE_SQL + " AND c.mode IN ('cloze', 'recognize')", (user_id,)
-        ).fetchall()
+        cards = conn.execute(_CARD_WITH_NOTE_SQL + " AND c.mode IN ('cloze', 'recognize')", (user_id,)).fetchall()
     return {
         "notes": [{"id": r["id"], "fr": r["sentence"], "zh": r["translation_zh"]} for r in notes],
         "cards": [
-            {"id": r["id"], "word": r["target"], "sentence": r["sentence"],
-             "zh": json.loads(r["target_json"] or "{}").get("meaning_zh", "")}
-            for r in cards if not json.loads(r["target_json"] or "{}").get("meaning_en")
+            {
+                "id": r["id"],
+                "word": r["target"],
+                "sentence": r["sentence"],
+                "zh": json.loads(r["target_json"] or "{}").get("meaning_zh", ""),
+            }
+            for r in cards
+            if not json.loads(r["target_json"] or "{}").get("meaning_en")
         ],
     }
 
@@ -758,8 +821,8 @@ def import_legacy_cards(user_id: int, cards: Iterable[dict[str, Any]]) -> dict[s
             continue
         sentence = str(legacy.get("sentence") or "").strip()
         meaning_zh = str(legacy.get("explanation_cn") or "").strip()
-        if meaning_zh.startswith("\U0001F4A1"):
-            meaning_zh = meaning_zh.lstrip("\U0001F4A1 ").strip()
+        if meaning_zh.startswith("\U0001f4a1"):
+            meaning_zh = meaning_zh.lstrip("\U0001f4a1 ").strip()
         meta = {
             "meaning_zh": meaning_zh,
             "meaning_en": legacy.get("explanation_en") or "",
@@ -826,9 +889,13 @@ def backfill_listen_cards(
                         VALUES (?, ?, ?, 'listen', '', '{}', ?, ?, 1, ?, ?)
                         """,
                         (
-                            card_id, row["id"], row["user_id"],
-                            json.dumps(fsrs_card.to_dict()), _iso(fsrs_card.due),
-                            _iso(now), DEFAULT_IMPORTANCE,
+                            card_id,
+                            row["id"],
+                            row["user_id"],
+                            json.dumps(fsrs_card.to_dict()),
+                            _iso(fsrs_card.due),
+                            _iso(now),
+                            DEFAULT_IMPORTANCE,
                         ),
                     )
                     created_count += 1
@@ -858,7 +925,9 @@ def _admin_cli(argv: list[str]) -> None:
     backfill_p.add_argument("--dry-run", action="store_true", help="Count candidates without writing to the database")
     backfill_p.add_argument("--user-id", type=int, default=None, help="Target specific user ID")
     backfill_p.add_argument("--email", default=None, help="Target specific user email")
-    backfill_p.add_argument("--max-words", type=int, default=25, help="Maximum sentence words for listen card (default 25)")
+    backfill_p.add_argument(
+        "--max-words", type=int, default=25, help="Maximum sentence words for listen card (default 25)"
+    )
     args = parser.parse_args(argv)
 
     if args.command == "backfill-listen":
@@ -881,4 +950,3 @@ if __name__ == "__main__":
     import sys
 
     _admin_cli(sys.argv[1:])
-

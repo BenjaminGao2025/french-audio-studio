@@ -1,15 +1,15 @@
-import testenv  # noqa: F401  (must run before the app is imported)
-
 import datetime
 import unittest
 import uuid
 from unittest.mock import patch
 
+import testenv  # noqa: F401  (must run before the app is imported)
 from fastapi.testclient import TestClient
 
 import auth_db
 import coach
 import game
+import routers.game
 import srs
 import tts_service
 
@@ -78,7 +78,9 @@ class LevelCurveTests(unittest.TestCase):
 
     def test_maintenance_scales_the_split_to_exactly_five_hours(self):
         scaled = game.lane_week_targets(datetime.date(2027, 6, 1))
-        self.assertEqual(scaled, {"listening": 66, "reading": 75, "speaking": 94, "writing": 37, "review": 28, "car": 0})
+        self.assertEqual(
+            scaled, {"listening": 66, "reading": 75, "speaking": 94, "writing": 37, "review": 28, "car": 0}
+        )
         self.assertEqual(sum(scaled.values()), game.MAINTENANCE_WEEK_TARGET_MIN)
         # The edges of the period; the day before and after use the full split.
         self.assertEqual(sum(game.lane_week_targets(datetime.date(2027, 5, 1)).values()), 300)
@@ -279,12 +281,19 @@ class CoachPlanTargetsTests(unittest.TestCase):
 
     def _profile(self, weekday_minutes: int, weekend_minutes: int) -> dict:
         return dict(
-            exam="TCF Canada", target="NCLC 7",
+            exam="TCF Canada",
+            target="NCLC 7",
             deadline=(coach.local_date() + datetime.timedelta(days=230)).isoformat(),
-            timezone="America/Vancouver", levels={k: "A1" for k in coach.KINDS},
-            weekday_minutes=weekday_minutes, weekend_minutes=weekend_minutes,
-            weekday_start="09:00", weekend_start="09:00", study_days=list(range(7)),
-            constraints="", experience="", reminder=False,
+            timezone="America/Vancouver",
+            levels={k: "A1" for k in coach.KINDS},
+            weekday_minutes=weekday_minutes,
+            weekend_minutes=weekend_minutes,
+            weekday_start="09:00",
+            weekend_start="09:00",
+            study_days=list(range(7)),
+            constraints="",
+            experience="",
+            reminder=False,
         )
 
     def test_default_weights_are_the_hours_of_the_16_hour_plan(self):
@@ -316,8 +325,12 @@ class CoachPlanTargetsTests(unittest.TestCase):
 class ReviewFeedbackTests(unittest.TestCase):
     def setUp(self):
         self.user_id, _ = _new_user()
-        note = srs.add_note(self.user_id, "Je vais à la gare.", translation_en="I am going to the station.",
-                            targets=[{"text": "gare"}, {"text": "vais"}, {"text": "la"}])
+        note = srs.add_note(
+            self.user_id,
+            "Je vais à la gare.",
+            translation_en="I am going to the station.",
+            targets=[{"text": "gare"}, {"text": "vais"}, {"text": "la"}],
+        )
         self.cards = [c["id"] for c in note["cards"]]
 
     def _review(self, card_id, rating, minute):
@@ -355,12 +368,17 @@ class GameApiTests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/game/state").status_code, 401)
 
     def test_log_heartbeat_and_undo(self):
-        res = self.client.post("/api/game/log", headers=self.headers,
-                               json={"lane": "speaking", "minutes": 60, "note": "Teacher class", "tz_offset": PDT})
+        res = self.client.post(
+            "/api/game/log",
+            headers=self.headers,
+            json={"lane": "speaking", "minutes": 60, "note": "Teacher class", "tz_offset": PDT},
+        )
         self.assertEqual(res.status_code, 200)
         log = res.json()["today"]["logs"][0]
         self.assertEqual(log["minutes"], 60)
-        self.client.post("/api/game/heartbeat", headers=self.headers, json={"lane": "review", "seconds": 60, "tz_offset": PDT})
+        self.client.post(
+            "/api/game/heartbeat", headers=self.headers, json={"lane": "review", "seconds": 60, "tz_offset": PDT}
+        )
         state = self.client.get(f"/api/game/state?tz_offset={PDT}", headers=self.headers).json()
         self.assertEqual(state["today"]["minutes"], 61)
         res = self.client.delete(f"/api/game/log/{log['id']}?tz_offset={PDT}", headers=self.headers)
@@ -385,7 +403,7 @@ class GameApiTests(unittest.TestCase):
                 with open(path, "wb") as handle:
                     handle.write(b"ID3fake")
 
-        with patch.object(tts_service.edge_tts, "Communicate", FakeCommunicate):
+        with patch.object(routers.game.edge_tts, "Communicate", FakeCommunicate):
             first = self.client.get("/api/game/callout/double_kill.mp3")
             second = self.client.get("/api/game/callout/double_kill.mp3")
         self.assertEqual(first.status_code, 200)
@@ -393,11 +411,22 @@ class GameApiTests(unittest.TestCase):
         self.assertEqual(second.content, b"ID3fake")
         self.assertEqual(spoken, [("Double kill!", game.CALLOUT_VOICE["voice"])])
 
+    def test_wave_cleared_endpoint_pays_once(self):
+        anon = self.client.post("/api/game/wave-cleared", json={"tz_offset": PDT})
+        self.assertEqual(anon.status_code, 401)
+        first = self.client.post("/api/game/wave-cleared", headers=self.headers, json={"tz_offset": PDT})
+        second = self.client.post("/api/game/wave-cleared", headers=self.headers, json={"tz_offset": PDT})
+        self.assertEqual((first.status_code, second.status_code), (200, 200))
+        self.assertEqual(first.json()["xp"], game.WAVE_CLEARED_XP)
+        self.assertEqual(second.json()["xp"], 0)
+        self.assertTrue(second.json()["state"]["today"]["wave_cleared"])
+
     def test_review_response_carries_the_kill_feed(self):
         note = srs.add_note(self.user_id, "Bonjour.", targets=[{"text": "Bonjour"}])
         card_id = note["cards"][0]["id"]
-        res = self.client.post(f"/api/srs/cards/{card_id}/review", headers=self.headers,
-                               json={"rating": 3, "tz_offset": PDT})
+        res = self.client.post(
+            f"/api/srs/cards/{card_id}/review", headers=self.headers, json={"rating": 3, "tz_offset": PDT}
+        )
         self.assertEqual(res.status_code, 200)
         feed = res.json()["game"]
         self.assertTrue(feed["kill"])

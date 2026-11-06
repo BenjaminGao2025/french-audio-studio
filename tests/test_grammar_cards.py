@@ -1,13 +1,13 @@
-import testenv  # noqa: F401  (must run before the app is imported)
-
 import json
 import unittest
 import uuid
 from unittest.mock import AsyncMock, patch
 
+import testenv  # noqa: F401  (must run before the app is imported)
 from fastapi.testclient import TestClient
 
 import auth_db
+import routers.tutor
 import srs
 import tts_service
 
@@ -21,7 +21,11 @@ GOOD = {
 REQUEST = {
     "sentence": "Elle comprend 40 questions portant sur des documents et ayant des objectifs différents.",
     "translation_zh": "它包含40道题。",
-    "grammar": {"title": "-ant words work like English -ing words", "explanation": "ayant = having.", "hook": "-ant = -ing"},
+    "grammar": {
+        "title": "-ant words work like English -ing words",
+        "explanation": "ayant = having.",
+        "hook": "-ant = -ing",
+    },
 }
 
 
@@ -32,14 +36,14 @@ def _login() -> tuple[int, dict]:
 
 class ParseTests(unittest.TestCase):
     def test_accepts_consistent_exercise(self):
-        item = tts_service._parse_grammar_exercise("```json\n" + json.dumps(GOOD, ensure_ascii=False) + "\n```")
+        item = routers.tutor._parse_grammar_exercise("```json\n" + json.dumps(GOOD, ensure_ascii=False) + "\n```")
         self.assertEqual(item["answer"], "ayant")
 
     def test_rejects_blank_that_does_not_rebuild_the_sentence(self):
         bad = {**GOOD, "answer": "avant"}
-        self.assertIsNone(tts_service._parse_grammar_exercise(json.dumps(bad)))
-        self.assertIsNone(tts_service._parse_grammar_exercise(json.dumps({**GOOD, "prompt_fr": "No blank here."})))
-        self.assertIsNone(tts_service._parse_grammar_exercise("not json"))
+        self.assertIsNone(routers.tutor._parse_grammar_exercise(json.dumps(bad)))
+        self.assertIsNone(routers.tutor._parse_grammar_exercise(json.dumps({**GOOD, "prompt_fr": "No blank here."})))
+        self.assertIsNone(routers.tutor._parse_grammar_exercise("not json"))
 
 
 class GrammarCardApiTests(unittest.TestCase):
@@ -49,7 +53,7 @@ class GrammarCardApiTests(unittest.TestCase):
     def test_requires_login(self):
         self.assertEqual(self.client.post("/api/srs/grammar", json=REQUEST).status_code, 401)
 
-    @patch("tts_service._post_chat", new_callable=AsyncMock)
+    @patch("services.ai.post_chat", new_callable=AsyncMock)
     def test_retries_once_then_saves_grammar_card(self, post_chat):
         user_id, headers = _login()
         post_chat.side_effect = [({}, "sorry"), ({}, json.dumps(GOOD, ensure_ascii=False))]
@@ -65,7 +69,7 @@ class GrammarCardApiTests(unittest.TestCase):
         queue = srs.build_queue(user_id)
         self.assertEqual([c["mode"] for c in queue["cards"]], ["grammar"])
 
-    @patch("tts_service._post_chat", new_callable=AsyncMock)
+    @patch("services.ai.post_chat", new_callable=AsyncMock)
     def test_gives_up_after_two_bad_outputs(self, post_chat):
         _, headers = _login()
         post_chat.return_value = ({}, "{}")

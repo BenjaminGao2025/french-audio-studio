@@ -1,0 +1,11 @@
+# Direct dependencies. requirements.txt is the pinned lock generated from this file:
+#   uv pip compile requirements.in --universal --python-version 3.11 -o requirements.txt
+edge-tts
+fastapi
+faster-whisper>=1.1,<2
+fsrs>=6.3,<7
+httpx
+uvicorn
+# episodes.py decodes and mixes audio itself (they used to arrive only via faster-whisper)
+av
+numpy

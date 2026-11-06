@@ -79,61 +79,101 @@ SUBJECTS: dict[str, list[dict[str, Any]]] = {
             "id": "t1_1",
             "title": "Invitation à un dîner de crémaillère",
             "prompt": "Vous venez d'emménager dans un nouvel appartement à Montréal. Vous écrivez un courriel à vos collègues pour les inviter à un dîner vendredi prochain chez vous.",
-            "requirements": ["Expliquer la raison de l'invitation", "Indiquer la date, l'heure et l'adresse", "Demander de confirmer la présence avant mercredi"],
+            "requirements": [
+                "Expliquer la raison de l'invitation",
+                "Indiquer la date, l'heure et l'adresse",
+                "Demander de confirmer la présence avant mercredi",
+            ],
         },
         {
             "id": "t1_2",
             "title": "Demande de service à un voisin",
             "prompt": "Vous partez en vacances pendant dix jours. Écrivez un message à votre voisin pour lui demander de surveiller vos plantes et votre courrier.",
-            "requirements": ["Expliquer vos dates d'absence", "Préciser les deux services demandés", "Laisser vos coordonnées en cas d'urgence"],
+            "requirements": [
+                "Expliquer vos dates d'absence",
+                "Préciser les deux services demandés",
+                "Laisser vos coordonnées en cas d'urgence",
+            ],
         },
         {
             "id": "t1_3",
             "title": "Annulation d'un rendez-vous médical",
             "prompt": "Vous avez un rendez-vous chez le dentiste à Ottawa mardi à 14h, mais vous avez un empêchement professionnel imprévu.",
-            "requirements": ["Expliquer poliment le motif de l'annulation", "S'excuser pour le désagrément", "Demander un autre créneau la semaine suivante"],
+            "requirements": [
+                "Expliquer poliment le motif de l'annulation",
+                "S'excuser pour le désagrément",
+                "Demander un autre créneau la semaine suivante",
+            ],
         },
         {
             "id": "t1_4",
             "title": "Remerciements après un déménagement",
             "prompt": "Un ami vous a aidé tout le week-end pour votre déménagement. Écrivez-lui un mot chaleureux.",
-            "requirements": ["Le remercier pour son aide précieuse", "Dire que vous êtes bien installé", "L'inviter au restaurant pour fêter ça"],
+            "requirements": [
+                "Le remercier pour son aide précieuse",
+                "Dire que vous êtes bien installé",
+                "L'inviter au restaurant pour fêter ça",
+            ],
         },
         {
             "id": "t1_5",
             "title": "Absence à la garderie",
             "prompt": "Votre enfant est malade et ne pourra pas aller à la garderie pendant deux jours. Vous écrivez à la responsable.",
-            "requirements": ["Indiquer le nom de l'enfant et les jours d'absence", "Expliquer brièvement la raison", "Préciser la date prévue de son retour"],
+            "requirements": [
+                "Indiquer le nom de l'enfant et les jours d'absence",
+                "Expliquer brièvement la raison",
+                "Préciser la date prévue de son retour",
+            ],
         },
         {
             "id": "t1_6",
             "title": "Signalement d'une fuite d'eau",
             "prompt": "Une fuite d'eau s'est déclarée sous l'évier de votre cuisine. Vous écrivez au gestionnaire de votre immeuble.",
-            "requirements": ["Décrire le problème et son urgence", "Indiquer vos disponibilités pour un réparateur", "Demander une réponse rapide"],
+            "requirements": [
+                "Décrire le problème et son urgence",
+                "Indiquer vos disponibilités pour un réparateur",
+                "Demander une réponse rapide",
+            ],
         },
         {
             "id": "t1_7",
             "title": "Inscription à un club de randonnée",
             "prompt": "Vous souhaitez rejoindre un club de plein air à Québec. Écrivez un courriel au responsable du club.",
-            "requirements": ["Présenter votre niveau de marche et votre intérêt", "Poser deux questions sur le calendrier des sorties et l'équipement", "Demander comment finaliser l'inscription"],
+            "requirements": [
+                "Présenter votre niveau de marche et votre intérêt",
+                "Poser deux questions sur le calendrier des sorties et l'équipement",
+                "Demander comment finaliser l'inscription",
+            ],
         },
         {
             "id": "t1_8",
             "title": "Organisation d'un anniversaire surprise",
             "prompt": "Vous organisez une fête surprise pour les 30 ans d'un ami proche. Écrivez aux invités.",
-            "requirements": ["Donner la date, l'heure et le lieu secret", "Demander de garder le secret absolu", "Proposer d'apporter quelque chose à partager"],
+            "requirements": [
+                "Donner la date, l'heure et le lieu secret",
+                "Demander de garder le secret absolu",
+                "Proposer d'apporter quelque chose à partager",
+            ],
         },
         {
             "id": "t1_9",
             "title": "Carte de bibliothèque égarée",
             "prompt": "Vous avez perdu votre carte d'abonné à la bibliothèque municipale. Vous écrivez à l'accueil.",
-            "requirements": ["Expliquer la perte de votre carte", "Demander la démarche pour en obtenir une nouvelle", "Vérifier si vous avez des emprunts en cours"],
+            "requirements": [
+                "Expliquer la perte de votre carte",
+                "Demander la démarche pour en obtenir une nouvelle",
+                "Vérifier si vous avez des emprunts en cours",
+            ],
         },
         {
             "id": "t1_10",
             "title": "Départ d'un collègue",
             "prompt": "Un collègue proche quitte l'équipe pour un nouveau projet. Écrivez-lui un message d'adieu amical.",
-            "requirements": ["Rappeler un bon souvenir de travail commun", "Lui souhaiter plein succès dans sa nouvelle aventure", "Proposer de rester en contact"],
+            "requirements": [
+                "Rappeler un bon souvenir de travail commun",
+                "Lui souhaiter plein succès dans sa nouvelle aventure",
+                "Proposer de rester en contact",
+            ],
         },
     ],
     "T2": [
@@ -141,61 +181,101 @@ SUBJECTS: dict[str, list[dict[str, Any]]] = {
             "id": "t2_1",
             "title": "Mon premier mois au Canada",
             "prompt": "Racontez pour le blog des nouveaux arrivants votre premier mois dans une ville canadienne : vos surprises, vos découvertes et vos premiers défis.",
-            "requirements": ["Décrire votre arrivée et vos premières impressions", "Raconter une difficulté rencontrée et comment vous l'avez surmontée", "Donner un conseil utile à ceux qui arrivent bientôt"],
+            "requirements": [
+                "Décrire votre arrivée et vos premières impressions",
+                "Raconter une difficulté rencontrée et comment vous l'avez surmontée",
+                "Donner un conseil utile à ceux qui arrivent bientôt",
+            ],
         },
         {
             "id": "t2_2",
             "title": "Une fête ou un festival inoubliable",
             "prompt": "Vous avez assisté à un événement culturel ou un festival local (ex. Carnaval d'hiver de Québec). Racontez votre expérience.",
-            "requirements": ["Présenter l'événement et l'ambiance générale", "Décrire un moment précis qui vous a marqué", "Expliquer pourquoi vous recommandez cette fête"],
+            "requirements": [
+                "Présenter l'événement et l'ambiance générale",
+                "Décrire un moment précis qui vous a marqué",
+                "Expliquer pourquoi vous recommandez cette fête",
+            ],
         },
         {
             "id": "t2_3",
             "title": "Un voyage qui ne s'est pas passé comme prévu",
             "prompt": "Racontez une excursion ou un voyage où rien ne s'est déroulé selon le plan initial.",
-            "requirements": ["Situer le contexte de départ", "Raconter les imprévus survenus et vos réactions", "Tirer une conclusion positive ou une leçon de cette aventure"],
+            "requirements": [
+                "Situer le contexte de départ",
+                "Raconter les imprévus survenus et vos réactions",
+                "Tirer une conclusion positive ou une leçon de cette aventure",
+            ],
         },
         {
             "id": "t2_4",
             "title": "Un an de télétravail : mon bilan",
             "prompt": "Écrivez un article pour le journal interne de votre entreprise après avoir passé un an en travail à distance.",
-            "requirements": ["Présenter comment votre quotidien a changé", "Analyser les avantages et les inconvénients majeurs", "Proposer des conseils pour mieux concilier vie privée et travail"],
+            "requirements": [
+                "Présenter comment votre quotidien a changé",
+                "Analyser les avantages et les inconvénients majeurs",
+                "Proposer des conseils pour mieux concilier vie privée et travail",
+            ],
         },
         {
             "id": "t2_5",
             "title": "Mon engagement bénévole dans le quartier",
             "prompt": "Vous avez participé à une action d'entraide ou de bénévolat (banque alimentaire, nettoyage d'un parc). Partagez votre vécu.",
-            "requirements": ["Expliquer ce qui vous a motivé à vous engager", "Décrire vos tâches et les rencontres faites", "Expliquer ce que cette expérience vous a apporté sur le plan personnel"],
+            "requirements": [
+                "Expliquer ce qui vous a motivé à vous engager",
+                "Décrire vos tâches et les rencontres faites",
+                "Expliquer ce que cette expérience vous a apporté sur le plan personnel",
+            ],
         },
         {
             "id": "t2_6",
             "title": "L'apprentissage d'une nouvelle passion",
             "prompt": "Racontez comment vous vous êtes lancé dans un nouveau sport, un instrument de musique ou une compétence.",
-            "requirements": ["Décrire les débuts et les doutes initiaux", "Raconter une étape clé où vous avez senti un progrès", "Exprimer vos objectifs futurs pour cette activité"],
+            "requirements": [
+                "Décrire les débuts et les doutes initiaux",
+                "Raconter une étape clé où vous avez senti un progrès",
+                "Exprimer vos objectifs futurs pour cette activité",
+            ],
         },
         {
             "id": "t2_7",
             "title": "Un coin de nature remarquable",
             "prompt": "Rédigez pour un guide de voyage le récit de votre visite dans un parc national ou un lieu naturel exceptionnel.",
-            "requirements": ["Décrire le paysage, les saisons et les sensations éprouvées", "Raconter une randonnée particulière", "Expliquer pourquoi cet endroit est unique"],
+            "requirements": [
+                "Décrire le paysage, les saisons et les sensations éprouvées",
+                "Raconter une randonnée particulière",
+                "Expliquer pourquoi cet endroit est unique",
+            ],
         },
         {
             "id": "t2_8",
             "title": "L'arrivée d'un animal de compagnie chez moi",
             "prompt": "Racontez l'adoption d'un chien ou d'un chat et les changements intervenus dans votre foyer.",
-            "requirements": ["Expliquer les circonstances de l'adoption", "Décrire les premières semaines d'adaptation", "Expliquer en quoi votre mode de vie a été transformé"],
+            "requirements": [
+                "Expliquer les circonstances de l'adoption",
+                "Décrire les premières semaines d'adaptation",
+                "Expliquer en quoi votre mode de vie a été transformé",
+            ],
         },
         {
             "id": "t2_9",
             "title": "Compte-rendu d'une formation professionnelle",
             "prompt": "Vous venez de suivre une formation de trois jours très enrichissante. Partagez votre retour d'expérience avec vos pairs.",
-            "requirements": ["Présenter les thèmes abordés", "Décrire un atelier pratique particulièrement utile", "Expliquer comment vous allez appliquer ces acquis dans votre travail"],
+            "requirements": [
+                "Présenter les thèmes abordés",
+                "Décrire un atelier pratique particulièrement utile",
+                "Expliquer comment vous allez appliquer ces acquis dans votre travail",
+            ],
         },
         {
             "id": "t2_10",
             "title": "Un défi sportif relevé avec fierté",
             "prompt": "Racontez votre participation à une épreuve sportive (course de 10 km, sortie en canot, randonnée en raquettes).",
-            "requirements": ["Décrire la préparation physique et mentale", "Raconter le déroulement de l'épreuve et les moments difficiles", "Exprimer votre sentiment à l'arrivée"],
+            "requirements": [
+                "Décrire la préparation physique et mentale",
+                "Raconter le déroulement de l'épreuve et les moments difficiles",
+                "Exprimer votre sentiment à l'arrivée",
+            ],
         },
     ],
     "T3": [
@@ -276,6 +356,7 @@ SUBJECTS: dict[str, list[dict[str, Any]]] = {
 TASKS.update(curriculum.training_tasks())
 SUBJECTS.update(curriculum.training_subjects())
 
+
 def word_count(text: str) -> int:
     """Count words following French TCF testing practice.
     Apostrophes split clitics (j'ai -> 2 words, l'arbre -> 2 words).
@@ -286,29 +367,33 @@ def word_count(text: str) -> int:
     return len(tokens)
 
 
+def _create_tables(conn: Any) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS writing_attempts (
+            id TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            task TEXT NOT NULL,
+            subject_json TEXT NOT NULL DEFAULT '{}',
+            level TEXT NOT NULL DEFAULT 'A1',
+            status TEXT NOT NULL DEFAULT 'ready',
+            text_1 TEXT NOT NULL DEFAULT '',
+            feedback_1_json TEXT NOT NULL DEFAULT '{}',
+            text_2 TEXT NOT NULL DEFAULT '',
+            feedback_2_json TEXT NOT NULL DEFAULT '{}',
+            seconds INTEGER NOT NULL DEFAULT 0,
+            error TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+
+
 @contextmanager
 def _db() -> Iterator[Any]:
     with auth_db.connect() as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS writing_attempts (
-                id TEXT PRIMARY KEY,
-                user_id INTEGER NOT NULL,
-                task TEXT NOT NULL,
-                subject_json TEXT NOT NULL DEFAULT '{}',
-                level TEXT NOT NULL DEFAULT 'A1',
-                status TEXT NOT NULL DEFAULT 'ready',
-                text_1 TEXT NOT NULL DEFAULT '',
-                feedback_1_json TEXT NOT NULL DEFAULT '{}',
-                text_2 TEXT NOT NULL DEFAULT '',
-                feedback_2_json TEXT NOT NULL DEFAULT '{}',
-                seconds INTEGER NOT NULL DEFAULT 0,
-                error TEXT NOT NULL DEFAULT '',
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            )
-            """
-        )
+        auth_db.ensure_schema(conn, "writing", _create_tables)
         yield conn
 
 
@@ -335,9 +420,7 @@ def create_attempt(
     return get_attempt(user_id, attempt_id)
 
 
-def update_attempt_round2(
-    user_id: int, attempt_id: str, text_2: str, seconds: int
-) -> dict[str, Any]:
+def update_attempt_round2(user_id: int, attempt_id: str, text_2: str, seconds: int) -> dict[str, Any]:
     now = _now()
     with _db() as conn:
         conn.execute(
@@ -475,19 +558,19 @@ def build_round1_payload(attempt: dict[str, Any], model: str) -> dict[str, Any]:
 
     doc_context = ""
     if task == "T3":
-        doc_context = (
-            f"Document 1: {subject.get('doc1', '')}\n"
-            f"Document 2: {subject.get('doc2', '')}\n"
-        )
+        doc_context = f"Document 1: {subject.get('doc1', '')}\nDocument 2: {subject.get('doc2', '')}\n"
 
     system = (
         f"{TUTOR_RULES}\n"
         f"This is ROUND 1 feedback for TCF EE {task} ({task_spec['name']}).\n"
         f"Task word range: {min_w}–{max_w} words.\n"
         f"Learner level: {attempt.get('level', 'A1')}. "
-        + ("This is scaffolded practice, NOT an exam. Use Chinese explanations, with short English alongside. Accept simple present-tense sentences. Do not demand exam length or advanced vocabulary.\n" if task_spec.get("practice") else "Keep the official task requirements.\n")
-        +
-        "Requirements of the subject:\n"
+        + (
+            "This is scaffolded practice, NOT an exam. Use Chinese explanations, with short English alongside. Accept simple present-tense sentences. Do not demand exam length or advanced vocabulary.\n"
+            if task_spec.get("practice")
+            else "Keep the official task requirements.\n"
+        )
+        + "Requirements of the subject:\n"
         f"Subject Title: {subject.get('title', '')}\n"
         f"Prompt: {subject.get('prompt', '')}\n"
         f"Points/requirements: {', '.join(subject.get('requirements', []))}\n"
@@ -526,9 +609,7 @@ def build_round1_payload(attempt: dict[str, Any], model: str) -> dict[str, Any]:
     }
 
 
-def parse_round1_feedback(
-    raw_text: str, text_1: str, task: str, subject: dict[str, Any]
-) -> dict[str, Any]:
+def parse_round1_feedback(raw_text: str, text_1: str, task: str, subject: dict[str, Any]) -> dict[str, Any]:
     match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw_text, re.DOTALL)
     snippet = match.group(1) if match else raw_text.strip()
     try:
@@ -550,7 +631,7 @@ def parse_round1_feedback(
     wc["actual"] = actual_wc
     wc["min"] = min_w
     wc["max"] = max_w
-    wc["in_range"] = (min_w <= actual_wc <= max_w)
+    wc["in_range"] = min_w <= actual_wc <= max_w
     if not wc.get("note"):
         if actual_wc < min_w:
             wc["note"] = f"{actual_wc} words ({min_w - actual_wc} words under minimum of {min_w})."
@@ -561,11 +642,13 @@ def parse_round1_feedback(
 
     checklist = []
     for item in data.get("checklist") or []:
-        checklist.append({
-            "point": str(item.get("point") or ""),
-            "covered": bool(item.get("covered", False)),
-            "note": str(item.get("note") or ""),
-        })
+        checklist.append(
+            {
+                "point": str(item.get("point") or ""),
+                "covered": bool(item.get("covered", False)),
+                "note": str(item.get("note") or ""),
+            }
+        )
 
     reg = data.get("register") or {}
     register = {
@@ -586,8 +669,10 @@ def parse_round1_feedback(
 
     raw_errors = data.get("errors") or []
     cleaned_errors = []
-    forbidden_leak = re.compile(r"(?:change\s+to|replace\s+with|should\s+be|write|say|correct\s+form\s+is)\s+['\"]?([^,.;'\"]+)", re.IGNORECASE)
-    for err in raw_errors[:task_spec.get("error_limit", 8)]:
+    forbidden_leak = re.compile(
+        r"(?:change\s+to|replace\s+with|should\s+be|write|say|correct\s+form\s+is)\s+['\"]?([^,.;'\"]+)", re.IGNORECASE
+    )
+    for err in raw_errors[: task_spec.get("error_limit", 8)]:
         span = str(err.get("span") or "").strip()
         etype = str(err.get("type") or "wrong word").lower()
         if etype not in ALLOWED_ERROR_TYPES:
@@ -595,11 +680,13 @@ def parse_round1_feedback(
         hint = str(err.get("hint") or "Check this part carefully.").strip()
         if forbidden_leak.search(hint):
             hint = f"Check the {etype} here carefully."
-        cleaned_errors.append({
-            "span": span,
-            "type": etype,
-            "hint": hint,
-        })
+        cleaned_errors.append(
+            {
+                "span": span,
+                "type": etype,
+                "hint": hint,
+            }
+        )
 
     return {
         "word_count": wc,
@@ -613,7 +700,6 @@ def parse_round1_feedback(
 
 def build_round2_payload(attempt: dict[str, Any], model: str) -> dict[str, Any]:
     task = attempt["task"]
-    subject = attempt["subject"]
     text_1 = attempt["text_1"]
     feedback_1 = attempt.get("feedback_1") or {}
     errors_1 = feedback_1.get("errors") or []
@@ -627,9 +713,12 @@ def build_round2_payload(attempt: dict[str, Any], model: str) -> dict[str, Any]:
     system = (
         f"{TUTOR_RULES}\n"
         f"This is ROUND 2 feedback for {task} ({task_spec['name']}). Learner level: {attempt.get('level', 'A1')}.\n"
-        + ("Beginner practice: Chinese explanations with short English alongside. Keep corrections within the learner level; do not expand the text to exam length.\n" if task_spec.get("practice") else "")
-        +
-        "The learner read Round 1 error hints and has revised their text.\n"
+        + (
+            "Beginner practice: Chinese explanations with short English alongside. Keep corrections within the learner level; do not expand the text to exam length.\n"
+            if task_spec.get("practice")
+            else ""
+        )
+        + "The learner read Round 1 error hints and has revised their text.\n"
         f"Original text (Round 1):\n{text_1}\n\n"
         f"Round 1 errors to check:\n{errors_summary or '(none)'}\n\n"
         "RULES FOR ROUND 2:\n"
@@ -683,20 +772,24 @@ def parse_round2_feedback(raw_text: str) -> dict[str, Any]:
 
     fixed_errors = []
     for item in data.get("fixed_errors") or []:
-        fixed_errors.append({
-            "span": str(item.get("span") or ""),
-            "fixed": bool(item.get("fixed", False)),
-            "comment": str(item.get("comment") or ""),
-        })
+        fixed_errors.append(
+            {
+                "span": str(item.get("span") or ""),
+                "fixed": bool(item.get("fixed", False)),
+                "comment": str(item.get("comment") or ""),
+            }
+        )
 
     remaining_errors = []
     for item in data.get("remaining_errors") or []:
-        remaining_errors.append({
-            "span": str(item.get("span") or ""),
-            "type": str(item.get("type") or "wrong word"),
-            "hint": str(item.get("hint") or ""),
-            "correction": str(item.get("correction") or ""),
-        })
+        remaining_errors.append(
+            {
+                "span": str(item.get("span") or ""),
+                "type": str(item.get("type") or "wrong word"),
+                "hint": str(item.get("hint") or ""),
+                "correction": str(item.get("correction") or ""),
+            }
+        )
 
     sentences = []
     for s in data.get("sentences") or []:
@@ -706,20 +799,24 @@ def parse_round2_feedback(raw_text: str) -> dict[str, Any]:
         if not chunk and corr:
             chunk = corr
         if corr:
-            sentences.append({
-                "original": orig,
-                "corrected": corr,
-                "explanation": str(s.get("explanation") or ""),
-                "chunk": chunk,
-            })
+            sentences.append(
+                {
+                    "original": orig,
+                    "corrected": corr,
+                    "explanation": str(s.get("explanation") or ""),
+                    "chunk": chunk,
+                }
+            )
 
     structures = []
     for st in (data.get("structures") or [])[:3]:
-        structures.append({
-            "french": str(st.get("french") or ""),
-            "english": str(st.get("english") or ""),
-            "usage": str(st.get("usage") or ""),
-        })
+        structures.append(
+            {
+                "french": str(st.get("french") or ""),
+                "english": str(st.get("english") or ""),
+                "usage": str(st.get("usage") or ""),
+            }
+        )
 
     return {
         "fixed_errors": fixed_errors,
@@ -747,17 +844,20 @@ def build_new_subject_payload(
         f"Generate a brand new subject for {task} ({task_spec['name']}) {prompt_theme}.\n"
         f"Learner level: {level}. Use vocabulary and grammar appropriate to this level.\n"
         f"Target length: {task_spec['min_words']}–{task_spec['max_words']} words.\n"
-        + ("This is beginner PRACTICE, not an exam. Prompt and requirements in Chinese with simple French. Include stems (3 French sentence starters with blanks) and words (5 French words with Chinese meanings).\n" if task_spec.get("practice") else "")
-        +
-        f"{extra_req}\n"
+        + (
+            "This is beginner PRACTICE, not an exam. Prompt and requirements in Chinese with simple French. Include stems (3 French sentence starters with blanks) and words (5 French words with Chinese meanings).\n"
+            if task_spec.get("practice")
+            else ""
+        )
+        + f"{extra_req}\n"
         "Return ONLY valid JSON with keys:\n"
-        '{\n'
+        "{\n"
         '  "title": "Short title in French",\n'
         '  "prompt": "Clear situation prompt in French",\n'
         '  "requirements": ["point 1 in French", "point 2 in French", "point 3 in French"],\n'
         '  "doc1": "Document 1 in French (~80 words, for T3 only, empty string otherwise)",\n'
         '  "doc2": "Document 2 in French (~80 words, for T3 only, empty string otherwise)"\n'
-        '}'
+        "}"
     )
     return {
         "model": model,

@@ -1,9 +1,9 @@
-// Run with: node tests/test_grammar_structure.cjs (uses the frontend's jsdom).
+// Run with: node tests/test_grammar_structure.cjs (needs `npm ci` at the repo root for jsdom).
 // /study sentence header Repeat switch, the N/V/S structure bar, and the /grammar map rendering.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { JSDOM } = require('../frontend/node_modules/jsdom');
+const { JSDOM } = require('jsdom');
 const read = name => fs.readFileSync(path.join(__dirname, '../static', name), 'utf8');
 
 const dom = new JSDOM('<!DOCTYPE html><body></body>', { pretendToBeVisual: true, runScripts: 'outside-only', url: 'http://localhost/study' });

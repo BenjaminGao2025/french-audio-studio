@@ -1,9 +1,9 @@
-// Run with: node tests/test_word_tap_targets.cjs (uses the frontend's jsdom).
+// Run with: node tests/test_word_tap_targets.cjs (needs `npm ci` at the repo root for jsdom).
 // Word tap targets on /study: hit-target CSS, word markup, nearest-word lookup, click -> popover.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { JSDOM } = require('../frontend/node_modules/jsdom');
+const { JSDOM } = require('jsdom');
 const read = name => fs.readFileSync(path.join(__dirname, '../static', name), 'utf8');
 const css = read('study.css');
 const block = selector => {

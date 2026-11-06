@@ -1,0 +1,50 @@
+name: CI
+
+# Runs on GitHub's machines, never the production runner: this is a public repository, so
+# pull requests from forks must not reach the self-hosted deploy box.
+on:
+  pull_request:
+  push:
+    branches:
+      - main  # deploy.yml also tests main, inside the image it is about to ship
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Lint and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"  # same as the Docker image
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          python -m pip install -r requirements.txt ruff==0.17.4
+          npm ci
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Python tests
+        run: python -m unittest discover -s tests
+
+      - name: Browser-script tests (node + jsdom)
+        run: npm test

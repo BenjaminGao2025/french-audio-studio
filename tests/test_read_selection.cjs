@@ -1,10 +1,10 @@
-// Run with: node tests/test_read_selection.cjs (uses the frontend's jsdom).
+// Run with: node tests/test_read_selection.cjs (needs `npm ci` at the repo root for jsdom).
 // Read selection on /study: a mouse drag, a system selection (long press) and the per-sentence
 // range mode all end in the floating bar, whose Read button speaks exactly the snapped words.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { JSDOM } = require('../frontend/node_modules/jsdom');
+const { JSDOM } = require('jsdom');
 const read = name => fs.readFileSync(path.join(__dirname, '../static', name), 'utf8');
 
 const SENTENCE = "J'ai déjà deux enfants, et ma femme est enceinte, donc nous cherchons un appartement.";

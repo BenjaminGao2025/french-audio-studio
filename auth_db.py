@@ -10,14 +10,17 @@ import datetime
 import hashlib
 import hmac
 import json
+import math
 import os
 import re
 import secrets
 import sqlite3
+import threading
 import uuid
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 AUTH_SECRET = os.getenv("AUTH_SECRET", "")
 if len(AUTH_SECRET) < 32:
@@ -116,9 +119,44 @@ def init_db() -> None:
         conn.close()
 
 
+# Schemas already created, per database file: (path, owner). Every module's CREATE TABLE IF NOT EXISTS
+# used to run on every connection, which made each request pay for a dozen no-op DDL statements.
+_schema_ready: set[tuple[str, str]] = set()
+_schema_lock = threading.RLock()
+
+
+def ensure_schema(conn: sqlite3.Connection, owner: str, create: Callable[[sqlite3.Connection], None]) -> None:
+    """Run `create(conn)` (idempotent CREATE / ALTER statements) once per database file for `owner`.
+
+    Runs again if the file disappears (a test or restore swapped it out).
+    """
+    path = _get_db_path()
+    key = (str(path), owner)
+    if key in _schema_ready and path.exists():
+        return
+    with _schema_lock:
+        if key in _schema_ready and path.exists():
+            return
+        create(conn)
+        conn.commit()
+        _schema_ready.add(key)
+
+
+def _ensure_core_schema() -> None:
+    path = _get_db_path()
+    key = (str(path), "auth_db")
+    if key in _schema_ready and path.exists():
+        return
+    with _schema_lock:
+        if key in _schema_ready and path.exists():
+            return
+        init_db()
+        _schema_ready.add(key)
+
+
 @contextmanager
 def connect() -> Iterator[sqlite3.Connection]:
-    init_db()
+    _ensure_core_schema()
     conn = _open_connection()
     try:
         yield conn
@@ -144,10 +182,31 @@ def set_etymology(key: str, word: str, lemma: str, text: str) -> None:
         )
 
 
+# OWASP's 2023 floor for PBKDF2-HMAC-SHA256. Stored as "pbkdf2_sha256$<iterations>$<hex>" so the count can rise
+# later; a bare hex hash is the original 100,000-iteration format and is upgraded at the next login.
+DEFAULT_PBKDF2_ITERATIONS = 600_000
+PBKDF2_ITERATIONS = int(os.getenv("PBKDF2_ITERATIONS", str(DEFAULT_PBKDF2_ITERATIONS)))
+_LEGACY_PBKDF2_ITERATIONS = 100_000
+_HASH_PREFIX = "pbkdf2_sha256"
+
+
+def _pbkdf2(password: str, salt: str, iterations: int) -> str:
+    return hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), iterations).hex()
+
+
 def _hash_password(password: str, salt: str) -> str:
-    return hashlib.pbkdf2_hmac(
-        "sha256", password.encode("utf-8"), salt.encode("utf-8"), 100_000
-    ).hex()
+    return f"{_HASH_PREFIX}${PBKDF2_ITERATIONS}${_pbkdf2(password, salt, PBKDF2_ITERATIONS)}"
+
+
+def _check_password(password: str, salt: str, stored: str) -> tuple[bool, bool]:
+    """(the password matches, the stored hash should be redone at today's iteration count)."""
+    if stored.startswith(_HASH_PREFIX + "$"):
+        _, iterations_text, digest = stored.split("$", 2)
+        iterations = int(iterations_text)
+    else:
+        iterations, digest = _LEGACY_PBKDF2_ITERATIONS, stored
+    matches = hmac.compare_digest(_pbkdf2(password, salt, iterations), digest)
+    return matches, matches and iterations < PBKDF2_ITERATIONS
 
 
 def _now_iso() -> str:
@@ -195,12 +254,10 @@ def _generate_token(user_id: int, email: str, session_id: str) -> str:
     # Token valid for 90 days, and only while its session (device) still exists
     exp = (datetime.datetime.utcnow() + datetime.timedelta(days=90)).timestamp()
     payload = {"sub": user_id, "email": email, "sid": session_id, "exp": int(exp)}
-    payload_b64 = base64.urlsafe_b64encode(
-        json.dumps(payload, separators=(",", ":")).encode("utf-8")
-    ).decode("utf-8").rstrip("=")
-    sig = hmac.new(
-        AUTH_SECRET.encode("utf-8"), payload_b64.encode("utf-8"), hashlib.sha256
-    ).hexdigest()
+    payload_b64 = (
+        base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode("utf-8")).decode("utf-8").rstrip("=")
+    )
+    sig = hmac.new(AUTH_SECRET.encode("utf-8"), payload_b64.encode("utf-8"), hashlib.sha256).hexdigest()
     return f"{payload_b64}.{sig}"
 
 
@@ -236,9 +293,7 @@ def _signed_payload(token: str) -> dict[str, Any] | None:
         return None
     try:
         payload_b64, sig = token.split(".", 1)
-        expected_sig = hmac.new(
-            AUTH_SECRET.encode("utf-8"), payload_b64.encode("utf-8"), hashlib.sha256
-        ).hexdigest()
+        expected_sig = hmac.new(AUTH_SECRET.encode("utf-8"), payload_b64.encode("utf-8"), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(sig, expected_sig):
             return None
 
@@ -313,9 +368,7 @@ def consume_invite(code: str) -> None:
         _consume_invite(conn, code)
 
 
-def register_user(
-    email: str, password: str, device: str = "", invite_code: str | None = None
-) -> dict[str, Any]:
+def register_user(email: str, password: str, device: str = "", invite_code: str | None = None) -> dict[str, Any]:
     clean_email = email.strip().lower()
     if not clean_email or not re.match(r"^[^@]+@[^@]+\.[^@]+$", clean_email):
         raise ValueError("请输入有效的邮箱地址。")
@@ -324,7 +377,6 @@ def register_user(
     if not ALLOW_REGISTRATION and not _clean_invite(invite_code):
         raise ValueError("本站暂不开放注册，请使用邀请码。")
 
-    init_db()
     salt = uuid.uuid4().hex
     pwd_hash = _hash_password(password, salt)
     now = datetime.datetime.utcnow()
@@ -365,19 +417,25 @@ def register_user(
 
 def login_user(email: str, password: str, device: str = "") -> dict[str, Any]:
     clean_email = email.strip().lower()
-    init_db()
-
     with connect() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM users WHERE email = ?", (clean_email,))
         row = cursor.fetchone()
 
     if not row:
+        _pbkdf2(password, "no-such-user", PBKDF2_ITERATIONS)  # same cost, so timing does not reveal the email
         raise ValueError("邮箱或密码错误，请重新输入。")
 
-    expected_hash = _hash_password(password, row["salt"])
-    if not hmac.compare_digest(row["password_hash"], expected_hash):
+    matches, needs_rehash = _check_password(password, row["salt"], row["password_hash"])
+    if not matches:
         raise ValueError("邮箱或密码错误，请重新输入。")
+    if needs_rehash:
+        salt = uuid.uuid4().hex
+        with connect() as conn:
+            conn.execute(
+                "UPDATE users SET password_hash = ?, salt = ? WHERE id = ?",
+                (_hash_password(password, salt), salt, row["id"]),
+            )
 
     token = _generate_token(row["id"], clean_email, _start_session(row["id"], device))
     user_info = get_user_status(row["id"])
@@ -385,8 +443,6 @@ def login_user(email: str, password: str, device: str = "") -> dict[str, Any]:
 
 
 def get_user_status(user_id: int) -> dict[str, Any] | None:
-    init_db()
-
     with connect() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
@@ -399,8 +455,6 @@ def get_user_status(user_id: int) -> dict[str, Any] | None:
         expires_at = datetime.datetime.fromisoformat(row["trial_expires_at"])
     except Exception:
         expires_at = datetime.datetime.utcnow()
-
-    import math
 
     now = datetime.datetime.utcnow()
     diff = (expires_at - now).total_seconds()
@@ -451,7 +505,6 @@ def save_history_record(
     Save or update a unified history record (TTS audio or Study analysis).
     Automatically deduplicates records with identical or near-identical text for the user.
     """
-    init_db()
     now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
     clean_type = (record_type or "unknown").strip().lower()
     clean_text = (text or "").strip()
@@ -501,7 +554,6 @@ def get_history_records(
     """
     Retrieve unified history records ordered by created_at DESC with deduplication.
     """
-    init_db()
     query = "SELECT id, user_id, record_type, text, payload_json, created_at FROM history_records WHERE user_id = ?"
     params: list[Any] = [user_id]
 
@@ -533,14 +585,16 @@ def get_history_records(
                 payload = json.loads(r["payload_json"])
             except Exception:
                 payload = {}
-            results.append({
-                "id": r["id"],
-                "user_id": r["user_id"],
-                "type": r["record_type"],
-                "text": clean_text,
-                "created_at": r["created_at"],
-                **payload,
-            })
+            results.append(
+                {
+                    "id": r["id"],
+                    "user_id": r["user_id"],
+                    "type": r["record_type"],
+                    "text": clean_text,
+                    "created_at": r["created_at"],
+                    **payload,
+                }
+            )
             if len(results) >= limit:
                 break
 
@@ -551,7 +605,6 @@ def delete_history_record(record_id: str, user_id: int) -> bool:
     """
     Delete a single history record by ID.
     """
-    init_db()
     query = "DELETE FROM history_records WHERE id = ? AND user_id = ?"
     params: list[Any] = [record_id, user_id]
 
@@ -565,7 +618,6 @@ def clear_history_records(user_id: int, record_type: str | None = None) -> int:
     """
     Clear history records.
     """
-    init_db()
     query = "DELETE FROM history_records WHERE user_id = ?"
     params: list[Any] = [user_id]
     if record_type:
@@ -627,9 +679,7 @@ def grammar_hit_sentences(user_id: int, gid: str, limit: int = 100) -> list[dict
 
 
 def _user_id_by_email(conn: sqlite3.Connection, email: str) -> int:
-    row = conn.execute(
-        "SELECT id FROM users WHERE email = ?", (email.strip().lower(),)
-    ).fetchone()
+    row = conn.execute("SELECT id FROM users WHERE email = ?", (email.strip().lower(),)).fetchone()
     if not row:
         raise SystemExit(f"No user with email {email!r}.")
     return row[0]

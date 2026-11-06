@@ -2,6 +2,7 @@
 
 Set APP_SHELL_ENABLED=1 to serve it again; while off, every /app URL redirects to /study.
 """
+
 from __future__ import annotations
 
 import os

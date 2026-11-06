@@ -1,10 +1,9 @@
-import testenv  # noqa: F401
-
 import json
 import unittest
 import uuid
 from unittest.mock import AsyncMock, patch
 
+import testenv  # noqa: F401
 from fastapi.testclient import TestClient
 
 import auth_db
@@ -27,9 +26,7 @@ class WritingLogicTests(unittest.TestCase):
     def test_attempt_lifecycle(self):
         user_id = _create_user()
         subject = writing.SUBJECTS["T1"][0]
-        attempt = writing.create_attempt(
-            user_id, "T1", subject, "A1", "Bonjour, je vous invite à dîner vendredi.", 120
-        )
+        attempt = writing.create_attempt(user_id, "T1", subject, "A1", "Bonjour, je vous invite à dîner vendredi.", 120)
         self.assertEqual(attempt["status"], "generating_1")
         self.assertEqual(attempt["user_id"], user_id)
         self.assertEqual(attempt["task"], "T1")
@@ -41,9 +38,7 @@ class WritingLogicTests(unittest.TestCase):
             "register": {"choice": "vous", "fits": True, "note": "Good"},
             "t3_comparison": None,
             "praise": "Clear invitation.",
-            "errors": [
-                {"span": "vendredi", "type": "spelling / accents", "hint": "Check capitalization in French."}
-            ],
+            "errors": [{"span": "vendredi", "type": "spelling / accents", "hint": "Check capitalization in French."}],
         }
         writing.set_attempt_feedback_1(attempt["id"], fb1)
         refreshed = writing.get_attempt(user_id, attempt["id"])
@@ -80,17 +75,24 @@ class WritingLogicTests(unittest.TestCase):
         self.assertEqual(len(final_att["feedback_2"]["structures"]), 1)
 
     def test_parse_round1_sanitizes_leaked_corrections_and_limits_errors(self):
-        raw = json.dumps({
-            "word_count": {"actual": 10, "in_range": False},
-            "checklist": [],
-            "register": {"choice": "vous", "fits": True},
-            "praise": "Great start!",
-            "errors": [
-                {"span": "j'ai aller", "type": "verb form", "hint": "Change to suis allé."},  # Leaked!
-                {"span": "la problème", "type": "gender", "hint": "Problème is masculine."},
-                {"span": "beaucoup des gens", "type": "wrong word", "hint": "Replace with beaucoup de gens."},  # Leaked!
-            ] + [{"span": f"err_{i}", "type": "agreement", "hint": "Check rule"} for i in range(10)],
-        })
+        raw = json.dumps(
+            {
+                "word_count": {"actual": 10, "in_range": False},
+                "checklist": [],
+                "register": {"choice": "vous", "fits": True},
+                "praise": "Great start!",
+                "errors": [
+                    {"span": "j'ai aller", "type": "verb form", "hint": "Change to suis allé."},  # Leaked!
+                    {"span": "la problème", "type": "gender", "hint": "Problème is masculine."},
+                    {
+                        "span": "beaucoup des gens",
+                        "type": "wrong word",
+                        "hint": "Replace with beaucoup de gens.",
+                    },  # Leaked!
+                ]
+                + [{"span": f"err_{i}", "type": "agreement", "hint": "Check rule"} for i in range(10)],
+            }
+        )
         fb = writing.parse_round1_feedback(raw, "text", "T1", writing.SUBJECTS["T1"][0])
         self.assertLessEqual(len(fb["errors"]), 8)
         # Verify leaks sanitized
@@ -98,15 +100,15 @@ class WritingLogicTests(unittest.TestCase):
         self.assertNotIn("Replace with", fb["errors"][2]["hint"])
 
     def test_parse_round2_limits_structures(self):
-        raw = json.dumps({
-            "fixed_errors": [],
-            "remaining_errors": [],
-            "corrected_text": "C'est un test.",
-            "sentences": [{"original": "Test", "corrected": "Test", "explanation": "ok", "chunk": "Test"}],
-            "structures": [
-                {"french": f"Structure {i}", "english": "...", "usage": "..."} for i in range(6)
-            ],
-        })
+        raw = json.dumps(
+            {
+                "fixed_errors": [],
+                "remaining_errors": [],
+                "corrected_text": "C'est un test.",
+                "sentences": [{"original": "Test", "corrected": "Test", "explanation": "ok", "chunk": "Test"}],
+                "structures": [{"french": f"Structure {i}", "english": "...", "usage": "..."} for i in range(6)],
+            }
+        )
         fb = writing.parse_round2_feedback(raw)
         self.assertLessEqual(len(fb["structures"]), 3)
 
@@ -132,16 +134,21 @@ class WritingEndpointTests(unittest.TestCase):
         self.assertIn("tasks", data)
         self.assertIn("subjects", data)
 
-    @patch("tts_service._post_chat", new_callable=AsyncMock)
+    @patch("services.ai.post_chat", new_callable=AsyncMock)
     def test_submit_attempt_and_poll(self, post_chat):
         # Mock Round 1 LLM response
-        post_chat.return_value = ({}, json.dumps({
-            "word_count": {"actual": 10, "min": 60, "max": 120, "in_range": False, "note": "Short"},
-            "checklist": [{"point": "RSVP", "covered": True, "note": "yes"}],
-            "register": {"choice": "vous", "fits": True, "note": "polite"},
-            "praise": "Good opening.",
-            "errors": [{"span": "inviter", "type": "verb form", "hint": "Check conjugated form"}],
-        }))
+        post_chat.return_value = (
+            {},
+            json.dumps(
+                {
+                    "word_count": {"actual": 10, "min": 60, "max": 120, "in_range": False, "note": "Short"},
+                    "checklist": [{"point": "RSVP", "covered": True, "note": "yes"}],
+                    "register": {"choice": "vous", "fits": True, "note": "polite"},
+                    "praise": "Good opening.",
+                    "errors": [{"span": "inviter", "type": "verb form", "hint": "Check conjugated form"}],
+                }
+            ),
+        )
         subject = writing.SUBJECTS["T1"][0]
         res = self.client.post(
             "/api/write/attempts",
@@ -164,22 +171,27 @@ class WritingEndpointTests(unittest.TestCase):
         self.assertEqual(poll_res.json()["feedback_1"]["praise"], "Good opening.")
 
         # Submit Round 2
-        post_chat.return_value = ({}, json.dumps({
-            "fixed_errors": [{"span": "inviter", "fixed": True, "comment": "Conjugated correctly"}],
-            "remaining_errors": [],
-            "corrected_text": "Je vous invite à venir chez moi vendredi.",
-            "sentences": [
+        post_chat.return_value = (
+            {},
+            json.dumps(
                 {
-                    "original": "Je vous invite à venir chez moi vendredi.",
-                    "corrected": "Je vous invite à venir chez moi vendredi.",
-                    "explanation": "invite is first person singular present.",
-                    "chunk": "Je vous invite à venir",
+                    "fixed_errors": [{"span": "inviter", "fixed": True, "comment": "Conjugated correctly"}],
+                    "remaining_errors": [],
+                    "corrected_text": "Je vous invite à venir chez moi vendredi.",
+                    "sentences": [
+                        {
+                            "original": "Je vous invite à venir chez moi vendredi.",
+                            "corrected": "Je vous invite à venir chez moi vendredi.",
+                            "explanation": "invite is first person singular present.",
+                            "chunk": "Je vous invite à venir",
+                        }
+                    ],
+                    "structures": [
+                        {"french": "Je vous invite à + inf", "english": "I invite you to...", "usage": "Invitations"}
+                    ],
                 }
-            ],
-            "structures": [
-                {"french": "Je vous invite à + inf", "english": "I invite you to...", "usage": "Invitations"}
-            ],
-        }))
+            ),
+        )
         r2_res = self.client.post(
             f"/api/write/attempts/{attempt_id}/round2",
             headers=self.auth,

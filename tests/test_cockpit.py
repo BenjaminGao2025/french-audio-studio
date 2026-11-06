@@ -1,11 +1,10 @@
-import testenv  # noqa: F401  (must run before the app is imported)
-
 import datetime
 import threading
 import unittest
 import uuid
 from unittest.mock import patch
 
+import testenv  # noqa: F401  (must run before the app is imported)
 from fastapi.testclient import TestClient
 
 import auth_db
@@ -20,7 +19,13 @@ CEST = -120
 
 # Study days used below (PLAN_START, 2026-10-05, is a Monday)
 MON, TUE, WED, THU, FRI, SAT, SUN = (
-    "2026-10-19", "2026-10-20", "2026-10-21", "2026-10-22", "2026-10-23", "2026-10-24", "2026-10-25"
+    "2026-10-19",
+    "2026-10-20",
+    "2026-10-21",
+    "2026-10-22",
+    "2026-10-23",
+    "2026-10-24",
+    "2026-10-25",
 )
 
 
@@ -84,7 +89,9 @@ class TodayPlanTests(unittest.TestCase):
         self.assertEqual(_kinds(tue), ["warmup", "journal", "shadowing", "reading", "intensive", "minimal"])
         self.assertEqual(tue["blocks"][3]["route"], "/reading")
         wed = cockpit.today(self.user_id, PDT, now=_at(WED))
-        self.assertEqual(_kinds(wed), ["warmup", "journal", "shadowing", "listening", "writing", "intensive", "minimal"])
+        self.assertEqual(
+            _kinds(wed), ["warmup", "journal", "shadowing", "listening", "writing", "intensive", "minimal"]
+        )
         self.assertEqual([b["planned_min"] for b in wed["blocks"][4:6]], [20, 20])
         self.assertEqual([b["start_time"] for b in wed["blocks"][4:6]], ["11:15", "11:35"])
         thu = cockpit.today(self.user_id, PDT, now=_at(THU))
@@ -505,7 +512,9 @@ class TodoTests(unittest.TestCase):
 
     def test_seeding_is_per_user(self):
         other, _ = _new_user()
-        self.assertFalse({t["id"] for t in cockpit.list_todos(self.user_id)} & {t["id"] for t in cockpit.list_todos(other)})
+        self.assertFalse(
+            {t["id"] for t in cockpit.list_todos(self.user_id)} & {t["id"] for t in cockpit.list_todos(other)}
+        )
 
     def test_done_marks_the_todo_and_is_idempotent(self):
         todo = cockpit.list_todos(self.user_id)[0]
@@ -596,7 +605,8 @@ class RetiredCourseRowsTests(unittest.TestCase):
             cockpit._retire_course_rows(conn)  # idempotent
             tue, thu, done = (self._block(conn, b) for b in ("old-tue", "old-thu", "old-done"))
             left = conn.execute(
-                "SELECT COUNT(*) FROM day_blocks WHERE user_id = ? AND (kind = 'course' OR lane = 'course')", (self.user_id,)
+                "SELECT COUNT(*) FROM day_blocks WHERE user_id = ? AND (kind = 'course' OR lane = 'course')",
+                (self.user_id,),
             ).fetchone()[0]
         self.assertEqual(
             (tue["kind"], tue["route"], tue["lane"], tue["planned_min"], tue["status"], tue["slot"]),
@@ -619,7 +629,10 @@ class RetiredCourseRowsTests(unittest.TestCase):
         cockpit._initialized_db_paths.discard(str(auth_db._get_db_path()))  # a fresh process
         plan = cockpit.today(self.user_id, PDT, now=_at(TUE))
         block = next(b for b in plan["blocks"] if b["id"] == self._id("old-tue"))
-        self.assertEqual((block["kind"], block["route"], block["lane"], block["status"]), ("intensive", "/reading", "reading", "active"))
+        self.assertEqual(
+            (block["kind"], block["route"], block["lane"], block["status"]),
+            ("intensive", "/reading", "reading", "active"),
+        )
         self.assertNotIn("course", _kinds(plan))
         self.assertEqual(len(plan["blocks"]), 6)  # nothing was added or duplicated
 
@@ -646,7 +659,9 @@ class RetiredCourseRowsTests(unittest.TestCase):
         cockpit.today(self.user_id, PDT, now=_at(MON))
         with cockpit._connect() as conn:
             cockpit._retire_course_rows(conn)
-            rows = conn.execute("SELECT lane, source, seconds FROM study_time WHERE user_id = ?", (self.user_id,)).fetchall()
+            rows = conn.execute(
+                "SELECT lane, source, seconds FROM study_time WHERE user_id = ?", (self.user_id,)
+            ).fetchall()
         self.assertEqual([(r["lane"], r["source"], r["seconds"]) for r in rows], [("course", "manual", 2700)])
 
 
@@ -656,7 +671,9 @@ class GameLogDayTests(unittest.TestCase):
         game.log_time(user_id, "speaking", 30, "past", PDT, now=_at(TUE), day=MON)
         game.log_time(user_id, "speaking", 20, "today", PDT, now=_at(TUE))
         with game._connect() as conn:
-            rows = conn.execute("SELECT day, seconds FROM study_time WHERE user_id = ? ORDER BY id", (user_id,)).fetchall()
+            rows = conn.execute(
+                "SELECT day, seconds FROM study_time WHERE user_id = ? ORDER BY id", (user_id,)
+            ).fetchall()
         self.assertEqual([(r["day"], r["seconds"]) for r in rows], [(MON, 1800), (TUE, 1200)])
 
 
@@ -714,7 +731,9 @@ class HttpApiTests(unittest.TestCase):
         block = self.client.get("/api/today", headers=self.headers).json()["blocks"][0]
         bad = self.client.post(f"/api/today/blocks/{block['id']}/skip", json={"reason": "bored"}, headers=self.headers)
         self.assertEqual(bad.status_code, 422)
-        good = self.client.post(f"/api/today/blocks/{block['id']}/skip", json={"reason": "family"}, headers=self.headers)
+        good = self.client.post(
+            f"/api/today/blocks/{block['id']}/skip", json={"reason": "family"}, headers=self.headers
+        )
         self.assertEqual(good.json()["status"], "skipped")
 
     def test_other_users_and_unknown_blocks_are_404(self):
@@ -745,10 +764,31 @@ class HttpApiTests(unittest.TestCase):
         plan = self.client.get("/api/today", params={"tz_offset": PDT}, headers=self.headers).json()
         self.assertEqual(
             set(plan),
-            {"minimal", "day", "phase", "blocks", "materials_ready", "fallback", "todos", "yesterday", "next_milestone"},
+            {
+                "minimal",
+                "day",
+                "phase",
+                "blocks",
+                "materials_ready",
+                "fallback",
+                "todos",
+                "yesterday",
+                "next_milestone",
+            },
         )
         self.assertEqual(set(plan["phase"]), {"id", "name", "hours_from", "hours_to", "week_target_min"})
-        block_keys = {"id", "position", "kind", "title", "planned_min", "actual_sec", "status", "route", "lane", "material_ids"}
+        block_keys = {
+            "id",
+            "position",
+            "kind",
+            "title",
+            "planned_min",
+            "actual_sec",
+            "status",
+            "route",
+            "lane",
+            "material_ids",
+        }
         for block in plan["blocks"]:
             self.assertTrue(block_keys <= set(block) <= block_keys | {"start_time"})
         self.assertEqual(set(plan["yesterday"]), {"blocks_done", "blocks_total", "active_minutes"})
@@ -762,7 +802,16 @@ class HttpApiTests(unittest.TestCase):
         self.assertEqual((body["active_hours"], body["input_hours"]), (1.0, 2.0))
         self.assertEqual(
             set(body),
-            {"active_hours", "manual_hours", "input_hours", "lanes", "milestones", "next_milestone", "hours_to_go", "phase"},
+            {
+                "active_hours",
+                "manual_hours",
+                "input_hours",
+                "lanes",
+                "milestones",
+                "next_milestone",
+                "hours_to_go",
+                "phase",
+            },
         )
         self.assertEqual(set(body["lanes"][0]), {"lane", "active", "manual", "input", "week_target"})
 
@@ -795,7 +844,9 @@ class HttpApiTests(unittest.TestCase):
 
     def test_review_round_trip_and_overwrite(self):
         saved = self._review(hard="Liaison", tomorrow="Cards first", mood=4).json()
-        self.assertEqual(saved, {"day": MON, "hard": "Liaison", "solved": "", "unsolved": "", "tomorrow": "Cards first", "mood": 4})
+        self.assertEqual(
+            saved, {"day": MON, "hard": "Liaison", "solved": "", "unsolved": "", "tomorrow": "Cards first", "mood": 4}
+        )
         got = self.client.get("/api/daily-reviews", params={"day": MON}, headers=self.headers).json()
         self.assertEqual(got, saved)
         self._review(hard="Gender", solved="Passé composé")

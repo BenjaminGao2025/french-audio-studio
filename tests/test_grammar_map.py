@@ -1,4 +1,3 @@
-import testenv  # noqa: F401
 import contextlib
 import io
 import json
@@ -9,10 +8,13 @@ import subprocess
 import unittest
 import uuid
 
+import testenv  # noqa: F401
 from fastapi.testclient import TestClient
 
+import analysis
 import auth_db
 import grammar
+import routers.pages
 import tts_service
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -29,13 +31,17 @@ def _user():
 
 
 def _analysis(sentence, structure=None, grammar_ids=None):
-    s = {"schemaVersion": 2, "sentence": sentence, "words": [{"fr": "Tu"}],
-         "grammar_points": [{"title": "pouvoir", "explanation": "can", "hook": "h"}]}
+    s = {
+        "schemaVersion": 2,
+        "sentence": sentence,
+        "words": [{"fr": "Tu"}],
+        "grammar_points": [{"title": "pouvoir", "explanation": "can", "hook": "h"}],
+    }
     if structure is not None:
         s["structure"] = structure
     if grammar_ids is not None:
         s["grammar_ids"] = grammar_ids
-    return tts_service._parse_analysis_json(json.dumps({"sentences": [s]}), sentence)["sentences"][0]
+    return analysis._parse_analysis_json(json.dumps({"sentences": [s]}), sentence)["sentences"][0]
 
 
 class InventoryTests(unittest.TestCase):
@@ -73,15 +79,27 @@ class StructureValidationTests(unittest.TestCase):
             self.assertIsNone(grammar.valid_gid(bad), bad)
 
     def test_structure_is_normalized(self):
-        s = _analysis("Tu peux m'aider ?", structure=[
-            {"text": "Tu", "block": "N", "role": "主语代词", "detail": "tu", "gid": "N.pronoun.subject"},
-            {"text": "peux", "block": "v", "role": "情态动词", "detail": "pouvoir · tu · 直陈式现在时", "gid": "V.present.pouvoir"},
-            {"text": "m’", "block": "N", "gid": "N.invented"},  # typographic apostrophe, unknown gid
-            {"text": "aider", "block": "X", "gid": "V.verb_infinitive"},  # invalid block: dropped
-            {"text": "voiture", "block": "N"},  # not in the sentence: dropped
-            {"block": "S"}, "junk", None,
-            {"text": "?", "block": "S", "role": "x" * 500, "detail": "<b>ok</b>", "gid": "S.question.intonation"},
-        ], grammar_ids=["V.present.pouvoir", "made.up", 7, "V.present.pouvoir", "S.neg.ne_pas"])
+        s = _analysis(
+            "Tu peux m'aider ?",
+            structure=[
+                {"text": "Tu", "block": "N", "role": "主语代词", "detail": "tu", "gid": "N.pronoun.subject"},
+                {
+                    "text": "peux",
+                    "block": "v",
+                    "role": "情态动词",
+                    "detail": "pouvoir · tu · 直陈式现在时",
+                    "gid": "V.present.pouvoir",
+                },
+                {"text": "m’", "block": "N", "gid": "N.invented"},  # typographic apostrophe, unknown gid
+                {"text": "aider", "block": "X", "gid": "V.verb_infinitive"},  # invalid block: dropped
+                {"text": "voiture", "block": "N"},  # not in the sentence: dropped
+                {"block": "S"},
+                "junk",
+                None,
+                {"text": "?", "block": "S", "role": "x" * 500, "detail": "<b>ok</b>", "gid": "S.question.intonation"},
+            ],
+            grammar_ids=["V.present.pouvoir", "made.up", 7, "V.present.pouvoir", "S.neg.ne_pas"],
+        )
         spans = s["structure"]
         self.assertEqual([sp["text"] for sp in spans], ["Tu", "peux", "m’", "?"])
         self.assertEqual([sp["block"] for sp in spans], ["N", "V", "N", "S"])
@@ -92,7 +110,9 @@ class StructureValidationTests(unittest.TestCase):
         self.assertEqual(len(spans[3]["role"]), grammar.MAX_ROLE)
         self.assertEqual(spans[3]["detail"], "<b>ok</b>", "kept as text; the page escapes it")
         # Unknown ids dropped, duplicates removed, span ids added after the listed ones
-        self.assertEqual(s["grammar_ids"], ["V.present.pouvoir", "S.neg.ne_pas", "N.pronoun.subject", "S.question.intonation"])
+        self.assertEqual(
+            s["grammar_ids"], ["V.present.pouvoir", "S.neg.ne_pas", "N.pronoun.subject", "S.question.intonation"]
+        )
         # grammar_points stay as they were
         self.assertEqual(s["grammar_points"], [{"title": "pouvoir", "explanation": "can", "hook": "h"}])
 
@@ -105,14 +125,15 @@ class StructureValidationTests(unittest.TestCase):
         self.assertEqual(len(_analysis("Tu peux.", structure=too_many)["structure"]), grammar.MAX_SPANS)
 
     def test_prompt_lists_the_inventory_and_examples_use_real_ids(self):
-        prompt = tts_service._analyze_payload(tts_service.AnalyzeRequest(text="Tu peux m'aider ?"))["messages"][0]["content"]
+        prompt = analysis._analyze_payload(analysis.AnalyzeRequest(text="Tu peux m'aider ?"))["messages"][0]["content"]
         self.assertIn('"structure"', prompt)
         self.assertIn('"grammar_ids"', prompt)
         self.assertIn("Never invent an id.", prompt)
         for gid in grammar.BY_ID:
             self.assertIn(gid, prompt)
         used = set(re.findall(r'"gid": "([^"]+)"', prompt)) | {
-            gid for ids in re.findall(r'"grammar_ids": \[([^\]]*)\]', prompt) for gid in re.findall(r'"([^"]+)"', ids)}
+            gid for ids in re.findall(r'"grammar_ids": \[([^\]]*)\]', prompt) for gid in re.findall(r'"([^"]+)"', ids)
+        }
         self.assertTrue(used)
         self.assertEqual(used - set(grammar.BY_ID), set(), "examples only use inventory ids")
         # The grammar_points rules stay
@@ -120,13 +141,19 @@ class StructureValidationTests(unittest.TestCase):
 
     def test_hits_from_sentences(self):
         sentences = [
-            {"sentence": "Tu  peux.", "grammar_ids": ["V.present.pouvoir", "bogus"], "structure": [{"gid": "N.pronoun.subject"}, "x"]},
+            {
+                "sentence": "Tu  peux.",
+                "grammar_ids": ["V.present.pouvoir", "bogus"],
+                "structure": [{"gid": "N.pronoun.subject"}, "x"],
+            },
             {"sentence": "", "grammar_ids": ["V.present.er"]},
             {"sentence": "Old analysis without ids."},
             "junk",
         ]
-        self.assertEqual(grammar.hits_from_sentences(sentences),
-                         [("V.present.pouvoir", "Tu peux."), ("N.pronoun.subject", "Tu peux.")])
+        self.assertEqual(
+            grammar.hits_from_sentences(sentences),
+            [("V.present.pouvoir", "Tu peux."), ("N.pronoun.subject", "Tu peux.")],
+        )
         self.assertEqual(grammar.hits_from_sentences(None), [])
 
 
@@ -164,20 +191,44 @@ class GrammarHitsTests(unittest.TestCase):
 
     def test_saving_study_history_records_hits(self):
         uid, auth = _user()
-        sentence = _analysis("Tu peux m'aider ?", structure=[
-            {"text": "peux", "block": "V", "gid": "V.present.pouvoir"}], grammar_ids=["S.question.intonation", "nope"])
+        sentence = _analysis(
+            "Tu peux m'aider ?",
+            structure=[{"text": "peux", "block": "V", "gid": "V.present.pouvoir"}],
+            grammar_ids=["S.question.intonation", "nope"],
+        )
         old = {"schemaVersion": 2, "sentence": "Bonjour.", "grammar_points": []}  # history from before this feature
         payload = {"id": "hist_study_1", "type": "study", "sentences": [sentence, old]}
-        res = self.client.post("/api/history", headers=auth, json={"id": "hist_study_1", "type": "study", "text": "Tu peux m'aider ?", "payload": payload})
+        res = self.client.post(
+            "/api/history",
+            headers=auth,
+            json={"id": "hist_study_1", "type": "study", "text": "Tu peux m'aider ?", "payload": payload},
+        )
         self.assertEqual(res.status_code, 200)
         self.assertEqual(auth_db.grammar_hit_counts(uid), {"S.question.intonation": 1, "V.present.pouvoir": 1})
         self.assertEqual(auth_db.grammar_hit_sentences(uid, "V.present.pouvoir")[0]["history_id"], "hist_study_1")
         # Saving it again (or restoring) does not count it twice; tts records never count
-        self.client.post("/api/history", headers=auth, json={"id": "hist_study_2", "type": "study", "text": "Tu peux m'aider ?", "payload": payload})
-        self.client.post("/api/history", headers=auth, json={"id": "tts_1", "type": "tts", "text": "x", "payload": {"sentences": [{"sentence": "Je vais.", "grammar_ids": ["V.present.aller"]}]}})
+        self.client.post(
+            "/api/history",
+            headers=auth,
+            json={"id": "hist_study_2", "type": "study", "text": "Tu peux m'aider ?", "payload": payload},
+        )
+        self.client.post(
+            "/api/history",
+            headers=auth,
+            json={
+                "id": "tts_1",
+                "type": "tts",
+                "text": "x",
+                "payload": {"sentences": [{"sentence": "Je vais.", "grammar_ids": ["V.present.aller"]}]},
+            },
+        )
         self.assertEqual(auth_db.grammar_hit_counts(uid), {"S.question.intonation": 1, "V.present.pouvoir": 1})
         # A malformed payload never breaks saving history
-        res = self.client.post("/api/history", headers=auth, json={"id": "hist_study_3", "type": "study", "text": "y", "payload": {"sentences": "oops"}})
+        res = self.client.post(
+            "/api/history",
+            headers=auth,
+            json={"id": "hist_study_3", "type": "study", "text": "y", "payload": {"sentences": "oops"}},
+        )
         self.assertEqual(res.status_code, 200)
 
 
@@ -191,7 +242,7 @@ class GrammarPageTests(unittest.TestCase):
         self.assertEqual(res.headers["Content-Security-Policy"], tts_service.CONTENT_SECURITY_POLICY)
         self.assertIn("no-store", res.headers["Cache-Control"])
         html = res.text
-        v = tts_service.ASSET_VERSION
+        v = routers.pages.ASSET_VERSION
         for asset in ("grammar.js", "grammar.css", "i18n.js", "tokens.css", "header-ui.js"):
             self.assertIn(f"/static/{asset}?v={v}", html)
         self.assertNotIn("__ASSET_VERSION__", html)
@@ -217,7 +268,14 @@ class GrammarPageTests(unittest.TestCase):
     def test_map_counts_and_sentences_are_per_user(self):
         uid, auth = _user()
         other, other_auth = _user()
-        auth_db.record_grammar_hits(uid, [("V.present.pouvoir", "Tu peux m'aider ?"), ("V.present.pouvoir", "<b>Je peux.</b>"), ("N.gender", "La table.")])
+        auth_db.record_grammar_hits(
+            uid,
+            [
+                ("V.present.pouvoir", "Tu peux m'aider ?"),
+                ("V.present.pouvoir", "<b>Je peux.</b>"),
+                ("N.gender", "La table."),
+            ],
+        )
         auth_db.record_grammar_hits(other, [("S.neg.ne_pas", "Je ne sais pas.")])
         data = self.client.get("/api/grammar/map", headers=auth).json()
         self.assertEqual([b["id"] for b in data["blocks"]], ["N", "V", "S"])
@@ -265,10 +323,14 @@ class StudyMarkupTests(unittest.TestCase):
     def test_structure_bar_is_wired_into_the_sentence_body(self):
         js = _read("static/study.js")
         body = js.split("const bodyHtml = `")[1].split("`;")[0]
-        self.assertLess(body.index("${structureBarHtml(s.structure)}"), body.index('class="card-tabs-bar"'), "above the tabs")
+        self.assertLess(
+            body.index("${structureBarHtml(s.structure)}"), body.index('class="card-tabs-bar"'), "above the tabs"
+        )
         self.assertIn("bindStructureBar(card, s.structure);", js)
-        for text in ("structureBlock: { N: 'Noun group', V: 'Verb', S: 'Sentence building' }",
-                     "structureBlock: { N: '名词组', V: '动词', S: '句子怎么组织' }"):
+        for text in (
+            "structureBlock: { N: 'Noun group', V: 'Verb', S: 'Sentence building' }",
+            "structureBlock: { N: '名词组', V: '动词', S: '句子怎么组织' }",
+        ):
             self.assertIn(text, js)
         bar = js.split("function structureBarHtml(structure) {")[1].split("\n    }\n")[0]
         self.assertIn("escapeHtml(span.text)", bar)
@@ -280,9 +342,11 @@ class StudyMarkupTests(unittest.TestCase):
 
     def test_structure_and_grammar_map_in_jsdom(self):
         node = shutil.which("node")
-        if not node or not (ROOT / "frontend/node_modules/jsdom").exists():
-            self.skipTest("node and the frontend's jsdom are needed")
-        result = subprocess.run([node, "tests/test_grammar_structure.cjs"], cwd=ROOT, capture_output=True, text=True, timeout=90)
+        if not node or not (ROOT / "node_modules/jsdom").exists():
+            self.skipTest("node and jsdom (npm ci at the repo root) are needed")
+        result = subprocess.run(
+            [node, "tests/test_grammar_structure.cjs"], cwd=ROOT, capture_output=True, text=True, timeout=90
+        )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
@@ -295,18 +359,27 @@ class BackfillScriptTests(unittest.TestCase):
 
     def test_backfill_dry_run_then_apply(self):
         import importlib.util
-        spec = importlib.util.spec_from_file_location("backfill_grammar_hits", ROOT / "scripts/backfill_grammar_hits.py")
+
+        spec = importlib.util.spec_from_file_location(
+            "backfill_grammar_hits", ROOT / "scripts/backfill_grammar_hits.py"
+        )
         backfill = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(backfill)
         uid, _ = _user()
         email = auth_db.get_user_status(uid)["email"]
-        record = {"sentences": [{"sentence": "Je vais au cinéma.", "grammar_ids": ["V.present.aller", "N.article.contraction"]}]}
+        record = {
+            "sentences": [
+                {"sentence": "Je vais au cinéma.", "grammar_ids": ["V.present.aller", "N.article.contraction"]}
+            ]
+        }
         auth_db.save_history_record("hist_backfill", "study", "Je vais au cinéma.", record, uid)
+
         def run(*args):
             out = io.StringIO()
             with contextlib.redirect_stdout(out):
                 backfill.main(["--user", email, *args])
             return out.getvalue()
+
         self.assertIn("Dry run: nothing written.", run())
         self.assertEqual(auth_db.grammar_hit_counts(uid), {}, "dry run writes nothing")
         self.assertIn("Added 2 new hits.", run("--apply"))

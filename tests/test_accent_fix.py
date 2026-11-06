@@ -6,10 +6,13 @@ import subprocess
 import unittest
 from unittest.mock import AsyncMock, patch
 
+import testenv  # noqa: F401  (sets up the isolated env before tts_service is imported)
 from fastapi.testclient import TestClient
 
-import testenv  # noqa: F401  (sets up the isolated env before tts_service is imported)
-import tts_service as host
+import analysis
+import intake
+import services.ai
+import tts_service
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 PHOTO = "data:image/jpeg;base64," + base64.b64encode(b"\xff\xd8\xff\xe0" + b"\x00" * 64).decode()
@@ -20,16 +23,16 @@ def analysis_reply(**fields):
 
 
 def parse(raw, source):
-    return host._parse_analysis_json(raw, source)["sentences"]
+    return analysis._parse_analysis_json(raw, source)["sentences"]
 
 
 def chat_reply(reply):
-    return patch.object(host, "_post_chat", new_callable=AsyncMock, return_value=({}, reply))
+    return patch.object(services.ai, "post_chat", new_callable=AsyncMock, return_value=({}, reply))
 
 
 class AccentPromptTests(unittest.TestCase):
     def test_rule_restores_only_required_accents(self):
-        rule = host.ACCENT_RULE
+        rule = analysis.ACCENT_RULE
         for example in ("A pied → À pied", "A l'heure → À l'heure", "A Paris → À Paris", "A 8 heures → À 8 heures"):
             self.assertIn(example, rule)
         self.assertIn("Ecole → École", rule)
@@ -39,12 +42,12 @@ class AccentPromptTests(unittest.TestCase):
 
     def test_rule_keeps_the_a_that_is_no_preposition(self):
         for kept in ("verb avoir (A-t-il fini ?)", "answer label (A., B))", "level (A1, A2)", "vitamine A"):
-            self.assertIn(kept, host.ACCENT_RULE)
+            self.assertIn(kept, analysis.ACCENT_RULE)
 
     def test_breakdown_prompt_explains_a_as_the_preposition(self):
-        payload = host._analyze_payload(host.AnalyzeRequest(text="A pied"))
+        payload = analysis._analyze_payload(analysis.AnalyzeRequest(text="A pied"))
         prompt = payload["messages"][0]["content"]
-        self.assertIn(host.ACCENT_RULE, prompt)
+        self.assertIn(analysis.ACCENT_RULE, prompt)
         self.assertIn('"accent_fixed_from": ""', prompt)
         self.assertIn("À is the preposition à with a capital letter", prompt)
         self.assertIn("lemma 'à'", prompt)
@@ -53,14 +56,14 @@ class AccentPromptTests(unittest.TestCase):
         self.assertIn("Every other field uses the corrected text too", prompt)
 
     def test_extraction_prompts_no_longer_forbid_the_fix(self):
-        clean = host._clean_input_payload("x")["messages"][0]["content"]
-        for prompt in (clean, host.PHOTO_SYSTEM_PROMPT):
+        clean = intake._clean_input_payload("x")["messages"][0]["content"]
+        for prompt in (clean, intake.PHOTO_SYSTEM_PROMPT):
             with self.subTest(prompt=prompt[:30]):
-                self.assertIn(host.ACCENT_RULE, prompt)
+                self.assertIn(analysis.ACCENT_RULE, prompt)
                 self.assertIn("except for missing accents", prompt)
                 self.assertNotIn("Do not translate, correct", prompt)
-        self.assertIn('"accent_fixed_from":""', host.PHOTO_SYSTEM_PROMPT)
-        self.assertIn("exactly as printed", host.PHOTO_SYSTEM_PROMPT)
+        self.assertIn('"accent_fixed_from":""', intake.PHOTO_SYSTEM_PROMPT)
+        self.assertIn("exactly as printed", intake.PHOTO_SYSTEM_PROMPT)
 
 
 class AccentFieldTests(unittest.TestCase):
@@ -75,7 +78,7 @@ class AccentFieldTests(unittest.TestCase):
         )
         for fixed, original in cases:
             with self.subTest(fixed=fixed):
-                self.assertEqual(host._accent_fixed_from(fixed, original), " ".join(original.split()))
+                self.assertEqual(analysis._accent_fixed_from(fixed, original), " ".join(original.split()))
 
     def test_anything_else_is_no_accent_fix(self):
         cases = (
@@ -94,17 +97,17 @@ class AccentFieldTests(unittest.TestCase):
         )
         for fixed, original in cases:
             with self.subTest(fixed=fixed, original=original):
-                self.assertEqual(host._accent_fixed_from(fixed, original), "")
+                self.assertEqual(analysis._accent_fixed_from(fixed, original), "")
 
     def test_source_lookup_finds_the_wording_inside_a_longer_text(self):
         source = "## 交通方式 한글\n- **A pied** ou en bus\n| Ecole | 学校 |"
-        self.assertEqual(host._accent_source_of("À pied", source), "A pied")
-        self.assertEqual(host._accent_source_of("École", source), "Ecole")
+        self.assertEqual(analysis._accent_source_of("À pied", source), "A pied")
+        self.assertEqual(analysis._accent_source_of("École", source), "Ecole")
 
     def test_source_lookup_stays_quiet_otherwise(self):
-        self.assertEqual(host._accent_source_of("À pied", "À pied et A pied"), "")  # copied as is
-        self.assertEqual(host._accent_source_of("A pied", "À pied"), "")  # lost an accent
-        self.assertEqual(host._accent_source_of("je parle", "| je | parle |"), "")  # rebuilt line
+        self.assertEqual(analysis._accent_source_of("À pied", "À pied et A pied"), "")  # copied as is
+        self.assertEqual(analysis._accent_source_of("A pied", "À pied"), "")  # lost an accent
+        self.assertEqual(analysis._accent_source_of("je parle", "| je | parle |"), "")  # rebuilt line
 
 
 class AnalysisFieldTests(unittest.TestCase):
@@ -147,7 +150,9 @@ class AnalysisFieldTests(unittest.TestCase):
     def test_endpoint_returns_the_field(self):
         reply = analysis_reply(sentence="À Paris", accent_fixed_from="A Paris")
         with chat_reply(reply):
-            r = TestClient(host.app).post("/api/analyze", json={"text": "A Paris"}, headers=testenv.session_headers())
+            r = TestClient(tts_service.app).post(
+                "/api/analyze", json={"text": "A Paris"}, headers=testenv.session_headers()
+            )
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual(r.json()["sentences"][0]["accent_fixed_from"], "A Paris")
 
@@ -162,7 +167,9 @@ class ExtractionFieldTests(unittest.TestCase):
             ]
         }
         with chat_reply(json.dumps(reply, ensure_ascii=False)):
-            r = TestClient(host.app).post("/api/photo-extract", json={"image": PHOTO}, headers=testenv.session_headers())
+            r = TestClient(tts_service.app).post(
+                "/api/photo-extract", json={"image": PHOTO}, headers=testenv.session_headers()
+            )
         self.assertEqual(r.status_code, 200, r.text)
         data = r.json()
         self.assertEqual(data["text"], "À pied\nJe parle.\nA vélo")
@@ -173,7 +180,9 @@ class ExtractionFieldTests(unittest.TestCase):
     def test_clean_input_reports_the_fixed_lines(self):
         lesson = "## 选项\n- A pied\n- A l'heure\n- Je parle.\n"
         with chat_reply("À pied\nÀ l'heure\nJe parle.\n"):
-            r = TestClient(host.app).post("/api/clean-input", json={"text": lesson}, headers=testenv.session_headers())
+            r = TestClient(tts_service.app).post(
+                "/api/clean-input", json={"text": lesson}, headers=testenv.session_headers()
+            )
         self.assertEqual(r.status_code, 200, r.text)
         data = r.json()
         self.assertEqual(data["cleaned"], "À pied\nÀ l'heure\nJe parle.")
@@ -187,7 +196,9 @@ class ExtractionFieldTests(unittest.TestCase):
 
     def test_clean_input_shape_is_unchanged_without_a_fix(self):
         with chat_reply("Je parle.\n"):
-            r = TestClient(host.app).post("/api/clean-input", json={"text": "## 例句\nJe parle."}, headers=testenv.session_headers())
+            r = TestClient(tts_service.app).post(
+                "/api/clean-input", json={"text": "## 例句\nJe parle."}, headers=testenv.session_headers()
+            )
         self.assertEqual(r.json(), {"cleaned": "Je parle.", "count": 1, "changed": True})
 
 
@@ -207,7 +218,9 @@ class AccentPageTests(unittest.TestCase):
         node = shutil.which("node")
         if not node:
             self.skipTest("node is needed")
-        result = subprocess.run([node, "tests/test_accent_fix.cjs"], cwd=ROOT, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(
+            [node, "tests/test_accent_fix.cjs"], cwd=ROOT, capture_output=True, text=True, timeout=30
+        )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 

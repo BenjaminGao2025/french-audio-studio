@@ -29,14 +29,13 @@ import auth_db
 import coach
 import srs
 
-
 LANE_WEEK_TARGETS = {  # raw minutes per week (16 hours = 960 min in total, PRD 6.1)
-    "listening": 210,    # 3.5 h
-    "reading": 240,      # 4 h, all intensive reading (sentence breakdown)
-    "speaking": 300,     # 5 h, incl. 90 min of shadowing
-    "writing": 120,      # 2 h of TCF EE practice
-    "review": 90,        # 1.5 h of cards
-    "car": 0,            # car and walk listening is input, not part of the 16 h (still counts half)
+    "listening": 210,  # 3.5 h
+    "reading": 240,  # 4 h, all intensive reading (sentence breakdown)
+    "speaking": 300,  # 5 h, incl. 90 min of shadowing
+    "writing": 120,  # 2 h of TCF EE practice
+    "review": 90,  # 1.5 h of cards
+    "car": 0,  # car and walk listening is input, not part of the 16 h (still counts half)
 }
 LANE_WEIGHTS = {"car": 0.5}
 LANES = tuple(LANE_WEEK_TARGETS)
@@ -226,9 +225,7 @@ def record_time(user_id: int, lane: str, seconds: int, tz_offset: int, now=None)
     return seconds
 
 
-def log_time(
-    user_id: int, lane: str, minutes: int, note: str, tz_offset: int, now=None, day: str | None = None
-) -> int:
+def log_time(user_id: int, lane: str, minutes: int, note: str, tz_offset: int, now=None, day: str | None = None) -> int:
     """Study done outside the app, logged by hand. Returns the log id.
 
     `day` books the time on a past study day (an ISO date); by default it is today's.
@@ -239,7 +236,14 @@ def log_time(
     with _connect() as conn:
         cursor = conn.execute(
             "INSERT INTO study_time (user_id, day, lane, source, seconds, note, created_at) VALUES (?, ?, ?, 'manual', ?, ?, ?)",
-            (user_id, day or local_day(now, tz_offset).isoformat(), lane, minutes * 60, (note or "")[:200], srs._iso(now)),
+            (
+                user_id,
+                day or local_day(now, tz_offset).isoformat(),
+                lane,
+                minutes * 60,
+                (note or "")[:200],
+                srs._iso(now),
+            ),
         )
         conn.commit()
         return int(cursor.lastrowid)
@@ -311,10 +315,17 @@ def _review_events(rows, tz_offset: int) -> list[dict[str, Any]]:
             xp += min(combo - 1, 4)
         if first_blood:
             xp += FIRST_BLOOD_XP
-        events.append({
-            "day": this_day, "rating": rating, "kill": kill, "death": rating == 1,
-            "combo": combo if kill else 0, "first_blood": first_blood, "xp": xp,
-        })
+        events.append(
+            {
+                "day": this_day,
+                "rating": rating,
+                "kill": kill,
+                "death": rating == 1,
+                "combo": combo if kill else 0,
+                "first_blood": first_blood,
+                "xp": xp,
+            }
+        )
     return events
 
 
@@ -345,9 +356,7 @@ def state(user_id: int, tz_offset: int, now=None) -> dict[str, Any]:
         review_rows = conn.execute(
             "SELECT reviewed_at, rating, was_new FROM srs_reviews WHERE user_id = ? ORDER BY reviewed_at", (user_id,)
         ).fetchall()
-        event_rows = conn.execute(
-            "SELECT day, kind FROM game_events WHERE user_id = ?", (user_id,)
-        ).fetchall()
+        event_rows = conn.execute("SELECT day, kind FROM game_events WHERE user_id = ?", (user_id,)).fetchall()
 
     minutes_by_day: dict[datetime.date, float] = {}
     today_lanes = {lane: 0.0 for lane in LANES}
@@ -365,7 +374,9 @@ def state(user_id: int, tz_offset: int, now=None) -> dict[str, Any]:
                 today_lanes[row["lane"]] += minutes
             today_effective += effective
             if row["source"] == "manual":
-                logs_today.append({"id": row["id"], "lane": row["lane"], "minutes": round(minutes), "note": row["note"]})
+                logs_today.append(
+                    {"id": row["id"], "lane": row["lane"], "minutes": round(minutes), "note": row["note"]}
+                )
         if week_start <= day <= week_end:
             if row["lane"] in week_lanes:
                 week_lanes[row["lane"]] += minutes
@@ -412,15 +423,21 @@ def state(user_id: int, tz_offset: int, now=None) -> dict[str, Any]:
     lane_targets = lane_week_targets(today)
     planned_week = week_target(today)
     if stored_plan:
-        profile = stored_plan['profile']
+        profile = stored_plan["profile"]
         planned_week = sum(coach.budget(profile, week_start + datetime.timedelta(days=i)) for i in range(7))
         day_target = 0 if family_today else coach.budget(profile, today)
         maintenance = False
-        weights = stored_plan['plan'].get('task_weights', coach.DEFAULT_WEIGHTS)
+        weights = stored_plan["plan"].get("task_weights", coach.DEFAULT_WEIGHTS)
         total_weight = sum(weights.values())
         lane_targets = {lane: 0 for lane in LANES}
-        for kind, lane in {'listen':'listening','write':'writing','speak':'speaking','read':'reading','review':'review'}.items():
-            lane_targets[lane] = round(planned_week * weights.get(kind,1) / total_weight)
+        for kind, lane in {
+            "listen": "listening",
+            "write": "writing",
+            "speak": "speaking",
+            "read": "reading",
+            "review": "review",
+        }.items():
+            lane_targets[lane] = round(planned_week * weights.get(kind, 1) / total_weight)
 
     skills = {}
     for skill_key, skill_lanes in TCF_SKILL_LANES.items():

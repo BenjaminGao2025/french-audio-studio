@@ -1,4 +1,5 @@
 """Game routes: study time, XP and hero level (see game.py)."""
+
 from __future__ import annotations
 
 import os
@@ -6,11 +7,11 @@ import uuid
 from typing import Literal
 
 import edge_tts
-import edge_compat  # noqa: F401  (Microsoft moved the synthesis host; must load before use)
 from fastapi import APIRouter, Header, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+import edge_compat  # noqa: F401  (Microsoft moved the synthesis host; must load before use)
 import game
 from web_common import OUTPUT_DIR, _require_user_id
 

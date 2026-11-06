@@ -1,9 +1,11 @@
 """Account routes: register, login, session cookie, logout, signed-in devices."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 
 import auth_db
 from web_common import (
@@ -12,6 +14,8 @@ from web_common import (
     _require_user_id,
     _session_value,
     _set_session_cookie,
+    client_ip,
+    rate_limit,
 )
 
 router = APIRouter()
@@ -34,13 +38,31 @@ def _auth_response(payload: dict, request: Request) -> JSONResponse:
     return response
 
 
+def _limit_attempts(request: Request, email: str) -> None:
+    """Sign-in and sign-up cost a deliberately slow hash: cap them per client IP and per email."""
+    rate_limit(f"ip:{client_ip(request)}", "auth_ip")
+    rate_limit(f"email:{email.strip().lower()}", "auth_email")
+
+
 def _device_label(user_agent: str) -> str:
     """A short, human name for the device a login came from, e.g. "Chrome · Android"."""
     ua = user_agent or ""
-    browsers = [("Edg/", "Edge"), ("MicroMessenger", "WeChat"), ("Firefox/", "Firefox"),
-                ("CriOS", "Chrome"), ("Chrome/", "Chrome"), ("Safari/", "Safari")]
-    systems = [("iPhone", "iPhone"), ("iPad", "iPad"), ("Android", "Android"),
-               ("Windows", "Windows"), ("Mac OS X", "Mac"), ("Linux", "Linux")]
+    browsers = [
+        ("Edg/", "Edge"),
+        ("MicroMessenger", "WeChat"),
+        ("Firefox/", "Firefox"),
+        ("CriOS", "Chrome"),
+        ("Chrome/", "Chrome"),
+        ("Safari/", "Safari"),
+    ]
+    systems = [
+        ("iPhone", "iPhone"),
+        ("iPad", "iPad"),
+        ("Android", "Android"),
+        ("Windows", "Windows"),
+        ("Mac OS X", "Mac"),
+        ("Linux", "Linux"),
+    ]
     browser = next((name for key, name in browsers if key in ua), "")
     system = next((name for key, name in systems if key in ua), "")
     return " · ".join(part for part in (browser, system) if part) or "Unknown device"
@@ -52,20 +74,23 @@ async def register_account(req: RegisterRequest, request: Request):
     invite = req.invite_code.strip()
     if not auth_db.ALLOW_REGISTRATION and not invite:
         raise HTTPException(status_code=403, detail={"message": "本站暂不开放注册。"})
+    _limit_attempts(request, req.email)
     device = _device_label(request.headers.get("user-agent", ""))
     try:
-        return _auth_response(
-            auth_db.register_user(req.email, req.password, device, invite_code=invite or None), request
-        )
+        # The password hash takes a few hundred ms of CPU: keep it off the event loop
+        account = await run_in_threadpool(auth_db.register_user, req.email, req.password, device, invite or None)
+        return _auth_response(account, request)
     except ValueError as e:
         raise HTTPException(status_code=400, detail={"message": str(e)})
 
 
 @router.post("/api/auth/login")
 async def login_account(req: AuthRequest, request: Request):
+    _limit_attempts(request, req.email)
     try:
         device = _device_label(request.headers.get("user-agent", ""))
-        return _auth_response(auth_db.login_user(req.email, req.password, device), request)
+        account = await run_in_threadpool(auth_db.login_user, req.email, req.password, device)
+        return _auth_response(account, request)
     except ValueError as e:
         raise HTTPException(status_code=400, detail={"message": str(e)})
 
@@ -107,9 +132,7 @@ async def list_devices(request: Request, authorization: str | None = Header(defa
     token = _session_value(authorization, request)
     user_id = _require_user_id(authorization, request)
     current = (auth_db.verify_token(token) or {}).get("sid")
-    devices = [
-        {**session, "current": session["id"] == current} for session in auth_db.list_sessions(user_id)
-    ]
+    devices = [{**session, "current": session["id"] == current} for session in auth_db.list_sessions(user_id)]
     return {"devices": devices, "max_devices": auth_db.MAX_DEVICES}
 
 

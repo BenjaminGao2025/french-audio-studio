@@ -5,7 +5,6 @@
   <img src="https://img.shields.io/badge/FastAPI-0.100+-009688?style=flat&logo=fastapi&logoColor=white" alt="FastAPI">
   <img src="https://img.shields.io/badge/TTS-Microsoft%20Edge%20TTS-0078D7?style=flat&logo=microsoft" alt="Edge TTS">
   <img src="https://img.shields.io/badge/Docker-Ready-2496ED?style=flat&logo=docker&logoColor=white" alt="Docker">
-  <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT">
 </p>
 
 [English](#english) | [中文说明](#中文说明)
@@ -60,7 +59,7 @@
 - 🔒 **隐私与安全第一**：
   - 后端无硬编码密钥；AI 接口只接受已登录账号的会话 token，上游 Key 由服务器环境变量提供，浏览器不接触。
 - 📦 **轻量可移植**：
-  - 基于 FastAPI + 原生现代化前端，无重型框架依赖，启动毫秒级，附带 40 项自动化测试全绿。
+  - 基于 FastAPI 和原生 JavaScript 前端；Python 与浏览器脚本均有自动化测试。
 
 ---
 
@@ -94,9 +93,11 @@ flowchart LR
    cd french-audio-studio
    ```
 
-2. **配置环境变量（可选）**
+2. **配置环境变量（必需）**
    ```bash
    cp .env.example .env
+   chmod 600 .env
+   # 编辑 .env：设置至少 32 个随机字符的 AUTH_SECRET，及需要 AI 时的 WEB2API_API_KEY
    ```
 
 3. **启动容器**
@@ -117,8 +118,13 @@ flowchart LR
    pip install -r requirements.txt
    ```
 
-2. **启动服务**
+2. **设置环境变量并启动服务**（Python 不会自动加载 `.env`）
    ```bash
+   # 一次性生成随机密钥并安全保存：
+   python -c 'import secrets; print(secrets.token_urlsafe(48))'
+   # 每次启动都从安全存储设置同一个 AUTH_SECRET；更换密钥会使现有会话失效。
+   export AUTH_SECRET='<已保存的随机密钥>'
+   # 如需 AI 功能，还需设置 WEB2API_API_KEY 和可访问的 AGY_BASE_URL。
    python tts_service.py
    # 或使用 uvicorn 启动：
    # uvicorn tts_service:app --host 0.0.0.0 --port 8000 --reload
@@ -134,37 +140,49 @@ flowchart LR
 | :--- | :--- | :--- |
 | `OUTPUT_DIR` | `./outputs` | 音频及字幕输出保存目录 |
 | `AGY_BASE_URL` | `http://127.0.0.1:8645/v1` | AGY（OpenAI 兼容 Gemini 网关）地址，所有 AI 调用都发往这里 |
-| `AGY_MODEL` | `gemini-3.8-flash-low` | 实际应答所有请求的模型；客户端传来的任何旧模型名都会映射到它 |
-| `UPSTREAM_TIMEOUT_SECONDS` | `120` | 单次 AI 请求超时时间（秒） |
+| `AGY_MODEL` | `gemini-3.8-flash-low` | 所有 AI 请求使用的上游模型 |
+| `UPSTREAM_TIMEOUT_SECONDS` | `90` | 单次 AI 请求超时时间（秒） |
 | `MAX_TEXT_CHARS` | `15000` | 单次输入最大字符限制 |
 | `AUTH_SECRET` | （必填） | 登录 token 签名密钥，至少 32 位随机字符，未设置时服务拒绝启动 |
 | `WEB2API_API_KEY` | （空） | 发给上游 AGY 的 Key；为空时 AI 接口返回 503 `server_key_missing` |
-| `ALLOW_REGISTRATION` | `false` | 是否开放注册（个人使用保持关闭，账号用 `python auth_db.py` 管理） |
+| `ALLOW_REGISTRATION` | `false` | 是否开放注册；关闭时仍可使用邀请码注册 |
+| `PBKDF2_ITERATIONS` | `600000` | 新密码的 PBKDF2-SHA256 迭代次数；旧格式在成功登录时升级 |
+| `RATE_AUTH_IP_BURST` / `RATE_AUTH_IP_PER_HOUR` | `20` / `30` | 登录与注册：每个客户端 IP 的令牌桶容量 / 每小时补充数 |
+| `RATE_AUTH_EMAIL_BURST` / `RATE_AUTH_EMAIL_PER_HOUR` | `8` / `6` | 登录与注册：每个规范化邮箱的容量 / 每小时补充数 |
+| `ASR_MODEL_DIR` / `ASR_CPU_THREADS` | `./models/faster-whisper-large-v3-turbo` / `8` | 本地语音识别模型目录 / CPU 线程数 |
+| `TTS_HOST` / `TTS_PORT` | `127.0.0.1` / `8000` | `python tts_service.py` 的监听地址 / 端口 |
+
+Compose 单独覆盖 `AGY_BASE_URL` 为 `http://127.0.0.1:3425/v1`、`AGY_MODEL` 为 `gemini-3.8-flash`；均可在 Compose 环境中覆盖。语音识别需要在模型目录中准备兼容的 faster-whisper 模型文件。限流状态保存在进程内，重启后重置，并非跨进程共享；只有来自本机代理的 `CF-Connecting-IP` 会被信任。
 
 ---
 
-## 🧭 今日驾驶舱前端（/app）
+## 🧭 前端与架构
 
-React 单页应用的源码在 `frontend/`，构建产物提交在 `static/app/`，由 FastAPI 在 `/app` 提供（`routers/app_shell.py`）。Docker 镜像没有 Node 阶段，所以**改了前端源码就要在同一次提交里重新构建**：
-
-```bash
-cd frontend
-npm ci && npm run check   # 类型检查 + lint + 测试 + 构建到 ../static/app
-npm run dev               # 用 mock 数据开发
-npm run dev:api           # 代理到 127.0.0.1:8000 的真实后端
-```
-
-站点的 CSP 不允许内联脚本；`tests/test_app_shell.py` 检查构建出的 `index.html` 只含带 `src` 的脚本、引用的资源都存在。后端还没有的功能（日记、听力、阅读等）在页面上显示"此功能的后端尚未上线"。
-
----
+当前界面由 `static/` 中的 HTML、CSS 和原生 JavaScript 提供，无需构建步骤。旧 React SPA（源码 `frontend/`，构建产物 `static/app/`）及其后端接口（`/api/today`、`/api/listening/*`、`/api/reading/*` 等）仍保留；`/app` 默认关闭并跳转到 `/study`，设置 `APP_SHELL_ENABLED=1` 后重新提供。更多实现细节见 [ARCHITECTURE.md](ARCHITECTURE.md)，界面规范见 [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)。
 
 ## 🧪 运行测试
 
-项目内置完整的单元测试套件（覆盖端点认证、降级机制、音视频输出校验与容错处理）：
+```bash
+python -m pip install -r requirements.txt ruff==0.17.4
+npm ci                       # Node.js 22；仅用于测试
+ruff check .
+python -m unittest discover -s tests
+npm test
+```
+
+CI 在 GitHub 托管的 runner 上运行 lint、Python 和 JavaScript 测试；生产部署在自托管 runner 上构建候选镜像，并用该镜像运行 Python 测试，备份数据库后才重启。推送到 `main` 会触发生产部署，请通过分支和 PR 审核。
+
+## 💾 备份与清理
+
+部署时使用 SQLite 在线备份把 `outputs/users.db` 的一致快照保存到 `outputs/backups/`，默认保留 14 份；找不到 `users.db` 时以非零状态退出（部署因此中止），不会在没有备份的情况下继续。备份与数据库在同一磁盘，应另行复制到异地并定期验证恢复。清理脚本只处理指定命名规则的旧短语音缓存与过期临时文件，不清理数据库引用的音频；找不到 `users.db` 时拒绝运行并以非零状态退出；默认预览，不自动运行：
 
 ```bash
-python -m unittest discover -s tests -p 'test_*.py'
+docker exec tts-service python scripts/prune_outputs.py              # 预览
+docker exec tts-service python scripts/prune_outputs.py --apply      # 执行（默认 60 天）
+docker exec tts-service python scripts/backup_db.py --label manual  # 手动备份
 ```
+
+请先检查预览并备份，再执行清理。`python auth_db.py --help` 查看密码、套餐、邀请码及候补名单等管理命令。
 
 ---
 
@@ -186,7 +204,7 @@ python -m unittest discover -s tests -p 'test_*.py'
 
 ## 📄 开源许可证
 
-本项目采用 [MIT License](LICENSE) 许可证。
+旧版 README 曾声明 MIT，但仓库缺少许可证文件；在版权人确认并补充许可证之前，请勿假定已获得授权。
 
 ## 学习教练与个人表达训练
 
@@ -201,7 +219,7 @@ AI 不可用时保留已有计划；用户用“更新安排”或修改时间�
 录音每段 1–180 秒、最多 8 MB。第一遍保留；最后一遍可有多个版本。
 开口练习计时根据麦克风活动估算，在后台或播放音频时暂停，环境声音可能影响估计。
 录音文件按实际时长记录（可能包含停顿）；重复上传同一段不重复累计。
-练习与游戏 XP 不代表 CEFR/NCLC 认证；脱稿完成为用户自评。
+练习结果不代表 CEFR/NCLC 认证；脱稿完成为用户自评。
 
 写作提供 P0（A1 起步）、P1（A1 巩固）、P2（A2）与独立的 TCF T1/T2/T3 模式。
 听力提供短句精听、提示和每周小挑战；A1 的历史材料按短句和基础词汇保守筛选。
@@ -219,42 +237,3 @@ AI 不可用时保留已有计划；用户用“更新安排”或修改时间�
 
 
 2026-10-15：个人表达练习已整合进 Study。完整保留原文信息，分成小段法语并保存每段对应的原文；可选择整篇或一段范读，在当前页逐句拆解并返回录音练习。旧简略稿尚未录音时可主动补全；已有录音的版本保持原文。范读/录音通过 Bearer 验证加载为本地 blob，显示加载、就绪和失败重试；音频生成失败时保留已生成的法语，重试无需再次调用文本模型。个人练习显示时暂停 Study 的阅读自动计时，开口活动与录音仍分别按原机制记录。
-
-### Phase A listening and intensive reading
-
-`/app/listening` uses learned SRS/history sentences, prepared journal texts, or stories made
-with the user's known vocabulary. An empty pool asks the learner to study/save a sentence or
-prepare a journal first. Blind listening, reveal (the shared analyzer), slow + two normal
-replays and a four-option check are persisted. Successful checks advance the personal
-0.75 → 0.9 → 1.0 speed ladder. Real audio stays locked until all PRD conditions are met;
-the unseen CO validation quiz is a later-phase feature and practice cannot unlock it.
-
-`/app/reading` accepts pasted texts or generates A1–A2 notices, emails, ads and short articles.
-It offers sentence breakdowns, vocabulary-to-cloze, two comprehension MCQs and saved attempts
-with explanations quoting the passage. Generation uses the same AGY gateway as other AI
-features. With no `WEB2API_API_KEY`, deterministic practice texts/questions and the analyzer's
-structural fallback work offline; translations/grammar require the gateway. TTS still needs
-Edge speech connectivity. Generated questions with invalid choices or citations use a
-local fallback. No live upstream call is required by the tests.
-
-Authenticated APIs (bearer token or the existing session cookie):
-
-- `POST /api/listening/sessions` (`block_id?`, `source: auto|srs|journal|story`)
-- `GET /api/listening/sessions/{id}`; `GET /api/listening/gate`
-- `POST /api/listening/sessions/{id}/blind` (`self: 0|1|2`, `plays`)
-- `POST /api/listening/sessions/{id}/reveal`
-- `POST /api/listening/sessions/{id}/relisten` (`stage: slow20|normal`, `index: 0|1|2`)
-- `POST /api/listening/sessions/{id}/check` (`answer_index`, `seconds`, `tz_offset`)
-- `GET /api/listening/sessions/{id}/audio?rate=1` (or the session's slow rate)
-- `POST /api/reading/passages` (`text` or `generate: {text_type, level}`)
-- `GET /api/reading/passages`; `GET /api/reading/passages/{id}`
-- `POST /api/reading/passages/{id}/done` (`answers`, `seconds`, `tz_offset`)
-- `POST /api/listening/sessions/{id}/words` and `POST /api/reading/passages/{id}/words`
-  (`sentence`, `word`, `meaning?`) create idempotent SRS cloze cards.
-
-`GET /tts` also accepts numeric `rate` (0.5–1.5); rate is part of the audio cache key.
-Listening/reading completion records active seconds in `study_time` atomically with the
-attempt, so retrying cannot add time twice. The SPA excludes AI waits, hidden tabs and idle
-time, and omits the shared block heartbeat on these two pages. Unfinished sessions do not
-log time. SQLite tables initialize idempotently on first use. Existing saved Today plans gain
-missing listening/reading blocks while retaining their existing block ids and state.

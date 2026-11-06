@@ -185,70 +185,120 @@ SUBJECTS: dict[str, list[dict[str, Any]]] = {
             "title": "Inscription à un centre sportif",
             "prompt": "Vous voulez vous inscrire à un centre sportif à Montréal. Vous posez des questions à l'employé(e) pour obtenir des renseignements.",
             "role_examiner": "Vous êtes l'employé à l'accueil du centre sportif. Répondez poliment et brièvement aux questions du candidat.",
-            "target_points": ["Horaires d'ouverture", "Tarifs des abonnements", "Cours collectifs disponibles", "Équipement requis"],
+            "target_points": [
+                "Horaires d'ouverture",
+                "Tarifs des abonnements",
+                "Cours collectifs disponibles",
+                "Équipement requis",
+            ],
         },
         {
             "id": "t2_s2",
             "title": "Renseignements à la bibliothèque municipale",
             "prompt": "Vous visitez la bibliothèque municipale de votre quartier à Québec pour la première fois. Vous demandez les informations nécessaires pour vous abonner.",
             "role_examiner": "Vous êtes bibliothécaire. Répondez de manière chaleureuse et concise aux questions du candidat.",
-            "target_points": ["Conditions et pièces pour s'inscrire", "Nombre de livres et durée d'emprunt", "Accès aux ordinateurs / wifi", "Ateliers culturels proposés"],
+            "target_points": [
+                "Conditions et pièces pour s'inscrire",
+                "Nombre de livres et durée d'emprunt",
+                "Accès aux ordinateurs / wifi",
+                "Ateliers culturels proposés",
+            ],
         },
         {
             "id": "t2_s3",
             "title": "Location d'une voiture pour le week-end",
             "prompt": "Vous souhaitez louer une voiture à Ottawa pour une excursion de fin de semaine. Vous vous adressez à l'agence de location.",
             "role_examiner": "Vous êtes l'agent de l'agence de location de voitures. Répondez aux questions avec clarté.",
-            "target_points": ["Types de véhicules disponibles", "Tarif pour deux jours", "Kilométrage illimité et assurances", "Conditions de retour du véhicule"],
+            "target_points": [
+                "Types de véhicules disponibles",
+                "Tarif pour deux jours",
+                "Kilométrage illimité et assurances",
+                "Conditions de retour du véhicule",
+            ],
         },
         {
             "id": "t2_s4",
             "title": "Organisation d'un repas de groupe au restaurant",
             "prompt": "Vous organisez un dîner d'anniversaire pour dix personnes dans un restaurant français. Vous demandez les détails au gérant.",
             "role_examiner": "Vous êtes le gérant du restaurant. Répondez aux questions de réservation.",
-            "target_points": ["Disponibilité pour samedi soir", "Menu de groupe ou à la carte", "Options pour les régimes alimentaires (végétarien, sans gluten)", "Montant de l'acompte nécessaire"],
+            "target_points": [
+                "Disponibilité pour samedi soir",
+                "Menu de groupe ou à la carte",
+                "Options pour les régimes alimentaires (végétarien, sans gluten)",
+                "Montant de l'acompte nécessaire",
+            ],
         },
         {
             "id": "t2_s5",
             "title": "Cours de français langue seconde",
             "prompt": "Vous cherchez une formation en français pour adultes. Vous téléphonez à une école de langues pour avoir des informations.",
             "role_examiner": "Vous êtes le responsable pédagogique de l'école de langues.",
-            "target_points": ["Test d'évaluation du niveau", "Horaires du soir ou du samedi", "Nombre d'étudiants par classe", "Tarif et attestation délivrée"],
+            "target_points": [
+                "Test d'évaluation du niveau",
+                "Horaires du soir ou du samedi",
+                "Nombre d'étudiants par classe",
+                "Tarif et attestation délivrée",
+            ],
         },
         {
             "id": "t2_s6",
             "title": "Renseignements à l'office de tourisme",
             "prompt": "Vous venez d'arriver dans une région touristique (ex. Banff). Vous demandez des conseils à l'agent d'accueil.",
             "role_examiner": "Vous êtes conseiller en séjour à l'office de tourisme.",
-            "target_points": ["Randonnées faciles à la journée", "Moyens de transport ou navettes", "Météo et consignes de sécurité", "Tarifs des parcs nationaux"],
+            "target_points": [
+                "Randonnées faciles à la journée",
+                "Moyens de transport ou navettes",
+                "Météo et consignes de sécurité",
+                "Tarifs des parcs nationaux",
+            ],
         },
         {
             "id": "t2_s7",
             "title": "Adhésion à un club de cuisine locale",
             "prompt": "Vous souhaitez rejoindre une association de cuisine de quartier. Vous posez des questions à un responsable.",
             "role_examiner": "Vous êtes animateur du club de cuisine associative.",
-            "target_points": ["Fréquence des ateliers", "Niveau de cuisine requis", "Ingrédients fournis ou à apporter", "Cotisation annuelle"],
+            "target_points": [
+                "Fréquence des ateliers",
+                "Niveau de cuisine requis",
+                "Ingrédients fournis ou à apporter",
+                "Cotisation annuelle",
+            ],
         },
         {
             "id": "t2_s8",
             "title": "Achat d'un vélo d'occasion",
             "prompt": "Vous répondez à une annonce en ligne pour acheter un vélo d'occasion. Vous posez des questions au vendeur.",
             "role_examiner": "Vous êtes le particulier qui vend son vélo.",
-            "target_points": ["Âge et état du vélo (freins, pneus)", "Raison de la vente", "Accessoires inclus (antivol, casque)", "Possibilité d'essayer le vélo et négocier le prix"],
+            "target_points": [
+                "Âge et état du vélo (freins, pneus)",
+                "Raison de la vente",
+                "Accessoires inclus (antivol, casque)",
+                "Possibilité d'essayer le vélo et négocier le prix",
+            ],
         },
         {
             "id": "t2_s9",
             "title": "Inscription d'un enfant à un camp de jour",
             "prompt": "Vous cherchez un camp de jour pour votre enfant pendant les vacances d'été. Vous interrogez le directeur du centre de loisirs.",
             "role_examiner": "Vous êtes directeur du camp de vacances.",
-            "target_points": ["Tranches d'âge acceptées", "Horaires d'accueil matin et soir", "Activités prévues et sorties", "Fourniture des repas et collations"],
+            "target_points": [
+                "Tranches d'âge acceptées",
+                "Horaires d'accueil matin et soir",
+                "Activités prévues et sorties",
+                "Fourniture des repas et collations",
+            ],
         },
         {
             "id": "t2_s10",
             "title": "Abonnement de transport en commun",
             "prompt": "Vous venez de vous installer dans une ville canadienne. Vous demandez des informations au guichet de transport pour choisir votre titre de transport.",
             "role_examiner": "Vous êtes agent au guichet du réseau de transport urbain.",
-            "target_points": ["Tarif mensuel de la carte", "Zones et lignes incluses (bus, métro)", "Tarifs réduits (étudiants, nouveaux arrivants)", "Moyens de rechargement en ligne"],
+            "target_points": [
+                "Tarif mensuel de la carte",
+                "Zones et lignes incluses (bus, métro)",
+                "Tarifs réduits (étudiants, nouveaux arrivants)",
+                "Moyens de rechargement en ligne",
+            ],
         },
     ],
     "T3": [
@@ -256,61 +306,121 @@ SUBJECTS: dict[str, list[dict[str, Any]]] = {
             "id": "t3_s1",
             "title": "Le travail à distance généralisé",
             "prompt": "« Le travail à distance à temps plein est une opportunité formidable pour les salariés et les entreprises. » Partagez-vous ce point de vue ?",
-            "structure_hints": ["Votre position claire", "Argument 1 : bien-être / gain de temps", "Argument 2 : risque d'isolement ou limites", "Exemple concret", "Conclusion"],
+            "structure_hints": [
+                "Votre position claire",
+                "Argument 1 : bien-être / gain de temps",
+                "Argument 2 : risque d'isolement ou limites",
+                "Exemple concret",
+                "Conclusion",
+            ],
         },
         {
             "id": "t3_s2",
             "title": "La gratuité des transports en commun",
             "prompt": "« Tous les transports en commun devraient être totalement gratuits pour encourager la transition écologique. » Qu'en pensez-vous ?",
-            "structure_hints": ["Votre position", "Argument 1 : impact environnemental et justice sociale", "Argument 2 : coût économique et entretien", "Exemple de ville", "Conclusion"],
+            "structure_hints": [
+                "Votre position",
+                "Argument 1 : impact environnemental et justice sociale",
+                "Argument 2 : coût économique et entretien",
+                "Exemple de ville",
+                "Conclusion",
+            ],
         },
         {
             "id": "t3_s3",
             "title": "Les téléphones portables à l'école",
             "prompt": "« Les téléphones intelligents devraient être totalement interdits dans tous les établissements scolaires. » Quel est votre avis ?",
-            "structure_hints": ["Position nette", "Argument pour : concentration et lutte contre le harcèlement", "Argument nuance : outil pédagogique moderne", "Exemple", "Conclusion"],
+            "structure_hints": [
+                "Position nette",
+                "Argument pour : concentration et lutte contre le harcèlement",
+                "Argument nuance : outil pédagogique moderne",
+                "Exemple",
+                "Conclusion",
+            ],
         },
         {
             "id": "t3_s4",
             "title": "Vivre en ville ou à la campagne",
             "prompt": "« Il est bien plus avantageux pour une famille d'habiter à la campagne que dans une métropole. » Partagez-vous cette opinion ?",
-            "structure_hints": ["Votre avis", "Argument 1 : espace, calme et coût de la vie", "Argument 2 : accès aux services, santé et transports", "Exemple personnel", "Conclusion"],
+            "structure_hints": [
+                "Votre avis",
+                "Argument 1 : espace, calme et coût de la vie",
+                "Argument 2 : accès aux services, santé et transports",
+                "Exemple personnel",
+                "Conclusion",
+            ],
         },
         {
             "id": "t3_s5",
             "title": "Le tourisme de masse",
             "prompt": "« Le tourisme de masse apporte plus d'inconvénients que d'avantages aux communautés locales. » Qu'en pensez-vous ?",
-            "structure_hints": ["Prise de position", "Argument économique vs argument écologique", "Pression sur le logement et la vie quotidienne", "Exemple", "Conclusion"],
+            "structure_hints": [
+                "Prise de position",
+                "Argument économique vs argument écologique",
+                "Pression sur le logement et la vie quotidienne",
+                "Exemple",
+                "Conclusion",
+            ],
         },
         {
             "id": "t3_s6",
             "title": "La semaine de travail de 4 jours",
             "prompt": "« La semaine de 4 jours sans diminution de salaire est la solution d'avenir pour le monde du travail. » Partagez-vous cette affirmation ?",
-            "structure_hints": ["Votre point de vue", "Argument productivité et santé mentale", "Argument faisabilité selon les secteurs", "Exemple", "Conclusion"],
+            "structure_hints": [
+                "Votre point de vue",
+                "Argument productivité et santé mentale",
+                "Argument faisabilité selon les secteurs",
+                "Exemple",
+                "Conclusion",
+            ],
         },
         {
             "id": "t3_s7",
             "title": "La publicité destinée aux enfants",
             "prompt": "« Les gouvernements devraient interdire toute publicité commerciale ciblant directement les enfants. » Êtes-vous d'accord ?",
-            "structure_hints": ["Position", "Protection de la santé et des jeunes esprits", "Rôle de l'éducation familiale et des médias", "Exemple", "Conclusion"],
+            "structure_hints": [
+                "Position",
+                "Protection de la santé et des jeunes esprits",
+                "Rôle de l'éducation familiale et des médias",
+                "Exemple",
+                "Conclusion",
+            ],
         },
         {
             "id": "t3_s8",
             "title": "L'avenir du livre papier",
             "prompt": "« Avec les livres numériques et les écrans, les livres papier sont condamnés à disparaître. » Quel est votre sentiment ?",
-            "structure_hints": ["Votre thèse", "Avantages du numérique (praticité, volume)", "Valeur irremplaçable du papier (émotion, concentration)", "Exemple", "Conclusion"],
+            "structure_hints": [
+                "Votre thèse",
+                "Avantages du numérique (praticité, volume)",
+                "Valeur irremplaçable du papier (émotion, concentration)",
+                "Exemple",
+                "Conclusion",
+            ],
         },
         {
             "id": "t3_s9",
             "title": "L'intelligence artificielle et l'emploi",
             "prompt": "« Le développement rapide de l'intelligence artificielle va détruire plus d'emplois qu'il n'en créera. » Qu'en pensez-vous ?",
-            "structure_hints": ["Position", "Menace pour les métiers répétitifs et intellectuels", "Création de nouvelles opportunités et complémentarité", "Exemple", "Conclusion"],
+            "structure_hints": [
+                "Position",
+                "Menace pour les métiers répétitifs et intellectuels",
+                "Création de nouvelles opportunités et complémentarité",
+                "Exemple",
+                "Conclusion",
+            ],
         },
         {
             "id": "t3_s10",
             "title": "Les repas végétariens dans les cantines",
             "prompt": "« Les cantines scolaires devraient proposer des repas entièrement végétariens plusieurs fois par semaine. » Partagez-vous cet avis ?",
-            "structure_hints": ["Position claire", "Arguments environnementaux et de santé", "Respect des habitudes et liberté de choix", "Exemple", "Conclusion"],
+            "structure_hints": [
+                "Position claire",
+                "Arguments environnementaux et de santé",
+                "Respect des habitudes et liberté de choix",
+                "Exemple",
+                "Conclusion",
+            ],
         },
     ],
 }
@@ -328,31 +438,35 @@ def calculate_wpm(words: int, duration_seconds: float) -> float:
     return round((words / (duration_seconds / 60.0)), 1)
 
 
+def _create_tables(conn: Any) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS speaking_attempts (
+            id TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            task TEXT NOT NULL,
+            subject_json TEXT NOT NULL DEFAULT '{}',
+            level TEXT NOT NULL DEFAULT 'A1',
+            status TEXT NOT NULL DEFAULT 'ready',
+            transcript_1 TEXT NOT NULL DEFAULT '',
+            feedback_1_json TEXT NOT NULL DEFAULT '{}',
+            transcript_2 TEXT NOT NULL DEFAULT '',
+            feedback_2_json TEXT NOT NULL DEFAULT '{}',
+            seconds INTEGER NOT NULL DEFAULT 0,
+            audio_duration REAL NOT NULL DEFAULT 0.0,
+            wpm REAL NOT NULL DEFAULT 0.0,
+            error TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+
+
 @contextmanager
 def _db() -> Iterator[Any]:
     with auth_db.connect() as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS speaking_attempts (
-                id TEXT PRIMARY KEY,
-                user_id INTEGER NOT NULL,
-                task TEXT NOT NULL,
-                subject_json TEXT NOT NULL DEFAULT '{}',
-                level TEXT NOT NULL DEFAULT 'A1',
-                status TEXT NOT NULL DEFAULT 'ready',
-                transcript_1 TEXT NOT NULL DEFAULT '',
-                feedback_1_json TEXT NOT NULL DEFAULT '{}',
-                transcript_2 TEXT NOT NULL DEFAULT '',
-                feedback_2_json TEXT NOT NULL DEFAULT '{}',
-                seconds INTEGER NOT NULL DEFAULT 0,
-                audio_duration REAL NOT NULL DEFAULT 0.0,
-                wpm REAL NOT NULL DEFAULT 0.0,
-                error TEXT NOT NULL DEFAULT '',
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            )
-            """
-        )
+        auth_db.ensure_schema(conn, "speaking", _create_tables)
         yield conn
 
 
@@ -654,11 +768,13 @@ def parse_round1_feedback(
 
     checklist = []
     for item in data.get("checklist") or []:
-        checklist.append({
-            "point": str(item.get("point") or ""),
-            "covered": bool(item.get("covered", False)),
-            "note": str(item.get("note") or ""),
-        })
+        checklist.append(
+            {
+                "point": str(item.get("point") or ""),
+                "covered": bool(item.get("covered", False)),
+                "note": str(item.get("note") or ""),
+            }
+        )
 
     t2_q = data.get("t2_questions")
     t2_questions = None
@@ -682,7 +798,9 @@ def parse_round1_feedback(
 
     raw_errors = data.get("errors") or []
     cleaned_errors = []
-    forbidden_leak = re.compile(r"(?:change\s+to|replace\s+with|should\s+be|write|say|correct\s+form\s+is)\s+['\"]?([^,.;'\"]+)", re.IGNORECASE)
+    forbidden_leak = re.compile(
+        r"(?:change\s+to|replace\s+with|should\s+be|write|say|correct\s+form\s+is)\s+['\"]?([^,.;'\"]+)", re.IGNORECASE
+    )
     for err in raw_errors[:8]:
         span = str(err.get("span") or "").strip()
         etype = str(err.get("type") or "wrong word").lower()
@@ -691,11 +809,13 @@ def parse_round1_feedback(
         hint = str(err.get("hint") or "Check this part carefully.").strip()
         if forbidden_leak.search(hint):
             hint = f"Check the {etype} here carefully."
-        cleaned_errors.append({
-            "span": span,
-            "type": etype,
-            "hint": hint,
-        })
+        cleaned_errors.append(
+            {
+                "span": span,
+                "type": etype,
+                "hint": hint,
+            }
+        )
 
     return {
         "stats": stats,
@@ -709,7 +829,6 @@ def parse_round1_feedback(
 
 def build_round2_payload(attempt: dict[str, Any], model: str) -> dict[str, Any]:
     task = attempt["task"]
-    subject = attempt["subject"]
     transcript_1 = attempt["transcript_1"]
     feedback_1 = attempt.get("feedback_1") or {}
     errors_1 = feedback_1.get("errors") or []
@@ -777,20 +896,24 @@ def parse_round2_feedback(raw_text: str) -> dict[str, Any]:
 
     fixed_errors = []
     for item in data.get("fixed_errors") or []:
-        fixed_errors.append({
-            "span": str(item.get("span") or ""),
-            "fixed": bool(item.get("fixed", False)),
-            "comment": str(item.get("comment") or ""),
-        })
+        fixed_errors.append(
+            {
+                "span": str(item.get("span") or ""),
+                "fixed": bool(item.get("fixed", False)),
+                "comment": str(item.get("comment") or ""),
+            }
+        )
 
     remaining_errors = []
     for item in data.get("remaining_errors") or []:
-        remaining_errors.append({
-            "span": str(item.get("span") or ""),
-            "type": str(item.get("type") or "wrong word"),
-            "hint": str(item.get("hint") or ""),
-            "correction": str(item.get("correction") or ""),
-        })
+        remaining_errors.append(
+            {
+                "span": str(item.get("span") or ""),
+                "type": str(item.get("type") or "wrong word"),
+                "hint": str(item.get("hint") or ""),
+                "correction": str(item.get("correction") or ""),
+            }
+        )
 
     sentences = []
     for s in data.get("sentences") or []:
@@ -800,20 +923,24 @@ def parse_round2_feedback(raw_text: str) -> dict[str, Any]:
         if not chunk and corr:
             chunk = corr
         if corr:
-            sentences.append({
-                "original": orig,
-                "corrected": corr,
-                "explanation": str(s.get("explanation") or ""),
-                "chunk": chunk,
-            })
+            sentences.append(
+                {
+                    "original": orig,
+                    "corrected": corr,
+                    "explanation": str(s.get("explanation") or ""),
+                    "chunk": chunk,
+                }
+            )
 
     structures = []
     for st in (data.get("structures") or [])[:3]:
-        structures.append({
-            "french": str(st.get("french") or ""),
-            "english": str(st.get("english") or ""),
-            "usage": str(st.get("usage") or ""),
-        })
+        structures.append(
+            {
+                "french": str(st.get("french") or ""),
+                "english": str(st.get("english") or ""),
+                "usage": str(st.get("usage") or ""),
+            }
+        )
 
     return {
         "fixed_errors": fixed_errors,

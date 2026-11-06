@@ -1,15 +1,24 @@
 """Spaced repetition routes: sentence notes and FSRS cards, per logged-in user."""
+
 from __future__ import annotations
 
+import json
+import logging
+import re
 from typing import Any, Literal
 
+import httpx
 from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
-import game
 import coach
+import game
 import srs
+from services import ai
 from web_common import _require_user_id
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -143,9 +152,7 @@ def srs_review_card(
 ):
     user_id = _require_user_id(authorization)
     try:
-        card = srs.review_card(
-            user_id, card_id, req.rating, req.duration_ms, req.score, req.answer
-        )
+        card = srs.review_card(user_id, card_id, req.rating, req.duration_ms, req.score, req.answer)
     except KeyError:
         raise HTTPException(status_code=404, detail={"message": "卡片不存在。"})
     coach.record(user_id, "review", f"{coach.date_for(user_id)}:{card_id}", {"rating": req.rating}, 0)
@@ -160,3 +167,67 @@ def srs_import_legacy(
     authorization: str | None = Header(default=None),
 ):
     return srs.import_legacy_cards(_require_user_id(authorization), req.cards)
+
+
+async def backfill_english(user_id: int, api_key: str) -> dict:
+    """Fill in simple-English translations/meanings that older cards lack (English UI mode)."""
+    missing = await run_in_threadpool(srs.missing_english, user_id)
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    translations: dict[str, str] = {}
+    meanings: dict[str, str] = {}
+    jobs = [
+        (
+            missing["notes"],
+            translations,
+            "Translate each French text into short, natural, simple English (A2 level). "
+            "It may be a sentence, a heading or a single word. Use the Chinese only as a hint.",
+        ),
+        (
+            missing["cards"],
+            meanings,
+            "For each item, give the short English meaning (1–6 words) of the French word or phrase "
+            "as it is used in the sentence. Use the Chinese only as a hint.",
+        ),
+    ]
+    async with httpx.AsyncClient(timeout=ai.UPSTREAM_TIMEOUT_SECONDS) as client:
+        for items, target, instruction in jobs:
+            for start in range(0, len(items), 20):
+                batch = items[start : start + 20]
+                payload = {
+                    "model": ai.AGY_MODEL,
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": instruction
+                            + ' Output valid JSON only: {"items": [{"id": "...", "en": "..."}]}, one entry per input id.',
+                        },
+                        {"role": "user", "content": json.dumps(batch, ensure_ascii=False)},
+                    ],
+                    "response_format": {"type": "json_object"},
+                    "stream": False,
+                    "temperature": 0.2,
+                }
+                _, raw_text = await ai.post_chat(client, payload, headers)
+                cleaned = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip()
+                start_brace, end_brace = cleaned.find("{"), cleaned.rfind("}")
+                try:
+                    data = json.loads(cleaned[start_brace : end_brace + 1])
+                except Exception:
+                    logger.warning("English backfill output not parseable: %r", raw_text[:300])
+                    continue
+                valid_ids = {item["id"] for item in batch}
+                for entry in data.get("items", []) if isinstance(data, dict) else []:
+                    if isinstance(entry, dict) and entry.get("id") in valid_ids and str(entry.get("en") or "").strip():
+                        target[entry["id"]] = str(entry["en"])[:500]
+    updated = await run_in_threadpool(srs.set_english, user_id, translations, meanings)
+    return {
+        "missing_notes": len(missing["notes"]),
+        "missing_cards": len(missing["cards"]),
+        "updated": updated,
+    }
+
+
+@router.post("/api/srs/backfill-english")
+async def srs_backfill_english(authorization: str | None = Header(default=None)):
+    user_id = _require_user_id(authorization)
+    return await backfill_english(user_id, ai.upstream_key(authorization))

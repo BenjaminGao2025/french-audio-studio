@@ -4,7 +4,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { JSDOM } = require('../frontend/node_modules/jsdom');
+const { JSDOM } = require('jsdom');
 const read = name => fs.readFileSync(path.join(__dirname, '../static', name), 'utf8');
 
 const LONG = 'toutes dignités, places et emplois publics.';

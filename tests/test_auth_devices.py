@@ -1,13 +1,13 @@
-import testenv  # noqa: F401  (must run before the app is imported)
-
 import unittest
 import uuid
 
+import testenv  # noqa: F401  (must run before the app is imported)
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 import auth_db
 import routers.auth
+import services.ai
 import tts_service
 
 PHONE_UA = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Mobile Safari/537.36"
@@ -41,9 +41,7 @@ class DeviceLimitTests(unittest.TestCase):
         for token in tokens[1:]:
             self.assertEqual(self._me(token).status_code, 200)
 
-        devices = self.client.get(
-            "/api/auth/devices", headers={"Authorization": f"Bearer {tokens[-1]}"}
-        ).json()
+        devices = self.client.get("/api/auth/devices", headers={"Authorization": f"Bearer {tokens[-1]}"}).json()
         self.assertEqual(devices["max_devices"], 3)
         self.assertEqual(len(devices["devices"]), 3)
         self.assertEqual(sum(d["current"] for d in devices["devices"]), 1)
@@ -76,7 +74,7 @@ class DeviceLimitTests(unittest.TestCase):
         token = self._login()
         auth_db.end_session(auth_db._signed_payload(token)["sub"], auth_db._signed_payload(token)["sid"])
         with self.assertRaises(HTTPException) as caught:
-            tts_service._authorization_token(f"Bearer {token}")
+            services.ai.upstream_key(f"Bearer {token}")
         self.assertEqual(caught.exception.status_code, 401)
         self.assertEqual(caught.exception.detail["code"], "session_revoked")
 
