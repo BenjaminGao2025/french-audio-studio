@@ -328,31 +328,35 @@ def calculate_wpm(words: int, duration_seconds: float) -> float:
     return round((words / (duration_seconds / 60.0)), 1)
 
 
+def _create_tables(conn: Any) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS speaking_attempts (
+            id TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            task TEXT NOT NULL,
+            subject_json TEXT NOT NULL DEFAULT '{}',
+            level TEXT NOT NULL DEFAULT 'A1',
+            status TEXT NOT NULL DEFAULT 'ready',
+            transcript_1 TEXT NOT NULL DEFAULT '',
+            feedback_1_json TEXT NOT NULL DEFAULT '{}',
+            transcript_2 TEXT NOT NULL DEFAULT '',
+            feedback_2_json TEXT NOT NULL DEFAULT '{}',
+            seconds INTEGER NOT NULL DEFAULT 0,
+            audio_duration REAL NOT NULL DEFAULT 0.0,
+            wpm REAL NOT NULL DEFAULT 0.0,
+            error TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+
+
 @contextmanager
 def _db() -> Iterator[Any]:
     with auth_db.connect() as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS speaking_attempts (
-                id TEXT PRIMARY KEY,
-                user_id INTEGER NOT NULL,
-                task TEXT NOT NULL,
-                subject_json TEXT NOT NULL DEFAULT '{}',
-                level TEXT NOT NULL DEFAULT 'A1',
-                status TEXT NOT NULL DEFAULT 'ready',
-                transcript_1 TEXT NOT NULL DEFAULT '',
-                feedback_1_json TEXT NOT NULL DEFAULT '{}',
-                transcript_2 TEXT NOT NULL DEFAULT '',
-                feedback_2_json TEXT NOT NULL DEFAULT '{}',
-                seconds INTEGER NOT NULL DEFAULT 0,
-                audio_duration REAL NOT NULL DEFAULT 0.0,
-                wpm REAL NOT NULL DEFAULT 0.0,
-                error TEXT NOT NULL DEFAULT '',
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            )
-            """
-        )
+        auth_db.ensure_schema(conn, "speaking", _create_tables)
         yield conn
 
 

@@ -11,7 +11,7 @@ import analysis
 import intake
 import transform
 from services import ai, speech
-from web_common import MAX_TEXT_CHARS, _require_user_id
+from web_common import MAX_TEXT_CHARS, _require_user_id, rate_limit
 
 router = APIRouter()
 
@@ -138,7 +138,7 @@ async def generate_speech(
     request: SpeechRequest,
     authorization: str | None = Header(default=None),
 ):
-    ai.rate_limit(_require_user_id(authorization), "speech")
+    rate_limit(_require_user_id(authorization), "speech")
     audio_filename, srt_filename = await speech.create_speech_files(
         request.text, request.voice
     )
@@ -185,7 +185,7 @@ async def generate_tts(
     if len(text) > speech.TTS_SNIPPET_MAX_CHARS:
         raise HTTPException(status_code=422, detail="文本过长，请使用音频工作台生成。")
     if not speech.snippet_cached(text, voice, rate):  # cache hits (prefetch, replays) are free
-        ai.rate_limit(user_id, "speech")
+        rate_limit(user_id, "speech")
     # Snippets are cached by (voice, text) hash, so the same URL always returns the same audio.
     audio_filename, srt_filename = (await speech.create_speech_files(text, voice) if rate == 1 else
                                     await speech.create_speech_files(text, voice, rate=rate))

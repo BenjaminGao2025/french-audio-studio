@@ -3,10 +3,10 @@ from __future__ import annotations
 
 from typing import Literal
 
-import edge_compat  # noqa: F401  (Microsoft moved the synthesis host; must load before use)
 from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
+import edge_compat  # noqa: F401  (Microsoft moved the synthesis host; must load before use)
 import game
 from web_common import _require_user_id
 

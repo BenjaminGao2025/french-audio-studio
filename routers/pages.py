@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import hashlib
 import os
-import time
 from typing import Literal
 from urllib.parse import urlencode
 
@@ -13,7 +12,7 @@ from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 import auth_db
-from web_common import STATIC_DIR
+from web_common import STATIC_DIR, client_ip, rate_limit
 
 router = APIRouter()
 
@@ -125,11 +124,6 @@ class WaitlistRequest(BaseModel):
     website: str = Field(default="", max_length=200)  # honeypot: people never see it
 
 
-WAITLIST_LIMIT = 5
-WAITLIST_WINDOW_SECONDS = 3600
-_waitlist_hits: dict[str, list[float]] = {}
-
-
 @router.post("/api/waitlist")
 async def join_waitlist(req: WaitlistRequest, request: Request):
     if req.website:
@@ -137,12 +131,7 @@ async def join_waitlist(req: WaitlistRequest, request: Request):
     contact = req.contact.strip()
     if not contact or (req.kind == "institution" and not req.org.strip()):
         raise HTTPException(status_code=422, detail={"message": "请填写必填项。"})
-    ip = request.headers.get("cf-connecting-ip") or (request.client.host if request.client else "")
-    now = time.monotonic()
-    hits = [t for t in _waitlist_hits.get(ip, []) if now - t < WAITLIST_WINDOW_SECONDS]
-    if len(hits) >= WAITLIST_LIMIT:
-        raise HTTPException(status_code=429, detail={"message": "提交太频繁了，请稍后再试。"})
-    _waitlist_hits[ip] = hits + [now]
+    rate_limit(f"ip:{client_ip(request)}", "waitlist")
     fields = ("org", "size", "level", "target", "exam", "note")
     details = {name: getattr(req, name).strip() for name in fields if getattr(req, name).strip()}
     await run_in_threadpool(auth_db.add_waitlist_entry, req.kind, contact, details, req.lang)

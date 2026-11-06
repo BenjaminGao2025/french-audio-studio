@@ -3,8 +3,6 @@ and one chat call with a retry and learner-safe errors."""
 from __future__ import annotations
 
 import os
-import threading
-import time
 from typing import Annotated
 
 import httpx
@@ -12,7 +10,7 @@ from fastapi import HTTPException
 from pydantic import Field
 
 import auth_db
-from web_common import SIGNED_OUT_DETAIL
+from web_common import SIGNED_OUT_DETAIL, rate_limit
 
 # Every AI call goes to the AGY (Antigravity) adapter: an OpenAI-compatible Gemini gateway.
 AGY_BASE_URL = os.getenv("AGY_BASE_URL", "http://127.0.0.1:8645/v1").rstrip("/")
@@ -88,41 +86,6 @@ def upstream_key(authorization: str | None) -> str:
         status_code=401,
         detail={"code": "login_required", "message": "请先登录账号。"},
     )
-
-
-# ---------------------------------------------------------------------------
-# Rate limiting (in-memory, per user). One process, so a dict is enough.
-# ---------------------------------------------------------------------------
-
-RATE_LIMITS: dict[str, tuple[float, float]] = {
-    # bucket: (capacity, refill tokens per second)
-    "ai": (float(os.getenv("RATE_AI_BURST", "40")), float(os.getenv("RATE_AI_PER_MIN", "30")) / 60),
-    "speech": (float(os.getenv("RATE_SPEECH_BURST", "120")), float(os.getenv("RATE_SPEECH_PER_MIN", "60")) / 60),
-    "transcribe": (float(os.getenv("RATE_ASR_BURST", "10")), float(os.getenv("RATE_ASR_PER_MIN", "6")) / 60),
-    "episode": (float(os.getenv("RATE_EPISODE_BURST", "3")), float(os.getenv("RATE_EPISODE_PER_HOUR", "6")) / 3600),
-}
-_rate_buckets: dict[tuple[int, str], tuple[float, float]] = {}
-_rate_lock = threading.Lock()
-
-
-def rate_limit(user_id: int, bucket: str) -> None:
-    capacity, refill = RATE_LIMITS[bucket]
-    now = time.monotonic()
-    with _rate_lock:
-        tokens, last = _rate_buckets.get((user_id, bucket), (capacity, now))
-        tokens = min(capacity, tokens + (now - last) * refill)
-        if tokens < 1:
-            wait = max(1, int((1 - tokens) / refill) + 1) if refill > 0 else 60
-            _rate_buckets[(user_id, bucket)] = (tokens, now)
-            raise HTTPException(
-                status_code=429,
-                detail={"code": "rate_limited", "message": f"操作太频繁了，请等 {wait} 秒后再试。", "retry_after": wait},
-                headers={"Retry-After": str(wait)},
-            )
-        _rate_buckets[(user_id, bucket)] = (tokens - 1, now)
-        if len(_rate_buckets) > 20000:  # drop idle entries
-            for key in [k for k, (_, t) in _rate_buckets.items() if now - t > 3600]:
-                _rate_buckets.pop(key, None)
 
 
 TRIAL_ENDED_MESSAGE = "试用已结束：AI 批改暂时不可用。请联系站长续期后再试。"

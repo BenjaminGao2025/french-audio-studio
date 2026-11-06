@@ -1,14 +1,14 @@
-import testenv  # noqa: F401  (must run before the app is imported)
-
 import json
 import unittest
 from unittest.mock import patch
 
+import testenv  # noqa: F401  (must run before the app is imported)
 from fastapi.testclient import TestClient
 
 import auth_db
-import tts_service
 import routers.pages
+import tts_service
+import web_common
 
 
 def _waitlist_rows():
@@ -19,7 +19,7 @@ def _waitlist_rows():
 class LandingTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(tts_service.app)
-        routers.pages._waitlist_hits.clear()
+        web_common._rate_buckets.clear()
 
     def test_public_pages_render(self):
         for path, marker in [
@@ -66,7 +66,7 @@ class LandingTests(unittest.TestCase):
 
     def test_waitlist_rate_limits_per_ip(self):
         headers = {"cf-connecting-ip": "203.0.113.9"}
-        for _ in range(routers.pages.WAITLIST_LIMIT):
+        for _ in range(int(web_common.RATE_LIMITS["waitlist"][0])):
             self.assertEqual(
                 self.client.post("/api/waitlist", json={"contact": "x@example.com"}, headers=headers).status_code,
                 200,

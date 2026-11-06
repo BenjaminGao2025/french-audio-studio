@@ -1,16 +1,16 @@
-import testenv  # noqa: F401  (must run before the app is imported)
-
 import pathlib
 import unittest
 import uuid
 from unittest.mock import patch
 
+import testenv  # noqa: F401  (must run before the app is imported)
 from fastapi.testclient import TestClient
 
 import auth_db
-import tts_service
 import services.ai
 import services.asr
+import tts_service
+import web_common
 
 # What iPhone Safari's MediaRecorder produces: fragmented MP4 (ftyp iso5) with AAC audio
 SAMPLE = pathlib.Path(__file__).parent / "fixtures" / "ios_safari_sample.m4a"
@@ -19,7 +19,7 @@ SAMPLE = pathlib.Path(__file__).parent / "fixtures" / "ios_safari_sample.m4a"
 class IosShadowingTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(tts_service.app)
-        services.ai._rate_buckets.clear()
+        web_common._rate_buckets.clear()
 
     def test_ios_mp4_recording_is_accepted_and_transcribed_in_french(self):
         audio = SAMPLE.read_bytes()

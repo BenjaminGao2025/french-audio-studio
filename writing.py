@@ -286,29 +286,33 @@ def word_count(text: str) -> int:
     return len(tokens)
 
 
+def _create_tables(conn: Any) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS writing_attempts (
+            id TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            task TEXT NOT NULL,
+            subject_json TEXT NOT NULL DEFAULT '{}',
+            level TEXT NOT NULL DEFAULT 'A1',
+            status TEXT NOT NULL DEFAULT 'ready',
+            text_1 TEXT NOT NULL DEFAULT '',
+            feedback_1_json TEXT NOT NULL DEFAULT '{}',
+            text_2 TEXT NOT NULL DEFAULT '',
+            feedback_2_json TEXT NOT NULL DEFAULT '{}',
+            seconds INTEGER NOT NULL DEFAULT 0,
+            error TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
+
+
 @contextmanager
 def _db() -> Iterator[Any]:
     with auth_db.connect() as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS writing_attempts (
-                id TEXT PRIMARY KEY,
-                user_id INTEGER NOT NULL,
-                task TEXT NOT NULL,
-                subject_json TEXT NOT NULL DEFAULT '{}',
-                level TEXT NOT NULL DEFAULT 'A1',
-                status TEXT NOT NULL DEFAULT 'ready',
-                text_1 TEXT NOT NULL DEFAULT '',
-                feedback_1_json TEXT NOT NULL DEFAULT '{}',
-                text_2 TEXT NOT NULL DEFAULT '',
-                feedback_2_json TEXT NOT NULL DEFAULT '{}',
-                seconds INTEGER NOT NULL DEFAULT 0,
-                error TEXT NOT NULL DEFAULT '',
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            )
-            """
-        )
+        auth_db.ensure_schema(conn, "writing", _create_tables)
         yield conn
 
 

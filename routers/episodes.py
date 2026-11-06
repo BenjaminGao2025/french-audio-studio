@@ -17,7 +17,7 @@ import coach
 import episodes
 import game
 from services import ai
-from web_common import _require_user_id, run_in_background
+from web_common import _require_user_id, rate_limit, run_in_background
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -275,7 +275,7 @@ async def create_episode_api(
         if exc.status_code == 429:
             raise
         api_key = None  # no upstream key: build the episode without new stories
-    ai.rate_limit(user_id, "episode")
+    rate_limit(user_id, "episode")
     if req.replace_id:
         try:
             episodes.get_episode(user_id, req.replace_id)

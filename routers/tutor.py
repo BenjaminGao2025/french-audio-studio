@@ -15,7 +15,7 @@ import analysis
 import auth_db
 import srs
 from services import ai, asr
-from web_common import _require_user_id
+from web_common import _require_user_id, rate_limit
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -165,7 +165,7 @@ async def transcribe_audio(
     declared = int(request.headers.get("content-length") or 0)
     if declared > asr.ASR_MAX_BYTES:
         raise HTTPException(status_code=413, detail={"message": "录音太长了，请分段说。"})
-    ai.rate_limit(user_id, "transcribe")
+    rate_limit(user_id, "transcribe")
     audio = await request.body()
     if not audio:
         raise HTTPException(status_code=422, detail={"message": "没有收到录音。"})

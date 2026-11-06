@@ -1,18 +1,17 @@
-import testenv  # noqa: F401  (must run before the app is imported)
-
 import asyncio
 import unittest
 from unittest.mock import AsyncMock, patch
 
+import fastapi
+import testenv  # noqa: F401  (must run before the app is imported)
 from fastapi.testclient import TestClient
 
-import speaking
-import tts_service
-import fastapi
 import routers.episodes
 import routers.writing
 import services.ai
 import services.asr
+import speaking
+import tts_service
 import web_common
 import writing
 
@@ -22,7 +21,7 @@ T1_SUBJECT = {"id": "t", "title": "Sujet test", "prompt": "Écrivez."}
 class Batch2Tests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(tts_service.app)
-        services.ai._rate_buckets.clear()
+        web_common._rate_buckets.clear()
 
     def _user(self):
         headers = testenv.session_headers()
@@ -31,18 +30,18 @@ class Batch2Tests(unittest.TestCase):
     # --- rate limiting ---
     def test_rate_limit_returns_429_with_chinese_message(self):
         _, uid = self._user()
-        with patch.dict(services.ai.RATE_LIMITS, {"ai": (2.0, 0.0001)}):
-            services.ai.rate_limit(uid, "ai")
-            services.ai.rate_limit(uid, "ai")
+        with patch.dict(web_common.RATE_LIMITS, {"ai": (2.0, 0.0001)}):
+            web_common.rate_limit(uid, "ai")
+            web_common.rate_limit(uid, "ai")
             with self.assertRaises(fastapi.HTTPException) as ctx:
-                services.ai.rate_limit(uid, "ai")
+                web_common.rate_limit(uid, "ai")
         self.assertEqual(ctx.exception.status_code, 429)
         self.assertIn("太频繁", ctx.exception.detail["message"])
         self.assertIn("Retry-After", ctx.exception.headers)
 
     def test_ai_endpoint_rate_limited_via_http(self):
         headers, _ = self._user()
-        with patch.dict(services.ai.RATE_LIMITS, {"ai": (1.0, 0.0001)}), \
+        with patch.dict(web_common.RATE_LIMITS, {"ai": (1.0, 0.0001)}), \
                 patch("routers.tutor.request_word_lookup", new_callable=AsyncMock, return_value={"word": "x"}):
             self.assertEqual(self.client.get("/api/lookup?word=bonjour", headers=headers).status_code, 200)
             res = self.client.get("/api/lookup?word=salut", headers=headers)

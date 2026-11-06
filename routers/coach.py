@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 import coach
 import curriculum
 from services import ai, speech
-from web_common import _require_user_id
+from web_common import _require_user_id, rate_limit
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -169,7 +169,7 @@ async def coach_listen_audio(check_id: str, request: Request, line: int = Query(
     lines=curriculum.BY_ID[check['lesson']['id']]['lines']
     text=lines[line][0] if line>=0 else ' '.join(x[0] for x in lines)
     voice='fr-FR-DeniseNeural'
-    if not speech.snippet_cached(text,voice): ai.rate_limit(user_id,'speech')
+    if not speech.snippet_cached(text,voice): rate_limit(user_id,'speech')
     filename,_=await speech.create_speech_files(text,voice)
     return speech.output_file(filename,cache_seconds=30*86400)
 

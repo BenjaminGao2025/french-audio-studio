@@ -7,6 +7,10 @@ os.environ["OUTPUT_DIR"] = tempfile.mkdtemp(prefix="tts-tests-")
 os.environ["AUTH_SECRET"] = "test-only-secret-" + "x" * 32
 os.environ["ALLOW_REGISTRATION"] = "true"
 os.environ["WEB2API_API_KEY"] = "server-test-key"
+# Fast password hashing and roomy sign-in limits; tests that check either patch them back.
+os.environ["PBKDF2_ITERATIONS"] = "1000"
+os.environ["RATE_AUTH_IP_BURST"] = "100000"
+os.environ["RATE_AUTH_EMAIL_BURST"] = "100000"
 
 
 def session_headers() -> dict:

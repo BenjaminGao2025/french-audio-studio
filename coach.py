@@ -21,17 +21,21 @@ LABELS = {'listen': ('听懂一小段', 'Understand a short clip'), 'write': ('�
 # its own weekly minutes in the same proportions. The AI coach may adjust them within 1..5.
 DEFAULT_WEIGHTS = {'listen': 3.5, 'write': 2, 'speak': 5, 'review': 1.5, 'read': 4}
 
-@contextmanager
-def db():
-    with auth_db.connect() as c:
-        c.executescript('''
+def _create_tables(c):
+    c.executescript('''
         CREATE TABLE IF NOT EXISTS coach_profiles (user_id INTEGER PRIMARY KEY, profile_json TEXT NOT NULL, plan_json TEXT NOT NULL, updated_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS learning_events (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, kind TEXT NOT NULL, source TEXT NOT NULL, day TEXT NOT NULL, xp INTEGER NOT NULL, data_json TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(user_id,kind,source));
         CREATE INDEX IF NOT EXISTS idx_learning_day ON learning_events(user_id,day);
         CREATE TABLE IF NOT EXISTS listening_checks (id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, lesson_id TEXT NOT NULL, level TEXT NOT NULL, challenge INTEGER NOT NULL, week TEXT NOT NULL, assisted INTEGER NOT NULL DEFAULT 0, result_json TEXT, created_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS coach_reviews (id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, review_json TEXT NOT NULL, created_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS coach_days (user_id INTEGER NOT NULL, day TEXT NOT NULL, tasks_json TEXT NOT NULL, PRIMARY KEY(user_id,day));
-        ''')
+    ''')
+
+
+@contextmanager
+def db():
+    with auth_db.connect() as c:
+        auth_db.ensure_schema(c, 'coach', _create_tables)
         yield c
 
 

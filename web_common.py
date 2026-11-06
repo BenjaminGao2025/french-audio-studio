@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import os
+import threading
+import time
 from collections.abc import Coroutine
 from pathlib import Path
 
@@ -107,3 +109,54 @@ def run_in_background(coro: Coroutine) -> asyncio.Task:
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
     return task
+
+
+def client_ip(request: Request) -> str:
+    """The visitor's IP. Behind the Cloudflare tunnel every request arrives from loopback, so
+    CF-Connecting-IP is trusted only then; anyone else could set it to dodge a per-IP limit."""
+    host = request.client.host if request.client else ""
+    if host in _TRUSTED_PROXY_HOSTS:
+        return request.headers.get("cf-connecting-ip", "").strip() or host
+    return host
+
+
+# ---------------------------------------------------------------------------
+# Rate limiting: in-memory token buckets. One process, so a dict is enough.
+# ---------------------------------------------------------------------------
+RATE_LIMITS: dict[str, tuple[float, float]] = {
+    # bucket: (capacity, refill tokens per second)
+    "ai": (float(os.getenv("RATE_AI_BURST", "40")), float(os.getenv("RATE_AI_PER_MIN", "30")) / 60),
+    "speech": (float(os.getenv("RATE_SPEECH_BURST", "120")), float(os.getenv("RATE_SPEECH_PER_MIN", "60")) / 60),
+    "transcribe": (float(os.getenv("RATE_ASR_BURST", "10")), float(os.getenv("RATE_ASR_PER_MIN", "6")) / 60),
+    "episode": (float(os.getenv("RATE_EPISODE_BURST", "3")), float(os.getenv("RATE_EPISODE_PER_HOUR", "6")) / 3600),
+    # Sign-in / sign-up attempts, per client IP and per email: slows password guessing (and the CPU it costs)
+    # while leaving room for a family behind one IP and a few mistyped passwords.
+    "auth_ip": (float(os.getenv("RATE_AUTH_IP_BURST", "20")), float(os.getenv("RATE_AUTH_IP_PER_HOUR", "30")) / 3600),
+    "auth_email": (
+        float(os.getenv("RATE_AUTH_EMAIL_BURST", "8")), float(os.getenv("RATE_AUTH_EMAIL_PER_HOUR", "6")) / 3600
+    ),
+    "waitlist": (5.0, 5 / 3600),
+}
+_rate_buckets: dict[tuple[object, str], tuple[float, float]] = {}
+_rate_lock = threading.Lock()
+
+
+def rate_limit(key: object, bucket: str) -> None:
+    """Spend one token of `key`'s bucket (a user id, "ip:..." or "email:..."), or raise a 429."""
+    capacity, refill = RATE_LIMITS[bucket]
+    now = time.monotonic()
+    with _rate_lock:
+        tokens, last = _rate_buckets.get((key, bucket), (capacity, now))
+        tokens = min(capacity, tokens + (now - last) * refill)
+        if tokens < 1:
+            wait = max(1, int((1 - tokens) / refill) + 1) if refill > 0 else 60
+            _rate_buckets[(key, bucket)] = (tokens, now)
+            raise HTTPException(
+                status_code=429,
+                detail={"code": "rate_limited", "message": f"操作太频繁了，请等 {wait} 秒后再试。", "retry_after": wait},
+                headers={"Retry-After": str(wait)},
+            )
+        _rate_buckets[(key, bucket)] = (tokens - 1, now)
+        if len(_rate_buckets) > 20000:  # drop idle entries (a bucket idle for an hour has refilled anyway)
+            for stale in [k for k, (_, t) in _rate_buckets.items() if now - t > 3600]:
+                _rate_buckets.pop(stale, None)

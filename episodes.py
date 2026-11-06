@@ -117,26 +117,30 @@ class Segment:
 # ---------------------------------------------------------------------------
 # Storage
 # ---------------------------------------------------------------------------
+def _create_tables(conn: Any) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS episodes (
+            id TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            title TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL,
+            duration REAL NOT NULL DEFAULT 0,
+            error TEXT NOT NULL DEFAULT '',
+            sentences_json TEXT NOT NULL DEFAULT '[]',
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(episodes)")}
+    if "settings_json" not in columns:
+        conn.execute("ALTER TABLE episodes ADD COLUMN settings_json TEXT NOT NULL DEFAULT '{}'")
+
+
 @contextmanager
 def _db() -> Iterator[Any]:
     with auth_db.connect() as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS episodes (
-                id TEXT PRIMARY KEY,
-                user_id INTEGER NOT NULL,
-                title TEXT NOT NULL DEFAULT '',
-                status TEXT NOT NULL,
-                duration REAL NOT NULL DEFAULT 0,
-                error TEXT NOT NULL DEFAULT '',
-                sentences_json TEXT NOT NULL DEFAULT '[]',
-                created_at TEXT NOT NULL
-            )
-            """
-        )
-        columns = {row[1] for row in conn.execute("PRAGMA table_info(episodes)")}
-        if "settings_json" not in columns:
-            conn.execute("ALTER TABLE episodes ADD COLUMN settings_json TEXT NOT NULL DEFAULT '{}'")
+        auth_db.ensure_schema(conn, "episodes", _create_tables)
         yield conn
 
 

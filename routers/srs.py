@@ -6,8 +6,8 @@ from typing import Any, Literal
 from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
-import game
 import coach
+import game
 import srs
 from web_common import _require_user_id
 

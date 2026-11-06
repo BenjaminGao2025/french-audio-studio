@@ -20,7 +20,7 @@ def root():
     return p
 
 
-def init(c):
+def _create_tables(c):
     c.executescript('''
     CREATE TABLE IF NOT EXISTS speaking_journals (
       id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, day TEXT NOT NULL,
@@ -43,6 +43,10 @@ def init(c):
     columns={r[1] for r in c.execute('PRAGMA table_info(speaking_journals)')}
     if 'parts_json' not in columns:
         c.execute("ALTER TABLE speaking_journals ADD COLUMN parts_json TEXT NOT NULL DEFAULT '[]'")
+
+
+def init(c):
+    auth_db.ensure_schema(c, 'journal', _create_tables)
 
 
 def create(user_id,native_text):

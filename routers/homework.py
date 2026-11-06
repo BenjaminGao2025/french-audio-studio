@@ -18,7 +18,7 @@ import coach
 import game
 import journal
 from services import ai, speech
-from web_common import OUTPUT_DIR, _require_user_id
+from web_common import OUTPUT_DIR, _require_user_id, rate_limit
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -97,7 +97,7 @@ async def homework_prepare(journal_id: str,req: HomeworkPrepareRequest,authoriza
             text='\n\n'.join(p['french'] for p in parts)
             entry=journal.prepared(user_id,journal_id,text,'',parts)
         else:text=entry['french']
-        ai.rate_limit(user_id,'speech')
+        rate_limit(user_id,'speech')
         audio,_=await speech.create_speech_files(text,'fr-FR-DeniseNeural',**({'timestamp':uuid.uuid4().hex} if req.repair_audio else {}))
         return journal.attach_reference(user_id,journal_id,audio,expected_text=text)
     except ValueError:
@@ -179,7 +179,7 @@ async def homework_reference(journal_id: str,request: Request,part: int | None=Q
             entry=journal.get(user_id,journal_id)
             if part>=len(entry['parts']):raise KeyError(part)
             text=entry['parts'][part]['french'];voice='fr-FR-DeniseNeural'
-            if not speech.snippet_cached(text,voice):ai.rate_limit(user_id,'speech')
+            if not speech.snippet_cached(text,voice):rate_limit(user_id,'speech')
             try:audio,_=await speech.create_speech_files(text,voice)
             except Exception:
                 raise HTTPException(503,'这段范读生成失败，请重试 / Audio preparation failed; please retry')
