@@ -93,6 +93,13 @@ def init_db() -> None:
                 ts TEXT NOT NULL
             );
             CREATE UNIQUE INDEX IF NOT EXISTS idx_grammar_hits_unique ON grammar_hits(user_id, gid, sentence_text);
+            CREATE TABLE IF NOT EXISTS etymology_cache (
+                key TEXT PRIMARY KEY,
+                word TEXT NOT NULL,
+                lemma TEXT NOT NULL,
+                text TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
             """
         )
         conn.commit()
@@ -112,6 +119,20 @@ def connect() -> Iterator[sqlite3.Connection]:
         raise
     finally:
         conn.close()
+
+
+def get_etymology(key: str) -> str | None:
+    with connect() as conn:
+        row = conn.execute("SELECT text FROM etymology_cache WHERE key = ?", (key,)).fetchone()
+    return row["text"] if row else None
+
+
+def set_etymology(key: str, word: str, lemma: str, text: str) -> None:
+    with connect() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO etymology_cache (key, word, lemma, text, created_at) VALUES (?, ?, ?, ?, ?)",
+            (key, word, lemma, text, _now_iso()),
+        )
 
 
 def _hash_password(password: str, salt: str) -> str:

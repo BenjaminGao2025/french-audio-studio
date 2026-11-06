@@ -2532,6 +2532,54 @@ async def lookup_word(
     return result
 
 
+class EtymologyRequest(BaseModel):
+    word: str = Field(min_length=1, max_length=200)
+    lemma: str | None = Field(default=None, max_length=200)
+
+
+@app.post("/api/etymology")
+async def etymology_word(
+    request: EtymologyRequest,
+    authorization: str | None = Header(default=None),
+):
+    _require_user_id(authorization)
+    word = request.word.strip()
+    lemma = (request.lemma or "").strip()
+    if not word:
+        raise HTTPException(status_code=400, detail={"message": "请提供待查询单词"})
+    key = (lemma or word).lower()
+    cached = auth_db.get_etymology(key)
+    if cached is not None:
+        return {"text": cached, "cached": True}
+
+    api_key = _authorization_token(authorization)
+    payload = {
+        "model": _map_upstream_model(DEFAULT_MODEL),
+        "messages": [
+            {"role": "system", "content": (
+                "你是严谨的法语词源老师。用简体中文纯文本解释所给原形词的词根/构词、"
+                "词源（如拉丁语来源，已知才写）和恰好一条简短记忆钩子。"
+                "不确定时明确说不确定，不编造词源；区分真实词源和记忆联想。"
+                "只解释原形词，便于同词族复用。总计约120个汉字以内，最多4短行，不用Markdown。"
+            )},
+            {"role": "user", "content": f"法语原形词：{key}"},
+        ],
+        "stream": False,
+        "temperature": 0.0,
+    }
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        _, raw_text = await _post_chat(client, payload, headers)
+    text = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip()
+    if not text:
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "etymology_failed", "message": "暂无法获取词源，请重试。"},
+        )
+    auth_db.set_etymology(key, word, lemma, text)
+    return {"text": text, "cached": False}
+
+
 @app.get("/tts")
 async def generate_tts(
     request: Request,

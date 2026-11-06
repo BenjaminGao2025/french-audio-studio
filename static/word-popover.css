@@ -438,3 +438,28 @@
     .read-selection-bar .rs-btn { min-height: 44px; }
     .read-selection-bar .rs-done { width: 44px; }
 }
+
+/* On-demand etymology. Model output is rendered as plain text. */
+.popover-etymology { margin-top: 8px; }
+.popover-etymology-button {
+    min-height: 32px;
+    padding: 4px 8px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--surface-subtle);
+    color: var(--primary);
+    font: inherit;
+    font-size: 12.5px;
+    cursor: pointer;
+}
+.popover-etymology-button:hover { background: var(--primary-soft); }
+.popover-etymology-button:disabled { cursor: wait; color: var(--muted); }
+.popover-etymology-button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.popover-etymology-text {
+    margin-top: 6px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--ink);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}

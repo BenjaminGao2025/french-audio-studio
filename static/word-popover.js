@@ -16,6 +16,7 @@
 
     const TEXT = {
         en: {
+            etymologyLoading: 'Loading etymology…', etymologyFailed: 'Could not load etymology. Please try again.',
             baseForm: 'base form: ', contextWord: 'Word in context', readAs: 'Read as: ',
             back: 'Back to ', lemmaLookup: word => `Look up ${word} and hear it`,
             lookingUpMeaning: 'Looking up the meaning...', lookupFailed: 'Lookup failed', noDefinition: 'Could not get the meaning',
@@ -31,6 +32,7 @@
             numberNote: (n, isYear) => `${n}${isYear ? ' (a year is read the same way)' : ''}`,
         },
         zh: {
+            etymologyLoading: '正在查询词源…', etymologyFailed: '暂无法获取词源，请重试。',
             baseForm: '原形: ', contextWord: '语境词汇', readAs: '读作：',
             back: '返回 ', lemmaLookup: word => `查 ${word} 的释义和发音`,
             lookingUpMeaning: '正在查询字义...', lookupFailed: '查词失败', noDefinition: '暂无法获取释义',
@@ -365,6 +367,10 @@
                 <div class="popover-cn-text"></div>
                 <div class="popover-en-text"></div>
             </div>
+            <div class="popover-etymology">
+                <button class="popover-etymology-button" type="button">词根词源</button>
+                <div class="popover-etymology-text" role="status" hidden></div>
+            </div>
             <div class="popover-importance" hidden>
                 <span class="importance-label">${escapeHtml(T.importanceLabel)}</span>
                 <span class="importance-stars">
@@ -410,6 +416,7 @@
             phonetic: q('.popover-phonetic'), pos: q('.popover-pos'), lemma: q('.popover-lemma'),
             close: q('.popover-close-btn'), loading: q('.popover-loading'), content: q('.popover-content'),
             cn: q('.popover-cn-text'), en: q('.popover-en-text'), importance: q('.popover-importance'),
+            etymologyButton: q('.popover-etymology-button'), etymologyText: q('.popover-etymology-text'),
         };
         els.star.hidden = !saving;
 
@@ -418,10 +425,51 @@
         let target = null;
         const trail = [];
         let lookupGeneration = 0;
+        let etymologyGeneration = 0;
+
+        function resetEtymology() {
+            etymologyGeneration++;
+            els.etymologyButton.disabled = false;
+            els.etymologyButton.textContent = '词根词源';
+            els.etymologyText.textContent = '';
+            els.etymologyText.hidden = true;
+        }
+
+        els.etymologyButton.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (!currentCard || els.etymologyButton.disabled) return;
+            const generation = ++etymologyGeneration;
+            const { token: word, lemma } = currentCard;
+            els.etymologyButton.disabled = true;
+            els.etymologyButton.textContent = T.etymologyLoading;
+            els.etymologyText.hidden = true;
+            position();
+            try {
+                const token = options.getAuthToken ? options.getAuthToken() : '';
+                const res = await fetch('/api/etymology', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                    body: JSON.stringify({ word, lemma }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || typeof data.text !== 'string' || !data.text.trim()) throw new Error(T.etymologyFailed);
+                if (generation === etymologyGeneration && isOpen()) els.etymologyText.textContent = data.text;
+            } catch (err) {
+                if (generation === etymologyGeneration && isOpen()) els.etymologyText.textContent = T.etymologyFailed;
+            } finally {
+                if (generation === etymologyGeneration && isOpen()) {
+                    els.etymologyButton.disabled = false;
+                    els.etymologyButton.textContent = '词根词源';
+                    els.etymologyText.hidden = false;
+                    position();
+                }
+            }
+        });
 
         const isOpen = () => !pop.hidden;
 
         function close() {
+            resetEtymology();
             lookupGeneration++;
             trail.length = 0;
             els.back.hidden = true;
@@ -530,6 +578,7 @@
         }
 
         function render(item) {
+            resetEtymology();
             currentCard = item;
             renderFrenchWords(els.word, item.token);
             const phonetic = formatFriendlyPhonetic(item.phonetic || '');
@@ -579,6 +628,7 @@
             if (!rect || (rect.width === 0 && rect.height === 0)) return;
 
             const requestId = ++lookupGeneration;
+            resetEtymology();
             if (navigation.nested && currentCard) trail.push({ item: currentCard, target });
             else trail.length = 0;
             updateBack();
