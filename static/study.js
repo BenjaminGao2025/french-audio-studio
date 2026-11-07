@@ -117,7 +117,7 @@ function initStudyWorkbench() {
             modeBlind: 'Test me', modeBlindTitle: 'Hide the new words of each step, so you say them from memory',
             modeWrite: 'Recall', modeWriteTitle: 'See only the English and write the French from memory',
             modeListen: 'Dictation', modeListenTitle: 'Listen to the sentence and write down the French',
-            dictationEntry: 'Write it:',
+            noGrammar: 'No grammar notes for this sentence.', noPron: 'No pronunciation notes for this sentence.',
             buildupHint: 'Tap any French word to hear it. Listen to each step, then say it yourself.',
             blindTipStrong: 'Feynman challenge', blindTipText: ': the new words of each step are hidden. Look at the meaning and say the French from memory!',
             revealAll: 'Reveal all', hideAgain: 'Hide again',
@@ -262,7 +262,7 @@ function initStudyWorkbench() {
             modeBlind: '考考我', modeBlindTitle: '遮住每一步新加的词，凭记忆说出来',
             modeWrite: '默写', modeWriteTitle: '只看英文，凭记忆写出法语',
             modeListen: '听写', modeListenTitle: '听句子，写下法语',
-            dictationEntry: '写一写：',
+            noGrammar: '这句没有需要特别讲的语法点。', noPron: '这句没有需要特别注意的发音点。',
             buildupHint: '点任意法语单词可以听发音。每一步先听，再自己说一遍。',
             blindTipStrong: '费曼认知挑战', blindTipText: '：递进关键词已遮挡。看着释义，凭借脑内记忆说出这句法语！',
             revealAll: '一键揭晓', hideAgain: '重新遮挡',
@@ -1857,11 +1857,51 @@ function initStudyWorkbench() {
                 </div>
             `;
 
+            // 1b. Feynman self-test: the learner explains first, the AI only points out gaps
+            const feynmanSelfTestHtml = `
+                <div class="feynman-selftest">
+                    <p class="panel-hint">${T.feynmanSub}</p>
+                    <textarea class="feynman-input" rows="3" maxlength="2000" placeholder="${T.feynmanPlaceholder}"></textarea>
+                    <details class="feynman-variation-box">
+                        <summary>${T.variationLabel}</summary>
+                        <input class="feynman-variation" type="text" maxlength="500" autocomplete="off" spellcheck="false" placeholder="${T.variationPlaceholder}">
+                    </details>
+                    <div class="feynman-actions">
+                        <span class="dictation-status" aria-live="polite"></span>
+                        ${canRecordAudio ? `
+                            <button class="btn-feynman-mic" type="button" title="${T.dictateTitle}">
+                                <i data-lucide="mic"></i><span class="dictation-label">${T.dictate}</span>
+                            </button>
+                        ` : ''}
+                        <button class="btn-feynman-check" type="button">
+                            <i data-lucide="search-check"></i><span>${T.feynmanCheck}</span>
+                        </button>
+                    </div>
+                    <div class="feynman-feedback" hidden></div>
+                    <div class="feynman-ask">
+                        <p class="feynman-ask-label">${T.askLabel}</p>
+                        <div class="ask-thread" aria-live="polite"></div>
+                        <form class="ask-row" autocomplete="off">
+                            <input class="ask-input" type="text" maxlength="1000" placeholder="${T.askPlaceholder}">
+                            ${canRecordAudio ? `
+                                <button class="btn-ask btn-ask-mic" type="button" title="${T.askMicTitle}"><i data-lucide="mic"></i><span class="dictation-label">${T.askMic}</span></button>
+                            ` : ''}
+                            <button class="btn-ask" type="submit"><i data-lucide="send"></i><span>${T.ask}</span></button>
+                        </form>
+                    </div>
+                </div>
+            `;
+
+            // Every card has the same tabs in the same order (V1 and V2, short or long); Steps is added
+            // in front only where a build-up exists. Recall / Dictation open the exercise (dictation.js).
+            let hasValidBuildup = false;
+            let buildupHtml = '';
+            let wordsPanelHtml = '';
             if (isV2) {
                 // ==================== SCHEMA V2 RENDERING ====================
                 const wordCount = sentenceText.trim().split(/\s+/).filter(Boolean).length;
                 const isShortSentence = wordCount <= 5;
-                const hasValidBuildup = Boolean(s.build_up && s.build_up.length > 1 && !isShortSentence);
+                hasValidBuildup = Boolean(s.build_up && s.build_up.length > 1 && !isShortSentence);
 
                 // 1. Sentence Hero: French text + Interlinear Gloss + Translations
                 const interlinearHtml = (s.alignment && s.alignment.length > 0) ? `
@@ -1884,65 +1924,7 @@ function initStudyWorkbench() {
                     </div>
                 ` : '';
 
-                // 1b. Feynman self-test: the learner explains first, the AI only points out gaps
-                const feynmanSelfTestHtml = `
-                    <div class="feynman-selftest">
-                        <p class="panel-hint">${T.feynmanSub}</p>
-                        <textarea class="feynman-input" rows="3" maxlength="2000" placeholder="${T.feynmanPlaceholder}"></textarea>
-                        <details class="feynman-variation-box">
-                            <summary>${T.variationLabel}</summary>
-                            <input class="feynman-variation" type="text" maxlength="500" autocomplete="off" spellcheck="false" placeholder="${T.variationPlaceholder}">
-                        </details>
-                        <div class="feynman-actions">
-                            <span class="dictation-status" aria-live="polite"></span>
-                            ${canRecordAudio ? `
-                                <button class="btn-feynman-mic" type="button" title="${T.dictateTitle}">
-                                    <i data-lucide="mic"></i><span class="dictation-label">${T.dictate}</span>
-                                </button>
-                            ` : ''}
-                            <button class="btn-feynman-check" type="button">
-                                <i data-lucide="search-check"></i><span>${T.feynmanCheck}</span>
-                            </button>
-                        </div>
-                        <div class="feynman-feedback" hidden></div>
-                        <div class="feynman-ask">
-                            <p class="feynman-ask-label">${T.askLabel}</p>
-                            <div class="ask-thread" aria-live="polite"></div>
-                            <form class="ask-row" autocomplete="off">
-                                <input class="ask-input" type="text" maxlength="1000" placeholder="${T.askPlaceholder}">
-                                ${canRecordAudio ? `
-                                    <button class="btn-ask btn-ask-mic" type="button" title="${T.askMicTitle}"><i data-lucide="mic"></i><span class="dictation-label">${T.askMic}</span></button>
-                                ` : ''}
-                                <button class="btn-ask" type="submit"><i data-lucide="send"></i><span>${T.ask}</span></button>
-                            </form>
-                        </div>
-                    </div>
-                `;
-
-                // 1c. Dictation (默写 / 听写): steps only where the Steps tab shows them
-                const dictationButtonsHtml = window.FrenchDictation ? `
-                    <button class="btn-feynman-toggle" data-mode="write" type="button" title="${T.modeWriteTitle}">
-                        <i data-lucide="pencil-line"></i>
-                        <span>${T.modeWrite}</span>
-                    </button>
-                    <button class="btn-feynman-toggle" data-mode="listen" type="button" title="${T.modeListenTitle}">
-                        <i data-lucide="headphones"></i>
-                        <span>${T.modeListen}</span>
-                    </button>
-                ` : '';
-                if (window.FrenchDictation) {
-                    dictationDataByCard.set(card, {
-                        sentence: sentenceText,
-                        translationEn: transEn,
-                        steps: hasValidBuildup ? s.build_up : [],
-                        voice: frenchVoiceFor(sentenceText),
-                        index: idx,
-                        total: sentences.length,
-                    });
-                }
-
                 // 2. Sentence Build-up (一层一层搭句子 - 5词及以内短句/标题无需生硬拆解)
-                let buildupHtml = '';
                 if (hasValidBuildup) {
                     const stepsHtml = s.build_up.map((step, sIdx) => {
                         const isFinal = sIdx === s.build_up.length - 1;
@@ -2015,7 +1997,6 @@ function initStudyWorkbench() {
                                         <i data-lucide="brain"></i>
                                         <span>${T.modeBlind}</span>
                                     </button>
-                                    ${dictationButtonsHtml}
                                 </div>
                             </div>
                             <div class="feynman-tip-banner" hidden>
@@ -2039,7 +2020,7 @@ function initStudyWorkbench() {
                 const hiddenWords = contentWords.length ? functionWords : [];
                 const renderWords = list => list.map(w => renderWordBreakdownCard(w, sentenceText, transZh, wordsList.indexOf(w))).join('');
 
-                const wordsSectionHtml = `
+                wordsPanelHtml = interlinearHtml + `
                     <div class="word-list">${renderWords(shownWords)}</div>
                     ${hiddenWords.length ? `
                         <div class="small-words">
@@ -2054,87 +2035,6 @@ function initStudyWorkbench() {
                     ` : ''}
                 `;
 
-                // 5. Grammar Points + Memory Hooks
-                let grammarHtml = '';
-                if (s.grammar_points && s.grammar_points.length > 0) {
-                    const pointsHtml = s.grammar_points.map(g => {
-                        return `
-                            <div class="grammar-point-card">
-                                <div class="grammar-point-header">
-                                    <div style="display: flex; align-items: center; gap: 8px;">
-                                        <span class="grammar-bullet">📌</span>
-                                        <h4 class="grammar-point-title">${escapeHtml(g.title)}</h4>
-                                    </div>
-                                    <button class="btn-grammar-star btn-grammar-card" type="button"
-                                        title="${T.grammarAdd}"
-                                        data-sentence="${escapeHtml(sentenceText)}"
-                                        data-title="${escapeHtml(g.title)}"
-                                        data-exp="${escapeHtml(g.explanation || '')}"
-                                        data-hook="${escapeHtml(g.hook || '')}">
-                                        <i data-lucide="star"></i>
-                                        <span class="grammar-card-label">${T.addToReview}</span>
-                                    </button>
-                                </div>
-                                <div class="grammar-point-body">
-                                    <p class="grammar-point-exp">${escapeHtml(g.explanation)}</p>
-                                    ${g.hook ? `
-                                        <div class="grammar-hook-inline feynman-hook-pill">
-                                            <span class="hook-icon">🧠</span>
-                                            <span class="hook-text"><strong>${T.memoryHook}</strong> ${escapeHtml(g.hook)}</span>
-                                        </div>
-                                    ` : ''}
-                                </div>
-                            </div>
-                        `;
-                    }).join('');
-
-                    grammarHtml = `
-                        <div class="study-card-section grammar-section">
-                            <div class="grammar-points-list">
-                                ${pointsHtml}
-                            </div>
-                        </div>
-                    `;
-                }
-
-                // 6. Pronunciation Tips (Interactive with audio playback and clickable chips)
-                let pronTipsHtml = '';
-                if (s.pronunciation_tips && s.pronunciation_tips.length > 0) {
-                    const tipsHtml = s.pronunciation_tips.map(tip => renderPronunciationTipItem(tip, sentenceText)).join('');
-
-                    pronTipsHtml = `
-                        <div class="study-card-section pronunciation-section">
-                            <ul class="pronunciation-tips-list">
-                                ${tipsHtml}
-                            </ul>
-                        </div>
-                    `;
-                }
-
-                const tabs = [
-                    hasValidBuildup && { id: 'buildup', label: T.tabBuildup, html: buildupHtml },
-                    { id: 'words', label: T.tabWords, html: interlinearHtml + wordsSectionHtml },
-                    grammarHtml && { id: 'grammar', label: T.tabGrammar, html: grammarHtml },
-                    pronTipsHtml && { id: 'pron', label: T.tabPron, html: pronTipsHtml },
-                    !hasValidBuildup && { id: 'shadowing', label: T.shadowScore, html: (dictationButtonsHtml ? `
-                        <div class="dictation-entry">
-                            <span class="dictation-entry-label">${T.dictationEntry}</span>
-                            <div class="feynman-mode-switch" role="group" aria-label="${T.modeSwitchAria}">${dictationButtonsHtml}</div>
-                        </div>` : '') + shadowingHtml },
-                    { id: 'explain', label: T.tabExplain, html: feynmanSelfTestHtml },
-                ].filter(Boolean);
-                const bodyHtml = `
-                    ${structureBarHtml(s.structure)}
-                    <div class="card-tabs-bar" role="tablist">
-                        ${tabs.map((t, i) => `
-                            <button class="card-tab-btn ${i === 0 ? 'active' : ''}" data-tab="${t.id}" type="button" role="tab" aria-selected="${i === 0}">${t.label}</button>
-                        `).join('')}
-                    </div>
-                    ${tabs.map((t, i) => `
-                        <div class="card-tab-panel ${i === 0 ? 'active' : ''}" data-panel="${t.id}" role="tabpanel" ${i === 0 ? '' : 'hidden'}>${t.html}</div>
-                    `).join('')}
-                `;
-                card.innerHTML = headHtml + `<div class="sentence-body" id="sentence-body-${idx}" ${open ? '' : 'hidden'}>${bodyHtml}</div>`;
             } else {
                 // ==================== LEGACY V1 RENDERING ====================
                 let rowsHtml = '';
@@ -2201,7 +2101,102 @@ function initStudyWorkbench() {
                     </div>
                 `;
 
-                card.innerHTML = headHtml + `<div class="sentence-body" id="sentence-body-${idx}" ${open ? '' : 'hidden'}>${shadowingHtml}${tableHtml}</div>`;
+                wordsPanelHtml = tableHtml;
+            }
+
+            // 5. Grammar Points + Memory Hooks
+            let grammarHtml = '';
+            if (s.grammar_points && s.grammar_points.length > 0) {
+                const pointsHtml = s.grammar_points.map(g => {
+                    return `
+                        <div class="grammar-point-card">
+                            <div class="grammar-point-header">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span class="grammar-bullet">📌</span>
+                                    <h4 class="grammar-point-title">${escapeHtml(g.title)}</h4>
+                                </div>
+                                <button class="btn-grammar-star btn-grammar-card" type="button"
+                                    title="${T.grammarAdd}"
+                                    data-sentence="${escapeHtml(sentenceText)}"
+                                    data-title="${escapeHtml(g.title)}"
+                                    data-exp="${escapeHtml(g.explanation || '')}"
+                                    data-hook="${escapeHtml(g.hook || '')}">
+                                    <i data-lucide="star"></i>
+                                    <span class="grammar-card-label">${T.addToReview}</span>
+                                </button>
+                            </div>
+                            <div class="grammar-point-body">
+                                <p class="grammar-point-exp">${escapeHtml(g.explanation)}</p>
+                                ${g.hook ? `
+                                    <div class="grammar-hook-inline feynman-hook-pill">
+                                        <span class="hook-icon">🧠</span>
+                                        <span class="hook-text"><strong>${T.memoryHook}</strong> ${escapeHtml(g.hook)}</span>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                grammarHtml = `
+                    <div class="study-card-section grammar-section">
+                        <div class="grammar-points-list">
+                            ${pointsHtml}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // 6. Pronunciation Tips (Interactive with audio playback and clickable chips)
+            let pronTipsHtml = '';
+            if (s.pronunciation_tips && s.pronunciation_tips.length > 0) {
+                const tipsHtml = s.pronunciation_tips.map(tip => renderPronunciationTipItem(tip, sentenceText)).join('');
+
+                pronTipsHtml = `
+                    <div class="study-card-section pronunciation-section">
+                        <ul class="pronunciation-tips-list">
+                            ${tipsHtml}
+                        </ul>
+                    </div>
+                `;
+            }
+
+            const emptyPanel = text => `<p class="panel-hint card-tab-empty">${text}</p>`;
+            const tabs = [
+                hasValidBuildup && { id: 'buildup', label: T.tabBuildup, html: buildupHtml },
+                { id: 'words', label: T.tabWords, html: wordsPanelHtml },
+                { id: 'grammar', label: T.tabGrammar, html: grammarHtml || emptyPanel(T.noGrammar) },
+                { id: 'pron', label: T.tabPron, html: pronTipsHtml || emptyPanel(T.noPron) },
+                { id: 'shadowing', label: T.shadowScore, html: shadowingHtml },
+                window.FrenchDictation && { id: 'recall', label: T.modeWrite, title: T.modeWriteTitle, dictation: 'write' },
+                window.FrenchDictation && { id: 'dictation', label: T.modeListen, title: T.modeListenTitle, dictation: 'listen' },
+                { id: 'explain', label: T.tabExplain, html: feynmanSelfTestHtml },
+            ].filter(Boolean);
+            // Recall / Dictation have no panel: their tab opens the exercise in place of the card
+            const panels = tabs.filter(t => !t.dictation);
+            const bodyHtml = `
+                ${structureBarHtml(s.structure)}
+                <div class="card-tabs-bar" role="tablist">
+                    ${tabs.map((t, i) => `
+                        <button class="card-tab-btn ${i === 0 ? 'active' : ''}" data-tab="${t.id}" type="button" role="tab" aria-selected="${i === 0}"${t.dictation ? ` data-dictation-mode="${t.dictation}" title="${escapeHtml(t.title)}"` : ` aria-controls="card-panel-${idx}-${t.id}"`}>${t.label}</button>
+                    `).join('')}
+                </div>
+                ${panels.map((t, i) => `
+                    <div class="card-tab-panel ${i === 0 ? 'active' : ''}" id="card-panel-${idx}-${t.id}" data-panel="${t.id}" role="tabpanel" ${i === 0 ? '' : 'hidden'}>${t.html}</div>
+                `).join('')}
+            `;
+            card.innerHTML = headHtml + `<div class="sentence-body" id="sentence-body-${idx}" ${open ? '' : 'hidden'}>${bodyHtml}</div>`;
+            if (window.FrenchDictation) {
+                dictationDataByCard.set(card, {
+                    sentence: sentenceText,
+                    translationEn: transEn,
+                    // Steps only where the Steps tab shows them
+                    steps: hasValidBuildup ? s.build_up : [],
+                    voice: frenchVoiceFor(sentenceText),
+                    index: idx,
+                    total: sentences.length,
+                    tabs: tabs.map(t => ({ id: t.id, label: t.label, mode: t.dictation || '' })),
+                });
             }
 
             sentencesContainer.appendChild(card);
@@ -2524,6 +2519,7 @@ function initStudyWorkbench() {
         tabBtns.forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
+                if (btn.dataset.dictationMode) return;  // Recall / Dictation: bindDictationEntry opens the exercise
                 const targetTab = btn.dataset.tab;
                 tabBtns.forEach(b => {
                     const isActive = b === btn;
@@ -3093,7 +3089,6 @@ function initStudyWorkbench() {
             feynmanToggles.forEach(toggleBtn => {
                 toggleBtn.addEventListener('click', () => {
                     const mode = toggleBtn.dataset.mode;
-                    if (mode === 'write' || mode === 'listen') return;  // bindDictationEntry opens the exercise
                     feynmanToggles.forEach(b => b.classList.toggle('active', b === toggleBtn));
 
                     if (mode === 'blind') {
@@ -3168,20 +3163,26 @@ function initStudyWorkbench() {
             stopAllAudio();
             playClip(text, () => {}, () => {}, dictationAudioOwner, options);
         },
-        onExit(card, mode) {
-            if (mode !== 'normal' && mode !== 'blind') return;
-            const tab = card.querySelector('.card-tab-btn[data-tab="buildup"]');
-            if (tab && !tab.classList.contains('active')) tab.click();
-            const toggle = card.querySelector(`.btn-feynman-toggle[data-mode="${mode}"]`);
-            if (toggle) toggle.click();
+        // Left with another tab of the exercise's tab row: show that tab; "Back" keeps the tab it left from
+        onExit(card, tabId) {
+            const tabs = Array.from(card.querySelectorAll('.card-tab-btn'));
+            const tab = tabs.find(b => b.dataset.tab === tabId && !b.dataset.dictationMode);
+            if (tab) tab.click();
+            const active = tab || tabs.find(b => b.classList.contains('active'));
+            if (!active) return;
+            active.focus({ preventScroll: true });
+            window.FrenchDictation.revealTab(active);
         },
     }) : null;
 
     function bindDictationEntry(card) {
         const data = dictationDataByCard.get(card);
         if (!dictation || !data) return;
-        card.querySelectorAll('.btn-feynman-toggle[data-mode="write"], .btn-feynman-toggle[data-mode="listen"]').forEach(btn => {
-            btn.addEventListener('click', () => dictation.open(card, data, btn.dataset.mode));
+        card.querySelectorAll('.card-tab-btn[data-dictation-mode]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                dictation.open(card, data, btn.dataset.dictationMode);
+            });
         });
     }
 

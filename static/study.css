@@ -3271,15 +3271,14 @@ a.nav-deck-btn {
 }
 
 /* ==================== DICTATION: 默写 / 听写 (static/dictation.js) ==================== */
-.dictation-entry { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 12px; }
-.dictation-entry-label { font-size: var(--text-sm); color: var(--muted); }
 .sentence-card.is-dictating { padding: var(--space-4); }
 .dictation-view { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .dictation-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
 .dictation-heading { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
 .dictation-kicker { font-weight: 700; color: var(--ink); }
-.dictation-view .feynman-mode-switch { flex-wrap: wrap; border-radius: var(--radius-md); }
-.dictation-view .btn-feynman-toggle { border-radius: var(--radius-sm); }
+/* The card's tab row stays on top while an exercise replaces the card */
+.sentence-card.is-dictating > .dictation-tabs { margin: 0 0 var(--space-3); }
+.dictation-back { min-height: 34px; padding: 4px 12px; font-size: var(--text-sm); }
 .dictation-scope { display: inline-flex; flex-wrap: wrap; gap: 6px; }
 .dictation-scope-btn {
     min-height: 34px; padding: 4px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
@@ -3363,5 +3362,5 @@ a.nav-deck-btn {
     .dictation-history-btn { margin-left: 0; }
 }
 @media (pointer: coarse) {
-    .dictation-scope-btn, .dictation-view .btn-feynman-toggle { min-height: 44px; }
+    .dictation-scope-btn, .dictation-back { min-height: 44px; }
 }

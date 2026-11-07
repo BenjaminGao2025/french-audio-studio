@@ -238,11 +238,52 @@ test('leaving restores the original card exactly', () => {
     env.ctl.open(env.card, DATA, 'write');
     env.ctl.open(env.card, DATA, 'listen');  // switching modes keeps the parked card
     assert(env.ctl.isOpen(env.card));
-    env.card.querySelector('[data-exit-mode="blind"]').click();
+    env.card.querySelector('[data-exit-mode="back"]').click();
     assert.equal(env.card.innerHTML, env.original);
-    assert.deepEqual(env.exits, ['blind']);
+    assert.deepEqual(env.exits, ['back']);
     assert(!env.ctl.isOpen(env.card));
     assert(!env.card.classList.contains('is-dictating'));
+});
+
+// Recall / Dictation are tabs of the card: the exercise shows the card's own tab row, with its
+// mode selected, and any other tab leaves the exercise for that tab
+const TABS = [
+    { id: 'buildup', label: '一步步搭', mode: '' }, { id: 'words', label: '逐词剖析', mode: '' },
+    { id: 'grammar', label: '语法考点', mode: '' }, { id: 'pron', label: '发音重点', mode: '' },
+    { id: 'shadowing', label: '跟读打分', mode: '' }, { id: 'recall', label: '默写', mode: 'write' },
+    { id: 'dictation', label: '听写', mode: 'listen' }, { id: 'explain', label: '自己讲', mode: '' },
+];
+test('the exercise keeps the card tab row; other tabs leave it', () => {
+    const env = setup();
+    const data = { ...DATA, tabs: TABS };
+    env.ctl.open(env.card, data, 'write');
+    const bar = env.card.querySelector('.dictation-tabs[role="tablist"]');
+    assert(bar);
+    const tabs = Array.from(bar.querySelectorAll('[role="tab"]'));
+    assert.deepEqual(tabs.map(t => t.textContent), TABS.map(t => t.label));
+    const selected = () => Array.from(env.card.querySelectorAll('.dictation-tabs [aria-selected="true"]')).map(t => t.dataset.tab);
+    assert.deepEqual(selected(), ['recall']);
+    const panel = env.card.querySelector('.dictation-view[role="tabpanel"]');
+    assert.equal(env.card.querySelector('.dictation-tabs .active').getAttribute('aria-controls'), panel.id);
+    // Whole sentence and steps are still there, and the old mode switch is gone
+    assert.equal(env.card.querySelectorAll('.dictation-scope-btn').length, 2);
+    assert.equal(env.card.querySelector('.feynman-mode-switch, [data-exit-mode="normal"], [data-exit-mode="blind"]'), null);
+    env.card.querySelector('.dictation-tabs [data-tab="dictation"]').click();
+    assert(env.ctl.isOpen(env.card));
+    assert.deepEqual(selected(), ['dictation']);
+    assert.equal(env.card.querySelector('.dictation-view').dataset.mode, 'listen');
+    assertNoFrench(env.card);
+    env.card.querySelector('.dictation-tabs [data-tab="shadowing"]').click();
+    assert(!env.ctl.isOpen(env.card));
+    assert.equal(env.card.innerHTML, env.original);
+    assert.deepEqual(env.exits, ['shadowing']);
+});
+
+test('tab labels are text only', () => {
+    const env = setup();
+    env.ctl.open(env.card, { ...DATA, tabs: [{ id: 'x"><img src=x onerror=alert(1)>', label: '<img src=x onerror=alert(1)>', mode: '' }, TABS[5]] }, 'write');
+    assert.equal(env.card.querySelector('img'), null);
+    assert.equal(env.card.querySelector('.dictation-tabs').firstElementChild.textContent, '<img src=x onerror=alert(1)>');
 });
 
 // Sentence punctuation is never an error: not in the diff, the counts, the legend or the verdict

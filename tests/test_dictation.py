@@ -506,13 +506,17 @@ class StudyPageWiringTests(unittest.TestCase):
     def test_dictation_script_loads_before_study(self):
         self.assertLess(self.STUDY_HTML.index("/static/dictation.js"), self.STUDY_HTML.index("/static/study.js"))
 
-    def test_modes_sit_next_to_show_all_and_test_me(self):
+    def test_recall_and_dictation_are_top_level_tabs(self):
+        self.assertIn("{ id: 'recall', label: T.modeWrite", self.STUDY_JS)
+        self.assertIn("{ id: 'dictation', label: T.modeListen", self.STUDY_JS)
+        self.assertIn(".card-tab-btn[data-dictation-mode]", self.STUDY_JS)
+        # The old "Write it:" row under Say it is gone, and Steps keeps only its own two modes
+        self.assertNotIn("dictation-entry", self.STUDY_JS)
+        self.assertNotIn("dictationEntry", self.STUDY_JS)
+        self.assertNotIn('data-mode="write"', self.STUDY_JS)
+        self.assertNotIn('data-mode="listen"', self.STUDY_JS)
         self.assertIn('data-mode="normal"', self.STUDY_JS)
         self.assertIn('data-mode="blind"', self.STUDY_JS)
-        self.assertIn('data-mode="write"', self.STUDY_JS)
-        self.assertIn('data-mode="listen"', self.STUDY_JS)
-        # The Show all / Test me handler leaves the new modes alone
-        self.assertIn("if (mode === 'write' || mode === 'listen') return;", self.STUDY_JS)
 
     def test_audio_uses_the_sentence_voice(self):
         self.assertIn("voice: frenchVoiceFor(sentenceText)", self.STUDY_JS)

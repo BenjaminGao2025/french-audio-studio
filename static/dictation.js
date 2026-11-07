@@ -244,6 +244,14 @@
     };
     let uid = 0;
 
+    // A phone's tab row scrolls sideways: keep the active tab in view (the page itself does not move)
+    function revealTab(btn) {
+        const bar = btn && btn.parentElement;
+        if (!bar || bar.scrollWidth <= bar.clientWidth) return;
+        const offset = btn.getBoundingClientRect().left - bar.getBoundingClientRect().left;
+        bar.scrollLeft = Math.max(0, bar.scrollLeft + offset - (bar.clientWidth - btn.offsetWidth) / 2);
+    }
+
     function defaultEscape(str) {
         if (str === null || str === undefined) return '';
         return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
@@ -350,22 +358,24 @@
             const { card, data } = state;
             const hasSteps = state.targets.length > 1;
             const n = state.targets.length - 1;
-            const modeBtn = (m, label) => `<button class="btn-feynman-toggle ${state.mode === m ? 'active' : ''}" type="button" data-dictation-mode="${m}" aria-pressed="${state.mode === m}">${esc(label)}</button>`;
+            const viewId = state.viewId || (state.viewId = `dictation-view-${++uid}`);
+            // The card's own tab row (data.tabs from study.js), so leaving is one tap on any other tab
+            const tabs = Array.isArray(data.tabs) && data.tabs.length ? data.tabs
+                : [{ id: 'recall', label: T.modeWrite, mode: 'write' }, { id: 'dictation', label: T.modeListen, mode: 'listen' }];
+            const tabBtn = t => {
+                const active = Boolean(t.mode) && state.mode === t.mode;
+                const action = t.mode ? `data-dictation-mode="${esc(t.mode)}"` : `data-exit-tab="${esc(t.id)}"`;
+                return `<button class="card-tab-btn${active ? ' active' : ''}" type="button" role="tab" data-tab="${esc(t.id)}" ${action} aria-selected="${active}"${active ? ' aria-controls="' + esc(viewId) + '"' : ''}>${esc(t.label)}</button>`;
+            };
             card.innerHTML = `
-                <div class="dictation-view" data-mode="${state.mode}" data-scope="${state.scope}">
+                <div class="card-tabs-bar dictation-tabs" role="tablist" aria-label="${esc(T.modeAria)}">${tabs.map(tabBtn).join('')}</div>
+                <div class="dictation-view" id="${esc(viewId)}" role="tabpanel" data-mode="${state.mode}" data-scope="${state.scope}">
                     <div class="dictation-head">
                         <div class="dictation-heading">
                             <span class="dictation-kicker">${esc(T.kicker[state.mode])}</span>
                             ${data.total > 1 ? `<span class="sentence-position">${data.index + 1} / ${data.total}</span>` : ''}
                         </div>
-                        <div class="feynman-mode-switch" role="group" aria-label="${esc(T.modeAria)}">
-                            ${hasSteps
-                                ? `<button class="btn-feynman-toggle" type="button" data-exit-mode="normal">${esc(T.modeNormal)}</button>
-                                   <button class="btn-feynman-toggle" type="button" data-exit-mode="blind">${esc(T.modeBlind)}</button>`
-                                : `<button class="btn-feynman-toggle" type="button" data-exit-mode="back">${esc(T.back)}</button>`}
-                            ${modeBtn('write', T.modeWrite)}
-                            ${modeBtn('listen', T.modeListen)}
-                        </div>
+                        <button class="btn-secondary dictation-back" type="button" data-exit-mode="back">${esc(T.back)}</button>
                     </div>
                     ${hasSteps ? `
                         <div class="dictation-scope" role="group" aria-label="${esc(T.scopeAria)}">
@@ -381,12 +391,14 @@
                 open(card, data, btn.dataset.dictationMode);
             }));
             card.querySelectorAll('[data-exit-mode]').forEach(btn => btn.addEventListener('click', () => exit(state, btn.dataset.exitMode)));
+            card.querySelectorAll('[data-exit-tab]').forEach(btn => btn.addEventListener('click', () => exit(state, btn.dataset.exitTab)));
             card.querySelectorAll('.dictation-scope-btn').forEach(btn => btn.addEventListener('click', () => {
                 if (btn.dataset.scope === state.scope) return;
                 state.scope = btn.dataset.scope;
                 state.step = 1;
                 renderView(state);
             }));
+            revealTab(card.querySelector('.dictation-tabs .card-tab-btn.active'));
             renderTask(state);
         }
 
@@ -679,7 +691,7 @@
         return { open, close, isOpen: card => states.has(card) };
     }
 
-    const api = { tokenize, grade, localTargets, create, ACCENT_CREDIT, TEXT };
+    const api = { tokenize, grade, localTargets, create, revealTab, ACCENT_CREDIT, TEXT };
     root.FrenchDictation = api;
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
