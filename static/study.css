@@ -3277,12 +3277,6 @@ a.nav-deck-btn {
 }
 .dictation-input:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
 .dictation-input[readonly] { background: var(--surface-subtle); }
-.dictation-accents { display: flex; flex-wrap: wrap; gap: 4px; }
-.dictation-accent {
-    min-width: 34px; min-height: 34px; padding: 0 6px; border: 1px solid var(--line); border-radius: var(--radius-sm);
-    background: var(--surface-subtle); color: var(--ink); font-size: var(--text-base); cursor: pointer;
-}
-.dictation-accent:hover { background: var(--surface-muted); }
 .dictation-message { margin: 0; min-height: 0; font-size: var(--text-sm); color: var(--danger); }
 .dictation-message:empty { display: none; }
 .dictation-result { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--line); }
@@ -3331,6 +3325,5 @@ a.nav-deck-btn {
     .dictation-history-btn { margin-left: 0; }
 }
 @media (pointer: coarse) {
-    .dictation-scope-btn, .dictation-accent, .dictation-view .btn-feynman-toggle { min-height: 44px; }
-    .dictation-accent { min-width: 44px; }
+    .dictation-scope-btn, .dictation-view .btn-feynman-toggle { min-height: 44px; }
 }

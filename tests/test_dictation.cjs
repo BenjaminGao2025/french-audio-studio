@@ -107,6 +107,31 @@ for (const mode of ['write', 'listen']) {
     });
 }
 
+// The learner types accents on their own keyboard: no row of accent buttons under the field,
+// in either mode, whole sentence or step by step. Accent mistakes are still graded as such.
+for (const mode of ['write', 'listen']) {
+    test(`${mode}: no accent quick-insert row, accents still graded`, async () => {
+        const env = setup();
+        env.ctl.open(env.card, DATA, mode);
+        const noRow = () => {
+            assert.equal(env.card.querySelector('.dictation-accents, .dictation-accent, [data-char]'), null);
+            assert(env.card.querySelector('.dictation-input'));
+        };
+        noRow();
+        env.card.querySelector('.dictation-scope-btn[data-scope="steps"]').click();
+        noRow();
+        env.card.querySelector('.dictation-scope-btn[data-scope="whole"]').click();
+        await answer(env, 'les autorites canadiennes n’autorisent aucune dispense');
+        noRow();
+        assert.equal(env.card.querySelectorAll('.dt-accent').length, 1);
+    });
+}
+
+test('no accent-row styles are left, phone layouts included', () => {
+    const css = fs.readFileSync(path.join(__dirname, '../static/study.css'), 'utf8');
+    assert(!/\.dictation-accents?\b/.test(css));
+});
+
 test('write mode shows the step English as the prompt', () => {
     const env = setup();
     env.ctl.open(env.card, DATA, 'write');

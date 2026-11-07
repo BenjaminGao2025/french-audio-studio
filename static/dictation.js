@@ -185,7 +185,6 @@
             listenThis: 'Practise by listening', skip: 'Skip',
             play: 'Play', playSlow: 'Slow', showHint: 'Show the English hint', hideHint: 'Hide the hint',
             inputLabel: 'Your French', placeholder: 'Type the French here…  (Enter to check)',
-            accentsAria: 'Insert a French letter',
             check: 'Check', checking: 'Checking…', reveal: 'Show the answer',
             emptyAnswer: 'Write your answer first.',
             correctAnswer: 'Correct answer', listenAnswer: 'Listen',
@@ -219,7 +218,6 @@
             listenThis: '改成听写', skip: '跳过',
             play: '播放', playSlow: '慢速', showHint: '显示英文提示', hideHint: '收起提示',
             inputLabel: '你的法语', placeholder: '在这里输入法语…（回车检查）',
-            accentsAria: '插入法语字母',
             check: '检查', checking: '检查中…', reveal: '直接看答案',
             emptyAnswer: '请先写下你的答案。',
             correctAnswer: '正确答案', listenAnswer: '听读音',
@@ -242,7 +240,6 @@
             historyRow: (a, when) => `${when} · ${a.accuracy}%${a.counts && a.counts.accent ? ` · 重音小错 ${a.counts.accent}` : ''}`,
         },
     };
-    const ACCENT_KEYS = ['é', 'è', 'ê', 'à', 'â', 'ç', 'ù', 'û', 'î', 'ï', 'ô', 'ë', 'œ', '’'];
     let uid = 0;
 
     function defaultEscape(str) {
@@ -435,9 +432,6 @@
                 ${promptHtml}
                 <label class="dictation-input-label" for="${id}">${esc(T.inputLabel)}</label>
                 <textarea class="dictation-input" id="${id}" rows="2" maxlength="1000" lang="fr" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="${esc(T.placeholder)}"></textarea>
-                <div class="dictation-accents" role="group" aria-label="${esc(T.accentsAria)}">
-                    ${ACCENT_KEYS.map(k => `<button class="dictation-accent" type="button" data-char="${esc(k)}">${esc(k)}</button>`).join('')}
-                </div>
                 <p class="dictation-message" role="status" aria-live="polite"></p>
                 <div class="dictation-actions">
                     <button class="btn-primary dictation-check" type="button">${esc(T.check)}</button>
@@ -479,14 +473,6 @@
             if (listenBtn) listenBtn.addEventListener('click', () => open(state.card, state.data, 'listen'));
             const skipBtn = task.querySelector('.dictation-skip');
             if (skipBtn) skipBtn.addEventListener('click', () => { state.step += 1; renderTask(state); });
-            task.querySelectorAll('.dictation-accent').forEach(btn => btn.addEventListener('click', () => {
-                const ch = btn.dataset.char === '’' ? "'" : btn.dataset.char;
-                const start = input.selectionStart ?? input.value.length;
-                const end = input.selectionEnd ?? input.value.length;
-                input.value = input.value.slice(0, start) + ch + input.value.slice(end);
-                input.focus();
-                input.setSelectionRange(start + ch.length, start + ch.length);
-            }));
             input.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
                     e.preventDefault();
