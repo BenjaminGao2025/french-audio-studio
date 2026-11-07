@@ -147,7 +147,6 @@ function initStudyWorkbench() {
             daysLeftShort: (n) => `${n} days left`, planPro: 'No expiry', daysLeft: (n) => `Valid for ${n} more days`,
             operationFailed: 'Something went wrong', loginSuccess: 'Logged in. Welcome back!', loggedOut: 'Logged out.',
             wordTitleSuffix: ' · click for the meaning and pronunciation',
-            partOfPhrase: (word, phrase) => `“${word}” is part of the fixed expression “${phrase}” here: learn it as a whole.`,
             emptyInput: 'Please enter the French text you want to break down first.',
             analyzing: 'Analysing...',
             cancelAnalysis: 'Cancel', cancelAnalysisTitle: 'Stop the analysis and keep editing (Esc)',
@@ -293,7 +292,6 @@ function initStudyWorkbench() {
             daysLeftShort: (n) => `剩 ${n} 天`, planPro: '长期有效', daysLeft: (n) => `有效期剩 ${n} 天`,
             operationFailed: '操作失败', loginSuccess: '登录成功！欢迎回来。', loggedOut: '已退出登录。',
             wordTitleSuffix: ' · 点击查看释义与单读发音',
-            partOfPhrase: (word, phrase) => `「${word}」在这句里是固定搭配「${phrase}」的一部分，要整体理解。`,
             emptyInput: '请先输入需要拆解或学习的法语文本。',
             analyzing: '正在智能拆解与精析...',
             cancelAnalysis: '取消', cancelAnalysisTitle: '停止分析，继续编辑 (Esc)',
@@ -478,13 +476,10 @@ function initStudyWorkbench() {
         notePayload: (sentence) => sentenceNotePayload(sentence),
         findLocal: (sentence, token) => findTargetCard(sentence, token),
         resolveChunk(sentence, token) {
-            const clean = (token || '').trim().toLowerCase();
-            const phrase = phraseByWord.get(`${srsSentenceKey(sentence)}::${clean}`);
-            if (phrase && phrase.token) {
-                const words = phrase.token.trim().split(/\s+/);
-                if (words.length >= 2 && words.length <= 4) return phrase.token;
-            }
-            return null;
+            // The star of an open word card knows where the word was tapped ('' = not in an expression)
+            const chunk = chunkForToggle !== null ? chunkForToggle : phraseTextFor(sentence, token);
+            const words = (chunk || '').trim().split(/\s+/);
+            return chunk && words.length >= 2 && words.length <= 4 ? chunk.trim() : null;
         },
         onSaved: (note) => rememberNote(note),
         onRemoved: (sentence, cardId) => forgetCard(sentence, cardId),
@@ -515,13 +510,6 @@ function initStudyWorkbench() {
         selectionPopover: false,
         contextFor: sentenceContextFor,
         localLookup(lower, word, context) {
-            // A word that belongs to a fixed expression of this sentence shows the expression
-            const phrase = context.sentence ? phraseByWord.get(`${srsSentenceKey(context.sentence)}::${lower}`) : null;
-            if (phrase) {
-                return Object.assign({}, phrase, {
-                    explanation_en: [phrase.explanation_en, T.partOfPhrase(word, phrase.token)].filter(Boolean).join(' '),
-                });
-            }
             const tokens = window.activeTokensMap || new Map();
             const elided = (lower.match(/^(?:aujourd['’]hui|([cjdlnmstqu]|qu)['’](.+))$/i) || [])[2];
             const match = tokens.get(lower) || (elided && tokens.get(elided));
@@ -531,10 +519,24 @@ function initStudyWorkbench() {
             if (!window.activeTokensMap) window.activeTokensMap = new Map();
             window.activeTokensMap.set(lower, item);
         },
+        // A word of a fixed expression of this sentence shows the whole expression (static/phrase-context.js)
+        phraseLookup: (word, element, context) => phraseLookup(word, element, context),
         saving: {
             ...wordBook.popoverSaving,
             async toggle(item) {
-                await wordBook.popoverSaving.toggle(item);
+                // Saving a word of an expression saves the expression, with its meaning here
+                const tap = phraseTap && phraseTap.element === wordPopover.activeElement() ? phraseTap : null;
+                chunkForToggle = item.phrase ? item.phrase.text : (tap ? '' : null);
+                const p = item.phrase;
+                try {
+                    await wordBook.popoverSaving.toggle(p ? Object.assign({}, item, {
+                        explanation_cn: p.meaning_zh || item.explanation_cn,
+                        explanation_en: p.meaning_en || item.explanation_en,
+                        lemma: p.phrase || item.lemma,
+                    }) : item);
+                } finally {
+                    chunkForToggle = null;
+                }
                 refreshDueBadge();
             },
         },
@@ -542,6 +544,126 @@ function initStudyWorkbench() {
 
     function showPopoverForElement(word, element, context = {}) {
         wordPopover.show(word, element, context);
+    }
+
+    // ---- Fixed expressions (static/phrase-context.js) ------------------------------------------
+    // Each interactive word of a line with its [start, end) in line.textContent
+    function wordSpans(line) {
+        const spans = [];
+        let offset = 0;
+        const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            const el = node.parentElement && node.parentElement.closest('.interactive-word');
+            const end = offset + node.textContent.length;
+            if (el && line.contains(el)) {
+                const last = spans[spans.length - 1];
+                if (last && last.el === el) last.end = end;
+                else spans.push({ el, start: offset, end });
+            }
+            offset = end;
+        }
+        return spans;
+    }
+
+    function phraseCard(occurrence, text) {
+        const p = occurrence.phrase;
+        return {
+            text: occurrence.surface, phrase: p.phrase, meaning_zh: p.meaning_zh, meaning_en: p.meaning_en,
+            literal_zh: p.literal_zh, notes: occurrence.notes, source: p.source,
+            snippet: window.FrenchPhraseContext.snippet(text, occurrence.start, occurrence.end),
+        };
+    }
+
+    // The expression a star on a table word (no tap position) saves: the old behaviour
+    function phraseTextFor(sentence, token) {
+        const PC = window.FrenchPhraseContext;
+        const info = PC && phraseIndex.get(srsSentenceKey(sentence));
+        const own = PC ? PC.fold((token || '').trim()) : '';
+        const p = info && own ? info.phrases.find(q => PC.atoms(q.text).some(a => a.norm === own)) : null;
+        return p ? p.text : null;
+    }
+
+    function mergeServerPhrases(info, list) {
+        if (info.merged) return;
+        info.merged = true;
+        info.structured = true;  // answered (cached on the server): never asked again
+        const PC = window.FrenchPhraseContext;
+        PC.fromAnalysis({ sentence: info.sentence, phrases: list || [] }).phrases.forEach(p => {
+            const spans = PC.find(p.text, info.sentence);
+            const same = info.phrases.find(q => PC.fold(q.phrase) === PC.fold(p.phrase)
+                || PC.find(q.text, info.sentence).some(h => spans.some(g => g.start < h.end && h.start < g.end)));
+            if (!same) { info.phrases.push(Object.assign(p, { source: 'ai' })); return; }
+            for (const field of ['meaning_zh', 'meaning_en', 'literal_zh']) if (!same[field]) same[field] = p[field];
+        });
+    }
+
+    // One request per sentence and page: taps on the same sentence, at once or later, share it.
+    // The server caches the answer per user (an empty list too). A failure may be retried after 30s.
+    function requestPhrases(key, info) {
+        if (!phraseRequests.has(key)) {
+            const token = getEffectiveAuthToken();
+            const request = fetch('/api/phrase-context', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ sentence: info.sentence.slice(0, 600), translation_zh: (info.translation_zh || '').slice(0, 600) }),
+            })
+                .then(res => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
+                .then(data => (Array.isArray(data.phrases) ? data.phrases : []))
+                .catch(() => { setTimeout(() => phraseRequests.delete(key), 30000); return null; });
+            phraseRequests.set(key, request);
+        }
+        return phraseRequests.get(key).then(list => {
+            if (list) mergeServerPhrases(info, list);
+            return list;
+        });
+    }
+
+    // Only sentences analysed before the analysis listed its expressions, and whose word table
+    // shows no sign of them, are asked about (once). A known expression without any meaning too.
+    function needsServerPhrases(info, found) {
+        if (info.structured || !getEffectiveAuthToken()) return false;
+        if (found) return !(found.phrase.meaning_zh || found.phrase.meaning_en);
+        return !info.aware && info.words >= 2;
+    }
+
+    function phraseLookup(word, element, context) {
+        const PC = window.FrenchPhraseContext;
+        phraseTap = null;
+        if (!PC || !context || !context.sentence) return null;
+        const key = srsSentenceKey(context.sentence);
+        const info = phraseIndex.get(key);
+        if (!info) return null;
+        const line = element && element.closest && element.classList && element.classList.contains('interactive-word')
+            ? element.closest('.sentence-french-text, .buildup-fr-text') : null;
+        if (!line) {
+            // A chunk from the word table or the gloss, or a selection: only the expression itself
+            const own = PC.fold(word).replace(/\s+/g, ' ').trim();
+            const p = info.phrases.find(q => PC.fold(q.text) === own || PC.fold(q.phrase) === own);
+            const occurrence = p && PC.occurrences([p], info.sentence)[0];
+            return occurrence ? { phrase: phraseCard(occurrence, info.sentence), highlight: [] } : null;
+        }
+        const locate = () => {
+            const text = line.textContent;
+            const spans = wordSpans(line);
+            const own = spans.find(sp => sp.el === element);
+            const occurrence = own && PC.occurrences(info.phrases, text).find(o => o.start < own.end && own.start < o.end);
+            if (!occurrence) return null;
+            return {
+                phrase: phraseCard(occurrence, text),
+                highlight: spans.filter(sp => sp.start < occurrence.end && occurrence.start < sp.end).map(sp => sp.el),
+            };
+        };
+        const found = locate();
+        const tap = { element, text: found ? found.phrase.text : '' };
+        phraseTap = tap;
+        const pending = needsServerPhrases(info, found)
+            ? requestPhrases(key, info).then(() => {
+                const next = locate();
+                if (next) tap.text = next.phrase.text;
+                return next;
+            })
+            : null;
+        return found || pending ? { phrase: found ? found.phrase : null, highlight: found ? found.highlight : [], pending } : null;
     }
 
     // Select French text (drag, long press, or the sentence's Select mode): a bar below offers
@@ -825,7 +947,10 @@ function initStudyWorkbench() {
     // 4. Spaced Repetition — server-side FSRS deck (reviewed on /review)
     // -------------------------------------------------------------------------
     const srsNotesByKey = new Map();       // sentence key -> saved note with its cards
-    const phraseByWord = new Map();        // "sentence key::word" -> multi-word expression entry
+    const phraseIndex = new Map();         // sentence key -> fixed expressions (FrenchPhraseContext.fromAnalysis)
+    const phraseRequests = new Map();      // sentence key -> pending / finished /api/phrase-context answer
+    let phraseTap = null;                  // {element, text}: where the open word card was tapped
+    let chunkForToggle = null;             // while the popover star saves: the expression to save, '' for none
     const sentenceContextByKey = new Map(); // sentence key -> translations + grammar from analysis
 
     function srsSentenceKey(sentence) {
@@ -1563,7 +1688,7 @@ function initStudyWorkbench() {
             window.activeTokensMap = new Map();
         }
         window.activeTokensMap.clear();
-        phraseByWord.clear();
+        phraseIndex.clear();
 
         if (!sentences || sentences.length === 0) {
             studyDeckSection.hidden = true;
@@ -1612,14 +1737,11 @@ function initStudyWorkbench() {
                     };
                     window.activeTokensMap.set(tokenText.toLowerCase(), entry);
                     if (lemma) window.activeTokensMap.set(lemma.toLowerCase(), entry);
-                    if (/\s/.test(tokenText.trim())) {
-                        tokenText.toLowerCase().split(/[\s'’]+/).forEach(part => {
-                            const word = part.replace(/^[^\p{L}\d]+|[^\p{L}\d]+$/gu, '');
-                            if (word) phraseByWord.set(`${srsSentenceKey(sentenceText)}::${word}`, entry);
-                        });
-                    }
                 }
             });
+            if (window.FrenchPhraseContext) {
+                phraseIndex.set(srsSentenceKey(sentenceText), Object.assign(window.FrenchPhraseContext.fromAnalysis(s), { translation_zh: transZh }));
+            }
 
             const open = sentences.length === 1 || idx === 0;
             const card = document.createElement('article');

@@ -1,0 +1,32 @@
+{
+  "_comment": "Shared by tests/test_phrase_context.py and tests/test_phrase_context.cjs: phrase_context.find and FrenchPhraseContext.find must agree. matches = the matched slices of the sentence, in order.",
+  "find": [
+    {"pattern": "à partir de", "sentence": "À partir des sessions de 2026, il faut partir tôt.", "matches": ["À partir des"]},
+    {"pattern": "À partir des", "sentence": "À partir des sessions de 2026, il faut partir tôt.", "matches": ["À partir des"]},
+    {"pattern": "à partir de", "sentence": "A partir du 1er mai, les bureaux ferment.", "matches": ["A partir du"]},
+    {"pattern": "à partir de", "sentence": "Le cours commence à partir d'une heure.", "matches": ["à partir d'"]},
+    {"pattern": "à partir de", "sentence": "À PARTIR DE demain, tout change.", "matches": ["À PARTIR DE"]},
+    {"pattern": "à partir de", "sentence": "Il veut repartir de Paris.", "matches": []},
+    {"pattern": "à partir de", "sentence": "Il faut partir de Paris à huit heures.", "matches": []},
+    {"pattern": "à partir de", "sentence": "Je vais à partir, de toute façon.", "matches": []},
+    {"pattern": "grâce à", "sentence": "Grâce aux efforts de tous, nous avons réussi.", "matches": ["Grâce aux"]},
+    {"pattern": "grâce à", "sentence": "C'est grâce au soutien de ma famille.", "matches": ["grâce au"]},
+    {"pattern": "au lieu de", "sentence": "Prends le train au lieu du bus, puis au lieu de rester, pars.", "matches": ["au lieu du", "au lieu de"]},
+    {"pattern": "il y a", "sentence": "Il y a deux ans, j'habitais à Lyon.", "matches": ["Il y a"]},
+    {"pattern": "il y a", "sentence": "Il y avait du monde.", "matches": []},
+    {"pattern": "à l'heure", "sentence": "Le train arrive à l’heure.", "matches": ["à l’heure"]},
+    {"pattern": "jusqu'à", "sentence": "Ouvert jusqu’au soir.", "matches": ["jusqu’au"]},
+    {"pattern": "c'est-à-dire", "sentence": "Le TCF, c'est-à-dire le test, est difficile.", "matches": ["c'est-à-dire"]},
+    {"pattern": "d'abord", "sentence": "D’abord, lisez la consigne.", "matches": ["D’abord"]},
+    {"pattern": "par rapport à", "sentence": "Par rapport aux autres candidats, il est prêt.", "matches": ["Par rapport aux"]},
+    {"pattern": "partir", "sentence": "Il faut partir.", "matches": []},
+    {"pattern": "ne … que", "sentence": "Il ne mange que du pain.", "matches": []}
+  ],
+  "notes": [
+    {"surface": "À partir des", "canonical": "à partir de", "notes": ["des = de + les"]},
+    {"surface": "A partir du", "canonical": "à partir de", "notes": ["du = de + le"]},
+    {"surface": "Grâce aux", "canonical": "grâce à", "notes": ["aux = à + les"]},
+    {"surface": "à partir d'", "canonical": "à partir de", "notes": ["d' = de"]},
+    {"surface": "Il y a", "canonical": "il y a", "notes": []}
+  ]
+}

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -14,6 +15,7 @@ from starlette.concurrency import run_in_threadpool
 
 import analysis
 import auth_db
+import phrase_context
 import srs
 from services import ai, asr
 from web_common import _require_user_id, rate_limit
@@ -499,6 +501,61 @@ async def etymology_word(
         )
     auth_db.set_etymology(key, word, lemma, text)
     return {"text": text, "cached": False}
+
+
+class PhraseContextRequest(BaseModel):
+    sentence: str = Field(min_length=1, max_length=phrase_context.SENTENCE_MAX_CHARS)
+    translation_zh: str = Field(default="", max_length=phrase_context.TRANSLATION_MAX_CHARS)
+
+
+# One model call per user and sentence at a time: duplicate taps wait for the same answer
+_phrase_in_flight: dict[tuple[int, str], asyncio.Task] = {}
+
+
+async def _compute_phrases(user_id: int, key: str, sentence: str, translation_zh: str, api_key: str) -> list:
+    payload = phrase_context.ai_payload(ai.AGY_MODEL, sentence, translation_zh)
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        _, raw_text = await ai.post_chat(client, payload, headers)
+    phrases = phrase_context.parse_ai_phrases(raw_text, sentence)
+    if phrases is None:
+        logger.warning("Phrase context reply not usable: %r", raw_text[:300])
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "phrase_context_bad_output", "message": "暂无法分析固定搭配，请稍后再试。"},
+        )
+    try:
+        await run_in_threadpool(phrase_context.save_cached, user_id, key, sentence, phrases)
+    except Exception:
+        logger.exception("Could not cache phrase context")
+    return phrases
+
+
+@router.post("/api/phrase-context")
+async def phrase_context_for(
+    request: PhraseContextRequest,
+    authorization: str | None = Header(default=None),
+):
+    """Fixed expressions of a sentence analysed before the analysis returned them (cached per user)."""
+    user_id = _require_user_id(authorization)
+    sentence = phrase_context.clean_sentence(request.sentence)
+    if not sentence:
+        raise HTTPException(status_code=422, detail={"message": "请提供句子"})
+    key = phrase_context.cache_key(sentence)
+    cached = await run_in_threadpool(phrase_context.get_cached, user_id, key)
+    if cached is not None:
+        return {"phrases": cached, "cached": True}
+    task = _phrase_in_flight.get((user_id, key))
+    shared = task is not None
+    if task is None:
+        rate_limit(user_id, "phrase_ai")
+        api_key = ai.upstream_key(authorization)  # checks the account and spends the shared "ai" bucket
+        task = asyncio.ensure_future(_compute_phrases(user_id, key, sentence, request.translation_zh, api_key))
+        _phrase_in_flight[(user_id, key)] = task
+        task.add_done_callback(lambda _: _phrase_in_flight.pop((user_id, key), None))
+    # shield: a client that goes away mid-call does not cancel the answer the others wait for
+    phrases = await asyncio.shield(task)
+    return {"phrases": phrases, "cached": False, "shared": shared}
 
 
 class GrammarPointIn(BaseModel):

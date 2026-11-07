@@ -20,7 +20,9 @@
             baseForm: 'base form: ', contextWord: 'Word in context', readAs: 'Read as: ',
             back: 'Back to ', lemmaLookup: word => `Look up ${word} and hear it`,
             lookingUpMeaning: 'Looking up the meaning...', lookupFailed: 'Lookup failed', noDefinition: 'Could not get the meaning',
-            partOfPhrase: (word, phrase) => `“${word}” is part of the fixed expression “${phrase}” here: learn it as a whole.`,
+            phraseTag: 'Fixed expression', standaloneLabel: 'The word on its own',
+            partOfPhrase: (word, phrase, meaning, alone) => `${alone ? `On its own “${word}” means “${alone}”, but here it` : `Here “${word}”`} is part of the fixed expression “${phrase}”${meaning ? `, which means “${meaning}”` : ''}: do not read it word by word.`,
+            contractionNote: notes => `Here ${notes.join('; ')}.`,
             popoverStarTitle: 'Add to review (shortcut S)', popoverSaved: 'In review (click to remove)',
             popoverReplayTitle: 'Replay (shortcut R)', replayTitle: 'Click to replay', closeEsc: 'Close (Esc)',
             importanceLabel: 'Importance', importanceTitle: (n) => `Importance ${n} of 5 (review the most important first)`,
@@ -36,7 +38,9 @@
             baseForm: '原形: ', contextWord: '语境词汇', readAs: '读作：',
             back: '返回 ', lemmaLookup: word => `查 ${word} 的释义和发音`,
             lookingUpMeaning: '正在查询字义...', lookupFailed: '查词失败', noDefinition: '暂无法获取释义',
-            partOfPhrase: (word, phrase) => `「${word}」在这句里是固定搭配「${phrase}」的一部分，要整体理解。`,
+            phraseTag: '固定搭配', standaloneLabel: '单独的词义',
+            partOfPhrase: (word, phrase, meaning, alone) => `${alone ? `「${word}」单独是「${alone}」，但` : `「${word}」`}在这句里是固定搭配「${phrase}」的一部分${meaning ? `，整体意思是「${meaning}」` : ''}，不能逐词直译。`,
+            contractionNote: notes => `这里 ${notes.join('；')}。`,
             popoverStarTitle: '加入复习 (快捷键 S)', popoverSaved: '已加入复习（点击移除）',
             popoverReplayTitle: '重播发音 (快捷键 R)', replayTitle: '点击重播发音', closeEsc: '关闭 (Esc)',
             importanceLabel: '重要度', importanceTitle: (n) => `重要度 ${n} / 5（复习时可以只挑重要的）`,
@@ -359,11 +363,21 @@
             </button>
         </div>
         <div class="popover-body">
+            <div class="popover-phrase" hidden>
+                <div class="popover-phrase-head">
+                    <span class="popover-phrase-tag">${escapeHtml(T.phraseTag)}</span>
+                    <span class="popover-phrase-canonical" lang="fr"></span>
+                </div>
+                <p class="popover-phrase-snippet" lang="fr"></p>
+                <p class="popover-phrase-meaning"></p>
+                <p class="popover-phrase-literal"></p>
+            </div>
             <div class="popover-loading" hidden style="display: none;">
                 <i data-lucide="loader" class="spin-icon"></i>
                 <span>${escapeHtml(T.lookingUpMeaning)}</span>
             </div>
             <div class="popover-content">
+                <div class="popover-standalone-label" hidden>${escapeHtml(T.standaloneLabel)}</div>
                 <div class="popover-cn-text"></div>
                 <div class="popover-en-text"></div>
             </div>
@@ -393,6 +407,9 @@
      *   wordSelector                      CSS selector of clickable words (clicks on them never close the popover)
      *   blockFor(element)                 optional: the text block of a word; the card never covers it
      *   contextFor(element)               {sentence, sentence_cn} around a selected phrase, for saving it
+     *   phraseLookup(word, element, context)
+     *                                     optional: the fixed expression the tapped word belongs to here,
+     *                                     {phrase, highlight: [elements], pending: Promise<{phrase, highlight}|null>}
      *   selectionPopover                  false: selecting a phrase does not open it (the page has its own selection bar)
      *   saving: { isSaved(item), toggle(item), entries(token), setImportance(entries, level) }
      *                                     optional "add to review" star and importance stars
@@ -417,6 +434,10 @@
             close: q('.popover-close-btn'), loading: q('.popover-loading'), content: q('.popover-content'),
             cn: q('.popover-cn-text'), en: q('.popover-en-text'), importance: q('.popover-importance'),
             etymologyButton: q('.popover-etymology-button'), etymologyText: q('.popover-etymology-text'),
+            body: q('.popover-body'), standalone: q('.popover-standalone-label'),
+            phrase: q('.popover-phrase'), phraseCanonical: q('.popover-phrase-canonical'),
+            phraseSnippet: q('.popover-phrase-snippet'), phraseMeaning: q('.popover-phrase-meaning'),
+            phraseLiteral: q('.popover-phrase-literal'),
         };
         els.star.hidden = !saving;
 
@@ -433,6 +454,15 @@
         // unlike the synthetic events of the opening gesture, so it may close a word card at once.
         let pressedSinceShow = false;
         let etymologyGeneration = 0;
+        // The fixed expression of the open word card: {requestId, hit}, and its words marked in the sentence
+        let phraseState = null;
+        let phraseEls = [];
+
+        function setPhraseHighlight(list) {
+            phraseEls.forEach(el => el.classList && el.classList.remove('is-phrase-word'));
+            phraseEls = (list || []).filter(el => el && el.classList);
+            phraseEls.forEach(el => el.classList.add('is-phrase-word'));
+        }
 
         function resetEtymology() {
             etymologyGeneration++;
@@ -487,6 +517,8 @@
             if (activeEl && activeEl.classList) activeEl.classList.remove('is-active-word');
             activeEl = null;
             target = null;
+            phraseState = null;
+            setPhraseHighlight([]);
         }
 
         function position(el = target) {
@@ -495,7 +527,8 @@
             if (!rect || (rect.width === 0 && rect.height === 0)) return;
             const width = 290;
             pop.style.display = 'flex';
-            const height = pop.offsetHeight || 160;
+            els.body.style.maxHeight = '';
+            let height = pop.offsetHeight || 160;
             let left = rect.left + (rect.width / 2) - (width / 2);
             left = Math.max(12, Math.min(left, root.innerWidth - width - 12));
             // The card stays clear of the whole text block the word is in (blockFor), so the other
@@ -506,6 +539,12 @@
             const prefersBelow = area !== rect && rect.top + rect.bottom > area.top + area.bottom;
             // 16px gap so the tapped word stays fully visible; flip below when there is no room above
             const gap = 16;
+            // A card taller than the room on either side (a fixed expression on a phone) scrolls inside
+            const room = Math.max(area.top - gap - 65, root.innerHeight - area.bottom - gap - 12);
+            if (height > room && els.body.offsetHeight) {
+                els.body.style.maxHeight = `${Math.max(96, room - (height - els.body.offsetHeight))}px`;
+                height = pop.offsetHeight || height;
+            }
             const spaceAbove = area.top - height - gap;
             const spaceBelow = root.innerHeight - (area.bottom + height + gap);
             const fitsAbove = spaceAbove >= 65;
@@ -584,9 +623,31 @@
             container.append(document.createTextNode(text.slice(offset)));
         }
 
+        // Model and page text only ever goes in as text nodes
+        function renderPhrase(item) {
+            const p = item.phrase;
+            els.phrase.hidden = !p;
+            if (!p) return;
+            const canonical = p.phrase || p.text || '';
+            renderFrenchWords(els.phraseCanonical, canonical);
+            const snip = p.snippet || { before: '', match: p.text || canonical, after: '' };
+            const mark = document.createElement('mark');
+            mark.className = 'popover-phrase-mark';
+            mark.textContent = snip.match;
+            els.phraseSnippet.replaceChildren(document.createTextNode(snip.before || ''), mark, document.createTextNode(snip.after || ''));
+            const meanings = (EN ? [p.meaning_en, p.meaning_zh] : [p.meaning_zh, p.meaning_en]).filter(Boolean);
+            els.phraseMeaning.textContent = meanings.join(' / ');
+            els.phraseMeaning.hidden = meanings.length === 0;
+            const notes = (p.notes || []).filter(n => !(p.literal_zh || '').includes(n));
+            const alone = String((EN ? item.explanation_en : item.explanation_cn) || '').split(/[（(;；,，]/)[0].trim().slice(0, 16);
+            const literal = p.literal_zh || T.partOfPhrase(item.token, canonical, meanings[0] || '', alone);
+            els.phraseLiteral.textContent = [literal, notes.length ? T.contractionNote(notes) : ''].filter(Boolean).join(' ');
+        }
+
         function render(item) {
             resetEtymology();
             currentCard = item;
+            renderPhrase(item);
             renderFrenchWords(els.word, item.token);
             const phonetic = formatFriendlyPhonetic(item.phonetic || '');
             els.phonetic.textContent = phonetic;
@@ -600,6 +661,10 @@
                 appendFrenchWords(els.lemma, item.lemma, true);
             }
             els.lemma.hidden = !showLemma;
+            // A word of a fixed expression: its own meaning (when the page has it) under the expression
+            const standalone = Boolean(item.explanation_cn || item.explanation_en);
+            const whole = item.phrase && (item.token || '').trim().toLowerCase() === (item.phrase.text || '').trim().toLowerCase();
+            els.standalone.hidden = !(item.phrase && standalone && !whole);
             if (EN) {
                 els.cn.textContent = pick(item.explanation_cn, item.explanation_en) || T.contextWord;
                 els.en.textContent = '';
@@ -614,8 +679,9 @@
             linkFrenchReferences(els.en, item);
             els.loading.hidden = true;
             els.loading.style.display = 'none';
-            els.content.hidden = false;
-            els.content.style.display = 'block';
+            const showContent = !(item.phrase && !standalone);
+            els.content.hidden = !showContent;
+            els.content.style.display = showContent ? 'block' : 'none';
             refreshSaved();
             refreshIcons();
             position();
@@ -637,7 +703,7 @@
 
             const requestId = ++lookupGeneration;
             resetEtymology();
-            if (navigation.nested && currentCard) trail.push({ item: currentCard, target });
+            if (navigation.nested && currentCard) trail.push({ item: currentCard, target, highlight: phraseEls.slice() });
             else trail.length = 0;
             updateBack();
 
@@ -655,6 +721,26 @@
                 sentence: context.sentence || item.sentence || '',
                 sentence_cn: context.sentence_cn || item.sentence_cn || '',
             });
+
+            // The fixed expression this word belongs to here: only for a tap in the sentence, never
+            // for a nested lookup (that asks for the word itself). Stored apart from the looked-up
+            // entry, so the word's own cached meaning never carries this sentence's expression.
+            const found = !navigation.nested && options.phraseLookup ? options.phraseLookup(word, element, context) : null;
+            phraseState = { requestId, hit: found && found.phrase ? found : null };
+            setPhraseHighlight(phraseState.hit ? phraseState.hit.highlight : []);
+            const decorate = (item) => (phraseState && phraseState.requestId === requestId && phraseState.hit
+                ? Object.assign({}, item, { phrase: phraseState.hit.phrase }) : item);
+            if (found && found.pending) {
+                found.pending.then(next => {
+                    if (!next || !next.phrase || requestId !== lookupGeneration || !isOpen() || !currentCard) return;
+                    phraseState = { requestId, hit: next };
+                    setPhraseHighlight(next.highlight);
+                    // Still waiting for the word's own lookup: that render adds the expression
+                    if (!els.loading.hidden) return;
+                    const { phrase: _old, ...item } = currentCard;
+                    render(decorate(item));
+                }).catch(() => {});
+            }
 
             const silent = Boolean(navigation.silent);
             const number = frenchNumberReading(word);
@@ -680,7 +766,7 @@
             // A nested word must resolve individually, rather than being redirected back to
             // the surrounding sentence's fixed expression (e.g. venir -> viens de).
             const local = !navigation.nested && options.localLookup ? options.localLookup(lower, word, context) : null;
-            if (local) { render(withContext(Object.assign({ token: word }, local))); return; }
+            if (local) { render(decorate(withContext(Object.assign({ token: word }, local)))); return; }
 
             // 2. Already looked up, or in the built-in A1 dictionary
             const cached = lookupCache.get(lower);
@@ -689,7 +775,13 @@
             if (known) {
                 const item = withContext(Object.assign({}, known, { token: word }));
                 remember(lower, item);
-                render(item);
+                render(decorate(item));
+                return;
+            }
+
+            // A word of a fixed expression needs no lookup of its own: the expression is its meaning here
+            if (phraseState.hit) {
+                render(decorate(withContext({ token: word, lemma: '', pos: '', phonetic: '', explanation_cn: '', explanation_en: '' })));
                 return;
             }
 
@@ -699,6 +791,7 @@
             els.phonetic.textContent = '';
             els.pos.hidden = true;
             els.lemma.hidden = true;
+            els.phrase.hidden = true;
             els.loading.hidden = false;
             els.loading.style.display = 'flex';
             els.content.hidden = true;
@@ -713,7 +806,7 @@
                 if (!res.ok) throw new Error(data.detail?.message || T.lookupFailed);
                 const item = withContext(data);
                 remember(lower, item);
-                if (requestId === lookupGeneration && isOpen()) render(item);
+                if (requestId === lookupGeneration && isOpen()) render(decorate(item));
             } catch (err) {
                 if (requestId === lookupGeneration && isOpen()) {
                     els.loading.hidden = true;
@@ -753,6 +846,8 @@
             lookupGeneration++;
             target = previous.target;
             updateBack();
+            phraseState = null;
+            setPhraseHighlight(previous.highlight);
             render(previous.item);
             replay();
         });

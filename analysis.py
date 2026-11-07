@@ -13,6 +13,7 @@ import httpx
 from pydantic import BaseModel, Field
 
 import grammar
+import phrase_context
 from services import ai
 from web_common import MAX_TEXT_CHARS
 
@@ -241,6 +242,15 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
         "The ipa is for the spoken form.\n"
         '- Never list a word that is not in the sentence. Example: if the sentence uses ne … aucune, do not list "ne … pas".\n'
         "- Every French sentence in the build-up must be correct French.\n\n"
+        'Fixed expressions list ("phrases"):\n'
+        '- List every fixed expression of the sentence again in "phrases", so a tap on one of its words can show the whole. '
+        "Only expressions whose words stand next to each other. Ordinary word groups are not fixed expressions: "
+        "les sessions, a été, est autorisée, à Paris.\n"
+        "- Each: text (the words exactly as the sentence writes them, e.g. 'À partir des'), phrase (dictionary form, "
+        "'à partir de'), meaning_zh ('从……起'), meaning_en ('starting from'), literal_zh: ONE short Chinese sentence "
+        "on why reading it word by word is wrong, e.g. 'partir 单独是“离开”，但 à partir de 是固定介词短语，表示起点；"
+        "这里 des = de + les。'\n"
+        '- Most sentences have none: then "phrases": []. Never invent one.\n\n'
         "Chinese meaning:\n"
         "- Every word also gets meaning_zh: its short Chinese meaning in THIS sentence (2–8 characters), e.g. 没有任何, 豁免, 被允许的.\n\n"
         "English bridge:\n"
@@ -345,6 +355,7 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
         '        {"text": "les autorités canadiennes", "block": "N", "role": "施动者", "detail": "les + autorités + canadiennes · 阴性复数 · 形容词在后", "gid": "N.adj.position"}\n'
         "      ],\n"
         '      "grammar_ids": ["S.neg.aucun", "V.passive", "N.adj.position", "N.adj.agreement", "S.elision"],\n'
+        '      "phrases": [],\n'
         '      "pronunciation_tips": [\n'
         "        \"'les autorités': link the 's' to make a /z/ sound → 'lé-zo-to-ri-té'\",\n"
         "        \"'autorisée': 's' between two vowels sounds like /z/\",\n"
@@ -525,6 +536,12 @@ def _parse_analysis_json(raw_text: str, fallback_text: str) -> dict:
                         "structure": structure,
                         "grammar_ids": grammar_ids,
                         "pronunciation_tips": clean_tips,
+                        # Only when the model answered: a missing list is "unknown", not "none"
+                        **(
+                            {"phrases": phrase_context.clean_phrases(s["phrases"], sentence_text)}
+                            if isinstance(s.get("phrases"), list)
+                            else {}
+                        ),
                     }
                 )
             else:
