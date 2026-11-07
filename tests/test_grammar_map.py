@@ -320,12 +320,11 @@ class StudyMarkupTests(unittest.TestCase):
         self.assertIn(".sentence-head-actions .btn-repeat-toggle.btn-head-repeat", css)
         self.assertIn(".sentence-card:not(.is-open) .btn-head-repeat { display: none; }", css)
 
-    def test_structure_bar_is_wired_into_the_sentence_body(self):
+    def test_structure_bar_is_at_top_of_grammar_panel(self):
         js = _read("static/study.js")
         body = js.split("const bodyHtml = `")[1].split("`;")[0]
-        self.assertLess(
-            body.index("${structureBarHtml(s.structure)}"), body.index('class="card-tabs-bar"'), "above the tabs"
-        )
+        self.assertNotIn("${structureBarHtml(s.structure)}", body)
+        self.assertIn("html: structureBarHtml(s.structure) + (grammarHtml || emptyPanel(T.noGrammar))", js)
         self.assertIn("bindStructureBar(card, s.structure);", js)
         for text in (
             "structureBlock: { N: 'Noun group', V: 'Verb', S: 'Sentence building' }",

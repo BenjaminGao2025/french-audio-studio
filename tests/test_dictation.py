@@ -509,12 +509,12 @@ class StudyPageWiringTests(unittest.TestCase):
     def test_recall_and_dictation_are_top_level_tabs(self):
         self.assertIn("{ id: 'recall', label: T.modeWrite", self.STUDY_JS)
         self.assertIn("{ id: 'dictation', label: T.modeListen", self.STUDY_JS)
-        self.assertIn(".card-tab-btn[data-dictation-mode]", self.STUDY_JS)
-        # The old "Write it:" row under Say it is gone, and Steps keeps only its own two modes
+        self.assertIn("card.querySelectorAll('[data-dictation-mode]')", self.STUDY_JS)
+        # The obsolete Write it row is gone; the existing four-mode Steps switch remains.
         self.assertNotIn("dictation-entry", self.STUDY_JS)
         self.assertNotIn("dictationEntry", self.STUDY_JS)
-        self.assertNotIn('data-mode="write"', self.STUDY_JS)
-        self.assertNotIn('data-mode="listen"', self.STUDY_JS)
+        self.assertIn('class="btn-feynman-toggle" data-dictation-mode="write"', self.STUDY_JS)
+        self.assertIn('class="btn-feynman-toggle" data-dictation-mode="listen"', self.STUDY_JS)
         self.assertIn('data-mode="normal"', self.STUDY_JS)
         self.assertIn('data-mode="blind"', self.STUDY_JS)
 
