@@ -216,7 +216,8 @@
     min-height: 28px;
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    /* Not centred: a card taller than its room scrolls, and centring would push its top out of reach */
+    justify-content: flex-start;
 }
 
 .popover-loading {
