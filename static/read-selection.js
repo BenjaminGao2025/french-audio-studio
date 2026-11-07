@@ -523,6 +523,8 @@
                     && outer.compareBoundaryPoints(Range.END_TO_END, inner) >= 0;
                 options.meaning(text, {
                     getBoundingClientRect: () => anchorBox,
+                    // Source metadata is separate from the virtual anchor's geometry/stability.
+                    sourceRange: range ? range.cloneRange() : null,
                     coversRange: (other) => { try { return Boolean(range && other && (holds(range, other) || holds(other, range))); } catch (err) { return false; } },
                 }, ctx);
             }

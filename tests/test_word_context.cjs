@@ -24,6 +24,8 @@ const A_PARTIR = {
 };
 const row = (fr, meaning_zh, meaning, extra = {}) => Object.assign({ fr, lemma: fr, ipa: '', type: 'naming word', meaning, meaning_zh, why: '' }, extra);
 const SENTENCES = {
+    cake: {sentence: 'Le gâteau au chocolat est délicieux.', translation_zh: '巧克力蛋糕很好吃。', phrases: [], words: [row('gâteau', '蛋糕', 'cake'), row('chocolat', '巧克力', 'chocolate')]},
+    cakes: {sentence: 'Le gâteau coûte cher, mais ce gâteau est délicieux.', translation_zh: '蛋糕很贵，但这个蛋糕很好吃。', phrases: [], words: [row('gâteau', '蛋糕', 'cake'), row('gâteau', '这个蛋糕', 'this cake')]},
     sac: {
         sentence: 'Prends ton sac.', translation_zh: '拿上你的包。', phrases: [],
         words: [row('Prends', '拿', 'take', { lemma: 'prendre', type: 'action word form' }),
@@ -538,6 +540,58 @@ const snippetBefore = () => $('.popover-context-snippet').firstChild.textContent
     }
     assert.equal(lookups(), beforeAccord.lookups);
     assert.equal(contextCalls().length, beforeAccord.calls);
+
+    // Review: selection Meaning carries its actual range independently of the virtual geometry.
+    const selectedAnchor = (id, word, n = 0) => {
+        const range = document.createRange();
+        range.selectNodeContents(wordIn(id, word, n));
+        return {getBoundingClientRect: () => rect, sourceRange: range.cloneRange(), coversRange: () => true};
+    };
+    const cakeAnchor = selectedAnchor('cake', 'gâteau');
+    const tappedCake = api.wordContextTarget('gâteau', wordIn('cake', 'gâteau'), ctxOf('cake'));
+    const pickedCake = api.wordContextTarget('gâteau', cakeAnchor, ctxOf('cake'));
+    assert.deepEqual(pickedCake, tappedCake, 'same target and dictionary hints as the actual tap');
+    assert.deepEqual(api.wordContextTarget('gâteau', {getBoundingClientRect: () => rect}, ctxOf('cake')), tappedCake, 'unique known token safe without source');
+    assert.equal(api.wordContextTarget('gâteau', cakeAnchor, {}), null, 'no known sentence');
+    assert.equal(api.wordContextTarget('gâteau', cakeAnchor, ctxOf('cakes')), null, 'source and sentence must agree');
+    assert.equal(api.wordContextTarget('gâteau', {getBoundingClientRect: () => rect}, ctxOf('cakes')), null, 'unlocated repeated word is ambiguous');
+    for (const occurrence of [0, 1]) {
+        const anchor = selectedAnchor('cakes', 'gâteau', occurrence);
+        const selected = api.wordContextTarget('gâteau', anchor, ctxOf('cakes'));
+        assert.equal(selected.occurrence, occurrence);
+        assert.deepEqual(selected, api.wordContextTarget('gâteau', wordIn('cakes', 'gâteau', occurrence), ctxOf('cakes')));
+    }
+    const multi = document.createRange(); multi.selectNodeContents(document.getElementById('line-cake'));
+    assert.equal(api.wordContextTarget('gâteau au chocolat', {sourceRange: multi}, ctxOf('cake')), null);
+    assert.equal(api.wordContextTarget('gâteau', {sourceRange: multi}, ctxOf('cake')), null, 'a multiword range cannot pretend to be one token');
+    const detached = document.createElement('p'); detached.className = 'sentence-french-text'; detached.textContent = SENTENCES.cake.sentence;
+    const deadRange = document.createRange(); deadRange.selectNodeContents(detached);
+    assert.equal(api.wordContextTarget('gâteau', {sourceRange: deadRange}, ctxOf('cake')), null, 'detached source is not current sentence');
+    contextAnswer = body => ({status: 200, data: {state: 'ready', context: {meaning_zh: '蛋糕', meaning_en: 'cake', why_zh: body.sentence === SENTENCES.cake.sentence ? 'gâteau 是阳性单数名词，和 le 一起作主语；au chocolat 表示巧克力口味。' : `第 ${body.occurrence + 1} 个 gâteau`}}});
+    const beforeSelection = contextCalls().length;
+    await popover.show('gâteau', cakeAnchor, ctxOf('cake'), {silent: true}); await settle();
+    assert.equal(contextCalls().length, beforeSelection + 1);
+    assert.match(text('.popover-context-why'), /阳性单数名词/);
+    await tap('cake', 'gâteau'); await settle();
+    await popover.show('gâteau', cakeAnchor, ctxOf('cake'), {silent: true}); await settle();
+    assert.equal(contextCalls().length, beforeSelection + 1, 'selection, tap and reopening share one request');
+    await popover.show('gâteau', cakeAnchor, ctxOf('cake'), {nested: true}); await settle();
+    assert.equal($('.popover-context').dataset.state, 'unavailable', 'nested lookup never inherits source context');
+    assert.equal(contextCalls().length, beforeSelection + 1);
+    // A delayed selection reply must cache its own occurrence but never repaint the next card.
+    let releaseSelection;
+    gates.set('gâteau', new Promise(resolve => { releaseSelection = resolve; }));
+    await popover.show('gâteau', selectedAnchor('cakes', 'gâteau', 1), ctxOf('cakes'), {silent: true}); await settle();
+    assert.equal($('.popover-context').dataset.state, 'loading');
+    await tap('cake', 'chocolat'); await settle();
+    const nextCard = text('.popover-context');
+    releaseSelection(); gates.delete('gâteau'); await settle();
+    assert.equal(text('.popover-word'), 'chocolat');
+    assert.equal(text('.popover-context'), nextCard, 'stale selection result did not repaint');
+    const afterDelayed = contextCalls().length;
+    await popover.show('gâteau', selectedAnchor('cakes', 'gâteau', 1), ctxOf('cakes'), {silent: true}); await settle();
+    assert.equal(contextCalls().length, afterDelayed);
+    assert.match(text('.popover-context-why'), /第 2 个 gâteau/);
 
     // 16. Close clears the card; the 700ms settle still protects a fresh card
     await tap('sac', 'ton');

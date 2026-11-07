@@ -49,6 +49,7 @@ window.eval(read('i18n.js'));
 window.eval(read('speech-eval.js'));
 window.eval(read('word-popover.js'));
 const spoken = [];
+const meaningAnchors = [];
 const popover = window.FrenchWordPopover.create({
     speak: text => spoken.push(text),
     wordSelector: '.interactive-word',
@@ -60,7 +61,7 @@ const rs = window.FrenchReadSelection.create({
     wordSelector: '.interactive-word',
     rangeLineFor: (toggle) => document.querySelector('.sentence-french-text'),
     speak: (text) => spoken.push(text),
-    meaning: (text, anchor, context) => popover.show(text, anchor, context),
+    meaning: (text, anchor, context) => { meaningAnchors.push(anchor); return popover.show(text, anchor, context); },
     contextFor: () => ({ sentence: SENTENCE }),
     openWord: () => popover.activeElement(),
 });
@@ -122,6 +123,10 @@ const select = (from, to) => {
     assert.deepEqual(spoken, ['femme', 'ma femme']);
     bar.querySelector('.rs-meaning').click();
     assert.equal(popover.isOpen(), true, 'Meaning opens the phrase popover');
+    const sourceAnchor = meaningAnchors[meaningAnchors.length - 1];
+    assert.equal(sourceAnchor.closest, undefined, 'geometry remains a virtual anchor');
+    assert.equal(sourceAnchor.sourceRange.toString(), 'ma femme');
+    assert.equal(sourceAnchor.coversRange(sourceAnchor.sourceRange), true, 'range stability stays independent of source metadata');
     assert.equal(popover.element.querySelector('.popover-word').textContent.trim(), 'ma femme');
     assert.deepEqual(spoken, ['femme', 'ma femme', 'ma femme'], 'the popover speaks the phrase too');
     await settled(750);

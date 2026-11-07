@@ -684,7 +684,7 @@ function initStudyWorkbench() {
         const WC = window.FrenchWordContext;
         const sentence = context && context.sentence ? context.sentence : '';
         const clean = WC ? WC.cleanWord(word) : '';
-        if (!clean || !sentence || !element || !element.closest) return null;
+        if (!clean || !sentence || !element) return null;
         const spans = WC.spans(clean, sentence);
         if (!spans.length) return null;
         const key = srsSentenceKey(sentence);
@@ -693,8 +693,31 @@ function initStudyWorkbench() {
         const rows = table.filter(w => norm(w.fr || w.token) === norm(clean));
         const rowPerOccurrence = rows.length === spans.length;
         let occurrence = -1;
+        const range = element.sourceRange;
         const line = element.classList && element.classList.contains('interactive-word') ? element.closest('.sentence-french-text') : null;
-        if (line && line.textContent === sentence) {
+        if (range) {
+            // Meaning has a virtual positioning anchor. Resolve its actual selected occurrence from
+            // the cloned source range, without changing getBoundingClientRect or coversRange.
+            const source = range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement;
+            const sourceLine = source && source.closest('.sentence-french-text');
+            if (!sentenceContextByKey.has(key) || !sourceLine || !sourceLine.isConnected || sourceLine.textContent !== sentence
+                || !sourceLine.contains(range.endContainer)) return null;
+            try {
+                const prefix = document.createRange();
+                prefix.selectNodeContents(sourceLine);
+                prefix.setEnd(range.startContainer, range.startOffset);
+                const start = prefix.toString().normalize('NFC').length;
+                prefix.setEnd(range.endContainer, range.endOffset);
+                const end = prefix.toString().normalize('NFC').length;
+                const selected = range.toString().trim().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}'’]+$/gu, '').trim();
+                if (norm(selected) !== norm(clean)) return null;
+                occurrence = spans.findIndex(sp => sp.start >= start && sp.end <= end);
+            } catch (_) { return null; }
+        } else if (!element.closest) {
+            // Older virtual anchors carry no source. A unique match is safe; repeats are ambiguous.
+            if (!sentenceContextByKey.has(key) || spans.length !== 1) return null;
+            occurrence = 0;
+        } else if (line && line.textContent === sentence) {
             const own = wordSpans(line).find(sp => sp.el === element);
             if (own) occurrence = spans.findIndex(sp => sp.start < own.end && own.start < sp.end);
         } else if (element.dataset && element.dataset.wordIndex !== undefined) {
