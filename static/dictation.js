@@ -42,7 +42,9 @@
 
     function splitElision(surface) {
         const parts = [];
+        // A quote mark typed as an apostrophe before a word ('J'ai faim') is punctuation, never part of the word
         let rest = Array.from(surface);
+        while (rest.length && APOSTROPHES.has(rest[0])) rest = rest.slice(1);
         for (;;) {
             const cut = rest.findIndex(ch => APOSTROPHES.has(ch));
             if (cut <= 0 || !ELISION_PREFIXES.has(norm(rest.slice(0, cut).join('')))) break;
@@ -188,10 +190,10 @@
             check: 'Check', checking: 'Checking…', reveal: 'Show the answer',
             emptyAnswer: 'Write your answer first.',
             correctAnswer: 'Correct answer', listenAnswer: 'Listen',
-            verdictCorrect: 'All correct ✓', verdictAccent: 'Only accents or apostrophes to fix', verdictClose: 'Almost there', verdictRetry: 'Have another go',
+            verdictCorrect: 'All correct ✓', verdictAccent: 'Only accents to fix', verdictClose: 'Almost there', verdictRetry: 'Have another go',
             revealed: 'Answer shown (not scored).',
-            legend: { ok: 'right', accent: 'accent / apostrophe', wrong: 'wrong', missing: 'missing', extra: 'extra' },
-            srKind: { ok: 'right: ', accent: 'accent or apostrophe: ', wrong: 'wrong: ', missing: 'missing: ', extra: 'extra: ' },
+            legend: { ok: 'right', accent: 'accent', wrong: 'wrong', missing: 'missing', extra: 'extra' },
+            srKind: { ok: 'right: ', accent: 'accent: ', wrong: 'wrong: ', missing: 'missing: ', extra: 'extra: ' },
             youWrote: 'you wrote',
             saved: 'Saved to your practice history.',
             unsaved: 'Checked, but the history could not be saved this time. Your score is still shown.',
@@ -221,10 +223,10 @@
             check: '检查', checking: '检查中…', reveal: '直接看答案',
             emptyAnswer: '请先写下你的答案。',
             correctAnswer: '正确答案', listenAnswer: '听读音',
-            verdictCorrect: '全对 ✓', verdictAccent: '只差重音或撇号', verdictClose: '差一点', verdictRetry: '再试一次吧',
+            verdictCorrect: '全对 ✓', verdictAccent: '只差重音', verdictClose: '差一点', verdictRetry: '再试一次吧',
             revealed: '已显示答案（本次不计分）。',
-            legend: { ok: '对', accent: '重音/撇号', wrong: '错', missing: '漏写', extra: '多写' },
-            srKind: { ok: '对：', accent: '重音或撇号：', wrong: '错：', missing: '漏写：', extra: '多写：' },
+            legend: { ok: '对', accent: '重音', wrong: '错', missing: '漏写', extra: '多写' },
+            srKind: { ok: '对：', accent: '重音：', wrong: '错：', missing: '漏写：', extra: '多写：' },
             youWrote: '你写的',
             saved: '已保存到练习记录。',
             unsaved: '已评分，但这次的练习记录没能保存。分数照常显示。',

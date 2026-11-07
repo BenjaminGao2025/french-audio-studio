@@ -49,6 +49,57 @@
     "d'",
     "aujourd'hui"
    ]
+  },
+  {
+   "text": "'J'ai faim', dit-il ; « L’homme ? » : “oui” !",
+   "tokens": [
+    "J'",
+    "ai",
+    "faim",
+    "dit",
+    "il",
+    "L’",
+    "homme",
+    "oui"
+   ],
+   "norms": [
+    "j'",
+    "ai",
+    "faim",
+    "dit",
+    "il",
+    "l'",
+    "homme",
+    "oui"
+   ]
+  },
+  {
+   "text": "Joyeux Noël !",
+   "tokens": [
+    "Joyeux",
+    "Noël"
+   ],
+   "norms": [
+    "joyeux",
+    "noël"
+   ]
+  },
+  {
+   "text": "‘Qu’il vienne’ dit-elle",
+   "tokens": [
+    "Qu’",
+    "il",
+    "vienne",
+    "dit",
+    "elle"
+   ],
+   "norms": [
+    "qu'",
+    "il",
+    "vienne",
+    "dit",
+    "elle"
+   ]
   }
  ],
  "grade": [
@@ -817,6 +868,366 @@
     ],
     "counts": {
      "ok": 5,
+     "accent": 0,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 100,
+    "correct": true,
+    "accent_only": false
+   }
+  },
+  {
+   "name": "Noël accent only, the ! is not graded",
+   "expected": "Joyeux Noël !",
+   "answer": "Joyeux Nöel",
+   "result": {
+    "ops": [
+     {
+      "kind": "ok",
+      "expected": "Joyeux",
+      "actual": "Joyeux"
+     },
+     {
+      "kind": "accent",
+      "expected": "Noël",
+      "actual": "Nöel"
+     }
+    ],
+    "counts": {
+     "ok": 1,
+     "accent": 1,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 75,
+    "correct": false,
+    "accent_only": true
+   }
+  },
+  {
+   "name": "no ! typed: fully correct",
+   "expected": "Joyeux Noël !",
+   "answer": "Joyeux Noël",
+   "result": {
+    "ops": [
+     {
+      "kind": "ok",
+      "expected": "Joyeux",
+      "actual": "Joyeux"
+     },
+     {
+      "kind": "ok",
+      "expected": "Noël",
+      "actual": "Noël"
+     }
+    ],
+    "counts": {
+     "ok": 2,
+     "accent": 0,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 100,
+    "correct": true,
+    "accent_only": false
+   }
+  },
+  {
+   "name": "space before ! and a typed ! the other way",
+   "expected": "Joyeux Noël!",
+   "answer": "Joyeux Noël !",
+   "result": {
+    "ops": [
+     {
+      "kind": "ok",
+      "expected": "Joyeux",
+      "actual": "Joyeux"
+     },
+     {
+      "kind": "ok",
+      "expected": "Noël",
+      "actual": "Noël"
+     }
+    ],
+    "counts": {
+     "ok": 2,
+     "accent": 0,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 100,
+    "correct": true,
+    "accent_only": false
+   }
+  },
+  {
+   "name": "quotes, guillemets, commas, semicolon, colon",
+   "expected": "« Oui », dit-il ; puis : “Non, merci.”",
+   "answer": "Oui dit-il puis Non merci",
+   "result": {
+    "ops": [
+     {
+      "kind": "ok",
+      "expected": "Oui",
+      "actual": "Oui"
+     },
+     {
+      "kind": "ok",
+      "expected": "dit",
+      "actual": "dit"
+     },
+     {
+      "kind": "ok",
+      "expected": "il",
+      "actual": "il"
+     },
+     {
+      "kind": "ok",
+      "expected": "puis",
+      "actual": "puis"
+     },
+     {
+      "kind": "ok",
+      "expected": "Non",
+      "actual": "Non"
+     },
+     {
+      "kind": "ok",
+      "expected": "merci",
+      "actual": "merci"
+     }
+    ],
+    "counts": {
+     "ok": 6,
+     "accent": 0,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 100,
+    "correct": true,
+    "accent_only": false
+   }
+  },
+  {
+   "name": "question and exclamation marks typed differently",
+   "expected": "Tu viens ? Oui !",
+   "answer": "Tu viens. Oui?",
+   "result": {
+    "ops": [
+     {
+      "kind": "ok",
+      "expected": "Tu",
+      "actual": "Tu"
+     },
+     {
+      "kind": "ok",
+      "expected": "viens",
+      "actual": "viens"
+     },
+     {
+      "kind": "ok",
+      "expected": "Oui",
+      "actual": "Oui"
+     }
+    ],
+    "counts": {
+     "ok": 3,
+     "accent": 0,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 100,
+    "correct": true,
+    "accent_only": false
+   }
+  },
+  {
+   "name": "quote apostrophe before an elision",
+   "expected": "« J'ai faim », dit-il.",
+   "answer": "'J'ai faim', dit-il",
+   "result": {
+    "ops": [
+     {
+      "kind": "ok",
+      "expected": "J'",
+      "actual": "J'"
+     },
+     {
+      "kind": "ok",
+      "expected": "ai",
+      "actual": "ai"
+     },
+     {
+      "kind": "ok",
+      "expected": "faim",
+      "actual": "faim"
+     },
+     {
+      "kind": "ok",
+      "expected": "dit",
+      "actual": "dit"
+     },
+     {
+      "kind": "ok",
+      "expected": "il",
+      "actual": "il"
+     }
+    ],
+    "counts": {
+     "ok": 5,
+     "accent": 0,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 100,
+    "correct": true,
+    "accent_only": false
+   }
+  },
+  {
+   "name": "missing elision apostrophe stays an accent-level spelling mistake",
+   "expected": "J'ai faim.",
+   "answer": "jai faim",
+   "result": {
+    "ops": [
+     {
+      "kind": "accent",
+      "expected": "J'",
+      "actual": "j"
+     },
+     {
+      "kind": "ok",
+      "expected": "ai",
+      "actual": "ai"
+     },
+     {
+      "kind": "ok",
+      "expected": "faim",
+      "actual": "faim"
+     }
+    ],
+    "counts": {
+     "ok": 2,
+     "accent": 1,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 83,
+    "correct": false,
+    "accent_only": true
+   }
+  },
+  {
+   "name": "l'homme with a typographic apostrophe",
+   "expected": "L'homme est là ?",
+   "answer": "l’homme est là",
+   "result": {
+    "ops": [
+     {
+      "kind": "ok",
+      "expected": "L'",
+      "actual": "l’"
+     },
+     {
+      "kind": "ok",
+      "expected": "homme",
+      "actual": "homme"
+     },
+     {
+      "kind": "ok",
+      "expected": "est",
+      "actual": "est"
+     },
+     {
+      "kind": "ok",
+      "expected": "là",
+      "actual": "là"
+     }
+    ],
+    "counts": {
+     "ok": 4,
+     "accent": 0,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 100,
+    "correct": true,
+    "accent_only": false
+   }
+  },
+  {
+   "name": "an elision written as a separate word without apostrophe is wrong",
+   "expected": "L'homme est là.",
+   "answer": "le homme est là",
+   "result": {
+    "ops": [
+     {
+      "kind": "wrong",
+      "expected": "L'",
+      "actual": "le"
+     },
+     {
+      "kind": "ok",
+      "expected": "homme",
+      "actual": "homme"
+     },
+     {
+      "kind": "ok",
+      "expected": "est",
+      "actual": "est"
+     },
+     {
+      "kind": "ok",
+      "expected": "là",
+      "actual": "là"
+     }
+    ],
+    "counts": {
+     "ok": 3,
+     "accent": 0,
+     "wrong": 1,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 75,
+    "correct": false,
+    "accent_only": false
+   }
+  },
+  {
+   "name": "quoting apostrophes around a word versus inside it",
+   "expected": "Il dit 'aujourd'hui'.",
+   "answer": "Il dit aujourd'hui",
+   "result": {
+    "ops": [
+     {
+      "kind": "ok",
+      "expected": "Il",
+      "actual": "Il"
+     },
+     {
+      "kind": "ok",
+      "expected": "dit",
+      "actual": "dit"
+     },
+     {
+      "kind": "ok",
+      "expected": "aujourd'hui",
+      "actual": "aujourd'hui"
+     }
+    ],
+    "counts": {
+     "ok": 3,
      "accent": 0,
      "wrong": 0,
      "missing": 0,

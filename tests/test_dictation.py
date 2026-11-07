@@ -122,6 +122,55 @@ class GradeTests(unittest.TestCase):
             self.assertEqual(dictation.grade(case["expected"], case["answer"]), case["result"], case["name"])
 
 
+class PunctuationTests(unittest.TestCase):
+    """Sentence punctuation is never a mistake; apostrophes inside a word are spelling."""
+
+    def test_joyeux_noel_is_an_accent_mistake_only(self):
+        result = dictation.grade("Joyeux Noël !", "Joyeux Nöel")
+        self.assertEqual([op["kind"] for op in result["ops"]], ["ok", "accent"])
+        self.assertTrue(result["accent_only"])
+        self.assertNotIn("!", [op["expected"] for op in result["ops"]])
+
+    def test_a_missing_final_mark_is_fully_correct(self):
+        for answer in ("Joyeux Noël", "Joyeux Noël!", "joyeux noël .", "« Joyeux Noël »"):
+            self.assertTrue(dictation.grade("Joyeux Noël !", answer)["correct"], answer)
+
+    def test_quotes_guillemets_and_marks_never_count(self):
+        expected = "« Oui », dit-il ; puis : “Non, merci.” Tu viens ? Oui !"
+        answer = 'Oui dit-il puis "Non merci" tu viens oui'
+        result = dictation.grade(expected, answer)
+        self.assertTrue(result["correct"])
+        self.assertEqual(result["accuracy"], 100)
+
+    def test_quote_apostrophe_before_an_elision_is_punctuation(self):
+        self.assertEqual([t["text"] for t in dictation.tokenize("'J'ai faim'")], ["J'", "ai", "faim"])
+        self.assertTrue(dictation.grade("« J'ai faim », dit-il.", "'J'ai faim', dit-il")["correct"])
+
+    def test_elision_apostrophes_are_still_spelling(self):
+        self.assertEqual([k for k, _, _ in _kinds(dictation.grade("J'ai faim.", "jai faim"))], ["accent", "ok", "ok"])
+        self.assertTrue(dictation.grade("L'homme est là ?", "l’homme est là")["correct"])
+        self.assertEqual(_kinds(dictation.grade("L'homme est là.", "le homme est là"))[0], ("wrong", "L'", "le"))
+
+    def test_ai_prompt_says_punctuation_is_not_a_mistake(self):
+        system = dictation.ai_payload("m", "write", "Joyeux Noël !", "Joyeux Nöel", "Merry Christmas!")["messages"][0]
+        self.assertIn("punctuation is never graded", system["content"])
+        self.assertIn("apostrophe inside a word", system["content"])
+
+    def test_ai_points_about_punctuation_only_are_dropped(self):
+        reply = {
+            "summary": "只差重音。",
+            "points": [
+                {"wrong": "Joyeux Noël", "right": "Joyeux Noël !", "why": "少了感叹号"},
+                {"wrong": "« Oui »", "right": '"Oui"', "why": "引号"},
+                {"wrong": "Nöel", "right": "Noël", "why": "重音放错了"},
+                {"wrong": "jai", "right": "j'ai", "why": "省音要写撇号"},
+            ],
+            "tip": "",
+        }
+        feedback = dictation.parse_ai_feedback(json.dumps(reply, ensure_ascii=False))
+        self.assertEqual([p["right"] for p in feedback["points"]], ["Noël", "j'ai"])
+
+
 class TargetTests(unittest.TestCase):
     def _item(self, translation=TRANSLATION, steps=None):
         return {"sentence": SENTENCE, "translation_en": translation, "steps": BUILD_UP if steps is None else steps}

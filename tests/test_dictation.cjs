@@ -244,3 +244,56 @@ test('leaving restores the original card exactly', () => {
     assert(!env.ctl.isOpen(env.card));
     assert(!env.card.classList.contains('is-dictating'));
 });
+
+// Sentence punctuation is never an error: not in the diff, the counts, the legend or the verdict
+for (const lang of ['zh', 'en']) {
+    test(`${lang}: Joyeux Nöel for "Joyeux Noël !" is an accent mistake only`, async () => {
+        const dom = new JSDOM('<body><article class="sentence-card" id="card"><p>card</p></article></body>', { runScripts: 'outside-only', url: 'http://localhost/study' });
+        dom.window.eval(SOURCE);
+        const ctl = dom.window.FrenchDictation.create({ lang, getToken: () => '' });
+        const card = dom.window.document.getElementById('card');
+        const data = { sentence: 'Joyeux Noël !', translationEn: 'Merry Christmas!', steps: [] };
+        ctl.open(card, data, 'write');
+        const check = async text => {
+            card.querySelector('.dictation-input').value = text;
+            card.querySelector('.dictation-check').click();
+            await flush();
+            return card.querySelector('.dictation-result');
+        };
+        let box = await check('Joyeux Nöel');
+        const words = Array.from(box.querySelectorAll('.dt-word'));
+        assert.equal(words.length, 2);
+        assert.equal(box.querySelectorAll('.dt-accent').length, 1);
+        assert.equal(box.querySelectorAll('.dt-wrong, .dt-missing, .dt-extra').length, 0);
+        assert(!box.querySelector('.dictation-diff').textContent.includes('!'));
+        const legend = box.querySelector('.dictation-legend').textContent.replace(/\s+/g, ' ').trim();
+        assert.equal(legend, lang === 'zh' ? '对 1重音 1' : 'right 1accent 1');
+        const verdict = box.querySelector('.dictation-verdict').textContent;
+        assert.equal(verdict, lang === 'zh' ? '只差重音' : 'Only accents to fix');
+        const text = box.textContent;
+        for (const banned of ['撇号', '标点', 'apostrophe', 'punctuation']) assert(!text.includes(banned), banned);
+        // The full answer still reads naturally, with its "!"
+        assert.equal(box.querySelector('.dictation-answer-text').textContent, 'Joyeux Noël !');
+        card.querySelector('.dictation-retry').click();
+        box = await check('Joyeux Noël');
+        assert.equal(box.querySelector('.dictation-accuracy').textContent, '100%');
+        assert.equal(box.querySelector('.dictation-verdict').textContent, lang === 'zh' ? '全对 ✓' : 'All correct ✓');
+    });
+}
+
+test('quotes, guillemets and marks never show in the diff; elisions do', async () => {
+    const dom = new JSDOM('<body><article class="sentence-card" id="card"><p>card</p></article></body>', { runScripts: 'outside-only', url: 'http://localhost/study' });
+    dom.window.eval(SOURCE);
+    const ctl = dom.window.FrenchDictation.create({ lang: 'zh', getToken: () => '' });
+    const card = dom.window.document.getElementById('card');
+    ctl.open(card, { sentence: "« J'ai faim », dit-il ; puis : “L'homme ?” Oui !", translationEn: 'x', steps: [] }, 'listen');
+    card.querySelector('.dictation-input').value = "'jai faim' dit-il puis l'homme oui";
+    card.querySelector('.dictation-check').click();
+    await flush();
+    const ops = Array.from(card.querySelectorAll('.dt-word'));
+    const diff = card.querySelector('.dictation-diff').textContent;
+    for (const mark of ['«', '»', '“', '”', ';', ':', '?', '!', ',']) assert(!diff.includes(mark), mark);
+    assert.equal(card.querySelectorAll('.dt-accent').length, 1);  // j' without its apostrophe
+    assert.equal(card.querySelectorAll('.dt-wrong, .dt-missing, .dt-extra').length, 0);
+    assert.equal(ops.length, 9);  // J' ai faim dit il puis L' homme Oui
+});
