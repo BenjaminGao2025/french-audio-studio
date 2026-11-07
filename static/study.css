@@ -3192,6 +3192,44 @@ a.nav-deck-btn {
 .sentence-head-actions .btn-repeat-toggle.btn-head-repeat { width: 34px; min-width: 34px; height: 34px; min-height: 34px; }
 .sentence-card:not(.is-open) .btn-head-repeat { display: none; }
 
+/* Phones: an open card's four buttons (listen, repeat, select, save) drop to their own row under
+   the sentence, so the French gets the full width of the card. Closed cards keep their single
+   listen button beside the line, so the list stays compact. Desktop is unchanged. */
+@media (max-width: 640px) {
+    .sentence-card.is-open .sentence-head {
+        flex-wrap: wrap;
+        row-gap: var(--space-2);
+    }
+
+    .sentence-card.is-open .sentence-head-text {
+        flex: 1 1 0;
+    }
+
+    .sentence-card.is-open .sentence-head-actions {
+        flex: 1 0 100%;
+        justify-content: flex-start;
+        gap: var(--space-3);
+        margin-top: 0;
+        padding-bottom: var(--space-2);
+    }
+
+    /* Lined up with the French text, past the arrow */
+    .sentence-card.is-open .sentence-head:has(.sentence-toggle) .sentence-head-actions {
+        padding-left: 26px;
+    }
+}
+
+/* ... and on a touch screen every one of them is a full 44px target */
+@media (max-width: 640px) and (pointer: coarse) {
+    .sentence-card.is-open .sentence-head-actions .btn-repeat-toggle.btn-head-repeat,
+    .sentence-card.is-open .sentence-head-actions .btn-sentence-save {
+        width: 44px;
+        min-width: 44px;
+        height: 44px;
+        min-height: 44px;
+    }
+}
+
 /* Sentence structure bar: N noun group (blue), V verb (red), S sentence building (green, dashed) */
 .structure-bar { margin-top: var(--space-2); }
 .structure-track { display: flex; flex-wrap: wrap; gap: 2px 6px; align-items: flex-end; }

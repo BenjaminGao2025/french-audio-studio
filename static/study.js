@@ -2498,6 +2498,9 @@ function initStudyWorkbench() {
             };
             head.addEventListener('click', (e) => {
                 if (e.target.closest('button:not(.sentence-toggle), a')) return;
+                // On a phone the buttons have their own row under the sentence (study.css): a
+                // near miss between them must not close the card
+                if (e.target.closest('.sentence-head-actions') && window.matchMedia?.('(max-width: 640px)').matches) return;
                 if (wordAtTap(e)) return;
                 // The end of a drag or a selection is not a click on the row
                 if (!window.FrenchReadSelection.isTap(e)) return;

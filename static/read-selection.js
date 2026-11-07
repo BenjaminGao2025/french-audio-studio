@@ -126,6 +126,37 @@
 
     const elementOf = (node) => (node.nodeType === 1 ? node : node.parentElement);
 
+    // ---- Where the bar goes ------------------------------------------------------------------
+    // A mouse: above the selection, below when there is no room (unchanged).
+    // A touch screen: the system's own callout (Copy / Look Up / Translate) sits ABOVE the
+    // selection and the two handles hang below its ends, so the bar goes BELOW the last selected
+    // line, past the end handle, and never just above the text, where it would cover the callout.
+    // Without room below: a selection running off the bottom of the screen gets the bar pinned to
+    // the bottom edge (the end handle is off screen anyway); otherwise the bar goes above, leaving
+    // room for the callout, and only when neither fits is it pinned to the bottom.
+    const EDGE = 8;
+    const TOUCH_HANDLE_GAP = 36;    // the end handle's knob under the text, plus air
+    const TOUCH_CALLOUT_ROOM = 64;  // fallback above: the callout's height and its gaps
+    function placement({ rects, box, width, height, view, touch }) {
+        const first = (rects && rects[0]) || box;
+        const last = (rects && rects[rects.length - 1]) || box;
+        const left = Math.max(view.left + EDGE, Math.min((box.left + box.right) / 2 - width / 2, view.right - width - EDGE));
+        if (!touch) {
+            const above = first.top - 10 - height;
+            const below = last.bottom + 10;
+            if (above >= view.top + EDGE) return { left, top: above, side: 'above' };
+            if (below + height <= view.bottom - EDGE) return { left, top: below, side: 'below' };
+            return { left, top: view.bottom - height - EDGE, side: 'pinned' };
+        }
+        const below = last.bottom + TOUCH_HANDLE_GAP;
+        const pinned = view.bottom - height - EDGE;
+        if (below <= pinned) return { left, top: below, side: 'below' };
+        if (last.bottom > view.bottom) return { left, top: pinned, side: 'pinned' };
+        const above = first.top - TOUCH_CALLOUT_ROOM - height;
+        if (above >= view.top + EDGE) return { left, top: above, side: 'above' };
+        return { left, top: pinned, side: 'pinned' };
+    }
+
     /**
      * options:
      *   speak(text, onEnd)         start reading the text (required); onEnd runs when it stops
@@ -171,30 +202,50 @@
         let playToken = 0;
 
         // ---- Bar -------------------------------------------------------------------------------
+        // The visible screen, in the bar's (layout viewport) coordinates. On a touch screen this is
+        // the visual viewport (pinch zoom, the keyboard, the collapsing toolbar) minus the safe area
+        // (notch, home indicator); a mouse keeps the plain window, as before.
+        let probe = null;
+        function safeInsets() {
+            if (!probe) {
+                probe = doc.createElement('div');
+                probe.className = 'rs-safe-probe';
+                probe.setAttribute('aria-hidden', 'true');
+                doc.body.appendChild(probe);
+            }
+            const style = root.getComputedStyle ? root.getComputedStyle(probe) : null;
+            const px = (value) => parseFloat(value) || 0;
+            return style
+                ? { top: px(style.paddingTop), right: px(style.paddingRight), bottom: px(style.paddingBottom), left: px(style.paddingLeft) }
+                : { top: 0, right: 0, bottom: 0, left: 0 };
+        }
+        function viewFor(touch) {
+            const vw = root.innerWidth;
+            const vh = root.innerHeight;
+            if (!touch) return { left: 0, top: 0, right: vw, bottom: vh };
+            const vv = root.visualViewport;
+            const safe = safeInsets();
+            const top = vv ? vv.offsetTop : 0;
+            const left = vv ? vv.offsetLeft : 0;
+            return {
+                left: left + safe.left, top: top + safe.top,
+                right: (vv ? left + vv.width : vw) - safe.right, bottom: (vv ? top + vv.height : vh) - safe.bottom,
+            };
+        }
+
         function place() {
             if (!state || bar.hidden) return;
             if (rangeLine && !rangeLine.isConnected) { exitRange(); return; }
             const { rects, box } = geometry(state.range);
-            const vw = root.innerWidth;
-            const vh = root.innerHeight;
-            if (!box || box.bottom < 0 || box.top > vh || box.right < 0 || box.left > vw) { hide(); return; }
-            const margin = 8;
+            const touch = coarse();
+            const view = viewFor(touch);
+            if (!box || box.bottom < view.top || box.top > view.bottom || box.right < view.left || box.left > view.right) { hide(); return; }
             const width = bar.offsetWidth || 220;
             const height = bar.offsetHeight || 44;
-            const first = rects[0] || box;
-            const last = rects[rects.length - 1] || box;
-            // The system callout sits above a touch selection and its handles hang below the
-            // ends, so on a phone the bar goes below with room for them; a mouse gets it above
-            const below = last.bottom + (coarse() ? 36 : 10);
-            const above = first.top - 10 - height;
-            const fitsBelow = below + height <= vh - margin;
-            const fitsAbove = above >= margin;
-            let top;
-            if (coarse()) top = fitsBelow ? below : fitsAbove ? above : vh - height - margin;
-            else top = fitsAbove ? above : fitsBelow ? last.bottom + 10 : vh - height - margin;
-            const left = Math.max(margin, Math.min((box.left + box.right) / 2 - width / 2, vw - width - margin));
+            const { left, top, side } = placement({ rects, box, width, height, view, touch });
             bar.style.left = `${Math.round(left)}px`;
             bar.style.top = `${Math.round(top)}px`;
+            bar.dataset.side = side;
             if (remembered && state.text === remembered.text) {
                 remembered.box = snapshot(box);
                 remembered.barBox = snapshot({ left, top, right: left + width, bottom: top + height, width, height });
@@ -396,6 +447,11 @@
         bar.addEventListener('mousedown', (e) => e.preventDefault());
         root.addEventListener('scroll', schedulePlace, { passive: true });
         root.addEventListener('resize', schedulePlace, { passive: true });
+        // Pinch zoom, the keyboard and the collapsing browser bars move the visible screen
+        if (root.visualViewport) {
+            root.visualViewport.addEventListener('resize', schedulePlace, { passive: true });
+            root.visualViewport.addEventListener('scroll', schedulePlace, { passive: true });
+        }
         doc.addEventListener('keydown', (e) => {
             if (e.key !== 'Escape' || bar.hidden) return;
             if (rangeLine) exitRange(); else { hide(); const s = root.getSelection && root.getSelection(); if (s) s.removeAllRanges(); }
@@ -599,6 +655,6 @@
     }
 
     let dismissActive = () => {};
-    root.FrenchReadSelection = { create, isTap, isDrag, snapRange, dismiss: () => dismissActive() };
+    root.FrenchReadSelection = { create, isTap, isDrag, snapRange, placement, dismiss: () => dismissActive() };
 
 })(window);
