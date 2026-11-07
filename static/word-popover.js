@@ -161,10 +161,10 @@
         "l'": { token: "l'", lemma: "le", pos: "art. déf.", phonetic: "/l/", explanation_cn: "定冠词 (le/la 在元音或哑音h前的省音形式)", explanation_en: "the (elision of le/la)" },
         "un": { token: "un", lemma: "un", pos: "art. indéf.", phonetic: "/œ̃/", explanation_cn: "一个 (阳性单数不定冠词 / 数词1)", explanation_en: "a / an / one (masculine)" },
         "une": { token: "une", lemma: "un", pos: "art. indéf.", phonetic: "/yn/", explanation_cn: "一个 (阴性单数不定冠词 / 数词1)", explanation_en: "a / an / one (feminine)" },
-        "des": { token: "des", lemma: "des", pos: "art. indéf. / contracté", phonetic: "/de/", explanation_cn: "1. 不定冠词复数 (一些，若干); 2. 缩合冠词 de+les (来自…的)", explanation_en: "some / of the (plural)" },
-        "du": { token: "du", lemma: "du", pos: "art. part. / contracté", phonetic: "/dy/", explanation_cn: "1. 部分冠词 (一些阳性不可数); 2. 缩合冠词 de+le (来自…的)", explanation_en: "some / of the (contraction of de + le)" },
-        "au": { token: "au", lemma: "à + le", pos: "art. contracté", phonetic: "/o/", explanation_cn: "在…，去… (介词 à 与阳性定冠词 le 的缩合形式)", explanation_en: "at the / to the (contraction of à + le)" },
-        "aux": { token: "aux", lemma: "à + les", pos: "art. contracté", phonetic: "/o/", explanation_cn: "在…，去… (介词 à 与复数定冠词 les 的缩合形式)", explanation_en: "at the / to the (contraction of à + les)" },
+        "des": { token: "des", lemma: "des", pos: "art. contracté / art. indéf.", phonetic: "/de/", explanation_cn: "de + les（……的/从 + 复数定冠词），或复数不定冠词（一些）", explanation_en: "of / from the (de + les), or some (plural of un / une)" },
+        "du": { token: "du", lemma: "du", pos: "art. contracté / art. part.", phonetic: "/dy/", explanation_cn: "de + le（……的/从 + 阳性单数定冠词），或部分冠词（一些 / 常不译）", explanation_en: "of / from the (de + le), or some (partitive)" },
+        "au": { token: "au", lemma: "au", pos: "art. contracté", phonetic: "/o/", explanation_cn: "à + le（到/在 + 阳性单数定冠词）", explanation_en: "to / at the (à + le)" },
+        "aux": { token: "aux", lemma: "aux", pos: "art. contracté", phonetic: "/o/", explanation_cn: "à + les（到/在 + 复数定冠词）", explanation_en: "to / at the (à + les)" },
 
         // Prepositions
         "à": { token: "à", lemma: "à", pos: "prép.", phonetic: "/a/", explanation_cn: "在，到，向，给 (基础介词)", explanation_en: "at, to, in" },
@@ -392,6 +392,31 @@
     window.frenchNumberReading = frenchNumberReading;
 
     const ELISION_RE = /^(?:aujourd['’]hui|([cjdlnmstqu]|qu)['’](.+))$/i;
+
+    // French contractions in 词典: what they are made of, from this table alone (never from the
+    // sentence or a model). du and des are not always de + le / de + les: du is also the partitive
+    // article and des the plural indefinite article, so their card names every use and leaves the
+    // choice to 语境.
+    const CONTRACTIONS = {
+        au: { parts: 'à + le', zh: '到/在 + 阳性单数定冠词', en: 'to / at + the (masculine singular)' },
+        aux: { parts: 'à + les', zh: '到/在 + 复数定冠词', en: 'to / at + the (plural)' },
+        du: {
+            parts: 'de + le', zh: '……的/从 + 阳性单数定冠词', en: 'of / from + the (masculine singular)', example: 'le prix du pain',
+            other: { zh: '部分冠词', en: 'partitive article', text_zh: '一些 / 常不译，用在不可数的阳性名词前', text_en: 'some, often not translated, before an uncountable masculine noun', example: 'je mange du pain' },
+        },
+        des: {
+            parts: 'de + les', zh: '……的/从 + 复数定冠词', en: 'of / from + the (plural)', example: 'la fin des vacances',
+            other: { zh: '不定冠词（复数）', en: 'indefinite article (plural)', text_zh: '一些，un / une 的复数', text_en: 'some, the plural of un / une', example: "j'ai des amis" },
+        },
+    };
+    const CONTRACTION_TEXT = {
+        en: { use: 'contraction', caution: word => `Which one it is depends on the sentence: not every ${word} is a contraction.` },
+        zh: { use: '缩合冠词', caution: word => `是哪一种要看句子：不是每个 ${word} 都是缩合形式。` },
+    }[EN ? 'en' : 'zh'];
+    const contractionOf = token => {
+        const key = String(token || '').normalize('NFC').toLowerCase();
+        return Object.prototype.hasOwnProperty.call(CONTRACTIONS, key) ? { word: key, ...CONTRACTIONS[key] } : null;
+    };
 
     function escapeHtml(str) {
         return String(str == null ? '' : str)
@@ -757,6 +782,49 @@
             container.hidden = !text;
         }
 
+        // au = à + le and its plain meaning; for du / des, each use with an example. Text nodes only.
+        function renderContraction(forms) {
+            const line = (label, build) => {
+                const row = document.createElement('p');
+                row.className = 'popover-dict-use';
+                const tag = document.createElement('span');
+                tag.className = 'popover-dict-use-label';
+                tag.textContent = label;
+                row.append(tag, document.createTextNode(' '));
+                build(row);
+                return row;
+            };
+            const example = (row, text) => {
+                if (!text) return;
+                const ex = document.createElement('span');
+                ex.className = 'popover-dict-example';
+                ex.lang = 'fr';
+                ex.textContent = text;
+                row.append(document.createTextNode(EN ? ' e.g. ' : ' 例：'), ex);
+            };
+            const rows = [line(CONTRACTION_TEXT.use, row => {
+                const formula = document.createElement('span');
+                formula.className = 'popover-dict-formula';
+                formula.lang = 'fr';
+                formula.append(document.createTextNode(`${forms.word} = `));
+                appendFrenchWords(formula, forms.parts);
+                row.append(formula, document.createTextNode(EN ? `: ${forms.en}` : `（${forms.zh}）`));
+                example(row, forms.other ? forms.example : '');
+            })];
+            if (forms.other) {
+                rows.push(line(EN ? forms.other.en : forms.other.zh, row => {
+                    row.append(document.createTextNode(EN ? forms.other.text_en : forms.other.text_zh));
+                    example(row, forms.other.example);
+                }));
+                const caution = document.createElement('p');
+                caution.className = 'popover-dict-caution';
+                caution.textContent = CONTRACTION_TEXT.caution(forms.word);
+                rows.push(caution);
+            }
+            els.cn.replaceChildren(...rows);
+            els.en.textContent = EN ? '' : `${forms.word} = ${forms.parts}: ${forms.en}${forms.other ? `; or ${forms.other.en}` : ''}`;
+        }
+
         function renderDict(item) {
             const shown = dictState !== 'none';
             els.dict.hidden = !shown;
@@ -775,6 +843,8 @@
             els.loading.style.display = loading ? 'flex' : 'none';
             els.content.hidden = loading;
             els.content.style.display = loading ? 'none' : 'block';
+            const forms = contractionOf(item.token);
+            if (forms) { renderContraction(forms); return; }
             if (dictState === 'failed' || (!item.explanation_cn && !item.explanation_en)) {
                 els.cn.textContent = T.noDefinition;
                 els.en.textContent = dictState === 'failed' ? dictError : '';

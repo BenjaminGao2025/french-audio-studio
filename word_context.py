@@ -26,7 +26,7 @@ import auth_db
 import phrase_context
 
 # Part of every cache key: bump it when the prompt or the cleaning rules change.
-VERSION = 1
+VERSION = 2
 SENTENCE_MAX_CHARS = phrase_context.SENTENCE_MAX_CHARS
 TRANSLATION_MAX_CHARS = 600
 WORD_MAX_CHARS = 40
@@ -134,6 +134,11 @@ SYSTEM_PROMPT = (
     "- Possessive determiners (mon/ton/son, ma/ta/sa, mes/tes/ses, notre/votre/leur, nos/vos/leurs) agree with "
     "the noun after them, never with the owner. Before a feminine singular word that starts with a vowel or a "
     "silent h, mon/ton/son replace ma/ta/sa.\n"
+    "- au = à + le and aux = à + les. du and des are not always contractions: du is de + le OR the partitive "
+    "article (some, often not translated: je mange du pain); des is de + les OR the plural indefinite article "
+    "(some, plural of un/une: j'ai des amis). Say which one it is here only when the sentence shows it (de "
+    "after a verb, noun or expression that takes de, e.g. la fin des vacances); never call every du/des a "
+    "contraction.\n"
     "- Examples:\n"
     f"  Prends {OPEN_MARK}ton{CLOSE_MARK} sac. -> "
     '{"meaning_zh": "你的", "meaning_en": "your", "why_zh": "ton 是主有限定词“你的”，和后面的名词 sac 配合：sac 是阳性单数，'

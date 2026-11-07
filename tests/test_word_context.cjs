@@ -54,6 +54,14 @@ const SENTENCES = {
     xss: { sentence: 'Elle mange une pomme.', translation_zh: '', phrases: [], words: [row('pomme', '<b>苹果</b>', 'apple')] },
     stale: { sentence: 'Nous lisons un livre.', translation_zh: '', phrases: [], words: [] },
     empty: { sentence: 'Il pleut beaucoup.', translation_zh: '', phrases: [], words: [] },
+    // Contractions: 词典 says what they are made of, from the page alone
+    secours: {
+        sentence: 'Au secours !', translation_zh: '救命！', words: [row('secours', '救助', 'help')],
+        phrases: [{ text: 'Au secours', phrase: 'au secours', meaning_zh: '救命！', meaning_en: 'Help!', literal_zh: '这是呼救的固定说法，整体就是“救命”，不能逐词理解成“到救助”。' }],
+    },
+    du: { sentence: 'Je mange du pain.', translation_zh: '我吃面包。', phrases: [], words: [] },
+    des: { sentence: "J'ai des amis.", translation_zh: '我有一些朋友。', phrases: [], words: [] },
+    aux: { sentence: 'Il parle aux enfants.', translation_zh: '他跟孩子们说话。', phrases: [], words: [] },
 };
 
 const dom = new JSDOM(`<body>${Object.keys(SENTENCES).map(id => `
@@ -428,7 +436,94 @@ const snippetBefore = () => $('.popover-context-snippet').firstChild.textContent
     const last = contextCalls().at(-1).body;
     assert.ok(last.translation_zh.length <= 600 && last.hints.note_en.length <= 600 && last.hints.meaning_zh.length <= 200);
 
-    // 15. Close clears the card; the 700ms settle still protects a fresh card
+    // 15. Contractions: 词典 first, au = à + le in plain Chinese, never from the sentence or a model
+    contextAnswer = body => ({ status: 200, data: { context: { meaning_zh: '一些', meaning_en: 'some', why_zh: `${body.word} 在这里是部分冠词` }, state: 'ready' } });
+    const before15 = { ctx: contextCalls().length, lookups: lookups() };
+    await tap('secours', 'Au');
+    await settle();
+    const dict = $('.popover-dict');
+    const context = $('.popover-context');
+    assert.ok(dict.compareDocumentPosition(context) & window.Node.DOCUMENT_POSITION_FOLLOWING, '词典 comes before 语境');
+    assert.equal(dict.parentElement.firstElementChild, dict, '词典 is the first part of the card');
+    assert.equal(visible('.popover-dict'), true);
+    assert.equal(text('.popover-pos'), '缩合冠词');
+    assert.equal(text('.popover-dict-formula'), 'au = à + le');
+    assert.match(text('.popover-dict .popover-content'), /au = à \+ le（到\/在 \+ 阳性单数定冠词）/);
+    assert.doesNotMatch(text('.popover-dict'), /救命|secours/, 'the expression never replaces what au means');
+    assert.equal(visible('.popover-lemma'), false, 'no confusing "base form: à + le"');
+    assert.equal(context.dataset.state, 'phrase');
+    assert.equal(text('.popover-phrase-canonical'), 'au secours');
+    assert.equal(text('.popover-phrase-mark'), 'Au secours');
+    assert.match(text('.popover-phrase-meaning'), /救命！ \/ Help!/);
+    assert.match(text('.popover-phrase-literal'), /不能逐词/);
+    assert.equal(contextCalls().length, before15.ctx, 'a known expression: no model call');
+    assert.equal(lookups(), before15.lookups, 'a contraction: no lookup');
+    // The formula's words are nested lookups; Back brings au back as it was
+    $('.popover-dict-formula [data-lookup-word="le"]').click();
+    await settle();
+    assert.equal(text('.popover-word'), 'le');
+    assert.equal($('.popover-context').dataset.state, 'unavailable', 'a nested card has no 语境');
+    pop.querySelector('.popover-back').click();
+    await settle();
+    assert.equal(text('.popover-dict-formula'), 'au = à + le');
+    assert.equal($('.popover-context').dataset.state, 'phrase');
+
+    // All four, in any case, with no sentence at all (nested / unknown cards): the expansion is always there
+    const FORMS = { au: ['au = à + le', '到/在 + 阳性单数定冠词'], aux: ['aux = à + les', '到/在 + 复数定冠词'],
+        du: ['du = de + le', '……的/从 + 阳性单数定冠词'], des: ['des = de + les', '……的/从 + 复数定冠词'] };
+    for (const [word, [formula, zh]] of Object.entries(FORMS)) {
+        for (const shown of [word, word.toUpperCase(), word[0].toUpperCase() + word.slice(1)]) {
+            await popover.show(shown, chip, {}, {});
+            await settle();
+            assert.equal($('.popover-context').dataset.state, 'unavailable', `${shown}: no sentence`);
+            assert.equal(text('.popover-dict-formula'), formula, shown);
+            assert.ok(text('.popover-dict .popover-content').includes(zh), `${shown}: ${zh}`);
+        }
+    }
+    // du / des are not always contractions: both uses, and a caution
+    await popover.show('du', chip, {}, {});
+    await settle();
+    assert.equal(text('.popover-pos'), '缩合冠词 / 部分冠词');
+    assert.equal(pop.querySelectorAll('.popover-dict-use').length, 2);
+    assert.match(text('.popover-dict'), /部分冠词 一些 \/ 常不译/);
+    assert.match(text('.popover-dict-caution'), /不是每个 du 都是缩合形式/);
+    await popover.show('des', chip, {}, {});
+    await settle();
+    assert.equal(text('.popover-pos'), '缩合冠词 / 不定冠词');
+    assert.match(text('.popover-dict'), /不定冠词（复数） 一些，un \/ une 的复数/);
+    assert.match(text('.popover-dict-caution'), /不是每个 des 都是缩合形式/);
+    await popover.show('aux', chip, {}, {});
+    await settle();
+    assert.equal(pop.querySelectorAll('.popover-dict-use').length, 1);
+    assert.equal($('.popover-dict-caution'), null, 'au / aux need no caution');
+    assert.equal(lookups(), before15.lookups, 'no lookup for any contraction');
+    // In a sentence the 语境 says which use it is; the 词典 still lists both
+    await tap('du', 'du');
+    await settle();
+    assert.match(text('.popover-context-why'), /du 在这里是部分冠词/);
+    assert.equal(pop.querySelectorAll('.popover-dict-use').length, 2);
+    // A 语境 failure never removes the expansion
+    contextAnswer = () => ({ status: 502, data: { detail: { message: 'bad' } } });
+    await tap('des', 'des');
+    await settle();
+    assert.equal($('.popover-context').dataset.state, 'failed');
+    assert.equal(text('.popover-dict-formula'), 'des = de + les');
+    assert.equal(visible('.popover-dict'), true);
+    // Logged out (no 语境 at all): still there
+    token = '';
+    await tap('aux', 'aux');
+    await settle();
+    assert.equal(text('.popover-dict-formula'), 'aux = à + les');
+    token = 'test-token';
+    // A poisoned page cache for "du" cannot put markup or another meaning into the expansion
+    window.fetch = fetchMock;
+    popover.show('du', chip, {}, {});
+    await settle();
+    assert.equal(pop.querySelectorAll('.popover-dict script, .popover-dict img, .popover-dict [onclick], .popover-dict [onerror]').length, 0);
+    assert.deepEqual([...pop.querySelectorAll('.popover-dict-formula [data-lookup-word]')].map(b => b.dataset.lookupWord), ['de', 'le']);
+    assert.doesNotMatch($('.popover-dict').innerHTML, /<script|<img/);
+
+    // 16. Close clears the card; the 700ms settle still protects a fresh card
     await tap('sac', 'ton');
     document.getElementById('outside').dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, button: 0 }));
     window.dispatchEvent(new window.Event('scroll'));
@@ -438,6 +533,6 @@ const snippetBefore = () => $('.popover-context-snippet').firstChild.textContent
     assert.equal(popover.isOpen(), false);
     assert.equal(popover.contextMeaning(), null);
 
-    console.log('PASS: word card 词典 and 语境 (occurrence, cache, phrase, failure/retry, stale, no markup).');
+    console.log('PASS: word card 词典 and 语境 (occurrence, cache, phrase, contractions, failure/retry, stale, no markup).');
     window.close();
 })().catch(err => { console.error(err); process.exitCode = 1; });

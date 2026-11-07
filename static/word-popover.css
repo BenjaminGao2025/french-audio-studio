@@ -627,3 +627,29 @@
     font-weight: 600;
     cursor: pointer;
 }
+/* 词典 of a contraction: au = à + le, and for du / des each of their uses */
+.popover-dict-use {
+    margin: 0 0 3px;
+}
+.popover-dict-use-label {
+    display: inline-block;
+    padding: 0 5px;
+    border-radius: 4px;
+    background: var(--surface-muted);
+    color: var(--muted);
+    font-size: 11.5px;
+    font-weight: 600;
+}
+.popover-dict-formula {
+    font-weight: 700;
+}
+.popover-dict-example {
+    font-style: italic;
+    font-weight: 500;
+}
+.popover-dict-caution {
+    margin: 2px 0 0;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+}
