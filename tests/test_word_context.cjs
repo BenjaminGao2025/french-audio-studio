@@ -533,7 +533,7 @@ const snippetBefore = () => $('.popover-context-snippet').firstChild.textContent
         assert.match(text('.popover-dict'), /accord = 一致、同意、协议（阳性名词 \/ n.m.）/);
         assert.match(text('.popover-context'), /好的 \/ 同意/);
         assert.match(text('.popover-context'), /处于一致/);
-        assert.equal(pop.querySelector('.popover-dict .popover-en')?.textContent || '', '');
+        assert.equal(pop.querySelector('.popover-dict .popover-en-text').textContent, '');
         assert.ok(pop.querySelector('.popover-dict').compareDocumentPosition(pop.querySelector('.popover-context')) & window.Node.DOCUMENT_POSITION_FOLLOWING);
     }
     assert.equal(lookups(), beforeAccord.lookups);

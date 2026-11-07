@@ -370,3 +370,24 @@ test('practice hierarchy and shared rounded button system through answering, rev
     assert.match(q('.dictation-step-label').textContent, /第 1 \/ 3 步/);
     env.window.close();
 });
+
+test('Check and optional AI review expose loading and disabled states without automatic AI', async () => {
+    const env = setup({aiFeedback: {summary: '再试一次', points: [], tip: ''}});
+    env.ctl.open(env.card, DATA, 'write');
+    env.card.querySelector('.dictation-input').value = 'erreur';
+    const check = env.card.querySelector('.dictation-check');
+    check.click();
+    assert.equal(check.disabled, true);
+    assert.equal(check.getAttribute('aria-busy'), 'true');
+    await flush();
+    assert.equal(check.getAttribute('aria-busy'), 'false');
+    assert.equal(env.calls.filter(c => c.url.endsWith('/ai')).length, 0);
+    const ai = env.card.querySelector('.dictation-ai-btn');
+    ai.click();
+    assert.equal(ai.disabled, true);
+    assert.equal(ai.getAttribute('aria-busy'), 'true');
+    await flush();
+    assert.equal(ai.getAttribute('aria-busy'), 'false');
+    assert.equal(env.calls.filter(c => c.url.endsWith('/ai')).length, 1);
+    env.window.close();
+});
