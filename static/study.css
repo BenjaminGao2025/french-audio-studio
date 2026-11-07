@@ -3377,6 +3377,7 @@ a.nav-deck-btn {
 .dictation-history-btn { margin-left: auto; min-height: 44px; }
 .dictation-prompt { font-weight: 600; }
 .dictation-actions[hidden] { display: none; }
+.dictation-actions, .dictation-next { align-items: stretch; }
 .dictation-audio svg, .dictation-next svg, .dictation-answer svg { width: 18px; height: 18px; flex-shrink: 0; }
 .card-tab-panel[data-panel="grammar"] > .structure-bar { margin-top: 0; margin-bottom: var(--space-4); }
 @media (max-width: 600px) {
