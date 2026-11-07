@@ -138,6 +138,16 @@ RATE_LIMITS: dict[str, tuple[float, float]] = {
         float(os.getenv("RATE_AUTH_EMAIL_PER_HOUR", "6")) / 3600,
     ),
     "waitlist": (5.0, 5 / 3600),
+    # Dictation checks are local (no AI): roomy, but a script cannot fill the history table
+    "dictation": (
+        float(os.getenv("RATE_DICTATION_BURST", "60")),
+        float(os.getenv("RATE_DICTATION_PER_MIN", "40")) / 60,
+    ),
+    # The optional AI review, on top of the shared "ai" bucket
+    "dictation_ai": (
+        float(os.getenv("RATE_DICTATION_AI_BURST", "10")),
+        float(os.getenv("RATE_DICTATION_AI_PER_HOUR", "40")) / 3600,
+    ),
 }
 _rate_buckets: dict[tuple[object, str], tuple[float, float]] = {}
 _rate_lock = threading.Lock()

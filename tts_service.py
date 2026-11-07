@@ -21,6 +21,7 @@ import routers.auth
 import routers.coach
 import routers.cockpit
 import routers.comprehension
+import routers.dictation
 import routers.episodes
 import routers.game
 import routers.grammar
@@ -61,6 +62,7 @@ for _routes in (
     routers.speaking,
     routers.coach,
     routers.homework,
+    routers.dictation,
 ):
     app.include_router(_routes.router)
 

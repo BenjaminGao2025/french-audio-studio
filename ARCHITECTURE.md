@@ -6,6 +6,7 @@
 - `routers/` 按认证、历史、SRS、工作台、精析、写作、口语、教练和个人练习等职责组织 HTTP 路由。路由注册顺序影响重叠路径；移动或新增路由时应核对匹配顺序与 OpenAPI。
 - `services/ai.py` 管理上游 AI 调用和鉴权，`services/speech.py` 处理语音合成，`services/asr.py` 处理识别和并发队列；`transform.py`、`analysis.py`、`intake.py` 等包含文本处理流程。
 - `auth_db.py` 与 `srs.py`、`writing.py`、`speaking.py`、`episodes.py`、`coach.py` 等存储学习数据，SQLite 数据库和生成的音频在 `OUTPUT_DIR`。模块的建表与迁移按数据库文件和模块在进程内惰性执行；新增迁移须保持幂等。
+- `dictation.py` 与 `routers/dictation.py` 提供 /study 的默写/听写：评分在本地完成（`static/dictation.js` 镜像同一规则，`tests/fixtures/dictation_cases.json` 保证两边一致）；客户端只登记题目（句子、英文、逐步拆分），作答时服务端从该用户自己的题目推导标准答案，不接受客户端传来的答案或用户 ID。AI 批改只在用户点击时调用并按用户缓存。
 - `static/` 提供无需编译的浏览器界面。资源版本用于更新缓存；service worker 不缓存 API、认证和音频。
 - 旧 React SPA 的源码在 `frontend/`、构建产物在 `static/app/`，由 `routers/app_shell.py` 提供；默认关闭（`/app` 跳转 `/study`），`APP_SHELL_ENABLED=1` 时启用。它使用的 `routers/cockpit.py`（今日计划、学时账本、待办、每日复盘、阶段）与 `routers/comprehension.py`（听力/阅读材料）始终注册。
 - `Dockerfile` 按显式清单复制顶层 Python 模块，新增顶层模块时须同步加入；未跟踪的本地文件不会进入镜像。

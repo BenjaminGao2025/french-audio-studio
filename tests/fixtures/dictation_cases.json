@@ -1,0 +1,831 @@
+{
+ "_comment": "Generated from dictation.py and checked by hand; dictation.js must give the same results (tests/test_dictation.py, tests/test_dictation.cjs).",
+ "accent_credit": 0.5,
+ "tokenize": [
+  {
+   "text": "« Lorsqu'il arrive, jusqu'à l'aube… » quelqu'un dit : “C’est ça !”",
+   "tokens": [
+    "Lorsqu'",
+    "il",
+    "arrive",
+    "jusqu'",
+    "à",
+    "l'",
+    "aube",
+    "quelqu'un",
+    "dit",
+    "C’",
+    "est",
+    "ça"
+   ],
+   "norms": [
+    "lorsqu'",
+    "il",
+    "arrive",
+    "jusqu'",
+    "à",
+    "l'",
+    "aube",
+    "quelqu'un",
+    "dit",
+    "c'",
+    "est",
+    "ça"
+   ]
+  },
+  {
+   "text": "'Bonjour' l' ami d’aujourd’hui",
+   "tokens": [
+    "Bonjour",
+    "l'",
+    "ami",
+    "d’",
+    "aujourd’hui"
+   ],
+   "norms": [
+    "bonjour",
+    "l'",
+    "ami",
+    "d'",
+    "aujourd'hui"
+   ]
+  }
+ ],
+ "grade": [
+  {
+   "name": "exact",
+   "expected": "Je suis content.",
+   "answer": "Je suis content.",
+   "result": {
+    "ops": [
+     {
+      "kind": "ok",
+      "expected": "Je",
+      "actual": "Je"
+     },
+     {
+      "kind": "ok",
+      "expected": "suis",
+      "actual": "suis"
+     },
+     {
+      "kind": "ok",
+      "expected": "content",
+      "actual": "content"
+     }
+    ],
+    "counts": {
+     "ok": 3,
+     "accent": 0,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 100,
+    "correct": true,
+    "accent_only": false
+   }
+  },
+  {
+   "name": "case and punctuation ignored",
+   "expected": "Bonjour, Marie !",
+   "answer": "bonjour marie",
+   "result": {
+    "ops": [
+     {
+      "kind": "ok",
+      "expected": "Bonjour",
+      "actual": "bonjour"
+     },
+     {
+      "kind": "ok",
+      "expected": "Marie",
+      "actual": "marie"
+     }
+    ],
+    "counts": {
+     "ok": 2,
+     "accent": 0,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 100,
+    "correct": true,
+    "accent_only": false
+   }
+  },
+  {
+   "name": "spacing ignored",
+   "expected": "Il fait beau.",
+   "answer": "  il   fait\tbeau  ",
+   "result": {
+    "ops": [
+     {
+      "kind": "ok",
+      "expected": "Il",
+      "actual": "il"
+     },
+     {
+      "kind": "ok",
+      "expected": "fait",
+      "actual": "fait"
+     },
+     {
+      "kind": "ok",
+      "expected": "beau",
+      "actual": "beau"
+     }
+    ],
+    "counts": {
+     "ok": 3,
+     "accent": 0,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 100,
+    "correct": true,
+    "accent_only": false
+   }
+  },
+  {
+   "name": "typographic apostrophe",
+   "expected": "J'ai faim.",
+   "answer": "J’ai faim",
+   "result": {
+    "ops": [
+     {
+      "kind": "ok",
+      "expected": "J'",
+      "actual": "J’"
+     },
+     {
+      "kind": "ok",
+      "expected": "ai",
+      "actual": "ai"
+     },
+     {
+      "kind": "ok",
+      "expected": "faim",
+      "actual": "faim"
+     }
+    ],
+    "counts": {
+     "ok": 3,
+     "accent": 0,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 100,
+    "correct": true,
+    "accent_only": false
+   }
+  },
+  {
+   "name": "space after elision",
+   "expected": "Qu'il vienne.",
+   "answer": "qu' il vienne",
+   "result": {
+    "ops": [
+     {
+      "kind": "ok",
+      "expected": "Qu'",
+      "actual": "qu'"
+     },
+     {
+      "kind": "ok",
+      "expected": "il",
+      "actual": "il"
+     },
+     {
+      "kind": "ok",
+      "expected": "vienne",
+      "actual": "vienne"
+     }
+    ],
+    "counts": {
+     "ok": 3,
+     "accent": 0,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 100,
+    "correct": true,
+    "accent_only": false
+   }
+  },
+  {
+   "name": "missing apostrophe with space",
+   "expected": "L'homme est là.",
+   "answer": "l homme est là",
+   "result": {
+    "ops": [
+     {
+      "kind": "accent",
+      "expected": "L'",
+      "actual": "l"
+     },
+     {
+      "kind": "ok",
+      "expected": "homme",
+      "actual": "homme"
+     },
+     {
+      "kind": "ok",
+      "expected": "est",
+      "actual": "est"
+     },
+     {
+      "kind": "ok",
+      "expected": "là",
+      "actual": "là"
+     }
+    ],
+    "counts": {
+     "ok": 3,
+     "accent": 1,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 88,
+    "correct": false,
+    "accent_only": true
+   }
+  },
+  {
+   "name": "merged elision",
+   "expected": "J'ai faim.",
+   "answer": "jai faim",
+   "result": {
+    "ops": [
+     {
+      "kind": "accent",
+      "expected": "J'",
+      "actual": "j"
+     },
+     {
+      "kind": "ok",
+      "expected": "ai",
+      "actual": "ai"
+     },
+     {
+      "kind": "ok",
+      "expected": "faim",
+      "actual": "faim"
+     }
+    ],
+    "counts": {
+     "ok": 2,
+     "accent": 1,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 83,
+    "correct": false,
+    "accent_only": true
+   }
+  },
+  {
+   "name": "aujourd'hui is one word",
+   "expected": "Aujourd'hui, il fait beau.",
+   "answer": "aujourd'hui il fait beau",
+   "result": {
+    "ops": [
+     {
+      "kind": "ok",
+      "expected": "Aujourd'hui",
+      "actual": "aujourd'hui"
+     },
+     {
+      "kind": "ok",
+      "expected": "il",
+      "actual": "il"
+     },
+     {
+      "kind": "ok",
+      "expected": "fait",
+      "actual": "fait"
+     },
+     {
+      "kind": "ok",
+      "expected": "beau",
+      "actual": "beau"
+     }
+    ],
+    "counts": {
+     "ok": 4,
+     "accent": 0,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 100,
+    "correct": true,
+    "accent_only": false
+   }
+  },
+  {
+   "name": "aujourd'hui without apostrophe",
+   "expected": "Aujourd'hui, il fait beau.",
+   "answer": "aujourdhui il fait beau",
+   "result": {
+    "ops": [
+     {
+      "kind": "accent",
+      "expected": "Aujourd'hui",
+      "actual": "aujourdhui"
+     },
+     {
+      "kind": "ok",
+      "expected": "il",
+      "actual": "il"
+     },
+     {
+      "kind": "ok",
+      "expected": "fait",
+      "actual": "fait"
+     },
+     {
+      "kind": "ok",
+      "expected": "beau",
+      "actual": "beau"
+     }
+    ],
+    "counts": {
+     "ok": 3,
+     "accent": 1,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 88,
+    "correct": false,
+    "accent_only": true
+   }
+  },
+  {
+   "name": "quelqu'un is one word",
+   "expected": "Quelqu'un arrive.",
+   "answer": "quelqu'un arrive",
+   "result": {
+    "ops": [
+     {
+      "kind": "ok",
+      "expected": "Quelqu'un",
+      "actual": "quelqu'un"
+     },
+     {
+      "kind": "ok",
+      "expected": "arrive",
+      "actual": "arrive"
+     }
+    ],
+    "counts": {
+     "ok": 2,
+     "accent": 0,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 100,
+    "correct": true,
+    "accent_only": false
+   }
+  },
+  {
+   "name": "accent only",
+   "expected": "Il a été là.",
+   "answer": "il a ete la",
+   "result": {
+    "ops": [
+     {
+      "kind": "ok",
+      "expected": "Il",
+      "actual": "il"
+     },
+     {
+      "kind": "ok",
+      "expected": "a",
+      "actual": "a"
+     },
+     {
+      "kind": "accent",
+      "expected": "été",
+      "actual": "ete"
+     },
+     {
+      "kind": "accent",
+      "expected": "là",
+      "actual": "la"
+     }
+    ],
+    "counts": {
+     "ok": 2,
+     "accent": 2,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 75,
+    "correct": false,
+    "accent_only": true
+   }
+  },
+  {
+   "name": "cedilla is an accent",
+   "expected": "Ça va.",
+   "answer": "ca va",
+   "result": {
+    "ops": [
+     {
+      "kind": "accent",
+      "expected": "Ça",
+      "actual": "ca"
+     },
+     {
+      "kind": "ok",
+      "expected": "va",
+      "actual": "va"
+     }
+    ],
+    "counts": {
+     "ok": 1,
+     "accent": 1,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 75,
+    "correct": false,
+    "accent_only": true
+   }
+  },
+  {
+   "name": "oe ligature typed as oe",
+   "expected": "C'est un œuf.",
+   "answer": "c'est un oeuf",
+   "result": {
+    "ops": [
+     {
+      "kind": "ok",
+      "expected": "C'",
+      "actual": "c'"
+     },
+     {
+      "kind": "ok",
+      "expected": "est",
+      "actual": "est"
+     },
+     {
+      "kind": "ok",
+      "expected": "un",
+      "actual": "un"
+     },
+     {
+      "kind": "ok",
+      "expected": "œuf",
+      "actual": "oeuf"
+     }
+    ],
+    "counts": {
+     "ok": 4,
+     "accent": 0,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 100,
+    "correct": true,
+    "accent_only": false
+   }
+  },
+  {
+   "name": "hyphen as a space",
+   "expected": "Est-ce que tu viens ?",
+   "answer": "est ce que tu viens",
+   "result": {
+    "ops": [
+     {
+      "kind": "ok",
+      "expected": "Est",
+      "actual": "est"
+     },
+     {
+      "kind": "ok",
+      "expected": "ce",
+      "actual": "ce"
+     },
+     {
+      "kind": "ok",
+      "expected": "que",
+      "actual": "que"
+     },
+     {
+      "kind": "ok",
+      "expected": "tu",
+      "actual": "tu"
+     },
+     {
+      "kind": "ok",
+      "expected": "viens",
+      "actual": "viens"
+     }
+    ],
+    "counts": {
+     "ok": 5,
+     "accent": 0,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 100,
+    "correct": true,
+    "accent_only": false
+   }
+  },
+  {
+   "name": "missing word",
+   "expected": "Je suis très content.",
+   "answer": "je suis content",
+   "result": {
+    "ops": [
+     {
+      "kind": "ok",
+      "expected": "Je",
+      "actual": "je"
+     },
+     {
+      "kind": "ok",
+      "expected": "suis",
+      "actual": "suis"
+     },
+     {
+      "kind": "missing",
+      "expected": "très",
+      "actual": ""
+     },
+     {
+      "kind": "ok",
+      "expected": "content",
+      "actual": "content"
+     }
+    ],
+    "counts": {
+     "ok": 3,
+     "accent": 0,
+     "wrong": 0,
+     "missing": 1,
+     "extra": 0
+    },
+    "accuracy": 75,
+    "correct": false,
+    "accent_only": false
+   }
+  },
+  {
+   "name": "extra word",
+   "expected": "Je suis content.",
+   "answer": "je suis très très content",
+   "result": {
+    "ops": [
+     {
+      "kind": "ok",
+      "expected": "Je",
+      "actual": "je"
+     },
+     {
+      "kind": "ok",
+      "expected": "suis",
+      "actual": "suis"
+     },
+     {
+      "kind": "extra",
+      "expected": "",
+      "actual": "très"
+     },
+     {
+      "kind": "extra",
+      "expected": "",
+      "actual": "très"
+     },
+     {
+      "kind": "ok",
+      "expected": "content",
+      "actual": "content"
+     }
+    ],
+    "counts": {
+     "ok": 3,
+     "accent": 0,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 2
+    },
+    "accuracy": 60,
+    "correct": false,
+    "accent_only": false
+   }
+  },
+  {
+   "name": "wrong word",
+   "expected": "Les autorités canadiennes n'autorisent aucune dispense.",
+   "answer": "les autorites canadienne n autorisent pas dispense",
+   "result": {
+    "ops": [
+     {
+      "kind": "ok",
+      "expected": "Les",
+      "actual": "les"
+     },
+     {
+      "kind": "accent",
+      "expected": "autorités",
+      "actual": "autorites"
+     },
+     {
+      "kind": "wrong",
+      "expected": "canadiennes",
+      "actual": "canadienne"
+     },
+     {
+      "kind": "accent",
+      "expected": "n'",
+      "actual": "n"
+     },
+     {
+      "kind": "ok",
+      "expected": "autorisent",
+      "actual": "autorisent"
+     },
+     {
+      "kind": "wrong",
+      "expected": "aucune",
+      "actual": "pas"
+     },
+     {
+      "kind": "ok",
+      "expected": "dispense",
+      "actual": "dispense"
+     }
+    ],
+    "counts": {
+     "ok": 3,
+     "accent": 2,
+     "wrong": 2,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 57,
+    "correct": false,
+    "accent_only": false
+   }
+  },
+  {
+   "name": "elision prefixes",
+   "expected": "Lorsqu'il arrive, jusqu'à l'aube, s'il pleut.",
+   "answer": "lorsqu'il arrive jusqu'à l'aube s'il pleut",
+   "result": {
+    "ops": [
+     {
+      "kind": "ok",
+      "expected": "Lorsqu'",
+      "actual": "lorsqu'"
+     },
+     {
+      "kind": "ok",
+      "expected": "il",
+      "actual": "il"
+     },
+     {
+      "kind": "ok",
+      "expected": "arrive",
+      "actual": "arrive"
+     },
+     {
+      "kind": "ok",
+      "expected": "jusqu'",
+      "actual": "jusqu'"
+     },
+     {
+      "kind": "ok",
+      "expected": "à",
+      "actual": "à"
+     },
+     {
+      "kind": "ok",
+      "expected": "l'",
+      "actual": "l'"
+     },
+     {
+      "kind": "ok",
+      "expected": "aube",
+      "actual": "aube"
+     },
+     {
+      "kind": "ok",
+      "expected": "s'",
+      "actual": "s'"
+     },
+     {
+      "kind": "ok",
+      "expected": "il",
+      "actual": "il"
+     },
+     {
+      "kind": "ok",
+      "expected": "pleut",
+      "actual": "pleut"
+     }
+    ],
+    "counts": {
+     "ok": 10,
+     "accent": 0,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 100,
+    "correct": true,
+    "accent_only": false
+   }
+  },
+  {
+   "name": "empty answer",
+   "expected": "Merci beaucoup.",
+   "answer": "  …  ",
+   "result": {
+    "ops": [
+     {
+      "kind": "missing",
+      "expected": "Merci",
+      "actual": ""
+     },
+     {
+      "kind": "missing",
+      "expected": "beaucoup",
+      "actual": ""
+     }
+    ],
+    "counts": {
+     "ok": 0,
+     "accent": 0,
+     "wrong": 0,
+     "missing": 2,
+     "extra": 0
+    },
+    "accuracy": 0,
+    "correct": false,
+    "accent_only": false
+   }
+  },
+  {
+   "name": "guillemets and quotes",
+   "expected": "« C'est ça », dit-il.",
+   "answer": "\"c'est ça\" dit il",
+   "result": {
+    "ops": [
+     {
+      "kind": "ok",
+      "expected": "C'",
+      "actual": "c'"
+     },
+     {
+      "kind": "ok",
+      "expected": "est",
+      "actual": "est"
+     },
+     {
+      "kind": "ok",
+      "expected": "ça",
+      "actual": "ça"
+     },
+     {
+      "kind": "ok",
+      "expected": "dit",
+      "actual": "dit"
+     },
+     {
+      "kind": "ok",
+      "expected": "il",
+      "actual": "il"
+     }
+    ],
+    "counts": {
+     "ok": 5,
+     "accent": 0,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 100,
+    "correct": true,
+    "accent_only": false
+   }
+  }
+ ]
+}

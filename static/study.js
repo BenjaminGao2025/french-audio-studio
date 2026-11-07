@@ -115,6 +115,9 @@ function initStudyWorkbench() {
             modeSwitchAria: 'Study mode',
             modeNormal: 'Show all', modeNormalTitle: 'Show the full French of every step',
             modeBlind: 'Test me', modeBlindTitle: 'Hide the new words of each step, so you say them from memory',
+            modeWrite: 'Recall', modeWriteTitle: 'See only the English and write the French from memory',
+            modeListen: 'Dictation', modeListenTitle: 'Listen to the sentence and write down the French',
+            dictationEntry: 'Write it:',
             buildupHint: 'Tap any French word to hear it. Listen to each step, then say it yourself.',
             blindTipStrong: 'Feynman challenge', blindTipText: ': the new words of each step are hidden. Look at the meaning and say the French from memory!',
             revealAll: 'Reveal all', hideAgain: 'Hide again',
@@ -258,6 +261,9 @@ function initStudyWorkbench() {
             modeSwitchAria: '学习模式切换',
             modeNormal: '全部显示', modeNormalTitle: '显示每一步完整的法语',
             modeBlind: '考考我', modeBlindTitle: '遮住每一步新加的词，凭记忆说出来',
+            modeWrite: '默写', modeWriteTitle: '只看英文，凭记忆写出法语',
+            modeListen: '听写', modeListenTitle: '听句子，写下法语',
+            dictationEntry: '写一写：',
             buildupHint: '点任意法语单词可以听发音。每一步先听，再自己说一遍。',
             blindTipStrong: '费曼认知挑战', blindTipText: '：递进关键词已遮挡。看着释义，凭借脑内记忆说出这句法语！',
             revealAll: '一键揭晓', hideAgain: '重新遮挡',
@@ -715,8 +721,11 @@ function initStudyWorkbench() {
     }
 
     // One clip, Edge TTS with Web Speech as the fallback; onDone runs when it finishes by itself
-    function playClip(cleanText, onDone, onInterrupt, owner) {
-        const audio = new Audio(`/tts?text=${encodeURIComponent(cleanText)}&voice=${frenchVoiceFor(cleanText)}`);
+    // options.voice keeps one voice for a whole sentence (dictation steps); options.rate slows it down
+    function playClip(cleanText, onDone, onInterrupt, owner, options = {}) {
+        const voice = options.voice || frenchVoiceFor(cleanText);
+        const rate = options.rate && options.rate !== 1 ? `&rate=${options.rate}` : '';
+        const audio = new Audio(`/tts?text=${encodeURIComponent(cleanText)}&voice=${voice}${rate}`);
         currentActiveAudio = audio;
         let done = false;
         window.FrenchAudio.bind(audio, () => { done = true; onInterrupt(); }, owner);
@@ -1731,6 +1740,28 @@ function initStudyWorkbench() {
                     </div>
                 `;
 
+                // 1c. Dictation (默写 / 听写): steps only where the Steps tab shows them
+                const dictationButtonsHtml = window.FrenchDictation ? `
+                    <button class="btn-feynman-toggle" data-mode="write" type="button" title="${T.modeWriteTitle}">
+                        <i data-lucide="pencil-line"></i>
+                        <span>${T.modeWrite}</span>
+                    </button>
+                    <button class="btn-feynman-toggle" data-mode="listen" type="button" title="${T.modeListenTitle}">
+                        <i data-lucide="headphones"></i>
+                        <span>${T.modeListen}</span>
+                    </button>
+                ` : '';
+                if (window.FrenchDictation) {
+                    dictationDataByCard.set(card, {
+                        sentence: sentenceText,
+                        translationEn: transEn,
+                        steps: hasValidBuildup ? s.build_up : [],
+                        voice: frenchVoiceFor(sentenceText),
+                        index: idx,
+                        total: sentences.length,
+                    });
+                }
+
                 // 2. Sentence Build-up (一层一层搭句子 - 5词及以内短句/标题无需生硬拆解)
                 let buildupHtml = '';
                 if (hasValidBuildup) {
@@ -1805,6 +1836,7 @@ function initStudyWorkbench() {
                                         <i data-lucide="brain"></i>
                                         <span>${T.modeBlind}</span>
                                     </button>
+                                    ${dictationButtonsHtml}
                                 </div>
                             </div>
                             <div class="feynman-tip-banner" hidden>
@@ -1905,7 +1937,11 @@ function initStudyWorkbench() {
                     { id: 'words', label: T.tabWords, html: interlinearHtml + wordsSectionHtml },
                     grammarHtml && { id: 'grammar', label: T.tabGrammar, html: grammarHtml },
                     pronTipsHtml && { id: 'pron', label: T.tabPron, html: pronTipsHtml },
-                    !hasValidBuildup && { id: 'shadowing', label: T.shadowScore, html: shadowingHtml },
+                    !hasValidBuildup && { id: 'shadowing', label: T.shadowScore, html: (dictationButtonsHtml ? `
+                        <div class="dictation-entry">
+                            <span class="dictation-entry-label">${T.dictationEntry}</span>
+                            <div class="feynman-mode-switch" role="group" aria-label="${T.modeSwitchAria}">${dictationButtonsHtml}</div>
+                        </div>` : '') + shadowingHtml },
                     { id: 'explain', label: T.tabExplain, html: feynmanSelfTestHtml },
                 ].filter(Boolean);
                 const bodyHtml = `
@@ -1991,6 +2027,7 @@ function initStudyWorkbench() {
 
             sentencesContainer.appendChild(card);
             attachSentenceCardEvents(card, sentenceText, transZh, transEn);
+            bindDictationEntry(card);
             bindStructureBar(card, s.structure);
         });
 
@@ -2874,6 +2911,7 @@ function initStudyWorkbench() {
             feynmanToggles.forEach(toggleBtn => {
                 toggleBtn.addEventListener('click', () => {
                     const mode = toggleBtn.dataset.mode;
+                    if (mode === 'write' || mode === 'listen') return;  // bindDictationEntry opens the exercise
                     feynmanToggles.forEach(b => b.classList.toggle('active', b === toggleBtn));
 
                     if (mode === 'blind') {
@@ -2935,6 +2973,35 @@ function initStudyWorkbench() {
         }
     }
     window.renderStudyDeck = renderStudyDeck;
+
+    // Dictation exercises (static/dictation.js). The card's French is detached while one is open.
+    const dictationDataByCard = new WeakMap();
+    const dictationAudioOwner = {};
+    const dictation = window.FrenchDictation ? window.FrenchDictation.create({
+        escapeHtml,
+        getToken: () => getEffectiveAuthToken() || '',
+        refreshIcons,
+        stopAudio: stopAllAudio,
+        play(text, options) {
+            stopAllAudio();
+            playClip(text, () => {}, () => {}, dictationAudioOwner, options);
+        },
+        onExit(card, mode) {
+            if (mode !== 'normal' && mode !== 'blind') return;
+            const tab = card.querySelector('.card-tab-btn[data-tab="buildup"]');
+            if (tab && !tab.classList.contains('active')) tab.click();
+            const toggle = card.querySelector(`.btn-feynman-toggle[data-mode="${mode}"]`);
+            if (toggle) toggle.click();
+        },
+    }) : null;
+
+    function bindDictationEntry(card) {
+        const data = dictationDataByCard.get(card);
+        if (!dictation || !data) return;
+        card.querySelectorAll('.btn-feynman-toggle[data-mode="write"], .btn-feynman-toggle[data-mode="listen"]').forEach(btn => {
+            btn.addEventListener('click', () => dictation.open(card, data, btn.dataset.mode));
+        });
+    }
 
 
     // What a highlighted chunk should sound like: its words, without the punctuation around it
