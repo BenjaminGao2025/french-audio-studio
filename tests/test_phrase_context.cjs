@@ -61,6 +61,9 @@ const A_PARTIR = {
 
     const snip = PC.snippet(SENTENCE, 0, 12);
     assert.deepEqual([snip.before, snip.match], ['', 'À partir des']);
+    // Long sentences are cut at word boundaries inside the radius, keeping the words around the match
+    const mid = PC.snippet(SENTENCE, 39, 45);
+    assert.deepEqual([mid.before, mid.match, mid.after], ['… sessions de 2026, il faut ', 'partir', ' tôt.']);
 }
 
 // ---- The study page's word card -----------------------------------------------------------
@@ -167,8 +170,12 @@ const phraseCalls = () => calls.filter(c => c.url === '/api/phrase-context').len
     assert.match($('.popover-phrase-meaning').textContent, /从……起 \/ starting from/);
     assert.match($('.popover-phrase-literal').textContent, /des = de \+ les/);
     assert.deepEqual(highlighted(), ['À', 'partir', 'des'], 'the span in the sentence is highlighted');
-    assert.equal($('.popover-standalone-label').hidden, false, 'its own meaning stays, labelled');
-    assert.match(pop.textContent, /离开；出发/);
+    assert.ok($('.popover-context').contains($('.popover-phrase')), 'the expression is the word\'s 语境');
+    assert.equal($('.popover-context').hidden, false);
+    assert.equal(pop.querySelectorAll('.popover-phrase').length, 1, 'no second expression block');
+    assert.equal($('.popover-dict').hidden, false, 'its own meaning stays, as the 词典');
+    assert.match($('.popover-dict').textContent, /离开；出发/);
+    assert.doesNotMatch($('.popover-dict').textContent, /从……起/, 'the expression does not replace the dictionary');
     assert.equal(api.tap().text, 'À partir des', 'the star saves the expression');
     assert.equal(phraseCalls(), 0, 'structured analysis data: no request');
 
@@ -196,11 +203,12 @@ const phraseCalls = () => calls.filter(c => c.url === '/api/phrase-context').len
     assert.equal(lookups(), before + 1);
     assert.equal($('.popover-phrase').hidden, true);
 
-    // 6. "lieu" has no entry of its own: an expression-only card without /api/lookup.
+    // 6. "lieu" has no entry of its own: its 词典 is looked up, the expression is its 语境.
     // Model text is only ever text.
     await tap('xss', 'lieu');
-    assert.equal(lookups(), before + 1, 'a word of a known expression needs no lookup');
-    assert.equal($('.popover-content').hidden, true, 'no empty standalone meaning');
+    assert.equal(lookups(), before + 2, 'a word of an expression still gets its own dictionary meaning');
+    assert.match($('.popover-dict').textContent, /查到的词义/);
+    assert.equal($('.popover-phrase').hidden, false);
     assert.equal(pop.querySelector('img, script'), null, 'no markup from the data');
     assert.match($('.popover-phrase-meaning').textContent, /img src=x onerror=alert\(1\)而不是/);
     assert.equal($('.popover-phrase-mark').textContent, 'Au lieu de');
@@ -265,8 +273,11 @@ const phraseCalls = () => calls.filter(c => c.url === '/api/phrase-context').len
 
     // 12. A selection / table chunk of the exact expression shows it, without a highlight
     const chip = document.getElementById('outside');
+    const chunkLookups = lookups();
     await popover.show('à partir des', chip, { sentence: SENTENCE }, { silent: true });
     assert.equal($('.popover-phrase').hidden, false);
+    assert.equal($('.popover-dict').hidden, true, 'the whole expression: its meaning is in 语境 only');
+    assert.equal(lookups(), chunkLookups, 'and nothing to look up');
     assert.deepEqual(highlighted(), []);
     // ...but a partial selection does not claim it
     await popover.show('partir des sessions', chip, { sentence: SENTENCE }, { silent: true });

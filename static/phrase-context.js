@@ -166,8 +166,9 @@
     function snippet(text, start, end, radius = 28) {
         let from = Math.max(0, start - radius);
         let to = Math.min(text.length, end + radius);
-        if (from > 0) { const cut = text.lastIndexOf(' ', start - 1); from = cut >= from ? cut + 1 : from; }
-        if (to < text.length) { const cut = text.indexOf(' ', end + 1); to = cut !== -1 && cut <= to ? cut : to; }
+        // Cut at word boundaries inside the radius (the first space after `from`, the last before `to`)
+        if (from > 0) { const cut = text.indexOf(' ', from); from = cut !== -1 && cut < start ? cut + 1 : from; }
+        if (to < text.length) { const cut = text.lastIndexOf(' ', to); to = cut >= end ? cut : to; }
         return {
             before: (from > 0 ? '… ' : '') + text.slice(from, start),
             match: text.slice(start, end),

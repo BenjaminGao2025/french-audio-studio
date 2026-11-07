@@ -17,10 +17,14 @@
     const TEXT = {
         en: {
             etymologyLoading: 'Loading etymology…', etymologyFailed: 'Could not load etymology. Please try again.',
-            baseForm: 'base form: ', contextWord: 'Word in context', readAs: 'Read as: ',
+            baseForm: 'base form: ', readAs: 'Read as: ',
             back: 'Back to ', lemmaLookup: word => `Look up ${word} and hear it`,
             lookingUpMeaning: 'Looking up the meaning...', lookupFailed: 'Lookup failed', noDefinition: 'Could not get the meaning',
-            phraseTag: 'Fixed expression', standaloneLabel: 'The word on its own',
+            phraseTag: 'Fixed expression',
+            dictTitle: 'Dictionary', contextTitle: 'In this sentence', meaningHere: 'Here: ', whyLabel: 'Why: ',
+            contextLoading: 'Working out how it is used here…', contextFailed: 'Could not explain this use right now.',
+            contextEmpty: 'Nothing special about this use.', retry: 'Retry',
+            contextUnavailable: 'No sentence context for this word here.',
             partOfPhrase: (word, phrase, meaning, alone) => `${alone ? `On its own “${word}” means “${alone}”, but here it` : `Here “${word}”`} is part of the fixed expression “${phrase}”${meaning ? `, which means “${meaning}”` : ''}: do not read it word by word.`,
             contractionNote: notes => `Here ${notes.join('; ')}.`,
             popoverStarTitle: 'Add to review (shortcut S)', popoverSaved: 'In review (click to remove)',
@@ -35,10 +39,14 @@
         },
         zh: {
             etymologyLoading: '正在查询词源…', etymologyFailed: '暂无法获取词源，请重试。',
-            baseForm: '原形: ', contextWord: '语境词汇', readAs: '读作：',
+            baseForm: '原形: ', readAs: '读作：',
             back: '返回 ', lemmaLookup: word => `查 ${word} 的释义和发音`,
             lookingUpMeaning: '正在查询字义...', lookupFailed: '查词失败', noDefinition: '暂无法获取释义',
-            phraseTag: '固定搭配', standaloneLabel: '单独的词义',
+            phraseTag: '固定搭配',
+            dictTitle: '词典', contextTitle: '语境', meaningHere: '这里的意思：', whyLabel: '为什么：',
+            contextLoading: '正在分析它在这句里的用法…', contextFailed: '暂时无法获取语境说明。',
+            contextEmpty: '这里没有需要特别说明的用法。', retry: '重试',
+            contextUnavailable: '这里没有可分析的句子语境。',
             partOfPhrase: (word, phrase, meaning, alone) => `${alone ? `「${word}」单独是「${alone}」，但` : `「${word}」`}在这句里是固定搭配「${phrase}」的一部分${meaning ? `，整体意思是「${meaning}」` : ''}，不能逐词直译。`,
             contractionNote: notes => `这里 ${notes.join('；')}。`,
             popoverStarTitle: '加入复习 (快捷键 S)', popoverSaved: '已加入复习（点击移除）',
@@ -53,6 +61,60 @@
         },
     };
     const T = TEXT[EN ? 'en' : 'zh'];
+
+    // Part of speech as a learner's grammar label (Chinese, or English in the English UI). Sources write
+    // it many ways: dictionary abbreviations (adj. poss., n.f.), English names, or the analysis's
+    // plain-English word types. A vague type ("small pointer word") names no part of speech: no label.
+    const POS_LABELS = [
+        [/^naming word/i, '名词', 'noun'],
+        [/^describing word/i, '形容词', 'adjective'],
+        [/^(?:action|doing) word/i, '动词', 'verb'],
+        [/^(?:adj\.?\s*poss|possessive)/i, '主有限定词', 'possessive determiner'],
+        [/^adj\.?\s*d[ée]m/i, '指示限定词', 'demonstrative determiner'],
+        [/^adj\.?\s*(?:interr|excl)/i, '疑问限定词', 'interrogative determiner'],
+        [/^adj\.?\s*ind[ée]f/i, '泛指限定词', 'indefinite determiner'],
+        [/^adj/i, '形容词', 'adjective'],
+        [/^art\.?\s*d[ée]f|^definite article/i, '定冠词', 'definite article'],
+        [/^art\.?\s*ind|^indefinite article/i, '不定冠词', 'indefinite article'],
+        [/^art\.?\s*part|^partitive/i, '部分冠词', 'partitive article'],
+        [/^(?:art\.?\s*)?contract/i, '缩合冠词', 'contracted article'],
+        [/^art/i, '冠词', 'article'],
+        [/^d[ée]t/i, '限定词', 'determiner'],
+        [/^pr[ée]p/i, '介词', 'preposition'],
+        [/^conj/i, '连词', 'conjunction'],
+        [/^adv\.?\s*n[ée]g/i, '否定副词', 'negative adverb'],
+        [/^adv/i, '副词', 'adverb'],
+        [/^pron\.?\s*pers/i, '人称代词', 'personal pronoun'],
+        [/^pron\.?\s*r[ée]fl/i, '自反代词', 'reflexive pronoun'],
+        [/^pron\.?\s*tonique/i, '重读人称代词', 'stressed pronoun'],
+        [/^pron\.?\s*d[ée]m/i, '指示代词', 'demonstrative pronoun'],
+        [/^pron\.?\s*rel/i, '关系代词', 'relative pronoun'],
+        [/^pron\.?\s*interr/i, '疑问代词', 'interrogative pronoun'],
+        [/^pron\.?\s*ind/i, '泛指代词', 'indefinite pronoun'],
+        [/^pron\.?\s*adv/i, '副代词', 'adverbial pronoun'],
+        [/^pron/i, '代词', 'pronoun'],
+        [/^v\.?\s*aux|^auxiliary/i, '助动词', 'auxiliary verb'],
+        [/^(?:p\.\s*p\.?|part\.?\s*pass|past participle)/i, '过去分词', 'past participle'],
+        [/^(?:part\.?\s*pr[ée]s|present participle)/i, '现在分词', 'present participle'],
+        [/^v(?:\.|erb|$)/i, '动词', 'verb'],
+        [/^n\.?\s*f\b/i, '阴性名词', 'feminine noun'],
+        [/^n\.?\s*m\b/i, '阳性名词', 'masculine noun'],
+        [/^(?:n\.?|noun|nom)$/i, '名词', 'noun'],
+        [/^interj/i, '感叹词', 'interjection'],
+        [/^(?:num|number|nombre)/i, '数词', 'number'],
+        [/^(?:loc|phrase|expression)/i, '短语', 'phrase'],
+    ];
+    function posLabel(pos) {
+        const labels = [];
+        String(pos || '').split('/').map(part => part.trim()).filter(Boolean).forEach(part => {
+            const known = POS_LABELS.find(([re]) => re.test(part));
+            let label = known ? known[EN ? 2 : 1] : '';
+            // Already a grammar label (e.g. 动词), or a short abbreviation this list does not know
+            if (!known && (/[一-鿿]/u.test(part) || (part.length <= 12 && !/\bword\b/i.test(part)))) label = part;
+            if (label && !labels.includes(label)) labels.push(label);
+        });
+        return labels.join(' / ');
+    }
 
     const BASIC_FRENCH_WORDS = {
         // Pronouns
@@ -354,8 +416,6 @@
                         <i data-lucide="volume-2" aria-hidden="true"></i>
                     </button>
                     <span class="popover-phonetic" title="${escapeHtml(T.replayTitle)}"></span>
-                    <span class="pos-tag popover-pos" hidden></span>
-                    <span class="lemma-tag popover-lemma" hidden></span>
                 </div>
             </div>
             <button class="icon-btn popover-close-btn" type="button" title="${escapeHtml(T.closeEsc)}">
@@ -363,24 +423,44 @@
             </button>
         </div>
         <div class="popover-body">
-            <div class="popover-phrase" hidden>
-                <div class="popover-phrase-head">
-                    <span class="popover-phrase-tag">${escapeHtml(T.phraseTag)}</span>
-                    <span class="popover-phrase-canonical" lang="fr"></span>
+            <section class="popover-dict" aria-label="${escapeHtml(T.dictTitle)}">
+                <div class="popover-section-head">
+                    <span class="popover-section-title">${escapeHtml(T.dictTitle)}</span>
+                    <span class="pos-tag popover-pos" hidden></span>
+                    <span class="lemma-tag popover-lemma" hidden></span>
                 </div>
-                <p class="popover-phrase-snippet" lang="fr"></p>
-                <p class="popover-phrase-meaning"></p>
-                <p class="popover-phrase-literal"></p>
-            </div>
-            <div class="popover-loading" hidden style="display: none;">
-                <i data-lucide="loader" class="spin-icon"></i>
-                <span>${escapeHtml(T.lookingUpMeaning)}</span>
-            </div>
-            <div class="popover-content">
-                <div class="popover-standalone-label" hidden>${escapeHtml(T.standaloneLabel)}</div>
-                <div class="popover-cn-text"></div>
-                <div class="popover-en-text"></div>
-            </div>
+                <div class="popover-loading" hidden style="display: none;">
+                    <i data-lucide="loader" class="spin-icon"></i>
+                    <span>${escapeHtml(T.lookingUpMeaning)}</span>
+                </div>
+                <div class="popover-content">
+                    <div class="popover-cn-text"></div>
+                    <div class="popover-en-text"></div>
+                </div>
+            </section>
+            <section class="popover-context" aria-label="${escapeHtml(T.contextTitle)}" hidden>
+                <div class="popover-section-head">
+                    <span class="popover-section-title">${escapeHtml(T.contextTitle)}</span>
+                </div>
+                <p class="popover-context-snippet" lang="fr" hidden></p>
+                <div class="popover-phrase" hidden>
+                    <div class="popover-phrase-head">
+                        <span class="popover-phrase-tag">${escapeHtml(T.phraseTag)}</span>
+                        <span class="popover-phrase-canonical" lang="fr"></span>
+                    </div>
+                    <p class="popover-phrase-snippet" lang="fr"></p>
+                    <p class="popover-phrase-meaning"></p>
+                    <p class="popover-phrase-literal"></p>
+                </div>
+                <p class="popover-context-meaning" hidden></p>
+                <p class="popover-context-why" hidden></p>
+                <p class="popover-context-note" hidden></p>
+                <div class="popover-context-status" role="status" hidden>
+                    <i data-lucide="loader" class="spin-icon" aria-hidden="true"></i>
+                    <span class="popover-context-status-text"></span>
+                    <button class="popover-context-retry" type="button" hidden>${escapeHtml(T.retry)}</button>
+                </div>
+            </section>
             <div class="popover-etymology">
                 <button class="popover-etymology-button" type="button">词根词源</button>
                 <div class="popover-etymology-text" role="status" hidden></div>
@@ -434,10 +514,14 @@
             close: q('.popover-close-btn'), loading: q('.popover-loading'), content: q('.popover-content'),
             cn: q('.popover-cn-text'), en: q('.popover-en-text'), importance: q('.popover-importance'),
             etymologyButton: q('.popover-etymology-button'), etymologyText: q('.popover-etymology-text'),
-            body: q('.popover-body'), standalone: q('.popover-standalone-label'),
+            body: q('.popover-body'), dict: q('.popover-dict'),
             phrase: q('.popover-phrase'), phraseCanonical: q('.popover-phrase-canonical'),
             phraseSnippet: q('.popover-phrase-snippet'), phraseMeaning: q('.popover-phrase-meaning'),
             phraseLiteral: q('.popover-phrase-literal'),
+            context: q('.popover-context'), ctxSnippet: q('.popover-context-snippet'),
+            ctxMeaning: q('.popover-context-meaning'), ctxWhy: q('.popover-context-why'), ctxNote: q('.popover-context-note'),
+            ctxStatus: q('.popover-context-status'), ctxStatusText: q('.popover-context-status-text'),
+            ctxRetry: q('.popover-context-retry'),
         };
         els.star.hidden = !saving;
 
@@ -457,6 +541,16 @@
         // The fixed expression of the open word card: {requestId, hit}, and its words marked in the sentence
         let phraseState = null;
         let phraseEls = [];
+        // 词典: the word on its own. 'ready', 'loading', 'failed', or 'none' (the tap is a whole fixed
+        // expression: its meaning is in 语境)
+        let dictState = 'ready';
+        let dictError = '';
+        // 语境 of the open card, one object per show(): {status, target, entry, hints, phrase, result,
+        // request}. A late answer updates the object it was asked for, and repaints only while that
+        // card is the one shown (Back brings an earlier card back with its state).
+        // status: 'waiting' (for the sentence's expressions), 'loading', 'ready', 'empty', 'phrase',
+        // 'unavailable' or 'failed'
+        let ctxState = null;
 
         function setPhraseHighlight(list) {
             phraseEls.forEach(el => el.classList && el.classList.remove('is-phrase-word'));
@@ -518,6 +612,7 @@
             activeEl = null;
             target = null;
             phraseState = null;
+            ctxState = null;
             setPhraseHighlight([]);
         }
 
@@ -624,8 +719,7 @@
         }
 
         // Model and page text only ever goes in as text nodes
-        function renderPhrase(item) {
-            const p = item.phrase;
+        function renderPhrase(item, p) {
             els.phrase.hidden = !p;
             if (!p) return;
             const canonical = p.phrase || p.text || '';
@@ -644,16 +738,31 @@
             els.phraseLiteral.textContent = [literal, notes.length ? T.contractionNote(notes) : ''].filter(Boolean).join(' ');
         }
 
-        function render(item) {
-            resetEtymology();
-            currentCard = item;
-            renderPhrase(item);
-            renderFrenchWords(els.word, item.token);
-            const phonetic = formatFriendlyPhonetic(item.phonetic || '');
-            els.phonetic.textContent = phonetic;
-            els.phonetic.hidden = !phonetic;
-            els.pos.textContent = item.pos || '';
-            els.pos.hidden = !item.pos;
+        // A sentence with one span marked, as text nodes only
+        function markSnippet(container, sentence, start, end) {
+            const PC = root.FrenchPhraseContext;
+            const snip = PC && PC.snippet ? PC.snippet(sentence, start, end)
+                : { before: sentence.slice(0, start), match: sentence.slice(start, end), after: sentence.slice(end) };
+            const mark = document.createElement('mark');
+            mark.className = 'popover-context-mark';
+            mark.textContent = snip.match;
+            container.replaceChildren(document.createTextNode(snip.before || ''), mark, document.createTextNode(snip.after || ''));
+        }
+
+        function labelled(container, label, text) {
+            const span = document.createElement('span');
+            span.className = 'popover-context-label';
+            span.textContent = label;
+            container.replaceChildren(span, document.createTextNode(text));
+            container.hidden = !text;
+        }
+
+        function renderDict(item) {
+            const shown = dictState !== 'none';
+            els.dict.hidden = !shown;
+            const label = posLabel(item.pos);
+            els.pos.textContent = label;
+            els.pos.hidden = !label;
             const showLemma = item.lemma && item.lemma.toLowerCase() !== item.token.toLowerCase();
             els.lemma.replaceChildren();
             if (showLemma) {
@@ -661,37 +770,142 @@
                 appendFrenchWords(els.lemma, item.lemma, true);
             }
             els.lemma.hidden = !showLemma;
-            // A word of a fixed expression: its own meaning (when the page has it) under the expression
-            const standalone = Boolean(item.explanation_cn || item.explanation_en);
-            const whole = item.phrase && (item.token || '').trim().toLowerCase() === (item.phrase.text || '').trim().toLowerCase();
-            els.standalone.hidden = !(item.phrase && standalone && !whole);
+            const loading = dictState === 'loading';
+            els.loading.hidden = !loading;
+            els.loading.style.display = loading ? 'flex' : 'none';
+            els.content.hidden = loading;
+            els.content.style.display = loading ? 'none' : 'block';
+            if (dictState === 'failed' || (!item.explanation_cn && !item.explanation_en)) {
+                els.cn.textContent = T.noDefinition;
+                els.en.textContent = dictState === 'failed' ? dictError : '';
+                return;
+            }
             if (EN) {
-                els.cn.textContent = pick(item.explanation_cn, item.explanation_en) || T.contextWord;
+                els.cn.textContent = pick(item.explanation_cn, item.explanation_en);
                 els.en.textContent = '';
             } else if (item.explanation_cn) {
                 els.cn.textContent = item.explanation_cn;
                 els.en.textContent = item.explanation_en || '';
             } else {
-                els.cn.textContent = item.explanation_en || T.contextWord;
+                els.cn.textContent = item.explanation_en;
                 els.en.textContent = '';
             }
             linkFrenchReferences(els.cn, item);
             linkFrenchReferences(els.en, item);
-            els.loading.hidden = true;
-            els.loading.style.display = 'none';
-            const showContent = !(item.phrase && !standalone);
-            els.content.hidden = !showContent;
-            els.content.style.display = showContent ? 'block' : 'none';
+        }
+
+        // The meaning in this sentence: the sentence analysis's when it has one, else the answer's
+        function meaningHere(ctx) {
+            const entry = ctx.entry || {};
+            const result = ctx.status === 'ready' && ctx.result ? ctx.result : {};
+            return { meaning_zh: entry.meaning_zh || result.meaning_zh || '', meaning_en: entry.meaning_en || result.meaning_en || '' };
+        }
+
+        function renderContext(item) {
+            const ctx = ctxState;
+            els.context.hidden = !ctx;
+            if (!ctx) { els.phrase.hidden = true; return; }
+            els.context.dataset.state = ctx.status;
+            renderPhrase(item, ctx.phrase);
+            const t = ctx.target;
+            const own = !ctx.phrase;  // a fixed expression shows its own snippet and meaning
+            els.ctxSnippet.hidden = !(t && own);
+            if (t && own) markSnippet(els.ctxSnippet, t.sentence, t.start, t.end);
+            const result = ctx.status === 'ready' && ctx.result ? ctx.result : {};
+            const entry = ctx.entry || {};
+            const { meaning_zh: zh, meaning_en: en } = own ? meaningHere(ctx) : { meaning_zh: '', meaning_en: '' };
+            labelled(els.ctxMeaning, T.meaningHere, (EN ? [en, zh] : [zh, en]).filter(Boolean).join(' / '));
+            const why = own ? result.why_zh || '' : '';
+            labelled(els.ctxWhy, T.whyLabel, why);
+            // The analysis's English note: in the English page, or when there is no Chinese why
+            const note = own && entry.why_en && (EN || !why) ? entry.why_en : '';
+            els.ctxNote.textContent = note;
+            els.ctxNote.hidden = !note;
+            const said = Boolean(zh || en || why || note || ctx.phrase);
+            const message = {
+                waiting: T.contextLoading, loading: T.contextLoading, failed: T.contextFailed,
+                empty: said ? '' : T.contextEmpty, unavailable: said ? '' : T.contextUnavailable,
+            }[ctx.status] || '';
+            els.ctxStatusText.textContent = message;
+            els.ctxStatus.hidden = !message;
+            els.ctxRetry.hidden = ctx.status !== 'failed';
+        }
+
+        function render(item) {
+            resetEtymology();
+            currentCard = item;
+            renderFrenchWords(els.word, item.token);
+            const phonetic = formatFriendlyPhonetic(item.phonetic || '');
+            els.phonetic.textContent = phonetic;
+            els.phonetic.hidden = !phonetic;
+            renderDict(item);
+            renderContext(item);
             refreshSaved();
             refreshIcons();
             position();
             requestAnimationFrame(() => position());
         }
 
+        function repaintContext(ctx) {
+            if (ctxState !== ctx || !isOpen() || !currentCard) return;
+            renderContext(currentCard);
+            refreshIcons();
+            position();
+        }
+
+        // Asks for the 语境 of ctx (options.wordContext.explain caches it, an empty answer too)
+        function startContext(ctx) {
+            const wc = options.wordContext;
+            if (!wc || !ctx.target) { ctx.status = 'unavailable'; return; }
+            ctx.status = 'loading';
+            ctx.result = null;
+            const request = Promise.resolve().then(() => wc.explain(ctx.target, ctx.hints));
+            ctx.request = request;
+            request.then(result => {
+                if (ctx.request !== request) return;
+                ctx.result = result || null;
+                ctx.status = result && ['ready', 'empty', 'unavailable'].includes(result.state) ? result.state : 'empty';
+            }, () => {
+                if (ctx.request === request) ctx.status = 'failed';
+            }).then(() => {
+                if (ctx.request !== request) return;
+                ctx.request = null;
+                repaintContext(ctx);
+            });
+        }
+
+        // A card shown again (Back) that was still waiting: ask now
+        function resumeContext(ctx) {
+            if (ctx && (ctx.status === 'loading' || ctx.status === 'waiting') && !ctx.request && !ctx.phrasePending) startContext(ctx);
+        }
+
         function remember(lower, item) {
             lookupCache.set(lower, item);
             if (options.remember) options.remember(lower, item);
         }
+
+        // The word's own meaning from the server (cached there for everyone, and here per page)
+        async function lookUp(word, requestId, base, decorate) {
+            try {
+                const token = options.getAuthToken ? options.getAuthToken() : '';
+                const res = await fetch(`/api/lookup?word=${encodeURIComponent(word)}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data.detail?.message || T.lookupFailed);
+                const item = Object.assign({}, data, { sentence: base.sentence, sentence_cn: base.sentence_cn });
+                remember(word.toLowerCase(), item);
+                if (requestId !== lookupGeneration || !isOpen()) return;
+                dictState = 'ready';
+                render(decorate(item));
+            } catch (err) {
+                if (requestId !== lookupGeneration || !isOpen()) return;
+                // The card keeps everything else it shows (语境, a fixed expression)
+                dictState = 'failed';
+                dictError = err.message || T.lookupFailed;
+                render(currentCard || decorate(base));
+            }
+        }
+
+        const foldText = text => String(text || '').normalize('NFC').replace(/’/g, "'").toLowerCase().replace(/\s+/g, ' ').trim();
 
         async function show(rawWord, element, context = {}, navigation = {}) {
             if (!element) return;
@@ -703,8 +917,9 @@
 
             const requestId = ++lookupGeneration;
             resetEtymology();
-            if (navigation.nested && currentCard) trail.push({ item: currentCard, target, highlight: phraseEls.slice() });
-            else trail.length = 0;
+            if (navigation.nested && currentCard) {
+                trail.push({ item: currentCard, target, highlight: phraseEls.slice(), ctx: ctxState, dict: dictState, dictError });
+            } else trail.length = 0;
             updateBack();
 
             target = element;
@@ -730,22 +945,52 @@
             setPhraseHighlight(phraseState.hit ? phraseState.hit.highlight : []);
             const decorate = (item) => (phraseState && phraseState.requestId === requestId && phraseState.hit
                 ? Object.assign({}, item, { phrase: phraseState.hit.phrase }) : item);
+
+            const number = frenchNumberReading(word);
+            // 语境: this occurrence of the word in its sentence. A nested lookup, a number or a chunk
+            // has none (options.wordContext.target returns null for what is not one word of the sentence).
+            const wc = options.wordContext;
+            const wcTarget = wc && !navigation.nested && !number ? wc.target(word, element, context) : null;
+            const entry = wcTarget && wcTarget.entry ? wcTarget.entry : null;
+            const ctx = (wc || phraseState.hit || (found && found.pending)) ? {
+                status: 'unavailable', target: wcTarget, entry, phrase: phraseState.hit ? phraseState.hit.phrase : null,
+                hints: entry ? { meaning_zh: entry.meaning_zh, meaning_en: entry.meaning_en, note_en: entry.why_en, lemma: entry.lemma, pos: entry.pos } : {},
+                result: null, request: null, phrasePending: false,
+            } : null;
+            ctxState = ctx;
+            if (ctx) {
+                // A word of a fixed expression: the expression is its meaning here, nothing to ask
+                if (ctx.phrase) ctx.status = 'phrase';
+                else if (found && found.pending) { ctx.status = 'waiting'; ctx.phrasePending = true; }
+                else startContext(ctx);
+            }
             if (found && found.pending) {
-                found.pending.then(next => {
-                    if (!next || !next.phrase || requestId !== lookupGeneration || !isOpen() || !currentCard) return;
-                    phraseState = { requestId, hit: next };
-                    setPhraseHighlight(next.highlight);
-                    // Still waiting for the word's own lookup: that render adds the expression
-                    if (!els.loading.hidden) return;
-                    const { phrase: _old, ...item } = currentCard;
-                    render(decorate(item));
-                }).catch(() => {});
+                found.pending.catch(() => null).then(next => {
+                    if (ctx) ctx.phrasePending = false;
+                    const current = requestId === lookupGeneration && isOpen() && currentCard;
+                    if (next && next.phrase) {
+                        if (ctx) { ctx.phrase = next.phrase; ctx.status = 'phrase'; }
+                        if (!current) { repaintContext(ctx); return; }
+                        phraseState = { requestId, hit: next };
+                        setPhraseHighlight(next.highlight);
+                        // Still waiting for the word's own lookup: that render adds the expression
+                        if (dictState === 'loading') { repaintContext(ctx); return; }
+                        const { phrase: _old, ...item } = currentCard;
+                        render(decorate(item));
+                        return;
+                    }
+                    // No expression after all: ask for this word's 语境, if its card is still open
+                    if (ctx && ctx.status === 'waiting' && ctxState === ctx && isOpen()) {
+                        startContext(ctx);
+                        repaintContext(ctx);
+                    }
+                });
             }
 
             const silent = Boolean(navigation.silent);
-            const number = frenchNumberReading(word);
             if (number) {
                 if (!silent) speak(number.spoken);
+                dictState = 'ready';
                 render(withContext({
                     token: word, speech: number.spoken, lemma: word, pos: number.pos, phonetic: '',
                     explanation_cn: EN ? '' : `${T.readAs}${number.spoken}`,
@@ -762,11 +1007,12 @@
                 speak((word.endsWith("'") || word.endsWith('’')) ? (BASIC_FRENCH_WORDS[lower]?.lemma || word) : word);
             }
 
-            // 1. The page's own data (sentence analysis, fixed expressions, the card being reviewed)
+            // 词典 never takes the meaning of this sentence: that is 语境's.
+            // 1. The page's own dictionary data (the card being reviewed)
             // A nested word must resolve individually, rather than being redirected back to
             // the surrounding sentence's fixed expression (e.g. venir -> viens de).
             const local = !navigation.nested && options.localLookup ? options.localLookup(lower, word, context) : null;
-            if (local) { render(decorate(withContext(Object.assign({ token: word }, local)))); return; }
+            if (local) { dictState = 'ready'; render(decorate(withContext(Object.assign({ token: word }, local)))); return; }
 
             // 2. Already looked up, or in the built-in A1 dictionary
             const cached = lookupCache.get(lower);
@@ -775,49 +1021,28 @@
             if (known) {
                 const item = withContext(Object.assign({}, known, { token: word }));
                 remember(lower, item);
+                dictState = 'ready';
                 render(decorate(item));
                 return;
             }
 
-            // A word of a fixed expression needs no lookup of its own: the expression is its meaning here
-            if (phraseState.hit) {
+            // A whole fixed expression (a table chunk, a selection): its meaning is the expression's
+            const hit = phraseState.hit && phraseState.hit.phrase;
+            if (hit && [hit.text, hit.phrase].some(text => text && foldText(text) === foldText(word))) {
+                dictState = 'none';
                 render(decorate(withContext({ token: word, lemma: '', pos: '', phonetic: '', explanation_cn: '', explanation_en: '' })));
                 return;
             }
 
-            // 3. Server lookup
-            currentCard = withContext({ token: word, lemma: word, pos: '', phonetic: '', explanation_cn: '', explanation_en: '' });
-            renderFrenchWords(els.word, word);
-            els.phonetic.textContent = '';
-            els.pos.hidden = true;
-            els.lemma.hidden = true;
-            els.phrase.hidden = true;
-            els.loading.hidden = false;
-            els.loading.style.display = 'flex';
-            els.content.hidden = true;
-            els.content.style.display = 'none';
-            refreshSaved();
-            refreshIcons();
+            // 3. Server lookup. The card opens at once with what the page knows of the word's form.
+            dictState = 'loading';
+            const base = withContext({
+                token: word, lemma: (entry && entry.lemma) || word, pos: '', phonetic: (entry && entry.phonetic) || '',
+                explanation_cn: '', explanation_en: '',
+            });
+            render(decorate(base));
             position(element);
-            try {
-                const token = options.getAuthToken ? options.getAuthToken() : '';
-                const res = await fetch(`/api/lookup?word=${encodeURIComponent(word)}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok) throw new Error(data.detail?.message || T.lookupFailed);
-                const item = withContext(data);
-                remember(lower, item);
-                if (requestId === lookupGeneration && isOpen()) render(decorate(item));
-            } catch (err) {
-                if (requestId === lookupGeneration && isOpen()) {
-                    els.loading.hidden = true;
-                    els.loading.style.display = 'none';
-                    els.content.hidden = false;
-                    els.content.style.display = 'block';
-                    els.cn.textContent = T.noDefinition;
-                    els.en.textContent = err.message;
-                    position(element);
-                }
-            }
+            await lookUp(word, requestId, base, decorate);
         }
 
         function replay() {
@@ -843,16 +1068,33 @@
             e.stopPropagation();
             const previous = trail.pop();
             if (!previous) return;
-            lookupGeneration++;
+            const requestId = ++lookupGeneration;
             target = previous.target;
             updateBack();
             phraseState = null;
             setPhraseHighlight(previous.highlight);
+            ctxState = previous.ctx || null;
+            dictState = previous.dict || 'ready';
+            dictError = previous.dictError || '';
             render(previous.item);
+            resumeContext(ctxState);
+            repaintContext(ctxState);
+            // Its own lookup was cut short by the nested one: ask again
+            if (dictState === 'loading') {
+                const phrase = previous.item.phrase;
+                lookUp(previous.item.token, requestId, previous.item, item => (phrase ? Object.assign({}, item, { phrase }) : item));
+            }
             replay();
         });
 
         els.close.addEventListener('click', close);
+        els.ctxRetry.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const ctx = ctxState;
+            if (!ctx || ctx.status !== 'failed') return;
+            startContext(ctx);
+            repaintContext(ctx);
+        });
         els.speak.addEventListener('click', (e) => { e.stopPropagation(); replay(); });
         els.phonetic.addEventListener('click', (e) => { e.stopPropagation(); replay(); });
         els.star.addEventListener('click', async (e) => {
@@ -990,7 +1232,14 @@
             if ((e.key === 's' || e.key === 'S') && saving) { els.star.click(); e.preventDefault(); e.stopImmediatePropagation(); }
         }, true);
 
-        return { show, close, isOpen, refreshSaved, activeElement: () => activeEl, element: pop };
+        // The open card's meaning in its sentence (语境), or null
+        function contextMeaning() {
+            if (!ctxState || ctxState.phrase) return null;
+            const here = meaningHere(ctxState);
+            return here.meaning_zh || here.meaning_en ? here : null;
+        }
+
+        return { show, close, isOpen, refreshSaved, contextMeaning, activeElement: () => activeEl, element: pop };
     }
 
     /**

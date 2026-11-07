@@ -154,6 +154,12 @@ RATE_LIMITS: dict[str, tuple[float, float]] = {
         float(os.getenv("RATE_PHRASE_AI_BURST", "20")),
         float(os.getenv("RATE_PHRASE_AI_PER_HOUR", "60")) / 3600,
     ),
+    # How one word works in one sentence (one model call per user, sentence and word, then cached),
+    # on top of the shared "ai" bucket
+    "word_context_ai": (
+        float(os.getenv("RATE_WORD_CONTEXT_AI_BURST", "40")),
+        float(os.getenv("RATE_WORD_CONTEXT_AI_PER_HOUR", "180")) / 3600,
+    ),
 }
 _rate_buckets: dict[tuple[object, str], tuple[float, float]] = {}
 _rate_lock = threading.Lock()

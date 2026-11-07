@@ -1,0 +1,231 @@
+{
+ "_comment": "Occurrences of a word in a sentence: word_context.word_spans and static/word-context.js spans() must agree (tests/test_word_context.py and .cjs).",
+ "spans": [
+  {
+   "word": "ton",
+   "sentence": "Prends ton sac.",
+   "spans": [
+    [
+     7,
+     10
+    ]
+   ]
+  },
+  {
+   "word": "Sac",
+   "sentence": "Prends ton sac.",
+   "spans": [
+    [
+     11,
+     14
+    ]
+   ]
+  },
+  {
+   "word": "ton",
+   "sentence": "C'est ton amie.",
+   "spans": [
+    [
+     6,
+     9
+    ]
+   ]
+  },
+  {
+   "word": "ami",
+   "sentence": "C'est ton amie.",
+   "spans": []
+  },
+  {
+   "word": "le",
+   "sentence": "Le chat voit le chien.",
+   "spans": [
+    [
+     0,
+     2
+    ],
+    [
+     13,
+     15
+    ]
+   ]
+  },
+  {
+   "word": "partir",
+   "sentence": "À partir des sessions de 2026, il faut partir tôt.",
+   "spans": [
+    [
+     2,
+     8
+    ],
+    [
+     39,
+     45
+    ]
+   ]
+  },
+  {
+   "word": "a",
+   "sentence": "À partir des sessions, il a fini.",
+   "spans": [
+    [
+     26,
+     27
+    ]
+   ]
+  },
+  {
+   "word": "à",
+   "sentence": "Il va à Paris, à pied.",
+   "spans": [
+    [
+     6,
+     7
+    ],
+    [
+     15,
+     16
+    ]
+   ]
+  },
+  {
+   "word": "une",
+   "sentence": "Le cours commence à partir d'une heure.",
+   "spans": []
+  },
+  {
+   "word": "d'une",
+   "sentence": "Le cours commence à partir d'une heure.",
+   "spans": [
+    [
+     27,
+     32
+    ]
+   ]
+  },
+  {
+   "word": "l'homme",
+   "sentence": "C’est l’homme.",
+   "spans": [
+    [
+     6,
+     13
+    ]
+   ]
+  },
+  {
+   "word": "être",
+   "sentence": "Il doit peut-être partir.",
+   "spans": [
+    [
+     13,
+     17
+    ]
+   ]
+  },
+  {
+   "word": "peut-être",
+   "sentence": "Il doit peut-être partir.",
+   "spans": [
+    [
+     8,
+     17
+    ]
+   ]
+  },
+  {
+   "word": "il",
+   "sentence": "Il mange et il dort, puis il part.",
+   "spans": [
+    [
+     0,
+     2
+    ],
+    [
+     12,
+     14
+    ],
+    [
+     26,
+     28
+    ]
+   ]
+  },
+  {
+   "word": "aujourd'hui",
+   "sentence": "Aujourd’hui, il pleut.",
+   "spans": [
+    [
+     0,
+     11
+    ]
+   ]
+  },
+  {
+   "word": "élève",
+   "sentence": "L'élève et les élèves.",
+   "spans": []
+  },
+  {
+   "word": "s",
+   "sentence": "C'est sa sœur.",
+   "spans": []
+  },
+  {
+   "word": "",
+   "sentence": "Prends ton sac.",
+   "spans": []
+  },
+  {
+   "word": "ton",
+   "sentence": "",
+   "spans": []
+  }
+ ],
+ "clean": [
+  {
+   "value": "ton",
+   "clean": "ton"
+  },
+  {
+   "value": " peut-être ",
+   "clean": "peut-être"
+  },
+  {
+   "value": "aujourd’hui",
+   "clean": "aujourd’hui"
+  },
+  {
+   "value": "ton sac",
+   "clean": ""
+  },
+  {
+   "value": "2026",
+   "clean": ""
+  },
+  {
+   "value": "<b>x</b>",
+   "clean": ""
+  },
+  {
+   "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "clean": ""
+  },
+  {
+   "value": "'",
+   "clean": ""
+  },
+  {
+   "value": "-",
+   "clean": ""
+  },
+  {
+   "value": "l'",
+   "clean": "l'"
+  },
+  {
+   "value": "élève",
+   "clean": "élève"
+  }
+ ]
+}

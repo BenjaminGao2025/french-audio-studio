@@ -17,6 +17,7 @@ import analysis
 import auth_db
 import phrase_context
 import srs
+import word_context
 from services import ai, asr
 from web_common import _require_user_id, rate_limit
 
@@ -361,6 +362,15 @@ async def ask_to_card(request: AskCardRequest, authorization: str | None = Heade
 
 
 LOOKUP_CACHE: dict[str, dict] = {}
+LOOKUP_MAX_CHARS = 200  # the selection bar's Meaning cap
+LOOKUP_FIELD_LIMITS = {
+    "token": 200,
+    "lemma": 200,
+    "pos": 40,
+    "phonetic": 120,
+    "explanation_cn": 400,
+    "explanation_en": 400,
+}
 
 
 async def request_word_lookup(word: str, api_key: str, model: str = ai.DEFAULT_MODEL) -> dict:
@@ -372,6 +382,7 @@ async def request_word_lookup(word: str, api_key: str, model: str = ai.DEFAULT_M
     prompt = (
         "You are an expert French pedagogical lexicographer for learners.\n"
         "Provide accurate linguistic details for the given French word or short phrase in valid JSON format ONLY.\n"
+        "Give its own dictionary meaning, as a dictionary does: there is no sentence around it.\n"
         "For a phrase, explain it as a whole (its meaning as a unit), not word by word.\n"
         "Schema:\n"
         "{\n"
@@ -421,15 +432,29 @@ async def request_word_lookup(word: str, api_key: str, model: str = ai.DEFAULT_M
                 data = {}
         else:
             data = {}
+    if not isinstance(data, dict):
+        data = {}
+
+    # Model output is untrusted and shared by every user: plain bounded text only
+    def field(key: str, default: str = "") -> str:
+        value = data.get(key)
+        return phrase_context.clean_text(value if isinstance(value, str) else default, LOOKUP_FIELD_LIMITS[key])
 
     result = {
-        "token": str(data.get("token", clean_word)),
-        "lemma": str(data.get("lemma", clean_word)),
-        "pos": str(data.get("pos", "")),
-        "phonetic": analysis.format_friendly_phonetic(str(data.get("phonetic", ""))),
-        "explanation_cn": str(data.get("explanation_cn", "语境词汇")),
-        "explanation_en": str(data.get("explanation_en", "")),
+        "token": field("token", clean_word) or clean_word,
+        "lemma": field("lemma", clean_word) or clean_word,
+        "pos": field("pos"),
+        "phonetic": analysis.format_friendly_phonetic(field("phonetic")),
+        "explanation_cn": field("explanation_cn"),
+        "explanation_en": field("explanation_en"),
     }
+    if not result["explanation_cn"] and not result["explanation_en"]:
+        # Never cached: the next tap may get a real definition
+        logger.warning("Lookup reply without a definition: %r", raw_text[:300])
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "lookup_bad_output", "message": "暂无法获取释义，请稍后再试。"},
+        )
 
     LOOKUP_CACHE[cache_key] = result
     return result
@@ -437,7 +462,7 @@ async def request_word_lookup(word: str, api_key: str, model: str = ai.DEFAULT_M
 
 @router.get("/api/lookup")
 async def lookup_word(
-    word: str,
+    word: str = Query(min_length=1, max_length=LOOKUP_MAX_CHARS),
     model: str = ai.DEFAULT_MODEL,
     authorization: str | None = Header(default=None),
 ):
@@ -556,6 +581,96 @@ async def phrase_context_for(
     # shield: a client that goes away mid-call does not cancel the answer the others wait for
     phrases = await asyncio.shield(task)
     return {"phrases": phrases, "cached": False, "shared": shared}
+
+
+class WordContextHints(BaseModel):
+    """What the page's analysis already says about the word here (optional notes for the model)."""
+
+    meaning_zh: str = Field(default="", max_length=200)
+    meaning_en: str = Field(default="", max_length=300)
+    note_en: str = Field(default="", max_length=600)
+    lemma: str = Field(default="", max_length=100)
+    pos: str = Field(default="", max_length=60)
+
+
+class WordContextRequest(BaseModel):
+    sentence: str = Field(min_length=1, max_length=word_context.SENTENCE_MAX_CHARS)
+    word: str = Field(min_length=1, max_length=word_context.WORD_MAX_CHARS)
+    occurrence: int = Field(default=0, ge=0, le=word_context.MAX_OCCURRENCE)
+    translation_zh: str = Field(default="", max_length=word_context.TRANSLATION_MAX_CHARS)
+    hints: WordContextHints = Field(default_factory=WordContextHints)
+
+
+# One model call per user, sentence and word at a time: duplicate opens wait for the same answer
+_word_context_in_flight: dict[tuple[int, str], asyncio.Task] = {}
+
+
+def _word_context_response(result: dict, **extra: Any) -> dict:
+    return {"context": result, "state": "empty" if word_context.is_empty(result) else "ready", **extra}
+
+
+async def _compute_word_context(
+    user_id: int,
+    key: str,
+    sentence: str,
+    word: str,
+    occurrence: int,
+    span: tuple[int, int],
+    request: WordContextRequest,
+    api_key: str,
+) -> dict:
+    payload = word_context.ai_payload(ai.AGY_MODEL, sentence, span, request.translation_zh, request.hints.model_dump())
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        _, raw_text = await ai.post_chat(client, payload, headers)
+    result = word_context.parse_ai_context(raw_text)
+    if result is None:
+        logger.warning("Word context reply not usable: %r", raw_text[:300])
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "word_context_bad_output", "message": "暂无法分析这个词在本句中的用法，请稍后再试。"},
+        )
+    try:
+        await run_in_threadpool(word_context.save_cached, user_id, key, sentence, word, occurrence, result)
+    except Exception:
+        logger.exception("Could not cache word context")
+    return result
+
+
+@router.post("/api/word-context")
+async def word_context_for(
+    request: WordContextRequest,
+    authorization: str | None = Header(default=None),
+):
+    """How one word works in one sentence: its meaning here and why this form (cached per user)."""
+    user_id = _require_user_id(authorization)
+    sentence = word_context.clean_sentence(request.sentence)
+    word = word_context.clean_word(request.word)
+    if not sentence or not word:
+        raise HTTPException(status_code=422, detail={"code": "word_context_invalid", "message": "请提供句子和单词"})
+    spans = word_context.word_spans(word, sentence)
+    if request.occurrence >= len(spans):
+        # Not a word of this sentence: there is nothing to explain, and no model call is spent on it
+        raise HTTPException(status_code=422, detail={"code": "word_not_in_sentence", "message": "这个词不在这句话里。"})
+    key = word_context.cache_key(sentence, word, request.occurrence)
+    cached = await run_in_threadpool(word_context.get_cached, user_id, key)
+    if cached is not None:
+        return _word_context_response(cached, cached=True)
+    task = _word_context_in_flight.get((user_id, key))
+    shared = task is not None
+    if task is None:
+        rate_limit(user_id, "word_context_ai")
+        api_key = ai.upstream_key(authorization)  # checks the account and spends the shared "ai" bucket
+        task = asyncio.ensure_future(
+            _compute_word_context(
+                user_id, key, sentence, word, request.occurrence, spans[request.occurrence], request, api_key
+            )
+        )
+        _word_context_in_flight[(user_id, key)] = task
+        task.add_done_callback(lambda _: _word_context_in_flight.pop((user_id, key), None))
+    # shield: a client that goes away mid-call does not cancel the answer the others wait for
+    result = await asyncio.shield(task)
+    return _word_context_response(result, cached=False, shared=shared)
 
 
 class GrammarPointIn(BaseModel):

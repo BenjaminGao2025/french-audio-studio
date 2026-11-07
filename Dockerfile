@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # helpers from other projects) must never ship. Add a new top-level module here when you create one.
 COPY analysis.py auth_db.py coach.py cockpit.py comprehension.py curriculum.py dictation.py edge_compat.py \
      episodes.py game.py grammar.py intake.py journal.py phrase_context.py speaking.py srs.py transform.py \
-     tts_service.py web_common.py writing.py ./
+     tts_service.py web_common.py word_context.py writing.py ./
 COPY routers /app/routers
 COPY services /app/services
 COPY scripts /app/scripts

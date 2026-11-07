@@ -500,6 +500,9 @@ function initStudyWorkbench() {
         };
     }
 
+    const wordContextClient = window.FrenchWordContext
+        ? window.FrenchWordContext.createClient({ getToken: () => getEffectiveAuthToken() }) : null;
+
     const wordPopover = window.FrenchWordPopover.create({
         speak: (text) => playFrenchSpeech(text, null, { once: true }),
         getAuthToken: () => getEffectiveAuthToken(),
@@ -509,18 +512,19 @@ function initStudyWorkbench() {
         // Selecting text shows the read bar below (Read selection / Meaning), not the popover
         selectionPopover: false,
         contextFor: sentenceContextFor,
-        localLookup(lower, word, context) {
-            const tokens = window.activeTokensMap || new Map();
-            const elided = (lower.match(/^(?:aujourd['’]hui|([cjdlnmstqu]|qu)['’](.+))$/i) || [])[2];
-            const match = tokens.get(lower) || (elided && tokens.get(elided));
-            return match ? Object.assign({}, match, { token: word }) : null;
-        },
+        // No localLookup: the word table holds each word's meaning in its own sentence, which is the
+        // card's 语境 (wordContext below), never its 词典 (built-in dictionary, then /api/lookup)
         remember(lower, item) {
             if (!window.activeTokensMap) window.activeTokensMap = new Map();
             window.activeTokensMap.set(lower, item);
         },
         // A word of a fixed expression of this sentence shows the whole expression (static/phrase-context.js)
         phraseLookup: (word, element, context) => phraseLookup(word, element, context),
+        // 语境: the tapped occurrence in its sentence (static/word-context.js, POST /api/word-context)
+        wordContext: wordContextClient ? {
+            target: (word, element, context) => wordContextTarget(word, element, context),
+            explain: (target, hints) => wordContextClient.explain(target, hints),
+        } : null,
         saving: {
             ...wordBook.popoverSaving,
             async toggle(item) {
@@ -528,11 +532,16 @@ function initStudyWorkbench() {
                 const tap = phraseTap && phraseTap.element === wordPopover.activeElement() ? phraseTap : null;
                 chunkForToggle = item.phrase ? item.phrase.text : (tap ? '' : null);
                 const p = item.phrase;
+                // A word saves its meaning in this sentence (语境) when the card has it, as before
+                const here = p ? null : wordPopover.contextMeaning();
                 try {
                     await wordBook.popoverSaving.toggle(p ? Object.assign({}, item, {
                         explanation_cn: p.meaning_zh || item.explanation_cn,
                         explanation_en: p.meaning_en || item.explanation_en,
                         lemma: p.phrase || item.lemma,
+                    }) : here ? Object.assign({}, item, {
+                        explanation_cn: here.meaning_zh || item.explanation_cn,
+                        explanation_en: here.meaning_en || item.explanation_en,
                     }) : item);
                 } finally {
                     chunkForToggle = null;
@@ -664,6 +673,51 @@ function initStudyWorkbench() {
             })
             : null;
         return found || pending ? { phrase: found ? found.phrase : null, highlight: found ? found.highlight : [], pending } : null;
+    }
+
+    // ---- 语境 of a word card (static/word-context.js) ---------------------------------------------
+    // Which occurrence of the sentence a tap means: the tapped word's own place on the sentence line;
+    // for the word table, its k-th row of that word (the table lists the sentence in order) when the
+    // table has a row for each occurrence; anywhere else only a word the sentence has once.
+    // null (no 语境) for what is not one word of a sentence on this page.
+    function wordContextTarget(word, element, context) {
+        const WC = window.FrenchWordContext;
+        const sentence = context && context.sentence ? context.sentence : '';
+        const clean = WC ? WC.cleanWord(word) : '';
+        if (!clean || !sentence || !element || !element.closest) return null;
+        const spans = WC.spans(clean, sentence);
+        if (!spans.length) return null;
+        const key = srsSentenceKey(sentence);
+        const norm = text => (text || '').normalize('NFC').replace(/’/g, "'").trim().toLowerCase();
+        const table = wordTables.get(key) || [];
+        const rows = table.filter(w => norm(w.fr || w.token) === norm(clean));
+        const rowPerOccurrence = rows.length === spans.length;
+        let occurrence = -1;
+        const line = element.classList && element.classList.contains('interactive-word') ? element.closest('.sentence-french-text') : null;
+        if (line && line.textContent === sentence) {
+            const own = wordSpans(line).find(sp => sp.el === element);
+            if (own) occurrence = spans.findIndex(sp => sp.start < own.end && own.start < sp.end);
+        } else if (element.dataset && element.dataset.wordIndex !== undefined) {
+            const k = rows.indexOf(table[Number(element.dataset.wordIndex)]);
+            if (k !== -1 && (rowPerOccurrence || spans.length === 1)) occurrence = spans.length === 1 ? 0 : k;
+        } else if (spans.length === 1) {
+            occurrence = 0;
+        }
+        if (occurrence < 0) return null;
+        const row = rowPerOccurrence ? rows[occurrence] : null;
+        const info = sentenceContextByKey.get(key) || {};
+        return {
+            sentence, word: clean, occurrence, start: spans[occurrence].start, end: spans[occurrence].end,
+            translation_zh: info.translation_zh || context.sentence_cn || '',
+            entry: row ? {
+                meaning_zh: row.meaning_zh || row.explanation_cn || '',
+                meaning_en: row.meaning || row.explanation_en || '',
+                why_en: row.why || '',
+                lemma: row.lemma || '',
+                phonetic: row.ipa || row.phonetic || '',
+                pos: row.type || row.pos || '',
+            } : null,
+        };
     }
 
     // Select French text (drag, long press, or the sentence's Select mode): a bar below offers
@@ -949,6 +1003,7 @@ function initStudyWorkbench() {
     const srsNotesByKey = new Map();       // sentence key -> saved note with its cards
     const phraseIndex = new Map();         // sentence key -> fixed expressions (FrenchPhraseContext.fromAnalysis)
     const phraseRequests = new Map();      // sentence key -> pending / finished /api/phrase-context answer
+    const wordTables = new Map();          // sentence key -> the analysis's word table, in its order (语境)
     let phraseTap = null;                  // {element, text}: where the open word card was tapped
     let chunkForToggle = null;             // while the popover star saves: the expression to save, '' for none
     const sentenceContextByKey = new Map(); // sentence key -> translations + grammar from analysis
@@ -1480,7 +1535,7 @@ function initStudyWorkbench() {
         return getPosCategory(pos) === 'function';
     }
 
-    function renderWordBreakdownCard(w, sentenceText = '', transZh = '') {
+    function renderWordBreakdownCard(w, sentenceText = '', transZh = '', index = -1) {
         const tokenText = w.fr || w.token || '';
         const sameText = (a, b) => (a || '').trim().toLowerCase() === (b || '').trim().toLowerCase();
         const lemma = w.lemma && !sameText(w.lemma, tokenText) ? w.lemma : '';
@@ -1514,7 +1569,7 @@ function initStudyWorkbench() {
             <div class="word-item">
                 <div class="word-item-head">
                     <span class="word-item-title">
-                        <span class="token-word" lang="fr" title="${T.clickForMeaning}">${escapeHtml(tokenText)}</span>
+                        <span class="token-word" lang="fr"${index >= 0 ? ` data-word-index="${index}"` : ''} title="${T.clickForMeaning}">${escapeHtml(tokenText)}</span>
                         ${ipa ? `<span class="word-ipa">${escapeHtml(formatFriendlyPhonetic(ipa))}</span>` : ''}
                         ${pos || lemma ? `<span class="word-meta">${[pos, lemma ? T.baseForm + lemma : ''].filter(Boolean).map(escapeHtml).join(' · ')}</span>` : ''}
                     </span>
@@ -1689,6 +1744,7 @@ function initStudyWorkbench() {
         }
         window.activeTokensMap.clear();
         phraseIndex.clear();
+        wordTables.clear();
 
         if (!sentences || sentences.length === 0) {
             studyDeckSection.hidden = true;
@@ -1739,6 +1795,7 @@ function initStudyWorkbench() {
                     if (lemma) window.activeTokensMap.set(lemma.toLowerCase(), entry);
                 }
             });
+            wordTables.set(srsSentenceKey(sentenceText), wordsList);
             if (window.FrenchPhraseContext) {
                 phraseIndex.set(srsSentenceKey(sentenceText), Object.assign(window.FrenchPhraseContext.fromAnalysis(s), { translation_zh: transZh }));
             }
@@ -1980,7 +2037,7 @@ function initStudyWorkbench() {
                 });
                 const shownWords = contentWords.length ? contentWords : wordsList;
                 const hiddenWords = contentWords.length ? functionWords : [];
-                const renderWords = list => list.map(w => renderWordBreakdownCard(w, sentenceText, transZh)).join('');
+                const renderWords = list => list.map(w => renderWordBreakdownCard(w, sentenceText, transZh, wordsList.indexOf(w))).join('');
 
                 const wordsSectionHtml = `
                     <div class="word-list">${renderWords(shownWords)}</div>
@@ -2081,7 +2138,7 @@ function initStudyWorkbench() {
             } else {
                 // ==================== LEGACY V1 RENDERING ====================
                 let rowsHtml = '';
-                wordsList.forEach(tok => {
+                wordsList.forEach((tok, tokIndex) => {
                     const tokenText = tok.token || tok.fr || '';
                     const lemma = tok.lemma && tok.lemma !== tokenText ? tok.lemma : '';
                     const pos = tok.pos || tok.type || '';
@@ -2095,7 +2152,7 @@ function initStudyWorkbench() {
                             <td>
                                 <div class="token-cell">
                                     <div class="token-main-row">
-                                        <span class="token-word" lang="fr">${escapeHtml(tokenText)}</span>
+                                        <span class="token-word" lang="fr" data-word-index="${tokIndex}">${escapeHtml(tokenText)}</span>
                                         <div class="token-actions">
                                             <button class="btn-token-speak" type="button" title="${T.clickToPronounce}" data-speech="${escapeHtml(tokenText)}">
                                                 <i data-lucide="volume-2"></i>
