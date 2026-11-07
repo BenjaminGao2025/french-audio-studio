@@ -192,6 +192,12 @@
         // they were on screen. A phone can clear the selection (and hide the bar through another
         // path) during the tap on the bar; the action still runs on what the user saw.
         let remembered = null;
+        // Meaning owns this range until the user selects a different span. Native selections often
+        // remain painted while buttons are pressed; do not offer the same selection again.
+        let meaningRange = null;
+        const inCard = node => Boolean(node && (node.nodeType === 1 ? node : node.parentElement)?.closest('.floating-word-popover'));
+        const sameRange = (a, b) => Boolean(a && b && a.startContainer === b.startContainer
+            && a.startOffset === b.startOffset && a.endContainer === b.endContainer && a.endOffset === b.endOffset);
         let pressing = false;
         let pressTimer = null;
         let mouseHeld = false;
@@ -335,6 +341,8 @@
             if (rangeLine && !rangeLine.isConnected) exitRange();
             if (rangeLine) return;
             const found = nativeSelection();
+            if (found && sameRange(meaningRange, found.range)) { hide(); return; }
+            if (found) meaningRange = null;
             if (!found) { scheduleHide(); return; }
             // A word the popover is already open for (a double click selects it afterwards) needs
             // no bar: the popover has its own speaker
@@ -396,7 +404,8 @@
         }
 
         doc.addEventListener('mousedown', (e) => {
-            if (e.button !== 0 || bar.contains(e.target)) return;
+            if (e.button !== 0 || bar.contains(e.target) || inCard(e.target)) return;
+            meaningRange = null;
             mouseHeld = true;
             if (!rangeLine) hide();
             const line = frenchLineOf(e.target);
@@ -415,10 +424,13 @@
             dragFrom = null;
             if (!mouseHeld) return;
             mouseHeld = false;
-            if (!bar.contains(e.target)) scheduleEvaluate(0, e.detail >= 2);
+            if (!bar.contains(e.target) && !inCard(e.target)) scheduleEvaluate(0, e.detail >= 2);
         });
-        doc.addEventListener('touchstart', () => { touching = true; }, { passive: true });
-        const touchEnded = (e) => { touching = false; if (!rangeLine && !bar.contains(e.target)) scheduleEvaluate(SETTLE_MS); };
+        doc.addEventListener('touchstart', (e) => {
+            touching = true;
+            if (!bar.contains(e.target) && !inCard(e.target)) meaningRange = null;
+        }, { passive: true });
+        const touchEnded = (e) => { touching = false; if (!rangeLine && !bar.contains(e.target) && !inCard(e.target)) scheduleEvaluate(SETTLE_MS); };
         doc.addEventListener('touchend', touchEnded, { passive: true });
         doc.addEventListener('touchcancel', touchEnded, { passive: true });
         // Mark the bar pressed as early as possible (before selectionchange can hide it).
@@ -503,6 +515,8 @@
                     ? picked.text.slice(0, MEANING_MAX).replace(/\s+\S*$/, '').trim() || picked.text.slice(0, MEANING_MAX)
                     : picked.text;
                 bar.hidden = true;
+                clearTimeout(settleTimer);
+                meaningRange = range ? range.cloneRange() : null;
                 // coversRange() lets the popover tell this selection from a new one: it stays
                 // open while the phrase it explains is still selected (one range holds the other)
                 const holds = (outer, inner) => outer.compareBoundaryPoints(Range.START_TO_START, inner) <= 0

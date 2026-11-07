@@ -176,7 +176,8 @@
     // ---------------------------------------------------------------------
     const TEXT = {
         en: {
-            kicker: { write: 'Recall · see the English, write the French', listen: 'Dictation · listen and write' },
+            kicker: { write: 'Recall', listen: 'Dictation' },
+            sentenceOf: (k, n) => `Sentence ${k} / ${n}`,
             modeAria: 'Study mode', modeNormal: 'Show all', modeBlind: 'Test me', modeWrite: 'Recall', modeListen: 'Dictation',
             back: 'Back to the card',
             scopeAria: 'What to practise', scopeWhole: 'Whole sentence', scopeSteps: n => `Step by step (${n})`,
@@ -209,7 +210,8 @@
             historyRow: (a, when) => `${when} · ${a.accuracy}%${a.counts && a.counts.accent ? ` · accents ${a.counts.accent}` : ''}`,
         },
         zh: {
-            kicker: { write: '默写 · 看英文写法语', listen: '听写 · 听句子写法语' },
+            kicker: { write: '默写', listen: '听写' },
+            sentenceOf: (k, n) => `第 ${k} / ${n} 句`,
             modeAria: '学习模式切换', modeNormal: '全部显示', modeBlind: '考考我', modeWrite: '默写', modeListen: '听写',
             back: '返回卡片',
             scopeAria: '练习范围', scopeWhole: '整句', scopeSteps: n => `逐步（${n} 步）`,
@@ -372,17 +374,16 @@
                 <div class="dictation-view" id="${esc(viewId)}" role="tabpanel" data-mode="${state.mode}" data-scope="${state.scope}">
                     <div class="dictation-head">
                         <div class="dictation-heading">
-                            <span class="dictation-kicker">${esc(T.kicker[state.mode])}</span>
-                            ${data.total > 1 ? `<span class="sentence-position">${data.index + 1} / ${data.total}</span>` : ''}
+                            <h3 class="dictation-kicker">${esc(T.kicker[state.mode])} · ${esc(T.sentenceOf((data.index || 0) + 1, data.total || 1))}</h3>
                         </div>
-                        <button class="btn-secondary dictation-back" type="button" data-exit-mode="back">${esc(T.back)}</button>
+                        <button class="btn btn-secondary dictation-back" type="button" data-exit-mode="back">${esc(T.back)}</button>
                     </div>
-                    ${hasSteps ? `
+                    ${`
                         <div class="dictation-scope" role="group" aria-label="${esc(T.scopeAria)}">
-                            <button class="dictation-scope-btn" type="button" data-scope="whole" aria-pressed="${state.scope === 'whole'}">${esc(T.scopeWhole)}</button>
-                            <button class="dictation-scope-btn" type="button" data-scope="steps" aria-pressed="${state.scope === 'steps'}">${esc(T.scopeSteps(n))}</button>
+                            <button class="btn btn-secondary dictation-scope-btn" type="button" data-scope="whole" aria-pressed="${state.scope === 'whole'}">${esc(T.scopeWhole)}</button>
+                            ${hasSteps ? `<button class="btn btn-secondary dictation-scope-btn" type="button" data-scope="steps" aria-pressed="${state.scope === 'steps'}">${esc(T.scopeSteps(n))}</button>` : ''}
                         </div>
-                    ` : ''}
+                    `}
                     <div class="dictation-task"></div>
                 </div>
             `;
@@ -425,19 +426,19 @@
                     : `<div class="dictation-noprompt" role="note">
                             <p>${esc(target.step === 0 ? T.noPromptWhole : T.noPrompt)}</p>
                             <div class="dictation-noprompt-actions">
-                                <button class="btn-secondary dictation-switch-listen" type="button">${esc(T.listenThis)}</button>
-                                ${state.scope === 'steps' && state.step < n ? `<button class="btn-secondary dictation-skip" type="button">${esc(T.skip)}</button>` : ''}
+                                <button class="btn btn-secondary dictation-switch-listen" type="button">${esc(T.listenThis)}</button>
+                                ${state.scope === 'steps' && state.step < n ? `<button class="btn btn-secondary dictation-skip" type="button">${esc(T.skip)}</button>` : ''}
                             </div>
                        </div>`)
                 : `<div class="dictation-audio">
-                        <button class="btn-secondary dictation-play" type="button" data-rate="1"><i data-lucide="volume-2"></i><span>${esc(T.play)}</span></button>
-                        <button class="btn-secondary dictation-play" type="button" data-rate="0.75"><i data-lucide="snail"></i><span>${esc(T.playSlow)}</span></button>
+                        <button class="btn btn-secondary dictation-play" type="button" data-rate="1"><i data-lucide="volume-2"></i><span>${esc(T.play)}</span></button>
+                        <button class="btn btn-secondary dictation-play" type="button" data-rate="0.75"><i data-lucide="snail"></i><span>${esc(T.playSlow)}</span></button>
                         ${prompt ? `<button class="dictation-hint-btn" type="button" aria-expanded="false">${esc(T.showHint)}</button>` : ''}
                    </div>
                    ${prompt ? `<p class="dictation-prompt dictation-hint" lang="en" hidden>${esc(prompt)}</p>` : ''}`;
             task.innerHTML = `
                 <div class="dictation-step-head">
-                    <span class="dictation-step-label">${esc(state.scope === 'steps' ? T.stepOf(state.step, n) : T.wholeSentence)}</span>
+                    ${state.scope === 'steps' ? `<span class="dictation-step-label">${esc(T.stepOf(state.step, n))}</span>` : ''}
                     <span class="dictation-stats">${esc(statsText(state, target))}</span>
                     ${getToken() ? `<button class="dictation-history-btn" type="button" aria-expanded="false">${esc(T.history)}</button>` : ''}
                 </div>
@@ -448,8 +449,8 @@
                 <textarea class="dictation-input" id="${id}" rows="2" maxlength="1000" lang="fr" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="${esc(T.placeholder)}"></textarea>
                 <p class="dictation-message" role="status" aria-live="polite"></p>
                 <div class="dictation-actions">
-                    <button class="btn-primary dictation-check" type="button">${esc(T.check)}</button>
-                    <button class="btn-secondary dictation-reveal" type="button">${esc(T.reveal)}</button>
+                    <button class="btn btn-primary dictation-check" type="button">${esc(T.check)}</button>
+                    <button class="btn btn-secondary dictation-reveal" type="button">${esc(T.reveal)}</button>
                 </div>
                 <div class="dictation-result" hidden></div>
             `;
@@ -545,6 +546,7 @@
             message.textContent = '';
             checkBtn.disabled = true;
             checkBtn.textContent = T.checking;
+            checkBtn.setAttribute('aria-busy', 'true');
             let result = null;
             let saveState = 'local';
             try {
@@ -619,16 +621,16 @@
                 <div class="dictation-answer">
                     <span class="dictation-answer-label">${esc(T.correctAnswer)}</span>
                     <p class="dictation-answer-text" lang="fr">${esc(expected)}</p>
-                    <button class="btn-secondary dictation-play-answer" type="button"><i data-lucide="volume-2"></i><span>${esc(T.listenAnswer)}</span></button>
+                    <button class="btn btn-secondary dictation-play-answer" type="button"><i data-lucide="volume-2"></i><span>${esc(T.listenAnswer)}</span></button>
                 </div>
                 ${note ? `<p class="dictation-note">${esc(note)}</p>` : ''}
                 <p class="dictation-save-state" data-state="${esc(result ? saveState : 'revealed')}">${esc(saveText)}</p>
                 <div class="dictation-next">
-                    <button class="btn-secondary dictation-retry" type="button">${esc(T.retry)}</button>
+                    <button class="btn ${state.scope === 'steps' ? 'btn-secondary' : 'btn-primary'} dictation-retry" type="button">${esc(T.retry)}</button>
                     ${state.scope === 'steps' ? (isLast
-                        ? `<button class="btn-primary dictation-again" type="button">${esc(T.again)}</button>`
-                        : `<button class="btn-primary dictation-next-step" type="button">${esc(T.next)}</button>`) : ''}
-                    ${canAi ? `<button class="btn-secondary dictation-ai-btn" type="button" title="${esc(T.aiTitle)}"><i data-lucide="sparkles"></i><span>${esc(T.ai)}</span></button>` : ''}
+                        ? `<button class="btn btn-primary dictation-again" type="button">${esc(T.again)}</button>`
+                        : `<button class="btn btn-primary dictation-next-step" type="button">${esc(T.next)}</button>`) : ''}
+                    ${canAi ? `<button class="btn btn-secondary dictation-ai-btn" type="button" title="${esc(T.aiTitle)}"><i data-lucide="sparkles"></i><span>${esc(T.ai)}</span></button>` : ''}
                 </div>
                 ${state.scope === 'steps' && isLast && result ? `<p class="dictation-done">${esc(T.done)}</p>` : ''}
                 <div class="dictation-ai" aria-live="polite" hidden></div>
@@ -637,7 +639,9 @@
             const checkBtn = task.querySelector('.dictation-check');
             checkBtn.disabled = true;
             checkBtn.textContent = T.check;
+            checkBtn.setAttribute('aria-busy', 'false');
             task.querySelector('.dictation-reveal').disabled = true;
+            task.querySelector('.dictation-actions').hidden = true;
             task.querySelector('.dictation-input').readOnly = true;
             task.querySelectorAll('.dictation-progress li').forEach((li, k) => {
                 const step = k + 1;
@@ -665,9 +669,11 @@
                 return;
             }
             btn.disabled = true;
+            btn.setAttribute('aria-busy', 'true');
             panel.innerHTML = `<p class="dictation-ai-loading">${esc(T.aiLoading)}</p>`;
             const res = await api('POST', `/api/dictation/attempts/${encodeURIComponent(result.attempt_id)}/ai`);
             if (!box.isConnected) return;
+            btn.setAttribute('aria-busy', 'false');
             const fb = res.ok && res.data && res.data.feedback;
             if (!fb) {
                 const detail = res.data && res.data.detail;

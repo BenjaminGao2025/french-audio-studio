@@ -52,12 +52,27 @@ const LABELS = {
 
 for (const lang of ['en', 'zh']) {
     const { window, document, errors } = page(lang);
-    window.renderStudyDeck([LONG, SHORT, LEGACY]);
+    const structure = [{text: 'Je', block: 'N'}, {text: 'voudrais', block: 'V'}, {text: 'ce soir', block: 'S'}];
+    window.renderStudyDeck([LONG, SHORT, LEGACY].map(s => ({...s, structure})));
     const cards = [...document.querySelectorAll('.sentence-card')];
     assert.equal(cards.length, 3);
     const tabsOf = card => [...card.querySelectorAll('.sentence-body > .card-tabs-bar .card-tab-btn')];
     const [long, short, legacy] = cards;
 
+    for (const card of cards) {
+        assert.equal(card.querySelectorAll('.structure-bar').length, 1);
+        assert.equal(card.querySelector('[data-panel="grammar"]').firstElementChild.className, 'structure-bar');
+        assert.equal(card.querySelector('.sentence-head .structure-bar, .sentence-body > .structure-bar'), null);
+        assert.equal(card.querySelectorAll('.structure-span').length, 3);
+        assert.equal(card.querySelector('.structure-map-link').getAttribute('href'), '/grammar');
+    }
+    long.querySelector('.feynman-mode-switch [data-mode="blind"]').click();
+    assert.ok(long.querySelector('.buildup-steps-list').classList.contains('is-blind-mode'));
+    long.querySelector('.feynman-mode-switch [data-mode="normal"]').click();
+    assert.ok(!long.querySelector('.buildup-steps-list').classList.contains('is-blind-mode'));
+    long.querySelector('.feynman-mode-switch [data-dictation-mode="write"]').click();
+    assert.ok(long.classList.contains('is-dictating'));
+    long.querySelector('[data-exit-mode="back"]').click();
     // Same base set, same order, same labels, on every card; Steps first only where there is a build-up
     assert.deepEqual(tabsOf(long).map(b => b.dataset.tab), ['buildup', ...BASE], `${lang}: long card keeps Say it next to Steps`);
     assert.deepEqual(tabsOf(short).map(b => b.dataset.tab), BASE, `${lang}: D'accord`);
@@ -76,14 +91,14 @@ for (const lang of ['en', 'zh']) {
         }
         assert.deepEqual(buttons.filter(b => b.dataset.dictationMode).map(b => [b.dataset.tab, b.dataset.dictationMode]), [['recall', 'write'], ['dictation', 'listen']]);
         assert.equal(card.querySelectorAll('.card-tab-panel').length, buttons.length - 2);
-        // One Say it panel per card, no "Write it:" row, no dictation buttons left in the Steps switch
+        // One Say it panel per card, no obsolete Write it sub-row
         assert.equal(card.querySelectorAll('.shadowing-panel').length, 1, 'Say it rendered once');
         assert.equal(card.querySelectorAll('.dictation-entry, .dictation-entry-label').length, 0, 'no Write it row');
         assert.doesNotMatch(card.textContent, /Write it|写出来：/);
-        assert.equal(card.querySelectorAll('.feynman-mode-switch [data-mode="write"], .feynman-mode-switch [data-mode="listen"]').length, 0);
+        assert.equal(card.querySelectorAll('.feynman-mode-switch').length, card === long ? 1 : 0);
     }
-    // Steps keeps only Show all / Test me
-    assert.deepEqual([...long.querySelectorAll('.feynman-mode-switch .btn-feynman-toggle')].map(b => b.dataset.mode), ['normal', 'blind']);
+    // Steps preserves its existing Show all / Test me / Recall / Dictation switcher
+    assert.deepEqual([...long.querySelectorAll('.feynman-mode-switch .btn-feynman-toggle')].map(b => b.dataset.mode || b.dataset.dictationMode), ['normal', 'blind', 'write', 'listen']);
     // An empty Grammar / Sounds tab says so instead of disappearing
     assert.ok(short.querySelector('[data-panel="grammar"] .card-tab-empty').textContent.length > 4);
     assert.ok(short.querySelector('[data-panel="pron"] .card-tab-empty').textContent.length > 4);

@@ -523,6 +523,22 @@ const snippetBefore = () => $('.popover-context-snippet').firstChild.textContent
     assert.deepEqual([...pop.querySelectorAll('.popover-dict-formula [data-lookup-word]')].map(b => b.dataset.lookupWord), ['de', 'le']);
     assert.doesNotMatch($('.popover-dict').innerHTML, /<script|<img/);
 
+    // D’accord decomposes from cached/static constituents even when context would fail.
+    const beforeAccord = {lookups: lookups(), calls: contextCalls().length};
+    for (const token of ["D'accord", 'D’accord', "D'ACCORD"]) {
+        await popover.show(token, document.getElementById('line-sac'), {sentence: token + '.'});
+        await settle();
+        assert.equal(visible('.popover-dict'), true);
+        assert.match(text('.popover-dict'), /d’ = de（元音前省略）/);
+        assert.match(text('.popover-dict'), /accord = 一致、同意、协议（阳性名词 \/ n.m.）/);
+        assert.match(text('.popover-context'), /好的 \/ 同意/);
+        assert.match(text('.popover-context'), /处于一致/);
+        assert.equal(pop.querySelector('.popover-dict .popover-en')?.textContent || '', '');
+        assert.ok(pop.querySelector('.popover-dict').compareDocumentPosition(pop.querySelector('.popover-context')) & window.Node.DOCUMENT_POSITION_FOLLOWING);
+    }
+    assert.equal(lookups(), beforeAccord.lookups);
+    assert.equal(contextCalls().length, beforeAccord.calls);
+
     // 16. Close clears the card; the 700ms settle still protects a fresh card
     await tap('sac', 'ton');
     document.getElementById('outside').dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, button: 0 }));

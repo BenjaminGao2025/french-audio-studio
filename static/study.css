@@ -3364,3 +3364,23 @@ a.nav-deck-btn {
 @media (pointer: coarse) {
     .dictation-scope-btn, .dictation-back { min-height: 44px; }
 }
+
+/* Practice uses the site's shared .btn system; pill shape and touch sizing apply to every action. */
+.dictation-view { padding: var(--space-4); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
+.dictation-view .btn { min-height: 44px; border-radius: var(--radius-full, 999px); font-family: inherit; font-size: var(--text-sm); padding: 8px 16px; white-space: normal; }
+.dictation-view .btn:disabled { opacity: .55; cursor: not-allowed; }
+.dictation-view .btn[aria-busy="true"] { cursor: progress; }
+.dictation-kicker { margin: 0; font-size: var(--text-base); }
+.dictation-scope { padding: 4px; border-radius: var(--radius-full, 999px); background: var(--surface-muted); align-self: flex-start; }
+.dictation-view .dictation-scope-btn { border-color: transparent; background: transparent; }
+.dictation-view .dictation-scope-btn[aria-pressed="true"] { background: var(--primary-soft); color: var(--primary); }
+.dictation-history-btn { margin-left: auto; min-height: 44px; }
+.dictation-prompt { font-weight: 600; }
+.dictation-actions[hidden] { display: none; }
+.dictation-audio svg, .dictation-next svg, .dictation-answer svg { width: 18px; height: 18px; flex-shrink: 0; }
+.card-tab-panel[data-panel="grammar"] > .structure-bar { margin-top: 0; margin-bottom: var(--space-4); }
+@media (max-width: 600px) {
+    .dictation-view { padding: var(--space-3); }
+    .dictation-step-head .dictation-history-btn { margin-left: auto; }
+    .dictation-next .btn { flex: 1 1 140px; }
+}

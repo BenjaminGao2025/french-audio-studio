@@ -124,6 +124,20 @@ const select = (from, to) => {
     assert.equal(popover.isOpen(), true, 'Meaning opens the phrase popover');
     assert.equal(popover.element.querySelector('.popover-word').textContent.trim(), 'ma femme');
     assert.deepEqual(spoken, ['femme', 'ma femme', 'ma femme'], 'the popover speaks the phrase too');
+    await settled(750);
+    // Every descendant (SVG, text span, controls) belongs to the open card, not the document selection.
+    for (const child of [popover.element.querySelector('.popover-etymology-button'), popover.element.querySelector('.popover-word'), popover.element.querySelector('svg')].filter(Boolean)) {
+        mouse('mousedown', child, 20, 310);
+        mouse('mouseup', child, 20, 310);
+        document.dispatchEvent(new window.Event('selectionchange'));
+        await settled(650);
+        assert.equal(popover.isOpen(), true, 'card child keeps Meaning open beyond 700ms');
+        assert.equal(bar.hidden, true, 'consumed native selection does not bring the bar back');
+    }
+    select(byWord.deux, byWord.enfants);
+    await settled(750);
+    assert.equal(bar.hidden, false, 'a genuinely new selection still offers Meaning');
+    assert.equal(popover.isOpen(), false, 'new selection dismisses the old Meaning card');
     popover.close();
     await settled(50);
 

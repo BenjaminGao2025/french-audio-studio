@@ -338,3 +338,35 @@ test('quotes, guillemets and marks never show in the diff; elisions do', async (
     assert.equal(card.querySelectorAll('.dt-wrong, .dt-missing, .dt-extra').length, 0);
     assert.equal(ops.length, 9);  // J' ai faim dit il puis L' homme Oui
 });
+
+test('practice hierarchy and shared rounded button system through answering, reveal, grading and retry', async () => {
+    const env = setup();
+    env.ctl.open(env.card, {...DATA, index: 3, total: 7}, 'write');
+    const q = s => env.card.querySelector(s);
+    assert.equal(q('.dictation-kicker').textContent, '默写 · 第 4 / 7 句');
+    assert.equal(env.card.querySelectorAll('.dictation-heading').length, 1);
+    assert.equal(env.card.querySelectorAll('.dictation-scope').length, 1);
+    assert.equal(env.card.querySelectorAll('.dictation-step-label').length, 0);
+    assert.equal(env.card.querySelectorAll('button[data-scope="whole"]').length, 1);
+    assert.ok(q('.dictation-history-btn').closest('.dictation-step-head'));
+    const shared = () => {
+        for (const b of env.card.querySelectorAll('.btn-primary, .btn-secondary')) assert.ok(b.classList.contains('btn'));
+    };
+    shared();
+    assert.ok(q('.dictation-check').classList.contains('btn-primary'));
+    assert.ok(q('.dictation-reveal').classList.contains('btn-secondary'));
+    q('.dictation-reveal').click();
+    assert.equal(q('.dictation-actions').hidden, true);
+    assert.ok(q('.dictation-retry').classList.contains('btn-primary'));
+    shared();
+    q('.dictation-retry').click();
+    await answer(env, 'erreur');
+    assert.equal(q('.dictation-actions').hidden, true);
+    assert.ok(q('.dictation-ai-btn').classList.contains('btn-secondary'));
+    assert.equal(env.calls.filter(c => c.url.endsWith('/ai')).length, 0);
+    shared();
+    q('.dictation-retry').click();
+    q('[data-scope="steps"]').click();
+    assert.match(q('.dictation-step-label').textContent, /第 1 \/ 3 步/);
+    env.window.close();
+});

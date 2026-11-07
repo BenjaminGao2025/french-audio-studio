@@ -117,6 +117,8 @@
     }
 
     const BASIC_FRENCH_WORDS = {
+        accord: { token: 'accord', lemma: 'accord', pos: 'n.m.', phonetic: '/a.kɔʁ/', explanation_cn: '一致、同意、协议', explanation_en: 'agreement; accord' },
+        "d'accord": { token: "d'accord", lemma: "d'accord", pos: 'expression', phonetic: '/da.kɔʁ/', explanation_cn: '好的；同意', explanation_en: 'OK; agreed' },
         // Pronouns
         "je": { token: "je", lemma: "je", pos: "pron. pers.", phonetic: "/ʒə/", explanation_cn: "我 (第一人称单数主格代词)", explanation_en: "I (subject pronoun)" },
         "j'": { token: "j'", lemma: "je", pos: "pron. pers.", phonetic: "/ʒ/", explanation_cn: "我 (je 在元音或哑音h前的省音形式)", explanation_en: "I (elision of je)" },
@@ -843,6 +845,19 @@
             els.loading.style.display = loading ? 'flex' : 'none';
             els.content.hidden = loading;
             els.content.style.display = loading ? 'none' : 'block';
+            if (/^d['’]accord$/i.test(item.token)) {
+                const constituent = lookupCache.get('accord') || BASIC_FRENCH_WORDS.accord;
+                const de = BASIC_FRENCH_WORDS["d'"];
+                const row = document.createElement('p');
+                row.className = 'popover-dict-use';
+                row.textContent = `d’ = ${de.lemma}（元音前省略）`;
+                const accord = document.createElement('p');
+                accord.className = 'popover-dict-use';
+                accord.textContent = `accord = ${constituent.explanation_cn || BASIC_FRENCH_WORDS.accord.explanation_cn}（阳性名词 / n.m.）`;
+                els.cn.replaceChildren(row, accord);
+                els.en.textContent = EN ? 'de (elided before a vowel) + accord (agreement; masculine noun)' : '';
+                return;
+            }
             const forms = contractionOf(item.token);
             if (forms) { renderContraction(forms); return; }
             if (dictState === 'failed' || (!item.explanation_cn && !item.explanation_en)) {
@@ -855,7 +870,7 @@
                 els.en.textContent = '';
             } else if (item.explanation_cn) {
                 els.cn.textContent = item.explanation_cn;
-                els.en.textContent = item.explanation_en || '';
+                els.en.textContent = item.explanation_en === item.explanation_cn ? '' : item.explanation_en || '';
             } else {
                 els.cn.textContent = item.explanation_en;
                 els.en.textContent = '';
@@ -1030,11 +1045,16 @@
             ctxState = ctx;
             if (ctx) {
                 // A word of a fixed expression: the expression is its meaning here, nothing to ask
-                if (ctx.phrase) ctx.status = 'phrase';
+                if (/^d['’]accord$/i.test(word)) {
+                    // Established elision/expression, independent of an AI response or sentence cache.
+                    ctx.phrase = { text: word, phrase: "d’accord", meaning_zh: '好的 / 同意', meaning_en: 'OK / agreed', literal_zh: '字面意思是“处于一致”：de 在元音前省略为 d’。' };
+                    ctx.status = 'phrase';
+                }
+                else if (ctx.phrase) ctx.status = 'phrase';
                 else if (found && found.pending) { ctx.status = 'waiting'; ctx.phrasePending = true; }
                 else startContext(ctx);
             }
-            if (found && found.pending) {
+            if (found && found.pending && !/^d['’]accord$/i.test(word)) {
                 found.pending.catch(() => null).then(next => {
                     if (ctx) ctx.phrasePending = false;
                     const current = requestId === lookupGeneration && isOpen() && currentCard;
@@ -1069,7 +1089,7 @@
                 return;
             }
 
-            const lower = word.toLowerCase();
+            const lower = word.toLowerCase().replace(/’/g, "'");
             const elided = (lower.match(ELISION_RE) || [])[2];
             // Elided forms such as "l'" are read as their full word.
             // Meaning from the selection bar passes silent: true so it only opens the card.
@@ -1272,7 +1292,7 @@
             selectionTimer = setTimeout(showSelectedPhrase, delay);
         };
         document.addEventListener('mousedown', (e) => {
-            if (e.button !== 0) return;
+            if (e.button !== 0 || pop.contains(e.target)) return;
             mouseHeld = true;
             if (isOpen()) pressedSinceShow = true;
         });

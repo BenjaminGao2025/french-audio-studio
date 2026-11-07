@@ -1997,6 +1997,10 @@ function initStudyWorkbench() {
                                         <i data-lucide="brain"></i>
                                         <span>${T.modeBlind}</span>
                                     </button>
+                                    ${window.FrenchDictation ? `
+                                        <button class="btn-feynman-toggle" data-dictation-mode="write" type="button" title="${T.modeWriteTitle}">${T.modeWrite}</button>
+                                        <button class="btn-feynman-toggle" data-dictation-mode="listen" type="button" title="${T.modeListenTitle}">${T.modeListen}</button>
+                                    ` : ''}
                                 </div>
                             </div>
                             <div class="feynman-tip-banner" hidden>
@@ -2165,7 +2169,7 @@ function initStudyWorkbench() {
             const tabs = [
                 hasValidBuildup && { id: 'buildup', label: T.tabBuildup, html: buildupHtml },
                 { id: 'words', label: T.tabWords, html: wordsPanelHtml },
-                { id: 'grammar', label: T.tabGrammar, html: grammarHtml || emptyPanel(T.noGrammar) },
+                { id: 'grammar', label: T.tabGrammar, html: structureBarHtml(s.structure) + (grammarHtml || emptyPanel(T.noGrammar)) },
                 { id: 'pron', label: T.tabPron, html: pronTipsHtml || emptyPanel(T.noPron) },
                 { id: 'shadowing', label: T.shadowScore, html: shadowingHtml },
                 window.FrenchDictation && { id: 'recall', label: T.modeWrite, title: T.modeWriteTitle, dictation: 'write' },
@@ -2175,7 +2179,6 @@ function initStudyWorkbench() {
             // Recall / Dictation have no panel: their tab opens the exercise in place of the card
             const panels = tabs.filter(t => !t.dictation);
             const bodyHtml = `
-                ${structureBarHtml(s.structure)}
                 <div class="card-tabs-bar" role="tablist">
                     ${tabs.map((t, i) => `
                         <button class="card-tab-btn ${i === 0 ? 'active' : ''}" data-tab="${t.id}" type="button" role="tab" aria-selected="${i === 0}"${t.dictation ? ` data-dictation-mode="${t.dictation}" title="${escapeHtml(t.title)}"` : ` aria-controls="card-panel-${idx}-${t.id}"`}>${t.label}</button>
@@ -3082,7 +3085,7 @@ function initStudyWorkbench() {
         const buildupSection = card.querySelector('.buildup-section');
         if (buildupSection) {
             const stepsList = buildupSection.querySelector('.buildup-steps-list');
-            const feynmanToggles = buildupSection.querySelectorAll('.btn-feynman-toggle');
+            const feynmanToggles = buildupSection.querySelectorAll('.btn-feynman-toggle[data-mode]');
             const tipBanner = buildupSection.querySelector('.feynman-tip-banner');
             const revealAllBtn = buildupSection.querySelector('.btn-reveal-all');
 
@@ -3178,7 +3181,7 @@ function initStudyWorkbench() {
     function bindDictationEntry(card) {
         const data = dictationDataByCard.get(card);
         if (!dictation || !data) return;
-        card.querySelectorAll('.card-tab-btn[data-dictation-mode]').forEach(btn => {
+        card.querySelectorAll('[data-dictation-mode]').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 dictation.open(card, data, btn.dataset.dictationMode);
