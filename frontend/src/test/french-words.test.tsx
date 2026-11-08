@@ -216,7 +216,8 @@ describe("FrenchWords", () => {
     mount();
     fireEvent.click(word("femme"));
     expect(document.querySelector(".popover-loading")).toHaveTextContent("Looking up");
-    expect(await screen.findByText("looked up")).toBeInTheDocument();
+    await waitFor(() => expect(document.querySelector(".popover-dict")).toHaveTextContent("looked up"));
+    expect(document.querySelector(".popover-headline")).toHaveTextContent("looked up");
     expect(api.analyze.lookup).toHaveBeenCalledWith("femme");
     vi.mocked(api.analyze.lookup).mockRejectedValueOnce(new Error("offline"));
     fireEvent.click(word("déjà"));

@@ -21,7 +21,7 @@
             back: 'Back to ', lemmaLookup: word => `Look up ${word} and hear it`,
             lookingUpMeaning: 'Looking up the meaning...', lookupFailed: 'Lookup failed', noDefinition: 'Could not get the meaning', lookupTimeout: 'The lookup timed out, try again later',
             phraseTag: 'Fixed expression',
-            dictTitle: 'Dictionary', contextTitle: 'In this sentence', meaningHere: 'Here: ', whyLabel: 'Why: ', whyTitle: 'Why',
+            dictMore: 'More', dictLess: 'Less', dictTitle: 'Dictionary', contextTitle: 'In this sentence', meaningHere: 'Here: ', whyLabel: 'Why: ', whyTitle: 'Why',
             contextLoading: 'Working out how it is used here…', contextFailed: 'Could not explain this use right now.',
             contextEmpty: 'Nothing special about this use.', retry: 'Retry',
             contextUnavailable: 'No sentence context for this word here.',
@@ -45,7 +45,7 @@
             back: '返回 ', lemmaLookup: word => `查 ${word} 的释义和发音`,
             lookingUpMeaning: '正在查询字义...', lookupFailed: '查词失败', noDefinition: '暂无释义', lookupTimeout: '查询超时，请稍后再试',
             phraseTag: '固定搭配',
-            dictTitle: '词典', contextTitle: '语境', meaningHere: '这里的意思：', whyLabel: '为什么：', whyTitle: '为什么',
+            dictMore: '展开', dictLess: '收起', dictTitle: '词典', contextTitle: '语境', meaningHere: '这里的意思：', whyLabel: '为什么：', whyTitle: '为什么',
             contextLoading: '正在分析它在这句里的用法…', contextFailed: '暂时无法获取语境说明。',
             contextEmpty: '这里没有需要特别说明的用法。', retry: '重试',
             contextUnavailable: '这里没有可分析的句子语境。',
@@ -444,6 +444,41 @@
             .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
     }
 
+
+    // The headline of a word card: a short Chinese core meaning plus a short English one, cut from the
+    // dictionary gloss. The full gloss lives in the 词典 zone; a long gloss is never the headline.
+    function glossItems(text, isEn) {
+        const cleaned = String(text || '')
+            .replace(/(^|[\s;；。.])\d{1,2}[.、)）]\s*/g, '$1;')
+            .replace(/[（(][^()（）]{0,14}[）)]\s*/g, m => (/^[（(]\s*(?:n|v|adj|adv|prep|conj|pron|det|art|interj|num|m|f|nm|nf|vt|vi|vp|loc)\b[.\s)）]/i.test(m) || /^[（(][^a-z]*[）)]/i.test(m) && !isEn ? ' ' : m))
+            .replace(/^\s*(?:n\.?[mf]\.?|v\.?|adj\.?|adv\.?|prep\.?|conj\.?|pron\.?)\s+/i, '');
+        return cleaned.split(/[;；。\n]+/).map(part => part.replace(/^[\s,，、:：.]+|[\s,，、:：.]+$/g, '')).filter(Boolean);
+    }
+    // The numbered sense that matches the entry's part of speech, else the whole gloss (first sense first)
+    function senseFor(text, pos) {
+        const raw = String(text || '');
+        const kind = /^\s*n/i.test(pos || '') ? /n\.|名|noun/i : /^\s*adj/i.test(pos || '') ? /adj|形/i : /^\s*v/i.test(pos || '') ? /\bv|动|动词/i : /^\s*adv/i.test(pos || '') ? /adv|副/i : null;
+        if (!kind) return raw;
+        const groups = raw.split(/(?=\d{1,2}[.、]\s*[（(])/).filter(g => g.trim());
+        const hit = groups.find(g => kind.test((g.match(/[（(][^()（）]{0,14}[）)]/) || [''])[0]));
+        return hit || raw;
+    }
+    function shortCore(text, isEn, pos) {
+        text = senseFor(text, pos);
+        const limit = isEn ? 30 : 14;
+        const picked = [];
+        let length = 0;
+        for (const item of glossItems(text, isEn)) {
+            if (picked.includes(item)) continue;
+            if (picked.length >= 2 || (picked.length && length + item.length + 2 > limit)) break;
+            picked.push(item);
+            length += item.length + 2;
+        }
+        let out = picked.join(isEn ? '; ' : '；');
+        if (out.length > limit + 6) out = out.slice(0, limit).replace(/[\s,，、(（]+\S*$/, '') || out.slice(0, limit);
+        return out;
+    }
+
     function popoverMarkup() {
         return `
         <div class="popover-arrow" aria-hidden="true"></div>
@@ -467,6 +502,10 @@
                 <i data-lucide="x" aria-hidden="true"></i>
             </button>
         </div>
+        <div class="popover-headline" hidden>
+            <span class="popover-headline-zh" lang="zh"></span>
+            <span class="popover-headline-en" lang="en"></span>
+        </div>
         <div class="popover-body">
             <section class="popover-dict" aria-label="${escapeHtml(T.dictTitle)}">
                 <div class="popover-section-head">
@@ -482,6 +521,7 @@
                     <div class="popover-cn-text"></div>
                     <div class="popover-en-text"></div>
                 </div>
+                <button class="popover-dict-more" type="button" aria-expanded="false" hidden></button>
             </section>
             <section class="popover-context" aria-label="${escapeHtml(T.contextTitle)}" hidden>
                 <div class="popover-section-head">
@@ -609,6 +649,8 @@
             footer: q('.popover-footer'), whyDetail: q('.popover-why-detail'),
             etymologyButton: q('.popover-etymology-button'), etymologyText: q('.popover-etymology-text'),
             body: q('.popover-body'), dict: q('.popover-dict'),
+            headline: q('.popover-headline'), hlZh: q('.popover-headline-zh'), hlEn: q('.popover-headline-en'),
+            dictMore: q('.popover-dict-more'),
             phrase: q('.popover-phrase'), phraseCanonical: q('.popover-phrase-canonical'),
             phraseSnippet: q('.popover-phrase-snippet'), phraseMeaning: q('.popover-phrase-meaning'),
             phraseLiteral: q('.popover-phrase-literal'),
@@ -754,6 +796,14 @@
         }
 
         const etymologyCache = new Map();
+        els.dictMore.addEventListener('click', (e) => {
+            e.preventDefault();
+            const open = els.content.classList.toggle('is-clamped') === false;
+            els.dictMore.setAttribute('aria-expanded', String(open));
+            els.dictMore.textContent = open ? T.dictLess : T.dictMore;
+            position();
+        });
+
         els.etymologyButton.addEventListener('click', async (e) => {
             e.stopPropagation();
             if (!currentCard || els.etymologyButton.disabled) return;
@@ -1071,6 +1121,58 @@
             }
             linkFrenchReferences(els.cn, item);
             linkFrenchReferences(els.en, item);
+            setDictClamp(els.cn.textContent.length + els.en.textContent.length > DICT_FOLD_CHARS);
+        }
+
+        // One concise line of the dictionary gloss; a long one folds behind a toggle.
+        const DICT_FOLD_CHARS = 70;
+        function setDictClamp(long) {
+            els.content.classList.toggle('is-clamped', long);
+            els.dictMore.hidden = !long;
+            els.dictMore.setAttribute('aria-expanded', 'false');
+            els.dictMore.textContent = T.dictMore;
+        }
+
+        // The headline: short Chinese core + short English, from the gloss; never the raw gloss.
+        const coreFetched = new Set();
+        function renderHeadline(item) {
+            const ctx = ctxState;
+            let zh = '';
+            let en = '';
+            if (dictState === 'none') {
+                const phrase = ctx && ctx.phrase;
+                zh = shortCore(phrase && phrase.meaning_zh, false);
+                en = shortCore(phrase && phrase.meaning_en, true);
+            } else if (dictState === 'ready' && els.content.dataset.kind === 'gloss') {
+                zh = shortCore(item.explanation_cn, false, item.pos);
+                en = shortCore(item.explanation_en, true, item.pos);
+                if (!zh) {
+                    // No Chinese in a kept snapshot: this sentence's meaning stands in until the lookup fills it
+                    const here = ctx && !ctx.phrase ? meaningHere(ctx) : null;
+                    zh = shortCore(here && here.meaning_zh, false);
+                    fetchCore(item);
+                }
+            }
+            if (zh && en && zh.toLowerCase() === en.toLowerCase()) en = '';
+            els.hlZh.textContent = zh;
+            els.hlEn.textContent = en;
+            els.headline.hidden = !(zh || en);
+        }
+        // A saved snapshot may lack the Chinese gloss: ask for it once per word, then repaint
+        function fetchCore(item) {
+            const key = normalizeWord(item.token);
+            if (coreFetched.has(key) || item.phrase) return;
+            coreFetched.add(key);
+            const requestId = lookupGeneration;
+            lookupWord(item.token).then(data => {
+                if (!data || !data.explanation_cn) return;
+                remember(item.token, Object.assign({}, item, data, { sentence: item.sentence, sentence_cn: item.sentence_cn }));
+                if (requestId !== lookupGeneration || !isOpen() || !currentCard || currentCard.token !== item.token) return;
+                currentCard = Object.assign({}, currentCard, { explanation_cn: data.explanation_cn });
+                renderDict(currentCard);
+                renderHeadline(currentCard);
+                position();
+            }, () => {});
         }
 
         // The meaning in this sentence: the sentence analysis's when it has one, else the answer's
@@ -1128,6 +1230,7 @@
             els.phonetic.hidden = !phonetic;
             renderDict(item);
             renderContext(item);
+            renderHeadline(item);
             renderLookupCount();
             refreshSaved();
             refreshIcons();
@@ -1138,6 +1241,7 @@
         function repaintContext(ctx) {
             if (ctxState !== ctx || !isOpen() || !currentCard) return;
             renderContext(currentCard);
+            renderHeadline(currentCard);
             refreshIcons();
             position();
         }
