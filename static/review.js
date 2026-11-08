@@ -464,6 +464,8 @@
 
     window.FrenchReadSelection.create({
         wordSelector: '.fr-word',
+        // A selection opens its meaning card directly (the card's speaker plays the audio).
+        meaningOnSelect: true,
         speak: (text, onEnd) => playFrench(text, 1, { once: true, onEnd }),
         contextFor: reviewContextFor,
         meaning: (text, anchor, context) => wordPopover.show(text, anchor, context, { silent: true }),

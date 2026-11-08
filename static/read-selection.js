@@ -163,11 +163,13 @@
      *   wordSelector               CSS selector of the tappable words (range mode)
      *   rangeLineFor(toggle)       the French line a [data-range-toggle] button selects words in
      *   meaning(text, anchor, ctx) optional: opens the phrase popover; anchor has getBoundingClientRect
+     *   meaningOnSelect            true: a text selection opens that card directly (no Read/Meaning bar)
      *   contextFor(element)        optional: {sentence, sentence_cn} around the selection
      *   openWord()                 optional: the word element the popover is open for, if any
      */
     function create(options) {
         const wordSelector = options.wordSelector || '';
+        const meaningOnSelect = Boolean(options.meaningOnSelect && options.meaning);
         const coarse = () => Boolean(root.matchMedia && root.matchMedia('(pointer: coarse)').matches);
 
         const bar = doc.createElement('div');
@@ -348,7 +350,10 @@
             // no bar: the popover has its own speaker
             const open = afterDoubleClick === true && options.openWord ? options.openWord() : null;
             if (open && !found.text.includes(' ') && open.contains(found.range.commonAncestorContainer)) { hide(); return; }
-            show({ text: found.text, range: found.range, source: 'native' });
+            const picked = { text: found.text, range: found.range, source: 'native' };
+            // Selecting text opens its meaning card directly; the card's speaker is the audio path.
+            if (meaningOnSelect && openMeaning(picked)) return;
+            show(picked);
         }
 
         function scheduleHide() {
@@ -400,7 +405,9 @@
             if (!selection) return;
             selection.removeAllRanges();
             selection.addRange(snapped.range);
-            show({ text: snapped.text, range: snapped.range, source: 'native' });
+            // Direct mode waits for mouseup (evaluate) to open one card; the bar does not flash
+            // under the moving drag.
+            if (!meaningOnSelect) show({ text: snapped.text, range: snapped.range, source: 'native' });
         }
 
         doc.addEventListener('mousedown', (e) => {
@@ -476,6 +483,40 @@
             return options.contextFor && anchor && anchor.isConnected ? options.contextFor(anchor) || {} : {};
         }
 
+        function meaningText(picked) {
+            return picked.text.length > MEANING_MAX
+                ? picked.text.slice(0, MEANING_MAX).replace(/\s+\S*$/, '').trim() || picked.text.slice(0, MEANING_MAX)
+                : picked.text;
+        }
+
+        // Open the meaning card for a selection, with the same anchor/range stability the bar's
+        // Meaning button used. The card's own speaker button is the only audio path.
+        function openMeaning(picked) {
+            if (!options.meaning || !picked || !picked.text) return false;
+            rememberText(picked);
+            const anchorBox = anchorBoxFor(picked);
+            // Clone: a live Selection range mutates when the OS adjusts/clears the selection,
+            // which made coversRange fail ~600ms later and auto-close the card.
+            let range = null;
+            try { range = picked.range ? picked.range.cloneRange() : null; } catch (err) { range = null; }
+            const ctx = context(picked);
+            const text = meaningText(picked);
+            hide();
+            clearTimeout(settleTimer);
+            meaningRange = range ? range.cloneRange() : null;
+            // coversRange() lets the popover tell this selection from a new one: it stays
+            // open while the phrase it explains is still selected (one range holds the other)
+            const holds = (outer, inner) => outer.compareBoundaryPoints(Range.START_TO_START, inner) <= 0
+                && outer.compareBoundaryPoints(Range.END_TO_END, inner) >= 0;
+            options.meaning(text, {
+                getBoundingClientRect: () => anchorBox,
+                // Source metadata is separate from the virtual anchor's geometry/stability.
+                sourceRange: range ? range.cloneRange() : null,
+                coversRange: (other) => { try { return Boolean(range && other && (holds(range, other) || holds(other, range))); } catch (err) { return false; } },
+            }, ctx);
+            return true;
+        }
+
         // pointerup runs the action even when touchstart.preventDefault suppressed the click,
         // or when the OS cleared the selection mid-tap. click remains for keyboard activation.
         const GHOST_MS = 600;
@@ -503,31 +544,7 @@
                 setPlaying(true);
                 return;
             }
-            if (action === 'meaning' && options.meaning) {
-                const anchorBox = anchorBoxFor(picked);
-                // Clone: a live Selection range mutates when the OS adjusts/clears the selection,
-                // which made coversRange fail ~600ms later and auto-close the Meaning card.
-                let range = null;
-                try { range = picked.range ? picked.range.cloneRange() : null; } catch (err) { range = null; }
-                const ctx = context(picked);
-                // Cap for the popover/lookup; the button was still shown for longer selections
-                const text = picked.text.length > MEANING_MAX
-                    ? picked.text.slice(0, MEANING_MAX).replace(/\s+\S*$/, '').trim() || picked.text.slice(0, MEANING_MAX)
-                    : picked.text;
-                bar.hidden = true;
-                clearTimeout(settleTimer);
-                meaningRange = range ? range.cloneRange() : null;
-                // coversRange() lets the popover tell this selection from a new one: it stays
-                // open while the phrase it explains is still selected (one range holds the other)
-                const holds = (outer, inner) => outer.compareBoundaryPoints(Range.START_TO_START, inner) <= 0
-                    && outer.compareBoundaryPoints(Range.END_TO_END, inner) >= 0;
-                options.meaning(text, {
-                    getBoundingClientRect: () => anchorBox,
-                    // Source metadata is separate from the virtual anchor's geometry/stability.
-                    sourceRange: range ? range.cloneRange() : null,
-                    coversRange: (other) => { try { return Boolean(range && other && (holds(range, other) || holds(other, range))); } catch (err) { return false; } },
-                }, ctx);
-            }
+            if (action === 'meaning') openMeaning(picked);
         };
         bar.addEventListener('pointerup', runBarAction);
         bar.addEventListener('click', runBarAction);
@@ -635,6 +652,13 @@
                 pickedSecond = true;
             }
             paintRange();
+            const complete = pickedSecond && rangeState();
+            if (complete && meaningOnSelect) {
+                // A complete range is a selection too: open its card and leave the picking mode.
+                exitRange();
+                openMeaning(complete);
+                return;
+            }
             showRange();
         }
 

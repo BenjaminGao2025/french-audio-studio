@@ -760,6 +760,8 @@ function initStudyWorkbench() {
     // Read selection and Meaning. The click on Read starts the audio, as iOS requires.
     window.FrenchReadSelection.create({
         wordSelector: '.interactive-word',
+        // A selection opens its meaning card directly (the card's speaker plays the audio).
+        meaningOnSelect: true,
         rangeLineFor: (toggle) => {
             const card = toggle.closest('.sentence-card');
             return card ? card.querySelector('.sentence-french-text') : null;

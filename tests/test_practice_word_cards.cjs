@@ -49,7 +49,7 @@ for(const mode of ['recall','dictation'])for(const scope of ['whole','steps'])te
  assert.equal(wrong.dataset.word,'semaine','learner error also occurs elsewhere in the correct sentence');wrong.click();await flush();assert.equal(doc.querySelector('.popover-context').dataset.state,'unavailable');
  doc.querySelector('.popover-close-btn').click();
  const answer=Array.from(card.querySelectorAll('.dictation-answer-text .interactive-word')).filter(x=>x.dataset.word==='semaine')[1];
- select(e,answer);await flush(300);doc.querySelector('[data-rs="meaning"]').click();await flush(800);
+ select(e,answer);await flush(800);
  assert.equal(doc.querySelector('.popover-context').dataset.state,'ready');assert.match(doc.querySelector('.popover-context-why').textContent,/第 2 个/);
  assert.equal(calls.filter(x=>x.url==='/api/word-context'&&x.body.word==='semaine').length,1,'same target shared across diff/answer selection');
  const pop=doc.querySelector('.floating-word-popover');const bar=doc.querySelector('.read-selection-bar');const before=calls.length;
@@ -57,8 +57,8 @@ for(const mode of ['recall','dictation'])for(const scope of ['whole','steps'])te
  const inside=button.querySelector('path');inside.dispatchEvent(new w.MouseEvent('mousedown',{bubbles:true,button:0}));inside.dispatchEvent(new w.MouseEvent('mouseup',{bubbles:true,button:0}));inside.dispatchEvent(new w.MouseEvent('click',{bubbles:true,button:0}));await flush(40);
  assert.equal(pop.hidden,false);assert.equal(bar.hidden,true);assert.equal(button.disabled,true);button.click();assert.equal(calls.length,before+1);
  e.finish();await flush();assert.match(pop.querySelector('.popover-etymology-text').textContent,/模拟词源/);button.click();await flush();assert.equal(calls.length,before+1,'cached etymology on repeated internal click');assert.equal(bar.hidden,true);
- // A truly new selection still replaces Meaning's consumed range.
- select(e,card.querySelector('.dictation-answer-text .interactive-word'));await flush(800);assert.equal(bar.hidden,false);
+ // A truly new selection opens its own card directly, replacing the previous one.
+ select(e,card.querySelector('.dictation-answer-text .interactive-word'));await flush(800);assert.equal(bar.hidden,true);assert.equal(pop.hidden,false);
  domClose(e);
 });
 function domClose(e){e.w.close()}

@@ -337,8 +337,7 @@ describe("FrenchWords selection", () => {
   const mountPlain = () => render(<FrenchWords text={SENTENCE} glosses={glosses} className="fr" />);
   const mountControls = () =>
     render(<FrenchWords text={SENTENCE} glosses={glosses} className="fr" sentenceControls />);
-  const bar = () => screen.getByRole("toolbar", { name: "Selection actions" });
-  const readButton = () => screen.getByRole("button", { name: "Read selection" });
+  const hear = (text: string) => screen.getByRole("button", { name: `Hear ${text}` });
 
   // A mouse drag: press on one word, move to another, release
   const drag = (from: HTMLElement, to: HTMLElement) => {
@@ -347,27 +346,23 @@ describe("FrenchWords selection", () => {
     fireEvent.mouseUp(document);
   };
 
-  it("reads exactly the dragged words through the shared controller, and opens no card", () => {
+  it("opens the selected phrase's card on release, without a toolbar or auto-play", async () => {
     mountPlain();
     drag(word("deux"), word("enfants,"));
-    expect(screen.queryByRole("dialog")).toBeNull();
-    expect(bar()).toBeInTheDocument();
-    fireEvent.click(readButton());
+    expect(screen.queryByRole("toolbar")).toBeNull();
+    expect(await screen.findByRole("dialog")).toHaveAttribute(
+      "aria-label",
+      "Meaning of deux enfants",
+    );
+    expect(plays).toEqual([]);
+    fireEvent.click(hear("deux enfants"));
     expect(plays).toEqual(["/tts?text=deux%20enfants"]);
     // The click that ends a drag is not a tap on the word it lands on
     fireEvent.click(word("enfants,"), { clientX: 200, clientY: 10 });
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByRole("dialog")).toHaveAttribute("aria-label", "Meaning of deux enfants");
   });
 
-  it("offers Meaning for a short selection, which opens the phrase card", async () => {
-    mountPlain();
-    drag(word("ma"), word("femme"));
-    fireEvent.click(screen.getByRole("button", { name: "Meaning" }));
-    expect(screen.getByRole("dialog")).toHaveAttribute("aria-label", "Meaning of ma femme");
-    expect(await screen.findByText("looked up")).toBeInTheDocument();
-  });
-
-  it("shows the bar for a selection made by the system (a long press with handles)", async () => {
+  it("opens the card for a selection made by the system (a long press with handles)", async () => {
     mountPlain();
     const ma = word("ma");
     const femme = word("femme");
@@ -378,12 +373,14 @@ describe("FrenchWords selection", () => {
     selection.removeAllRanges();
     selection.addRange(range);
     document.dispatchEvent(new Event("selectionchange"));
-    expect(await screen.findByRole("toolbar")).toBeInTheDocument();
-    fireEvent.click(readButton());
+    expect(await screen.findByRole("dialog")).toHaveAttribute("aria-label", "Meaning of ma femme");
+    expect(screen.queryByRole("toolbar")).toBeNull();
+    expect(plays).toEqual([]);
+    fireEvent.click(hear("ma femme"));
     expect(plays).toEqual(["/tts?text=ma%20femme"]);
   });
 
-  it("keeps a single selected word out of the card but offers to read it", async () => {
+  it("opens the card for a single selected word too", async () => {
     mountPlain();
     const femme = word("femme");
     const range = document.createRange();
@@ -392,28 +389,31 @@ describe("FrenchWords selection", () => {
     selection.removeAllRanges();
     selection.addRange(range);
     document.dispatchEvent(new Event("selectionchange"));
-    expect(await screen.findByRole("toolbar")).toBeInTheDocument();
-    expect(screen.queryByRole("dialog")).toBeNull();
-    fireEvent.click(readButton());
+    expect(await screen.findByRole("dialog")).toHaveAttribute("aria-label", "Meaning of femme");
+    expect(screen.queryByRole("toolbar")).toBeNull();
+    expect(plays).toEqual([]);
+    fireEvent.click(hear("femme"));
     expect(plays).toEqual(["/tts?text=femme"]);
   });
 
-  it("picks a span word by word in range mode and reads it", () => {
+  it("picks a span word by word in range mode and opens its card", async () => {
     mountControls();
     fireEvent.click(screen.getByRole("button", { name: "Select words" }));
     expect(screen.getByRole("status")).toHaveTextContent("Tap the first word");
     fireEvent.click(word("deux"));
     expect(screen.getByRole("status")).toHaveTextContent("Tap the last word");
     fireEvent.click(word("enfants,"));
-    expect(screen.queryByRole("status")).toBeNull();
-    fireEvent.click(readButton());
-    expect(plays).toEqual(["/tts?text=deux%20enfants"]);
-    // Clear drops the span, and the switch leaves range mode
-    fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
+    expect(screen.queryByText("Tap the last word")).toBeNull();
+    expect(await screen.findByRole("dialog")).toHaveAttribute(
+      "aria-label",
+      "Meaning of deux enfants",
+    );
+    // A complete span leaves range mode, so the next tap opens a single word again
+    expect(screen.getByRole("button", { name: "Select words" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
     expect(screen.queryByRole("toolbar")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Select words" }));
-    expect(screen.queryByRole("status")).toBeNull();
-    // A tap on a word opens it again once range mode is off
     fireEvent.click(word("femme"));
     expect(screen.getByRole("dialog")).toHaveAttribute("aria-label", "Meaning of femme");
   });
@@ -426,15 +426,16 @@ describe("FrenchWords selection", () => {
     expect(plays).toEqual([`/tts?text=${encodeURIComponent(SENTENCE)}`]);
   });
 
-  it("reads through the shared controller, which stops the audio already playing", () => {
+  it("plays the selection from the card's speaker, stopping the word already playing", async () => {
     mountPlain();
     // A word is playing…
     fireEvent.click(word("femme"));
     expect(plays).toEqual(["/tts?text=femme"]);
     const playing = clips[clips.length - 1]!;
-    // …and reading the selection takes the player over from it
+    // …and the card of the selection takes the player over from it
     drag(word("deux"), word("enfants,"));
-    fireEvent.click(readButton());
+    expect(plays).toEqual(["/tts?text=femme"]);
+    fireEvent.click(hear("deux enfants"));
     expect(plays).toEqual(["/tts?text=femme", "/tts?text=deux%20enfants"]);
     expect(playing.paused).toBe(true);
   });
@@ -512,7 +513,7 @@ it("keeps a selected repeated occurrence through slow etymology and internal SVG
   getSelection()!.removeAllRanges();
   getSelection()!.addRange(r);
   document.dispatchEvent(new Event("selectionchange"));
-  fireEvent.click(await screen.findByRole("button", { name: "Meaning" }));
+  expect(await screen.findByRole("dialog")).toHaveAttribute("aria-label", "Meaning of semaine");
   await waitFor(() =>
     expect(api.analyze.wordContext).toHaveBeenCalledWith({
       sentence: "La semaine commence, cette semaine aussi.",
