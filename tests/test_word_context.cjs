@@ -202,6 +202,10 @@ const snippetBefore = () => $('.popover-context-snippet').firstChild.textContent
     assert.equal(snippetBefore(), 'Prends ');
     assert.match(text('.popover-context-meaning'), /这里的意思：你的 \/ your/);
     assert.match(text('.popover-context-why'), /sac 是阳性单数，所以用 ton，不用 ta 或 tes/);
+    // Why and the etymology start folded; the footer carries the lookup count
+    assert.equal(pop.querySelector('.popover-why-detail').open, false, 'Why starts collapsed');
+    assert.equal(pop.querySelector('.popover-etymology-text').hidden, true, 'etymology starts collapsed');
+    assert.ok(pop.querySelector('.popover-footer .popover-lookup-count'), 'the count lives in the footer');
     assert.equal(visible('.popover-context-status'), false);
     assert.equal(contextCalls().length, 1);
     const sent = contextCalls()[0];

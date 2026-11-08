@@ -6,16 +6,16 @@
 .floating-word-popover {
     position: fixed;
     z-index: 9999;
-    width: 290px;
+    width: 312px;
     max-width: calc(100vw - 32px);
     background: var(--surface);
     border: 1px solid var(--line);
     border-radius: var(--radius-md);
-    box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.12), 0 4px 10px -2px rgba(0, 0, 0, 0.05);
-    padding: 12px 14px;
+    box-shadow: 0 12px 32px -8px rgba(18, 31, 53, 0.18), 0 4px 10px -2px rgba(0, 0, 0, 0.05);
+    padding: 14px 16px 0;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 0;
     pointer-events: auto;
     animation: popoverFadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
     transform-origin: center bottom;
@@ -75,6 +75,7 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: 8px;
+    padding-bottom: 10px;
 }
 
 .popover-meta,
@@ -92,23 +93,23 @@
     gap: 8px;
 }
 
-/* Eudic-style lookup count, next to the word */
+/* Eudic-style lookup count, in the card footer */
 .popover-lookup-count {
-    font-size: 11.5px;
+    font-size: 12px;
     line-height: 1;
     color: var(--muted);
     background: var(--surface-muted);
     border-radius: 999px;
-    padding: 3px 7px;
+    padding: 4px 8px;
     white-space: nowrap;
 }
 
 .popover-word {
-    font-size: 20px;
-    font-weight: 750;
+    font-size: 22px;
+    font-weight: 700;
     color: var(--ink, var(--ink));
     font-family: var(--font-sans);
-    letter-spacing: -0.015em;
+    letter-spacing: -0.02em;
     line-height: 1.2;
 }
 
@@ -226,6 +227,7 @@
 
 .popover-body {
     min-height: 28px;
+    padding-bottom: 12px;
     display: flex;
     flex-direction: column;
     /* Not centred: a card taller than its room scrolls, and centring would push its top out of reach */
@@ -262,6 +264,15 @@
     to { transform: rotate(360deg); }
 }
 
+/* The headline gloss: one strong Chinese meaning with its English echo on the same line. */
+.popover-content[data-kind="gloss"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 8px;
+    margin-top: 2px;
+}
+
 .popover-cn-text {
     font-size: 13.5px;
     font-weight: 550;
@@ -276,12 +287,58 @@
     margin-top: 2px;
 }
 
+.popover-content[data-kind="gloss"] .popover-cn-text {
+    font-size: 23px;
+    font-weight: 650;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+}
+
+.popover-content[data-kind="gloss"] .popover-en-text {
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.4;
+    margin-top: 0;
+}
+
+.popover-content[data-kind="gloss"] .popover-en-text:empty {
+    display: none;
+}
+
+/* Contractions and elisions are structured rows, not a headline. */
+.popover-content[data-kind="forms"] .popover-cn-text {
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.55;
+}
+
+.popover-content[data-kind="forms"] .popover-en-text {
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.popover-content[data-kind="message"] .popover-cn-text {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--muted);
+}
+
+.popover-content[data-kind="message"] .popover-en-text {
+    margin-top: 2px;
+}
+
 .popover-footer {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    padding-top: 8px;
-    border-top: 1px solid var(--surface-muted);
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 44px;
+    padding: 8px 0 12px;
+    border-top: 1px solid var(--line);
+}
+
+.popover-footer[hidden] {
+    display: none !important;
 }
 
 .btn-popover-star {
@@ -305,23 +362,29 @@
     stroke: var(--accent);
 }
 
-/* Word importance (1-5 stars, like Eudic's word book) */
+/* Word importance (1-5 stars, like Eudic's word book), kept in the footer next to the count. */
 .popover-importance {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-top: 8px;
-    padding-top: 8px;
-    border-top: 1px solid var(--line);
-    font-size: 12.5px;
+    gap: 6px;
+    margin: 0 0 0 auto;
+    padding: 0;
+    border: 0;
+    font-size: 11px;
     color: var(--muted);
+}
+
+.importance-stars {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
 }
 
 .importance-stars button {
     border: none;
     background: none;
     padding: 0 1px;
-    font-size: 18px;
+    font-size: 17px;
     line-height: 1;
     color: var(--line-strong);
     cursor: pointer;
@@ -463,26 +526,59 @@
     .read-selection-bar .rs-done { width: 44px; }
 }
 
-/* On-demand etymology. Model output is rendered as plain text. */
-.popover-etymology { margin-top: 8px; }
+/* On-demand explanation and etymology: folded rows, opened by choice. Model output is plain text. */
+.popover-detail[hidden] { display: none; }
+.popover-detail,
+.popover-etymology {
+    margin-top: 10px;
+    border-top: 1px solid var(--line);
+}
+.popover-detail summary,
 .popover-etymology-button {
-    min-height: 32px;
-    padding: 4px 8px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-sm);
-    background: var(--surface-subtle);
-    color: var(--primary);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    min-height: 44px;
+    padding: 4px 0;
+    border: 0;
+    background: transparent;
+    color: var(--ink);
     font: inherit;
-    font-size: 12.5px;
+    font-size: 13px;
+    font-weight: 550;
+    text-align: left;
+    list-style: none;
     cursor: pointer;
 }
-.popover-etymology-button:hover { background: var(--primary-soft); }
+.popover-detail summary::-webkit-details-marker { display: none; }
+.popover-detail summary:hover,
+.popover-etymology-button:hover { color: var(--primary); }
+.popover-detail summary::after,
+.popover-etymology-button::after {
+    content: '＋';
+    color: var(--muted);
+    font-weight: 400;
+}
+.popover-detail[open] summary::after,
+.popover-etymology-button[data-state="open"]::after {
+    content: '−';
+}
+.popover-detail summary:focus-visible,
+.popover-etymology-button:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+}
+.popover-detail p {
+    margin: 0 0 10px;
+}
 .popover-etymology-button:disabled { cursor: wait; color: var(--muted); }
-.popover-etymology-button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .popover-etymology-text {
-    margin-top: 6px;
+    padding-bottom: 10px;
     font-size: 13px;
-    line-height: 1.5;
+    line-height: 1.55;
     color: var(--ink);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
@@ -562,8 +658,8 @@
 .popover-context[hidden],
 .popover-context [hidden] { display: none; }
 .popover-dict + .popover-context {
-    margin-top: 8px;
-    padding-top: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
     border-top: 1px solid var(--line);
 }
 .popover-section-head {
@@ -574,9 +670,9 @@
     font-size: var(--text-xs);
 }
 .popover-section-title {
-    font-weight: 700;
+    font-weight: 650;
     color: var(--muted);
-    letter-spacing: 0.02em;
+    letter-spacing: 0.06em;
 }
 .popover-context .popover-phrase { margin-bottom: 0; }
 .popover-context-snippet,
@@ -599,12 +695,12 @@
     font-weight: 650;
 }
 .popover-context-meaning {
-    font-size: 13.5px;
+    font-size: 14px;
     font-weight: 600;
     color: var(--ink);
 }
 .popover-context-why {
-    font-size: 12.5px;
+    font-size: 13px;
     color: var(--ink);
 }
 .popover-context-label {
@@ -612,7 +708,7 @@
     color: var(--muted);
 }
 .popover-context-note {
-    font-size: 12px;
+    font-size: 12.5px;
     color: var(--muted);
 }
 .popover-context-status {

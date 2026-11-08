@@ -21,7 +21,7 @@
             back: 'Back to ', lemmaLookup: word => `Look up ${word} and hear it`,
             lookingUpMeaning: 'Looking up the meaning...', lookupFailed: 'Lookup failed', noDefinition: 'Could not get the meaning',
             phraseTag: 'Fixed expression',
-            dictTitle: 'Dictionary', contextTitle: 'In this sentence', meaningHere: 'Here: ', whyLabel: 'Why: ',
+            dictTitle: 'Dictionary', contextTitle: 'In this sentence', meaningHere: 'Here: ', whyLabel: 'Why: ', whyTitle: 'Why',
             contextLoading: 'Working out how it is used here…', contextFailed: 'Could not explain this use right now.',
             contextEmpty: 'Nothing special about this use.', retry: 'Retry',
             contextUnavailable: 'No sentence context for this word here.',
@@ -45,7 +45,7 @@
             back: '返回 ', lemmaLookup: word => `查 ${word} 的释义和发音`,
             lookingUpMeaning: '正在查询字义...', lookupFailed: '查词失败', noDefinition: '暂无法获取释义',
             phraseTag: '固定搭配',
-            dictTitle: '词典', contextTitle: '语境', meaningHere: '这里的意思：', whyLabel: '为什么：',
+            dictTitle: '词典', contextTitle: '语境', meaningHere: '这里的意思：', whyLabel: '为什么：', whyTitle: '为什么',
             contextLoading: '正在分析它在这句里的用法…', contextFailed: '暂时无法获取语境说明。',
             contextEmpty: '这里没有需要特别说明的用法。', retry: '重试',
             contextUnavailable: '这里没有可分析的句子语境。',
@@ -449,7 +449,6 @@
             <div class="popover-main-info">
                 <div class="popover-word-row">
                     <strong class="popover-word">--</strong>
-                    <span class="popover-lookup-count" hidden></span>
                     <button class="btn-popover-star-icon" type="button" title="${escapeHtml(T.popoverStarTitle)}" hidden>
                         <i data-lucide="star" aria-hidden="true"></i>
                     </button>
@@ -496,25 +495,31 @@
                     <p class="popover-phrase-literal"></p>
                 </div>
                 <p class="popover-context-meaning" hidden></p>
-                <p class="popover-context-why" hidden></p>
-                <p class="popover-context-note" hidden></p>
                 <div class="popover-context-status" role="status" hidden>
                     <i data-lucide="loader" class="spin-icon" aria-hidden="true"></i>
                     <span class="popover-context-status-text"></span>
                     <button class="popover-context-retry" type="button" hidden>${escapeHtml(T.retry)}</button>
                 </div>
             </section>
+            <details class="popover-detail popover-why-detail" hidden>
+                <summary>${escapeHtml(T.whyTitle)}</summary>
+                <p class="popover-context-why" hidden></p>
+                <p class="popover-context-note" hidden></p>
+            </details>
             <div class="popover-etymology">
-                <button class="popover-etymology-button" type="button">词根词源</button>
+                <button class="popover-etymology-button" type="button" aria-expanded="false">词根词源</button>
                 <div class="popover-etymology-text" role="status" hidden></div>
             </div>
+        </div>
+        <footer class="popover-footer" hidden>
+            <span class="popover-lookup-count" hidden></span>
             <div class="popover-importance" hidden>
                 <span class="importance-label">${escapeHtml(T.importanceLabel)}</span>
                 <span class="importance-stars">
                     <button type="button" data-level="1">★</button><button type="button" data-level="2">★</button><button type="button" data-level="3">★</button><button type="button" data-level="4">★</button><button type="button" data-level="5">★</button>
                 </span>
             </div>
-        </div>`;
+        </footer>`;
     }
 
     function refreshIcons() {
@@ -598,6 +603,7 @@
             phonetic: q('.popover-phonetic'), pos: q('.popover-pos'), lemma: q('.popover-lemma'),
             close: q('.popover-close-btn'), loading: q('.popover-loading'), content: q('.popover-content'),
             cn: q('.popover-cn-text'), en: q('.popover-en-text'), importance: q('.popover-importance'),
+            footer: q('.popover-footer'), whyDetail: q('.popover-why-detail'),
             etymologyButton: q('.popover-etymology-button'), etymologyText: q('.popover-etymology-text'),
             body: q('.popover-body'), dict: q('.popover-dict'),
             phrase: q('.popover-phrase'), phraseCanonical: q('.popover-phrase-canonical'),
@@ -653,6 +659,13 @@
             const count = currentCard ? (lookupCounts.get(lookupKey(currentCard.token)) || 0) : 0;
             els.lookupCount.textContent = count > 0 ? T.lookupCount(count) : '';
             els.lookupCount.hidden = count <= 0;
+            renderFooter();
+        }
+
+        // The footer holds the word's lookup history and, once saved, its importance stars.
+        function renderFooter() {
+            if (!els.footer) return;
+            els.footer.hidden = els.lookupCount.hidden && els.importance.hidden;
         }
 
         // One open of a word: count it, unless this page already reported the same word recently.
@@ -731,6 +744,8 @@
             etymologyGeneration++;
             els.etymologyButton.disabled = false;
             els.etymologyButton.textContent = '词根词源';
+            els.etymologyButton.dataset.state = 'closed';
+            els.etymologyButton.setAttribute('aria-expanded', 'false');
             els.etymologyText.textContent = '';
             els.etymologyText.hidden = true;
         }
@@ -739,6 +754,14 @@
         els.etymologyButton.addEventListener('click', async (e) => {
             e.stopPropagation();
             if (!currentCard || els.etymologyButton.disabled) return;
+            // A second press folds the answer away again.
+            if (els.etymologyButton.dataset.state === 'open') {
+                els.etymologyButton.dataset.state = 'closed';
+                els.etymologyButton.setAttribute('aria-expanded', 'false');
+                els.etymologyText.hidden = true;
+                position();
+                return;
+            }
             const generation = ++etymologyGeneration;
             const { token: word, lemma } = currentCard;
             els.etymologyButton.disabled = true;
@@ -767,6 +790,8 @@
                 if (generation === etymologyGeneration && isOpen()) {
                     els.etymologyButton.disabled = false;
                     els.etymologyButton.textContent = '词根词源';
+                    els.etymologyButton.dataset.state = 'open';
+                    els.etymologyButton.setAttribute('aria-expanded', 'true');
                     els.etymologyText.hidden = false;
                     position();
                 }
@@ -837,10 +862,10 @@
         }
 
         function renderImportance() {
-            if (!saving || !currentCard) { els.importance.hidden = true; return; }
+            if (!saving || !currentCard) { els.importance.hidden = true; renderFooter(); return; }
             const entries = saving.entries(currentCard.token) || [];
             els.importance.hidden = entries.length === 0;
-            if (!entries.length) return;
+            if (!entries.length) { renderFooter(); return; }
             const key = lookupKey(currentCard.token);
             const count = lookupCounts.get(key) || 0;
             const automatic = lookupImportance(count);
@@ -855,6 +880,7 @@
                 btn.title = automatic > existing && n === automatic
                     ? T.importanceLookupTitle(count, automatic) : T.importanceTitle(n);
             });
+            renderFooter();
         }
 
         function refreshSaved() {
@@ -947,6 +973,7 @@
 
         // au = à + le and its plain meaning; for du / des, each use with an example. Text nodes only.
         function renderContraction(forms) {
+            els.content.dataset.kind = 'forms';
             const line = (label, build) => {
                 const row = document.createElement('p');
                 row.className = 'popover-dict-use';
@@ -991,6 +1018,7 @@
         function renderDict(item) {
             const shown = dictState !== 'none';
             els.dict.hidden = !shown;
+            els.content.dataset.kind = 'gloss';
             const label = posLabel(item.pos);
             els.pos.textContent = label;
             els.pos.hidden = !label;
@@ -1005,8 +1033,9 @@
             els.loading.hidden = !loading;
             els.loading.style.display = loading ? 'flex' : 'none';
             els.content.hidden = loading;
-            els.content.style.display = loading ? 'none' : 'block';
+            els.content.style.display = loading ? 'none' : '';
             if (/^d['’]accord$/i.test(item.token)) {
+                els.content.dataset.kind = 'forms';
                 const constituent = lookupCache.get('accord') || BASIC_FRENCH_WORDS.accord;
                 const de = BASIC_FRENCH_WORDS["d'"];
                 const row = document.createElement('p');
@@ -1022,6 +1051,7 @@
             const forms = contractionOf(item.token);
             if (forms) { renderContraction(forms); return; }
             if (dictState === 'failed' || (!item.explanation_cn && !item.explanation_en)) {
+                els.content.dataset.kind = 'message';
                 els.cn.textContent = T.noDefinition;
                 els.en.textContent = dictState === 'failed' ? dictError : '';
                 return;
@@ -1050,7 +1080,7 @@
         function renderContext(item) {
             const ctx = ctxState;
             els.context.hidden = !ctx;
-            if (!ctx) { els.phrase.hidden = true; return; }
+            if (!ctx) { els.phrase.hidden = true; if (els.whyDetail) els.whyDetail.hidden = true; return; }
             els.context.dataset.state = ctx.status;
             renderPhrase(item, ctx.phrase);
             const t = ctx.target;
@@ -1062,11 +1092,13 @@
             const { meaning_zh: zh, meaning_en: en } = own ? meaningHere(ctx) : { meaning_zh: '', meaning_en: '' };
             labelled(els.ctxMeaning, T.meaningHere, (EN ? [en, zh] : [zh, en]).filter(Boolean).join(' / '));
             const why = own ? result.why_zh || '' : '';
-            labelled(els.ctxWhy, T.whyLabel, why);
+            els.ctxWhy.textContent = why;
+            els.ctxWhy.hidden = !why;
             // The analysis's English note: in the English page, or when there is no Chinese why
             const note = own && entry.why_en && (EN || !why) ? entry.why_en : '';
             els.ctxNote.textContent = note;
             els.ctxNote.hidden = !note;
+            if (els.whyDetail) els.whyDetail.hidden = !(why || note);
             const said = Boolean(zh || en || why || note || ctx.phrase);
             const message = {
                 waiting: T.contextLoading, loading: T.contextLoading, failed: T.contextFailed,
@@ -1078,7 +1110,11 @@
         }
 
         function render(item) {
-            if (currentCard && currentCard.token !== item.token) resetEtymology();
+            if (!currentCard || currentCard.token !== item.token) {
+                resetEtymology();
+                // Long explanations start folded, so the word and its gloss stay the headline.
+                if (els.whyDetail) els.whyDetail.open = false;
+            }
             currentCard = item;
             pop.setAttribute('aria-label', `Meaning of ${item.token}`);
             els.close.setAttribute('aria-label', 'Close');
