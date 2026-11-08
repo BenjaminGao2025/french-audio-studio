@@ -391,7 +391,7 @@ async def request_word_lookup(word: str, api_key: str, model: str = ai.DEFAULT_M
         '  "pos": "part of speech (e.g. v., n.m., n.f., adj., adv., prep., conj.)",\n'
         '  "phonetic": "IPA phonetic transcription (e.g. /bɔ̃.ʒuʁ/)",\n'
         '  "explanation_cn": "concise, accurate Chinese definition and grammatical nuance",\n'
-        '  "explanation_en": "concise, accurate English definition"\n'
+        '  "explanation_en": "short simple English meanings first, then any needed detail; never start with a part of speech"\n'
         "}\n"
         "If the token is a number, ordinal, date part or abbreviation (1er, 2026, 15h30, TCF), "
         "explanation_cn must say how to read it aloud in French words, e.g. '读作 premier（第一）'."
@@ -494,7 +494,7 @@ async def etymology_word(
         raise HTTPException(status_code=400, detail={"message": "请提供待查询单词"})
     key = (lemma or word).lower()
     cached = auth_db.get_etymology(key)
-    if cached is not None:
+    if cached is not None and not re.search(r"[\u3400-\u9fff]", cached):
         return {"text": cached, "cached": True}
 
     api_key = ai.upstream_key(authorization)
@@ -504,13 +504,14 @@ async def etymology_word(
             {
                 "role": "system",
                 "content": (
-                    "你是严谨的法语词源老师。用简体中文纯文本解释所给原形词的词根/构词、"
-                    "词源（如拉丁语来源，已知才写）和恰好一条简短记忆钩子。"
-                    "不确定时明确说不确定，不编造词源；区分真实词源和记忆联想。"
-                    "只解释原形词，便于同词族复用。总计约120个汉字以内，最多4短行，不用Markdown。"
+                    "You are a careful French etymology teacher. Use simple English only, in plain text. "
+                    "Explain the base word's roots or word parts, its origin (such as Latin, only if known), "
+                    "and exactly one short memory hook. Say when you are unsure; never invent an origin. "
+                    "Separate true word history from a memory trick. Explain only the base word, "
+                    "so the answer can be reused for its word family. At most 80 words and 4 short lines. No Markdown."
                 ),
             },
-            {"role": "user", "content": f"法语原形词：{key}"},
+            {"role": "user", "content": f"French base word: {key}"},
         ],
         "stream": False,
         "temperature": 0.0,

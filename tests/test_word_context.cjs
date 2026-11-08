@@ -20,7 +20,7 @@ for (const c of FIXTURES.clean) assert.equal(WC.cleanWord(c.value), c.clean, `cl
 const PARTIR = 'À partir des sessions de 2026, il faut partir tôt.';
 const A_PARTIR = {
     text: 'À partir des', phrase: 'à partir de', meaning_zh: '从……起', meaning_en: 'starting from',
-    literal_zh: 'partir 单独是“离开”，但 à partir de 是固定介词短语，表示起点；这里 des = de + les。',
+    literal_zh: 'The whole phrase means starting from; des = de + les.',
 };
 const row = (fr, meaning_zh, meaning, extra = {}) => Object.assign({ fr, lemma: fr, ipa: '', type: 'naming word', meaning, meaning_zh, why: '' }, extra);
 const SENTENCES = {
@@ -108,10 +108,10 @@ const DICT = {
     amie: { token: 'amie', lemma: 'ami', pos: 'n.f.', phonetic: '/a.mi/', explanation_cn: '女性朋友', explanation_en: 'friend (female)' },
 };
 const WHY = {
-    'prends ton sac.|ton|0': { meaning_zh: '你的', meaning_en: 'your', why_zh: 'ton 和后面的 sac 配合：sac 是阳性单数，所以用 ton，不用 ta 或 tes；配合看名词，不看物主是男是女。' },
-    "c'est ton amie.|ton|0": { meaning_zh: '你的', meaning_en: 'your', why_zh: 'amie 是阴性单数，本该用 ta，但 amie 以元音开头，改用 ton。' },
+    'prends ton sac.|ton|0': { meaning_zh: '你的', meaning_en: 'your', why_zh: 'Use ton because sac is masculine and singular, not ta or tes.' },
+    "c'est ton amie.|ton|0": { meaning_zh: '你的', meaning_en: 'your', why_zh: 'Amie starts with a vowel, so use ton.' },
 };
-let contextAnswer = body => ({ status: 200, data: { context: WHY[`${body.sentence.toLowerCase()}|${body.word.toLowerCase()}|${body.occurrence}`] || { meaning_zh: '', meaning_en: '', why_zh: `第 ${body.occurrence + 1} 个 ${body.word}` }, state: 'ready' } });
+let contextAnswer = body => ({ status: 200, data: { context: WHY[`${body.sentence.toLowerCase()}|${body.word.toLowerCase()}|${body.occurrence}`] || { meaning_zh: '', meaning_en: '', why_zh: `Occurrence ${body.occurrence + 1} of ${body.word}` }, state: 'ready' } });
 const gates = new Map();  // word -> promise the answer waits for
 const fetchMock = async (url, init = {}) => {
     const body = init.body ? JSON.parse(init.body) : null;
@@ -191,17 +191,17 @@ const snippetBefore = () => $('.popover-context-snippet').firstChild.textContent
     await tap('sac', 'ton');
     await settle();
     assert.equal(visible('.popover-dict'), true);
-    assert.equal(text('.popover-dict .popover-section-title'), '词典');
-    assert.equal(text('.popover-pos'), '主有限定词', 'a real grammar label');
-    assert.match(text('.popover-dict .popover-content'), /你的 \(阳性单数\)/);
+    assert.equal(text('.popover-dict .popover-section-title'), 'Dictionary');
+    assert.equal(text('.popover-pos'), 'possessive determiner', 'a real grammar label');
+    assert.match(text('.popover-dict .popover-content'), /your \(masculine\)/);
     assert.doesNotMatch(pop.textContent, /small pointer word/, 'the analysis\'s vague word type never shows');
     assert.doesNotMatch(text('.popover-dict'), /sac/, 'the dictionary does not explain this sentence');
     assert.equal(visible('.popover-context'), true);
-    assert.equal(text('.popover-context .popover-section-title'), '语境');
+    assert.equal(text('.popover-context .popover-section-title'), 'In this sentence');
     assert.equal(mark(), 'ton');
     assert.equal(snippetBefore(), 'Prends ');
-    assert.match(text('.popover-context-meaning'), /这里的意思：你的 \/ your/);
-    assert.match(text('.popover-context-why'), /sac 是阳性单数，所以用 ton，不用 ta 或 tes/);
+    assert.match(text('.popover-context-meaning'), /Here: your/);
+    assert.match(text('.popover-context-why'), /sac is masculine and singular, not ta or tes/);
     // Why and the etymology start folded; the footer carries the lookup count
     assert.equal(pop.querySelector('.popover-why-detail').open, false, 'Why starts collapsed');
     assert.equal(pop.querySelector('.popover-etymology-text').hidden, true, 'etymology starts collapsed');
@@ -222,33 +222,33 @@ const snippetBefore = () => $('.popover-context-snippet').firstChild.textContent
     await tapTable('sac', 1);
     await settle();
     assert.equal(contextCalls().length, 1, 'reopen: cached on the page');
-    assert.match(text('.popover-context-why'), /sac 是阳性单数/);
+    assert.match(text('.popover-context-why'), /sac is masculine and singular/);
 
     // 3. ton in "C'est ton amie.": another answer, the same dictionary
     await tap('amie', 'ton');
     await settle();
     assert.equal(contextCalls().length, 2);
-    assert.match(text('.popover-context-why'), /amie 以元音开头/);
-    assert.match(text('.popover-dict .popover-content'), /你的 \(阳性单数\)/, 'the dictionary does not change with the sentence');
+    assert.match(text('.popover-context-why'), /Amie starts with a vowel/);
+    assert.match(text('.popover-dict .popover-content'), /your \(masculine\)/, 'the dictionary does not change with the sentence');
     // ...and a content word: its dictionary from /api/lookup, its meaning here from the table
     await tap('amie', 'amie');
     await settle();
-    assert.equal(text('.popover-pos'), '阴性名词');
-    assert.match(text('.popover-dict .popover-content'), /女性朋友/);
-    assert.match(text('.popover-context-meaning'), /朋友 \/ friend/);
-    assert.equal($('.popover-lemma').textContent, '原形: ami');
+    assert.equal(text('.popover-pos'), 'feminine noun');
+    assert.match(text('.popover-dict .popover-content'), /friend \(female\)/);
+    assert.match(text('.popover-context-meaning'), /Here: friend/);
+    assert.equal($('.popover-lemma').textContent, 'base form: ami');
 
     // 4. A repeated word: the tapped occurrence only
     await tap('repeat', 'le', 0);
     await settle();
     assert.equal(contextCalls().at(-1).body.occurrence, 1, 'the second "le" of the line');
     assert.equal(snippetBefore(), 'Le chat voit ');
-    assert.match(text('.popover-context-meaning'), /那只/, 'the table row of that occurrence');
+    assert.match(text('.popover-context-meaning'), /Here: the/, 'the table row of that occurrence');
     await tap('repeat', 'Le', 0);
     await settle();
     assert.equal(contextCalls().at(-1).body.occurrence, 0);
     assert.equal(snippetBefore(), '');
-    assert.match(text('.popover-context-meaning'), /这只/);
+    assert.match(text('.popover-context-meaning'), /Here: the/);
     const before = contextCalls().length;
     await tapTable('repeat', 3);  // the table's second "le" row = the second occurrence (cached)
     await settle();
@@ -259,7 +259,7 @@ const snippetBefore = () => $('.popover-context-snippet').firstChild.textContent
     await settle();
     assert.equal(contextCalls().length, before);
     assert.equal($('.popover-context').dataset.state, 'unavailable');
-    assert.match(text('.popover-context-status'), /没有可分析的句子语境/);
+    assert.match(text('.popover-context-status'), /No sentence context/);
     assert.equal(visible('.popover-dict'), true, 'the dictionary still shows');
     // One table row for three "il": the line still knows its occurrence, but takes no row's meaning
     await tap('il', 'il', 1);
@@ -280,12 +280,12 @@ const snippetBefore = () => $('.popover-context-snippet').firstChild.textContent
     assert.ok($('.popover-context').contains($('.popover-phrase')));
     assert.equal(pop.querySelectorAll('.popover-phrase').length, 1);
     assert.equal(text('.popover-phrase-mark'), 'À partir des');
-    assert.match(text('.popover-phrase-meaning'), /从……起/);
+    assert.match(text('.popover-phrase-meaning'), /starting from/);
     assert.match(text('.popover-phrase-literal'), /des = de \+ les/);
     assert.equal(visible('.popover-context-snippet'), false, 'one snippet: the expression\'s');
-    assert.match(text('.popover-dict'), /离开；出发/);
-    assert.equal(text('.popover-pos'), '动词');
-    assert.doesNotMatch(text('.popover-dict'), /从……起/);
+    assert.match(text('.popover-dict'), /to leave/);
+    assert.equal(text('.popover-pos'), 'verb');
+    assert.doesNotMatch(text('.popover-dict'), /starting from/);
     assert.equal(popover.contextMeaning(), null);
     // The standalone partir of the same sentence: its own 语境, no expression
     await tap('partir', 'partir', 1);
@@ -298,8 +298,8 @@ const snippetBefore = () => $('.popover-context-snippet').firstChild.textContent
     // One "partir" row for two occurrences: which one it means is unknown, so no row's meaning is used
     assert.equal(contextCalls().at(-1).body.hints.meaning_zh, '');
     assert.equal(visible('.popover-context-meaning'), false);
-    assert.match(text('.popover-context-why'), /第 2 个 partir/);
-    assert.match(text('.popover-dict'), /离开；出发/);
+    assert.match(text('.popover-context-why'), /Occurrence 2 of partir/);
+    assert.match(text('.popover-dict'), /to leave/);
 
     // 6. A nested lookup has no sentence: no 语境, no request; Back brings the card back as it was
     await tap('partir', 'partir', 0);
@@ -323,7 +323,7 @@ const snippetBefore = () => $('.popover-context-snippet').firstChild.textContent
     await settle();
     assert.equal($('.popover-context').dataset.state, 'unavailable', 'a chunk the sentence does not have');
     assert.equal(visible('.popover-dict'), true);
-    assert.match(text('.popover-dict'), /查到的词义/);
+    assert.match(text('.popover-dict'), /looked up/);
     await popover.show('ton', chip, {}, {});
     await settle();
     assert.equal($('.popover-context').dataset.state, 'unavailable', 'no sentence: nothing to ask');
@@ -335,17 +335,17 @@ const snippetBefore = () => $('.popover-context-snippet').firstChild.textContent
     await tap('fail', 'partir');
     await settle();
     assert.equal($('.popover-context').dataset.state, 'failed');
-    assert.match(text('.popover-context-status'), /暂时无法获取语境说明/);
+    assert.match(text('.popover-context-status'), /Could not explain this use/);
     assert.equal(visible('.popover-context-retry'), true);
-    assert.match(text('.popover-dict'), /离开；出发/, 'a failure never removes the dictionary');
+    assert.match(text('.popover-dict'), /to leave/, 'a failure never removes the dictionary');
     assert.equal(client.size(), kept, 'the failure is not kept');
-    contextAnswer = body => ({ status: 200, data: { context: { meaning_zh: '出发', meaning_en: 'leave', why_zh: 'il faut 后面用不定式 partir。' }, state: 'ready' } });
+    contextAnswer = body => ({ status: 200, data: { context: { meaning_zh: '出发', meaning_en: 'leave', why_zh: 'Use the infinitive partir after il faut.' }, state: 'ready' } });
     const failedCalls = contextCalls().length;
     $('.popover-context-retry').click();
     await settle();
     assert.equal(contextCalls().length, failedCalls + 1);
     assert.equal($('.popover-context').dataset.state, 'ready');
-    assert.match(text('.popover-context-why'), /il faut 后面用不定式/);
+    assert.match(text('.popover-context-why'), /infinitive partir after il faut/);
     assert.equal(visible('.popover-context-retry'), false);
     // A failed lookup keeps the 语境 too
     const realFetch = window.fetch;
@@ -353,32 +353,32 @@ const snippetBefore = () => $('.popover-context-snippet').firstChild.textContent
     await tap('fail', 'matin');
     await settle();
     window.fetch = realFetch;
-    assert.match(text('.popover-dict'), /暂无释义/);
-    assert.match(text('.popover-dict'), /查词服务忙/);
+    assert.match(text('.popover-dict'), /Could not get the meaning/);
+    assert.match(text('.popover-dict'), /Lookup failed/);
     assert.equal(visible('.popover-context'), true);
-    assert.match(text('.popover-context-why'), /il faut 后面用不定式/);
+    assert.match(text('.popover-context-why'), /infinitive partir after il faut/);
 
     // 9. Stale replies: a late answer for a closed card never paints the open one
     let releaseLivre;
     gates.set('livre', new Promise(r => { releaseLivre = r; }));
-    contextAnswer = body => ({ status: 200, data: { context: { meaning_zh: body.word, meaning_en: '', why_zh: `关于 ${body.word} 的说明` }, state: 'ready' } });
+    contextAnswer = body => ({ status: 200, data: { context: { meaning_zh: body.word, meaning_en: '', why_zh: `About ${body.word}` }, state: 'ready' } });
     const slow = tap('stale', 'livre');
     await settle();
     assert.equal($('.popover-context').dataset.state, 'loading');
-    assert.match(text('.popover-context-status'), /正在分析/);
+    assert.match(text('.popover-context-status'), /Working out/);
     await tap('stale', 'lisons');
     await settle();
-    assert.match(text('.popover-context-why'), /关于 lisons 的说明/);
+    assert.match(text('.popover-context-why'), /About lisons/);
     releaseLivre();
     gates.delete('livre');
     await slow;
     await settle();
-    assert.match(text('.popover-context-why'), /关于 lisons 的说明/, 'the earlier answer is ignored here');
+    assert.match(text('.popover-context-why'), /About lisons/, 'the earlier answer is ignored here');
     const k = contextCalls().length;
     await tap('stale', 'livre');
     await settle();
     assert.equal(contextCalls().length, k, 'but kept for its own card');
-    assert.match(text('.popover-context-why'), /关于 livre 的说明/);
+    assert.match(text('.popover-context-why'), /About livre/);
 
     // 10. Concurrent opens of the same word share one request
     let releaseNous;
@@ -392,14 +392,14 @@ const snippetBefore = () => $('.popover-context-snippet').firstChild.textContent
     gates.delete('Nous');
     await Promise.all([a, b]);
     await settle();
-    assert.match(text('.popover-context-why'), /关于 Nous 的说明/);
+    assert.match(text('.popover-context-why'), /About Nous/);
 
     // 11. An empty answer is kept and said plainly; 422 means unavailable, kept too
     contextAnswer = () => ({ status: 200, data: { context: { meaning_zh: '', meaning_en: '', why_zh: '' }, state: 'empty' } });
     await tap('empty', 'beaucoup');
     await settle();
     assert.equal($('.popover-context').dataset.state, 'empty');
-    assert.match(text('.popover-context-status'), /没有需要特别说明/);
+    assert.match(text('.popover-context-status'), /Nothing special/);
     await tap('empty', 'beaucoup');
     contextAnswer = () => ({ status: 422, data: { detail: { code: 'word_not_in_sentence' } } });
     await tap('empty', 'pleut');
@@ -424,17 +424,17 @@ const snippetBefore = () => $('.popover-context-snippet').firstChild.textContent
     assert.equal(contextCalls().length, e + 1);
 
     // 13. Model and page text only ever goes in as text
-    contextAnswer = () => ({ status: 200, data: { context: { meaning_zh: '<img src=x onerror=alert(1)>吃', meaning_en: '<script>x()</script>', why_zh: '<b onclick=x>动词</b>变位' }, state: 'ready' } });
+    contextAnswer = () => ({ status: 200, data: { context: { meaning_zh: '<img src=x onerror=alert(1)>吃', meaning_en: '<script>x()</script>', why_zh: '<b onclick=x>verb</b>form' }, state: 'ready' } });
     await tap('xss', 'mange');
     await settle();
     assert.equal(pop.querySelector('img, script, b'), null);
     assert.equal(pop.querySelectorAll('[onclick], [onerror]').length, 0, 'markup stays text, never attributes');
     assert.doesNotMatch(pop.innerHTML, /<img|<script/);
-    assert.match(text('.popover-context-why'), /动词.*变位/);
+    assert.match(text('.popover-context-why'), /verb.*form/);
     await tap('xss', 'pomme');
     await settle();
     assert.equal(pop.querySelector('b'), null);
-    assert.match(text('.popover-context-meaning'), /苹果/);
+    assert.match(text('.popover-context-meaning'), /Here: apple/);
 
     // 14. The bounded request: no oversized field leaves the page
     const big = 'x'.repeat(5000);
@@ -443,7 +443,7 @@ const snippetBefore = () => $('.popover-context-snippet').firstChild.textContent
     assert.ok(last.translation_zh.length <= 600 && last.hints.note_en.length <= 600 && last.hints.meaning_zh.length <= 200);
 
     // 15. Contractions: 词典 first, au = à + le in plain Chinese, never from the sentence or a model
-    contextAnswer = body => ({ status: 200, data: { context: { meaning_zh: '一些', meaning_en: 'some', why_zh: `${body.word} 在这里是部分冠词` }, state: 'ready' } });
+    contextAnswer = body => ({ status: 200, data: { context: { meaning_zh: '一些', meaning_en: 'some', why_zh: `${body.word} is a partitive article here` }, state: 'ready' } });
     const before15 = { ctx: contextCalls().length, lookups: lookups() };
     await tap('secours', 'Au');
     await settle();
@@ -452,16 +452,16 @@ const snippetBefore = () => $('.popover-context-snippet').firstChild.textContent
     assert.ok(dict.compareDocumentPosition(context) & window.Node.DOCUMENT_POSITION_FOLLOWING, '词典 comes before 语境');
     assert.equal(dict.parentElement.firstElementChild, dict, '词典 is the first part of the card');
     assert.equal(visible('.popover-dict'), true);
-    assert.equal(text('.popover-pos'), '缩合冠词');
+    assert.equal(text('.popover-pos'), 'contracted article');
     assert.equal(text('.popover-dict-formula'), 'au = à + le');
-    assert.match(text('.popover-dict .popover-content'), /au = à \+ le（到\/在 \+ 阳性单数定冠词）/);
+    assert.match(text('.popover-dict .popover-content'), /au = à \+ le: to \/ at \+ the/);
     assert.doesNotMatch(text('.popover-dict'), /救命|secours/, 'the expression never replaces what au means');
     assert.equal(visible('.popover-lemma'), false, 'no confusing "base form: à + le"');
     assert.equal(context.dataset.state, 'phrase');
     assert.equal(text('.popover-phrase-canonical'), 'au secours');
     assert.equal(text('.popover-phrase-mark'), 'Au secours');
-    assert.match(text('.popover-phrase-meaning'), /救命！ \/ Help!/);
-    assert.match(text('.popover-phrase-literal'), /不能逐词/);
+    assert.match(text('.popover-phrase-meaning'), /Help!/);
+    assert.match(text('.popover-phrase-literal'), /do not read it word by word/);
     assert.equal(contextCalls().length, before15.ctx, 'a known expression: no model call');
     assert.equal(lookups(), before15.lookups, 'a contraction: no lookup');
     // The formula's words are nested lookups; Back brings au back as it was
@@ -475,8 +475,8 @@ const snippetBefore = () => $('.popover-context-snippet').firstChild.textContent
     assert.equal($('.popover-context').dataset.state, 'phrase');
 
     // All four, in any case, with no sentence at all (nested / unknown cards): the expansion is always there
-    const FORMS = { au: ['au = à + le', '到/在 + 阳性单数定冠词'], aux: ['aux = à + les', '到/在 + 复数定冠词'],
-        du: ['du = de + le', '……的/从 + 阳性单数定冠词'], des: ['des = de + les', '……的/从 + 复数定冠词'] };
+    const FORMS = { au: ['au = à + le', 'to / at + the (masculine singular)'], aux: ['aux = à + les', 'to / at + the (plural)'],
+        du: ['du = de + le', 'of / from + the (masculine singular)'], des: ['des = de + les', 'of / from + the (plural)'] };
     for (const [word, [formula, zh]] of Object.entries(FORMS)) {
         for (const shown of [word, word.toUpperCase(), word[0].toUpperCase() + word.slice(1)]) {
             await popover.show(shown, chip, {}, {});
@@ -489,15 +489,15 @@ const snippetBefore = () => $('.popover-context-snippet').firstChild.textContent
     // du / des are not always contractions: both uses, and a caution
     await popover.show('du', chip, {}, {});
     await settle();
-    assert.equal(text('.popover-pos'), '缩合冠词 / 部分冠词');
+    assert.equal(text('.popover-pos'), 'contracted article / partitive article');
     assert.equal(pop.querySelectorAll('.popover-dict-use').length, 2);
-    assert.match(text('.popover-dict'), /部分冠词 一些 \/ 常不译/);
-    assert.match(text('.popover-dict-caution'), /不是每个 du 都是缩合形式/);
+    assert.match(text('.popover-dict'), /partitive article some, often not translated/);
+    assert.match(text('.popover-dict-caution'), /not every du is a contraction/);
     await popover.show('des', chip, {}, {});
     await settle();
-    assert.equal(text('.popover-pos'), '缩合冠词 / 不定冠词');
-    assert.match(text('.popover-dict'), /不定冠词（复数） 一些，un \/ une 的复数/);
-    assert.match(text('.popover-dict-caution'), /不是每个 des 都是缩合形式/);
+    assert.equal(text('.popover-pos'), 'contracted article / indefinite article');
+    assert.match(text('.popover-dict'), /indefinite article \(plural\) some, the plural of un \/ une/);
+    assert.match(text('.popover-dict-caution'), /not every des is a contraction/);
     await popover.show('aux', chip, {}, {});
     await settle();
     assert.equal(pop.querySelectorAll('.popover-dict-use').length, 1);
@@ -506,7 +506,7 @@ const snippetBefore = () => $('.popover-context-snippet').firstChild.textContent
     // In a sentence the 语境 says which use it is; the 词典 still lists both
     await tap('du', 'du');
     await settle();
-    assert.match(text('.popover-context-why'), /du 在这里是部分冠词/);
+    assert.match(text('.popover-context-why'), /du is a partitive article here/);
     assert.equal(pop.querySelectorAll('.popover-dict-use').length, 2);
     // A 语境 failure never removes the expansion
     contextAnswer = () => ({ status: 502, data: { detail: { message: 'bad' } } });
@@ -535,11 +535,11 @@ const snippetBefore = () => $('.popover-context-snippet').firstChild.textContent
         await popover.show(token, document.getElementById('line-sac'), {sentence: token + '.'});
         await settle();
         assert.equal(visible('.popover-dict'), true);
-        assert.match(text('.popover-dict'), /d’ = de（元音前省略）/);
-        assert.match(text('.popover-dict'), /accord = 一致、同意、协议（阳性名词 \/ n.m.）/);
-        assert.match(text('.popover-context'), /好的 \/ 同意/);
-        assert.match(text('.popover-context'), /处于一致/);
-        assert.equal(pop.querySelector('.popover-dict .popover-en-text').textContent, '');
+        assert.match(text('.popover-dict'), /d’ = de \(elided before a vowel\)/);
+        assert.match(text('.popover-dict'), /accord = agreement; accord \(masculine noun\)/);
+        assert.match(text('.popover-context'), /OK \/ agreed/);
+        assert.match(text('.popover-context'), /in agreement/);
+        assert.match(pop.querySelector('.popover-dict .popover-en-text').textContent, /agreement/);
         assert.ok(pop.querySelector('.popover-dict').compareDocumentPosition(pop.querySelector('.popover-context')) & window.Node.DOCUMENT_POSITION_FOLLOWING);
     }
     assert.equal(lookups(), beforeAccord.lookups);
@@ -571,11 +571,11 @@ const snippetBefore = () => $('.popover-context-snippet').firstChild.textContent
     const detached = document.createElement('p'); detached.className = 'sentence-french-text'; detached.textContent = SENTENCES.cake.sentence;
     const deadRange = document.createRange(); deadRange.selectNodeContents(detached);
     assert.equal(api.wordContextTarget('gâteau', {sourceRange: deadRange}, ctxOf('cake')), null, 'detached source is not current sentence');
-    contextAnswer = body => ({status: 200, data: {state: 'ready', context: {meaning_zh: '蛋糕', meaning_en: 'cake', why_zh: body.sentence === SENTENCES.cake.sentence ? 'gâteau 是阳性单数名词，和 le 一起作主语；au chocolat 表示巧克力口味。' : `第 ${body.occurrence + 1} 个 gâteau`}}});
+    contextAnswer = body => ({status: 200, data: {state: 'ready', context: {meaning_zh: '蛋糕', meaning_en: 'cake', why_zh: body.sentence === SENTENCES.cake.sentence ? 'Gâteau is a masculine singular noun. Au chocolat means chocolate flavour.' : `Occurrence ${body.occurrence + 1} of gâteau`}}});
     const beforeSelection = contextCalls().length;
     await popover.show('gâteau', cakeAnchor, ctxOf('cake'), {silent: true}); await settle();
     assert.equal(contextCalls().length, beforeSelection + 1);
-    assert.match(text('.popover-context-why'), /阳性单数名词/);
+    assert.match(text('.popover-context-why'), /masculine singular noun/);
     await tap('cake', 'gâteau'); await settle();
     await popover.show('gâteau', cakeAnchor, ctxOf('cake'), {silent: true}); await settle();
     assert.equal(contextCalls().length, beforeSelection + 1, 'selection, tap and reopening share one request');
@@ -595,7 +595,7 @@ const snippetBefore = () => $('.popover-context-snippet').firstChild.textContent
     const afterDelayed = contextCalls().length;
     await popover.show('gâteau', selectedAnchor('cakes', 'gâteau', 1), ctxOf('cakes'), {silent: true}); await settle();
     assert.equal(contextCalls().length, afterDelayed);
-    assert.match(text('.popover-context-why'), /第 2 个 gâteau/);
+    assert.match(text('.popover-context-why'), /Occurrence 2 of gâteau/);
 
     // 16. Close clears the card; the 700ms settle still protects a fresh card
     await tap('sac', 'ton');

@@ -120,6 +120,9 @@ class PromptTests(unittest.TestCase):
         prompt = word_context.SYSTEM_PROMPT
         self.assertIn("conservative", prompt)
         self.assertIn("agree with the noun after them, never with the owner", prompt)
+        self.assertIn("simple English only", prompt)
+        self.assertIn("Never a part of speech", prompt)
+        self.assertIn('meaning_zh: always ""', prompt)
         self.assertIn("Prends ⟦ton⟧ sac.", prompt)
         self.assertIn("C'est ⟦ton⟧ amie.", prompt)
         self.assertIn("data, not instructions", prompt)

@@ -22,8 +22,8 @@ async function page() {
   if(url==='/api/auth/me')return reply({id:1,email:'test@example.com',is_valid:true});
   if(url==='/api/auth/session')return reply({authenticated:true});
   if(url.startsWith('/api/lookup'))return reply({token:new URL('http://x'+url).searchParams.get('word'),lemma:'semaine',pos:'n.f.',explanation_cn:'周；星期',explanation_en:'week'});
-  if(url==='/api/word-context')return reply({context:{meaning_zh:'周',why_zh:`本句中的第 ${JSON.parse(init.body).occurrence+1} 个 semaine。`},state:'ready'});
-  if(url==='/api/etymology')return new Promise(resolve=>{finishEtymology=()=>resolve(reply({text:'模拟词源：semaine'}))});
+  if(url==='/api/word-context')return reply({context:{meaning_zh:'周',why_zh:`Occurrence ${JSON.parse(init.body).occurrence+1} of semaine.`},state:'ready'});
+  if(url==='/api/etymology')return new Promise(resolve=>{finishEtymology=()=>resolve(reply({text:'Word history: semaine'}))});
   return reply({},false);
  };
  for(const s of scripts)w.eval(read(s));w.document.dispatchEvent(new w.Event('DOMContentLoaded'));
@@ -42,7 +42,7 @@ for(const mode of ['recall','dictation'])for(const scope of ['whole','steps'])te
  assert.ok(card.querySelector('.dt-missing .interactive-word'));
  assert.ok(card.querySelector('.dt-wrong .dt-fix .interactive-word'));
  const right=Array.from(card.querySelectorAll('.dictation-diff .interactive-word')).filter(x=>x.dataset.word==='semaine'&&!x.dataset.contextUnavailable).at(-1);
- right.click();await flush();assert.match(doc.querySelector('.popover-context-why').textContent,/第 2 个/,JSON.stringify({state:doc.querySelector('.popover-context').dataset.state,calls}));
+ right.click();await flush();assert.match(doc.querySelector('.popover-context-why').textContent,/Occurrence 2/,JSON.stringify({state:doc.querySelector('.popover-context').dataset.state,calls}));
  assert.equal(calls.filter(x=>x.url==='/api/word-context').at(-1).body.occurrence,1);
  doc.querySelector('.popover-close-btn').click();
  const wrong=card.querySelector('.dt-wrong .dt-yours .interactive-word');
@@ -50,13 +50,13 @@ for(const mode of ['recall','dictation'])for(const scope of ['whole','steps'])te
  doc.querySelector('.popover-close-btn').click();
  const answer=Array.from(card.querySelectorAll('.dictation-answer-text .interactive-word')).filter(x=>x.dataset.word==='semaine')[1];
  select(e,answer);await flush(800);
- assert.equal(doc.querySelector('.popover-context').dataset.state,'ready');assert.match(doc.querySelector('.popover-context-why').textContent,/第 2 个/);
+ assert.equal(doc.querySelector('.popover-context').dataset.state,'ready');assert.match(doc.querySelector('.popover-context-why').textContent,/Occurrence 2/);
  assert.equal(calls.filter(x=>x.url==='/api/word-context'&&x.body.word==='semaine').length,1,'same target shared across diff/answer selection');
  const pop=doc.querySelector('.floating-word-popover');const bar=doc.querySelector('.read-selection-bar');const before=calls.length;
- const button=pop.querySelector('.popover-etymology-button');button.innerHTML='<svg><path/></svg><span>词根词源</span>';
+ const button=pop.querySelector('.popover-etymology-button');button.innerHTML='<svg><path/></svg><span>Etymology</span>';
  const inside=button.querySelector('path');inside.dispatchEvent(new w.MouseEvent('mousedown',{bubbles:true,button:0}));inside.dispatchEvent(new w.MouseEvent('mouseup',{bubbles:true,button:0}));inside.dispatchEvent(new w.MouseEvent('click',{bubbles:true,button:0}));await flush(40);
  assert.equal(pop.hidden,false);assert.equal(bar.hidden,true);assert.equal(button.disabled,true);button.click();assert.equal(calls.length,before+1);
- e.finish();await flush();assert.match(pop.querySelector('.popover-etymology-text').textContent,/模拟词源/);button.click();await flush();assert.equal(calls.length,before+1,'cached etymology on repeated internal click');assert.equal(bar.hidden,true);
+ e.finish();await flush();assert.match(pop.querySelector('.popover-etymology-text').textContent,/Word history/);button.click();await flush();assert.equal(calls.length,before+1,'cached etymology on repeated internal click');assert.equal(bar.hidden,true);
  // A truly new selection opens its own card directly, replacing the previous one.
  select(e,card.querySelector('.dictation-answer-text .interactive-word'));await flush(800);assert.equal(bar.hidden,true);assert.equal(pop.hidden,false);
  domClose(e);

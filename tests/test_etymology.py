@@ -15,7 +15,7 @@ class EtymologyApiTests(unittest.TestCase):
         self.client = TestClient(tts_service.app)
 
     def test_shared_persistent_cache_skips_llm_and_upstream_key(self):
-        chat = AsyncMock(return_value=({}, "<think>reasoning</think>构词：empêcher。\n记忆：被阻挡。"))
+        chat = AsyncMock(return_value=({}, "<think>reasoning</think>Word parts: empêcher.\nMemory: blocked."))
         with patch.object(services.ai, "post_chat", chat):
             first = self.client.post(
                 "/api/etymology",
@@ -25,9 +25,10 @@ class EtymologyApiTests(unittest.TestCase):
             self.assertEqual(first.status_code, 200)
             self.assertEqual(
                 first.json(),
-                {"text": "构词：empêcher。\n记忆：被阻挡。", "cached": False},
+                {"text": "Word parts: empêcher.\nMemory: blocked.", "cached": False},
             )
             chat.assert_awaited_once()
+            self.assertIn("simple English only", chat.call_args.args[1]["messages"][0]["content"])
             self.assertEqual(
                 chat.call_args.args[1]["model"],
                 services.ai.AGY_MODEL,
@@ -44,6 +45,18 @@ class EtymologyApiTests(unittest.TestCase):
             self.assertEqual(second.status_code, 200)
             self.assertEqual(second.json(), {**first.json(), "cached": True})
             chat.assert_awaited_once()
+
+    def test_old_chinese_cache_is_regenerated_in_english(self):
+        auth_db.set_etymology("old-chinese", "old-chinese", "", "旧的中文词源")
+        chat = AsyncMock(return_value=({}, "Origin unknown. Memory: a simple picture."))
+        with patch.object(services.ai, "post_chat", chat):
+            response = self.client.post(
+                "/api/etymology", headers=testenv.session_headers(), json={"word": "old-chinese"}
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["cached"])
+        self.assertEqual(auth_db.get_etymology("old-chinese"), response.json()["text"])
+        chat.assert_awaited_once()
 
     def test_login_required_even_on_cache_hit(self):
         auth_db.set_etymology("étymo-login-hit", "étymo-login-hit", "", "词源")
@@ -62,7 +75,7 @@ class EtymologyApiTests(unittest.TestCase):
         chat.assert_not_awaited()
 
     def test_word_fallback_and_blank_validation(self):
-        chat = AsyncMock(return_value=({}, "词源：拉丁语。"))
+        chat = AsyncMock(return_value=({}, "Origin: Latin."))
         headers = testenv.session_headers()
         with patch.object(services.ai, "post_chat", chat):
             for body in (
@@ -87,7 +100,7 @@ class EtymologyApiTests(unittest.TestCase):
                 502,
             )
             self.assertIsNone(auth_db.get_etymology(key_word))
-            chat.return_value = ({}, "词源：拉丁语。")
+            chat.return_value = ({}, "Origin: Latin.")
             response = self.client.post("/api/etymology", headers=headers, json={"word": key_word})
             self.assertEqual(response.status_code, 200)
             self.assertIs(response.json()["cached"], False)
@@ -103,7 +116,7 @@ class EtymologyApiTests(unittest.TestCase):
             )
             self.assertIsNone(auth_db.get_etymology(key_word))
             chat.side_effect = None
-            chat.return_value = ({}, "词源：拉丁语。")
+            chat.return_value = ({}, "Origin: Latin.")
             response = self.client.post("/api/etymology", headers=headers, json={"word": key_word})
             self.assertEqual(response.status_code, 200)
             self.assertIs(response.json()["cached"], False)

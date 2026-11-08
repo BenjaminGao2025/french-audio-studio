@@ -76,7 +76,7 @@ test('card open shows the per-user lookup count and debounces repeated opens', a
     await card.show('bonjour', el);
     await flush();
     assert.deepEqual(posts, ['bonjour']);
-    assert.equal(card.element.querySelector('.popover-lookup-count').textContent, '已查 7 次');
+    assert.equal(card.element.querySelector('.popover-lookup-count').textContent, 'Looked up 7 times');
     assert.equal(card.element.querySelector('.popover-lookup-count').hidden, false);
     const filled = card.element.querySelectorAll('.importance-stars button.filled');
     assert.equal(filled.length, 4); // lookup-derived 4 beats the saved card's 3
@@ -128,8 +128,8 @@ test('removal star waits five seconds and the toast can undo it', async (t) => {
     await flush(5);
     assert.equal(removed, 0, 'the delete must wait for the undo window');
     assert.equal(toast.hidden, false);
-    assert.match(toast.textContent, /已移除/);
-    assert.match(toast.textContent, /撤销/);
+    assert.match(toast.textContent, /Removed/);
+    assert.match(toast.textContent, /Undo/);
     assert.equal(star.classList.contains('active'), false);
 
     toast.querySelector('.word-card-toast-undo').click();

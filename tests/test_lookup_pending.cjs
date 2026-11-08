@@ -54,14 +54,14 @@ const visible = sel => { const el = card().querySelector(sel); return Boolean(el
     await wait(60);
     assert.equal(calls.length, 2, 'one retry after the timeout');
     assert.equal(visible('.popover-loading'), false, 'the spinner is gone');
-    assert.match(text('.popover-dict .popover-content'), /暂无释义/);
+    assert.match(text('.popover-dict .popover-content'), /Could not get the meaning/);
 
     // 2. The failure left nothing pending: the next tap asks again, and the answer shows at once
     script = ['ok'];
     await popover.show('Afin', first, { sentence: 'Afin de réussir.' }, { silent: true });
     await wait(10);
     assert.equal(calls.length, 3);
-    assert.match(text('.popover-cn-text'), /为了/);
+    assert.match(text('.popover-cn-text'), /in order to/);
 
     // 3. A 5xx is retried once, and the retry's answer is used
     popover.close();
@@ -69,7 +69,7 @@ const visible = sel => { const el = card().querySelector(sel); return Boolean(el
     await popover.show('Alors', second, { sentence: 'Alors.' }, { silent: true });
     await wait(20);
     assert.equal(calls.length, 5, 'one retry after a 5xx');
-    assert.match(text('.popover-cn-text'), /为了/);
+    assert.match(text('.popover-cn-text'), /in order to/);
 
     // 4. "Pourtant" and "pourtant" tapped back to back share one request
     popover.close();

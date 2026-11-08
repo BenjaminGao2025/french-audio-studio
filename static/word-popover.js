@@ -9,9 +9,10 @@
 (function (root) {
     'use strict';
 
-    const I18N = root.FrenchI18n;
-    const EN = I18N.lang() === 'en';
-    const pick = I18N.pick;
+    // Desktop word cards always teach in simple English, independently of the page language.
+    const EN = true;
+    const english = value => typeof value === 'string' && !/[\u3400-\u9fff]/u.test(value) ? value.trim() : '';
+    const pick = (legacy, en) => english(en) || english(legacy);
     const formatFriendlyPhonetic = root.SpeechEval.formatFriendlyPhonetic;
 
     const TEXT = {
@@ -115,7 +116,7 @@
             let label = known ? known[EN ? 2 : 1] : '';
             // Already a grammar label (e.g. 动词), or a short abbreviation this list does not know
             if (!known && (/[一-鿿]/u.test(part) || (part.length <= 12 && !/\bword\b/i.test(part)))) label = part;
-            if (label && !labels.includes(label)) labels.push(label);
+            if (english(label) && !labels.includes(label)) labels.push(label);
         });
         return labels.join(' / ');
     }
@@ -456,8 +457,7 @@
     }
 
 
-    // The headline of a word card: a short Chinese core meaning plus a short English one, cut from the
-    // dictionary gloss. The full gloss lives in the 词典 zone; a long gloss is never the headline.
+    // Keep the core meaning short; the full gloss lives in the Dictionary zone.
     function glossItems(text, isEn) {
         const cleaned = String(text || '')
             .replace(/(^|[\s;；。.])\d{1,2}[.、)）]\s*/g, '$1;')
@@ -561,7 +561,7 @@
                 <p class="popover-context-note" hidden></p>
             </details>
             <div class="popover-etymology">
-                <button class="popover-etymology-button" type="button" aria-expanded="false">词根词源</button>
+                <button class="popover-etymology-button" type="button" aria-expanded="false">Etymology</button>
                 <div class="popover-etymology-text" role="status" hidden></div>
             </div>
         </div>
@@ -801,7 +801,7 @@
         function resetEtymology() {
             etymologyGeneration++;
             els.etymologyButton.disabled = false;
-            els.etymologyButton.textContent = '词根词源';
+            els.etymologyButton.textContent = 'Etymology';
             els.etymologyButton.dataset.state = 'closed';
             els.etymologyButton.setAttribute('aria-expanded', 'false');
             els.etymologyText.textContent = '';
@@ -846,7 +846,8 @@
                 });
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok || typeof data.text !== 'string' || !data.text.trim()) throw new Error(T.etymologyFailed);
-                text = data.text;
+                text = english(data.text);
+                if (!text) throw new Error(T.etymologyFailed);
                 etymologyCache.set(key, text);
                 }
                 if (generation === etymologyGeneration && isOpen()) els.etymologyText.textContent = text;
@@ -855,7 +856,7 @@
             } finally {
                 if (generation === etymologyGeneration && isOpen()) {
                     els.etymologyButton.disabled = false;
-                    els.etymologyButton.textContent = '词根词源';
+                    els.etymologyButton.textContent = 'Etymology';
                     els.etymologyButton.dataset.state = 'open';
                     els.etymologyButton.setAttribute('aria-expanded', 'true');
                     els.etymologyText.hidden = false;
@@ -1009,12 +1010,12 @@
             mark.className = 'popover-phrase-mark';
             mark.textContent = snip.match;
             els.phraseSnippet.replaceChildren(document.createTextNode(snip.before || ''), mark, document.createTextNode(snip.after || ''));
-            const meanings = (EN ? [p.meaning_en, p.meaning_zh] : [p.meaning_zh, p.meaning_en]).filter(Boolean);
+            const meanings = [pick(p.meaning_zh, p.meaning_en)].filter(Boolean);
             els.phraseMeaning.textContent = meanings.join(' / ');
             els.phraseMeaning.hidden = meanings.length === 0;
-            const notes = (p.notes || []).filter(n => !(p.literal_zh || '').includes(n));
-            const alone = String((EN ? item.explanation_en : item.explanation_cn) || '').split(/[（(;；,，]/)[0].trim().slice(0, 16);
-            const literal = p.literal_zh || T.partOfPhrase(item.token, canonical, meanings[0] || '', alone);
+            const notes = (p.notes || []).map(english).filter(n => n && !(p.literal_zh || '').includes(n));
+            const alone = english(item.explanation_en).split(/[（(;；,，]/)[0].trim().slice(0, 16);
+            const literal = pick(p.literal_zh, p.literal_en) || T.partOfPhrase(item.token, canonical, meanings[0] || '', alone);
             els.phraseLiteral.textContent = [literal, notes.length ? T.contractionNote(notes) : ''].filter(Boolean).join(' ');
         }
 
@@ -1106,10 +1107,10 @@
                 const de = BASIC_FRENCH_WORDS["d'"];
                 const row = document.createElement('p');
                 row.className = 'popover-dict-use';
-                row.textContent = `d’ = ${de.lemma}（元音前省略）`;
+                row.textContent = `d’ = ${de.lemma} (elided before a vowel)`;
                 const accord = document.createElement('p');
                 accord.className = 'popover-dict-use';
-                accord.textContent = `accord = ${constituent.explanation_cn || BASIC_FRENCH_WORDS.accord.explanation_cn}（阳性名词 / n.m.）`;
+                accord.textContent = `accord = ${pick(constituent.explanation_cn, constituent.explanation_en) || 'agreement'} (masculine noun)`;
                 els.cn.replaceChildren(row, accord);
                 els.en.textContent = EN ? 'de (elided before a vowel) + accord (agreement; masculine noun)' : '';
                 return;
@@ -1119,7 +1120,7 @@
             if (dictState === 'failed' || (!item.explanation_cn && !item.explanation_en)) {
                 els.content.dataset.kind = 'message';
                 els.cn.textContent = T.noDefinition;
-                els.en.textContent = dictState === 'failed' ? dictError : '';
+                els.en.textContent = dictState === 'failed' ? english(dictError) || T.lookupFailed : '';
                 return;
             }
             if (EN) {
@@ -1146,42 +1147,38 @@
             els.dictMore.textContent = T.dictMore;
         }
 
-        // The headline: short Chinese core + short English, from the gloss; never the raw gloss.
+        // Prefer the short meaning here; grammar labels are never a headline.
         const coreFetched = new Set();
+        function coreMeaning(text, pos) {
+            const items = glossItems(english(text), true).filter(item => {
+                const plain = item.replace(/[.()]/g, '').trim();
+                return !POS_LABELS.some(([, zh, en]) => plain.toLowerCase() === en || plain === zh)
+                    && !/^(?:n|nm|nf|v|adj|adv|prep|conj|pron|det|art|interj|num|loc)$/i.test(plain);
+            });
+            return shortCore(items.join('; '), true, pos);
+        }
         function renderHeadline(item) {
             const ctx = ctxState;
-            let zh = '';
-            let en = '';
-            if (dictState === 'none') {
-                const phrase = ctx && ctx.phrase;
-                zh = shortCore(phrase && phrase.meaning_zh, false);
-                en = shortCore(phrase && phrase.meaning_en, true);
-            } else if (dictState === 'ready' && els.content.dataset.kind === 'gloss') {
-                zh = shortCore(item.explanation_cn, false, item.pos);
-                en = shortCore(item.explanation_en, true, item.pos);
-                if (!zh) {
-                    // No Chinese in a kept snapshot: this sentence's meaning stands in until the lookup fills it
-                    const here = ctx && !ctx.phrase ? meaningHere(ctx) : null;
-                    zh = shortCore(here && here.meaning_zh, false);
-                    fetchCore(item);
-                }
-            }
-            if (zh && en && zh.toLowerCase() === en.toLowerCase()) en = '';
-            els.hlZh.textContent = zh;
+            const here = ctx && (ctx.phrase || meaningHere(ctx));
+            const en = coreMeaning(here && here.meaning_en, item.pos)
+                || coreMeaning(item.explanation_en, item.pos);
+            els.hlZh.textContent = '';
+            els.hlZh.hidden = true;
             els.hlEn.textContent = en;
-            els.headline.hidden = !(zh || en);
+            els.headline.hidden = !en;
+            if (!english(item.explanation_en) && dictState === 'ready') fetchCore(item);
         }
-        // A saved snapshot may lack the Chinese gloss: ask for it once per word, then repaint
+        // Old snapshots can contain only Chinese. Fetch an English dictionary gloss once.
         function fetchCore(item) {
             const key = normalizeWord(item.token);
             if (coreFetched.has(key) || item.phrase) return;
             coreFetched.add(key);
             const requestId = lookupGeneration;
             lookupWord(item.token).then(data => {
-                if (!data || !data.explanation_cn) return;
+                if (!data || !english(data.explanation_en)) return;
                 remember(item.token, Object.assign({}, item, data, { sentence: item.sentence, sentence_cn: item.sentence_cn }));
                 if (requestId !== lookupGeneration || !isOpen() || !currentCard || currentCard.token !== item.token) return;
-                currentCard = Object.assign({}, currentCard, { explanation_cn: data.explanation_cn });
+                currentCard = Object.assign({}, currentCard, { explanation_en: data.explanation_en });
                 renderDict(currentCard);
                 renderHeadline(currentCard);
                 position();
@@ -1192,7 +1189,7 @@
         function meaningHere(ctx) {
             const entry = ctx.entry || {};
             const result = ctx.status === 'ready' && ctx.result ? ctx.result : {};
-            return { meaning_zh: entry.meaning_zh || result.meaning_zh || '', meaning_en: entry.meaning_en || result.meaning_en || '' };
+            return { meaning_zh: entry.meaning_zh || result.meaning_zh || '', meaning_en: english(entry.meaning_en) || english(result.meaning_en) || '' };
         }
 
         function renderContext(item) {
@@ -1208,12 +1205,12 @@
             const result = ctx.status === 'ready' && ctx.result ? ctx.result : {};
             const entry = ctx.entry || {};
             const { meaning_zh: zh, meaning_en: en } = own ? meaningHere(ctx) : { meaning_zh: '', meaning_en: '' };
-            labelled(els.ctxMeaning, T.meaningHere, (EN ? [en, zh] : [zh, en]).filter(Boolean).join(' / '));
-            const why = own ? result.why_zh || '' : '';
+            labelled(els.ctxMeaning, T.meaningHere, english(en));
+            const why = own ? pick(result.why_zh, result.why_en) : '';
             els.ctxWhy.textContent = why;
             els.ctxWhy.hidden = !why;
-            // The analysis's English note: in the English page, or when there is no Chinese why
-            const note = own && entry.why_en && (EN || !why) ? entry.why_en : '';
+            // Use the analysis's English note when the saved/generated explanation has no English.
+            const note = own && !why ? english(entry.why_en) : '';
             els.ctxNote.textContent = note;
             els.ctxNote.hidden = !note;
             if (els.whyDetail) els.whyDetail.hidden = !(why || note);
@@ -1415,7 +1412,7 @@
                 // A word of a fixed expression: the expression is its meaning here, nothing to ask
                 if (/^d['’]accord$/i.test(word)) {
                     // Established elision/expression, independent of an AI response or sentence cache.
-                    ctx.phrase = { text: word, phrase: "d’accord", meaning_zh: '好的 / 同意', meaning_en: 'OK / agreed', literal_zh: '字面意思是“处于一致”：de 在元音前省略为 d’。' };
+                    ctx.phrase = { text: word, phrase: "d’accord", meaning_zh: '好的 / 同意', meaning_en: 'OK / agreed', literal_zh: 'Literally “in agreement”: de becomes d’ before a vowel.' };
                     ctx.status = 'phrase';
                 }
                 else if (ctx.phrase) ctx.status = 'phrase';

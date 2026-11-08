@@ -104,6 +104,8 @@ class AnalysisTests(unittest.TestCase):
         prompt = analysis._analyze_payload(analysis.AnalyzeRequest(text=SENTENCE))["messages"][0]["content"]
         self.assertIn('"phrases"', prompt)
         self.assertIn("literal_zh", prompt)
+        self.assertIn("simple English sentence", prompt)
+        self.assertIn("No Chinese in literal_zh", prompt)
 
     def test_phrases_are_cleaned_when_present(self):
         out = self._parse({"schemaVersion": 2, "sentence": SENTENCE, "words": [], "phrases": [A_PARTIR, {"x": 1}]})

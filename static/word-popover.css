@@ -802,7 +802,7 @@
     background: var(--surface-subtle, var(--surface));
 }
 
-/* Headline: short Chinese core meaning + short English; the full gloss is in the 词典 zone below. */
+/* Headline: short English core meaning; the full gloss is in the Dictionary zone below. */
 .popover-headline {
     display: flex;
     flex-wrap: wrap;
@@ -813,17 +813,12 @@
     overflow-wrap: anywhere;
 }
 .popover-headline[hidden] { display: none; }
-.popover-headline-zh {
+.popover-headline-en {
     font-size: 23px;
     font-weight: 650;
     line-height: 1.3;
     letter-spacing: -0.01em;
     color: var(--ink);
-}
-.popover-headline-en {
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--muted);
 }
 .popover-headline-zh:empty,
 .popover-headline-en:empty { display: none; }

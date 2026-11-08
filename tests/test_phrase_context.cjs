@@ -21,7 +21,7 @@ for (const c of FIXTURES.notes) assert.deepEqual(PC.contractionNotes(c.surface, 
 const SENTENCE = 'À partir des sessions de 2026, il faut partir tôt.';
 const A_PARTIR = {
     text: 'À partir des', phrase: 'à partir de', meaning_zh: '从……起', meaning_en: 'starting from',
-    literal_zh: 'partir 单独是“离开”，但 à partir de 是固定介词短语，表示起点；这里 des = de + les。',
+    literal_zh: 'The whole phrase means starting from; des = de + les.',
 };
 {
     const structured = PC.fromAnalysis({ sentence: SENTENCE, phrases: [A_PARTIR, { text: 'en fait', meaning_zh: '其实' }] });
@@ -167,14 +167,14 @@ const phraseCalls = () => calls.filter(c => c.url === '/api/phrase-context').len
     assert.equal($('.popover-phrase').hidden, false, 'the expression block shows');
     assert.equal($('.popover-phrase-canonical').textContent, 'à partir de');
     assert.equal($('.popover-phrase-mark').textContent, 'À partir des');
-    assert.match($('.popover-phrase-meaning').textContent, /从……起 \/ starting from/);
+    assert.match($('.popover-phrase-meaning').textContent, /starting from/);
     assert.match($('.popover-phrase-literal').textContent, /des = de \+ les/);
     assert.deepEqual(highlighted(), ['À', 'partir', 'des'], 'the span in the sentence is highlighted');
     assert.ok($('.popover-context').contains($('.popover-phrase')), 'the expression is the word\'s 语境');
     assert.equal($('.popover-context').hidden, false);
     assert.equal(pop.querySelectorAll('.popover-phrase').length, 1, 'no second expression block');
     assert.equal($('.popover-dict').hidden, false, 'its own meaning stays, as the 词典');
-    assert.match($('.popover-dict').textContent, /离开；出发/);
+    assert.match($('.popover-dict').textContent, /to leave/);
     assert.doesNotMatch($('.popover-dict').textContent, /从……起/, 'the expression does not replace the dictionary');
     assert.equal(api.tap().text, 'À partir des', 'the star saves the expression');
     assert.equal(phraseCalls(), 0, 'structured analysis data: no request');
@@ -183,7 +183,7 @@ const phraseCalls = () => calls.filter(c => c.url === '/api/phrase-context').len
     await tap('a', 'partir', 1);
     assert.equal($('.popover-phrase').hidden, true, 'a standalone partir gets no expression');
     assert.deepEqual(highlighted(), []);
-    assert.match(pop.textContent, /离开；出发/);
+    assert.match(pop.textContent, /to leave/);
     assert.equal(api.tap().text, '');
 
     // 3. The same word in a sentence without the expression
@@ -207,10 +207,10 @@ const phraseCalls = () => calls.filter(c => c.url === '/api/phrase-context').len
     // Model text is only ever text.
     await tap('xss', 'lieu');
     assert.equal(lookups(), before + 2, 'a word of an expression still gets its own dictionary meaning');
-    assert.match($('.popover-dict').textContent, /查到的词义/);
+    assert.match($('.popover-dict').textContent, /looked up/);
     assert.equal($('.popover-phrase').hidden, false);
     assert.equal(pop.querySelector('img, script'), null, 'no markup from the data');
-    assert.match($('.popover-phrase-meaning').textContent, /img src=x onerror=alert\(1\)而不是/);
+    assert.match($('.popover-phrase-meaning').textContent, /^$/);
     assert.equal($('.popover-phrase-mark').textContent, 'Au lieu de');
 
     // 7. Elision: "d'une" belongs to "à partir d'"

@@ -29,7 +29,7 @@ const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 const etymologyCalls = () => calls.filter(c => c.url === '/api/etymology');
 (async () => {
     await popover.show('empêché', anchor, {}, { silent: true });
-    assert.equal(button.textContent, '词根词源');
+    assert.equal(button.textContent, 'Etymology');
     assert.equal(etymologyCalls().length, 0, 'show must not precompute etymology');
     assert.deepEqual(spoken, [], 'silent Meaning still opens without speech');
     button.click();
@@ -40,7 +40,7 @@ const etymologyCalls = () => calls.filter(c => c.url === '/api/etymology');
     assert.equal(request.options.method, 'POST');
     assert.equal(request.options.headers.Authorization, 'Bearer session-token');
     assert.deepEqual(JSON.parse(request.options.body), { word: 'empêché', lemma: 'empêcher' });
-    const text = '<img src=x onerror=alert(1)>\n词源';
+    const text = '<img src=x onerror=alert(1)>\nWord history';
     resolveFetch({ ok: true, json: async () => ({ text }) });
     await tick();
     assert.equal(panel.textContent, text);

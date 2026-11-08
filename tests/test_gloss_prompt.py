@@ -19,4 +19,10 @@ def test_alignment_glosses_are_contextual_not_literal():
     assert "not 'that which'" in p
 
 
+def test_card_meanings_and_phrase_notes_request_simple_english():
+    p = _prompt()
+    assert "Word meaning and phrase meaning_en must use short simple English" in p
+    assert "No Chinese in literal_zh" in p
+
+
 load_tests = testenv.function_tests(globals())
