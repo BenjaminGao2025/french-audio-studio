@@ -16,6 +16,7 @@ import datetime
 import json
 import re
 import sqlite3
+import unicodedata
 import uuid
 from typing import Any, Iterable
 
@@ -84,6 +85,15 @@ def init_db() -> None:
                 answer TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_srs_reviews_user_time ON srs_reviews(user_id, reviewed_at);
+            -- Additive: lookup counts are their own table, so existing srs_cards and notes are untouched.
+            CREATE TABLE IF NOT EXISTS word_lookup_counts (
+                user_id INTEGER NOT NULL,
+                word TEXT NOT NULL,
+                count INTEGER NOT NULL DEFAULT 0,
+                first_looked_at TEXT NOT NULL,
+                last_looked_at TEXT NOT NULL,
+                PRIMARY KEY (user_id, word)
+            );
             """
         )
         columns = {row[1] for row in conn.execute("PRAGMA table_info(srs_cards)")}
@@ -109,6 +119,79 @@ def _iso(value: datetime.datetime) -> str:
 def sentence_key(sentence: str) -> str:
     text = sentence.replace("’", "'").replace(" ", " ")
     return re.sub(r"\s+", " ", text).strip().lower()
+
+
+# Word lookup counts (Eudic-style "已查 N 次"): one row per user per normalized word.
+LOOKUP_DEBOUNCE_SECONDS = 5
+LOOKUP_IMPORTANCE_THRESHOLDS = ((10, 5), (5, 4))  # count >= 10 -> 5 stars, >= 5 -> 4, else 3
+
+
+def normalize_lookup_word(word: str) -> str:
+    """Lower-case, normalise apostrophes and treat non-breaking spaces as spaces, so one word counts once."""
+    text = unicodedata.normalize("NFC", str(word or ""))
+    text = text.replace("’", "'").replace("ʼ", "'")
+    text = text.replace(" ", " ").replace(" ", " ")
+    return re.sub(r"\s+", " ", text).strip().lower()
+
+
+def importance_for_lookups(count: int) -> int:
+    """Automatic importance from the lookup count: 3 below 5, 4 for 5-9, 5 from 10."""
+    for threshold, importance in LOOKUP_IMPORTANCE_THRESHOLDS:
+        if count >= threshold:
+            return importance
+    return 3
+
+
+def record_word_lookup(
+    user_id: int,
+    word: str,
+    now: datetime.datetime | None = None,
+    debounce_seconds: int = LOOKUP_DEBOUNCE_SECONDS,
+) -> dict[str, Any]:
+    """Count one lookup of `word`, at most once per `debounce_seconds` for repeated opens."""
+    normalized = normalize_lookup_word(word)
+    if not normalized:
+        raise ValueError("单词不能为空。")
+    moment = now or _now()
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=datetime.timezone.utc)
+    moment_iso = _iso(moment)
+
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT count, last_looked_at FROM word_lookup_counts WHERE user_id = ? AND word = ?",
+            (user_id, normalized),
+        ).fetchone()
+        incremented = False
+        if row:
+            count = int(row["count"])
+            last = datetime.datetime.fromisoformat(row["last_looked_at"])
+            if last.tzinfo is None:
+                last = last.replace(tzinfo=datetime.timezone.utc)
+            # Repeated opens of the same word (a second surface, a quick reopen) do not inflate the count.
+            if (moment - last).total_seconds() >= debounce_seconds:
+                count += 1
+                incremented = True
+                conn.execute(
+                    "UPDATE word_lookup_counts SET count = ?, last_looked_at = ? WHERE user_id = ? AND word = ?",
+                    (count, moment_iso, user_id, normalized),
+                )
+        else:
+            count = 1
+            incremented = True
+            conn.execute(
+                "INSERT INTO word_lookup_counts (user_id, word, count, first_looked_at, last_looked_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (user_id, normalized, count, moment_iso, moment_iso),
+            )
+        conn.commit()
+
+    return {
+        "word": normalized,
+        "count": count,
+        "importance": importance_for_lookups(count),
+        "incremented": incremented,
+    }
 
 
 def target_in_sentence(sentence: str, target: str) -> bool:

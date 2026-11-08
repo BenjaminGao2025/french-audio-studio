@@ -17,7 +17,9 @@
 
     function fold(text) {
         return String(text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
-            .replace(/’/g, "'").replace(/œ/g, 'oe').replace(/æ/g, 'ae');
+            .replace(/’/g, "'").replace(/œ/g, 'oe').replace(/æ/g, 'ae')
+            // Non-breaking spaces must compare like ordinary spaces in every phrase match.
+            .replace(/[  ]/g, ' ').replace(/\s+/g, ' ');
     }
 
     function atoms(text) {

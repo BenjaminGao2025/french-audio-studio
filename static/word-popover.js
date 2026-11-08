@@ -28,6 +28,8 @@
             partOfPhrase: (word, phrase, meaning, alone) => `${alone ? `On its own “${word}” means “${alone}”, but here it` : `Here “${word}”`} is part of the fixed expression “${phrase}”${meaning ? `, which means “${meaning}”` : ''}: do not read it word by word.`,
             contractionNote: notes => `Here ${notes.join('; ')}.`,
             popoverStarTitle: 'Add to review (shortcut S)', popoverSaved: 'In review (click to remove)',
+            lookupCount: (n) => `Looked up ${n} ${n === 1 ? 'time' : 'times'}`, removed: 'Removed', undo: 'Undo',
+            importanceLookupTitle: (n, level) => `Importance ${level} of 5, at least ${level} because this word was looked up ${n} times`,
             popoverReplayTitle: 'Replay (shortcut R)', replayTitle: 'Click to replay', closeEsc: 'Close (Esc)',
             importanceLabel: 'Importance', importanceTitle: (n) => `Importance ${n} of 5 (review the most important first)`,
             posOrdinal: 'ordinal', posTime: 'time', posNumber: 'number',
@@ -50,6 +52,8 @@
             partOfPhrase: (word, phrase, meaning, alone) => `${alone ? `「${word}」单独是「${alone}」，但` : `「${word}」`}在这句里是固定搭配「${phrase}」的一部分${meaning ? `，整体意思是「${meaning}」` : ''}，不能逐词直译。`,
             contractionNote: notes => `这里 ${notes.join('；')}。`,
             popoverStarTitle: '加入复习 (快捷键 S)', popoverSaved: '已加入复习（点击移除）',
+            lookupCount: (n) => `已查 ${n} 次`, removed: '已移除', undo: '撤销',
+            importanceLookupTitle: (n, level) => `重要度 ${level} / 5，因已查 ${n} 次自动提升`,
             popoverReplayTitle: '重播发音 (快捷键 R)', replayTitle: '点击重播发音', closeEsc: '关闭 (Esc)',
             importanceLabel: '重要度', importanceTitle: (n) => `重要度 ${n} / 5（复习时可以只挑重要的）`,
             posOrdinal: '序数词', posTime: '时间', posNumber: '数字',
@@ -420,6 +424,17 @@
         return Object.prototype.hasOwnProperty.call(CONTRACTIONS, key) ? { word: key, ...CONTRACTIONS[key] } : null;
     };
 
+    // One canonical spelling for word keys and phrase matching: curly apostrophes become ',
+    // non-breaking spaces become normal spaces (so "il y a" == "il y a"), then lower-case.
+    function normalizeWord(text) {
+        return String(text == null ? '' : text).normalize('NFC')
+            .replace(/[’ʼʹ]/g, "'")
+            .replace(/[  ]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toLowerCase();
+    }
+
     function escapeHtml(str) {
         return String(str == null ? '' : str)
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -434,6 +449,7 @@
             <div class="popover-main-info">
                 <div class="popover-word-row">
                     <strong class="popover-word">--</strong>
+                    <span class="popover-lookup-count" hidden></span>
                     <button class="btn-popover-star-icon" type="button" title="${escapeHtml(T.popoverStarTitle)}" hidden>
                         <i data-lucide="star" aria-hidden="true"></i>
                     </button>
@@ -526,6 +542,12 @@
         const wordSelector = options.wordSelector || '';
         const saving = options.saving || null;
         const lookupCache = new Map();
+        // Repeated opens of one word do not inflate the count (the server enforces the same window).
+        const lookupDebounceMs = Number.isFinite(options.lookupDebounceMs) ? options.lookupDebounceMs : 5000;
+        // The removal star is undoable for a few seconds before the delete request is sent.
+        const undoMs = Number.isFinite(options.undoMs) ? options.undoMs : 5000;
+        const lookupCounts = new Map();   // normalized word -> count
+        const lookupRequestedAt = new Map();
 
         const pop = document.createElement('div');
         pop.className = 'floating-word-popover';
@@ -536,10 +558,27 @@
         pop.setAttribute('role', 'dialog');
         pop.innerHTML = popoverMarkup();
         document.body.appendChild(pop);
+
+        // Undo toast for the removal star. It survives the card closing for a moment, and its
+        // button is marked as a word-card part so the page's outside-press handlers do not eat it.
+        const toast = document.createElement('div');
+        toast.className = 'word-card-toast';
+        toast.dataset.wordCard = 'true';
+        toast.setAttribute('role', 'status');
+        toast.setAttribute('aria-live', 'polite');
+        toast.hidden = true;
+        toast.innerHTML = `<span class="word-card-toast-text"></span><button class="word-card-toast-undo" type="button"></button>`;
+        document.body.appendChild(toast);
+        const toastText = toast.querySelector('.word-card-toast-text');
+        const toastUndo = toast.querySelector('.word-card-toast-undo');
+        toastText.textContent = T.removed;
+        toastUndo.textContent = T.undo;
+
         const q = (sel) => pop.querySelector(sel);
         const els = {
             back: q('.popover-back'),
-            word: q('.popover-word'), star: q('.btn-popover-star-icon'), speak: q('.btn-popover-speak-inline'),
+            word: q('.popover-word'), lookupCount: q('.popover-lookup-count'),
+            star: q('.btn-popover-star-icon'), speak: q('.btn-popover-speak-inline'),
             phonetic: q('.popover-phonetic'), pos: q('.popover-pos'), lemma: q('.popover-lemma'),
             close: q('.popover-close-btn'), loading: q('.popover-loading'), content: q('.popover-content'),
             cn: q('.popover-cn-text'), en: q('.popover-en-text'), importance: q('.popover-importance'),
@@ -581,6 +620,90 @@
         // status: 'waiting' (for the sentence's expressions), 'loading', 'ready', 'empty', 'phrase',
         // 'unavailable' or 'failed'
         let ctxState = null;
+        // The star's deferred removal: {key, item, timer}. Undo simply cancels it, so a save is
+        // never actually deleted until the toast has had its few seconds.
+        let pendingRemoval = null;
+
+        const lookupKey = (word) => normalizeWord(word);
+
+        // Same tiers as srs.importance_for_lookups on the server.
+        function lookupImportance(count) {
+            if (count >= 10) return 5;
+            if (count >= 5) return 4;
+            return 3;
+        }
+
+        function renderLookupCount() {
+            const count = currentCard ? (lookupCounts.get(lookupKey(currentCard.token)) || 0) : 0;
+            els.lookupCount.textContent = count > 0 ? T.lookupCount(count) : '';
+            els.lookupCount.hidden = count <= 0;
+        }
+
+        // One open of a word: count it, unless this page already reported the same word recently.
+        function trackLookup(word) {
+            const key = lookupKey(word);
+            if (!key) return;
+            renderLookupCount();
+            const now = Date.now();
+            const last = lookupRequestedAt.get(key) || 0;
+            if (lookupCounts.has(key) && now - last < lookupDebounceMs) return;
+            lookupRequestedAt.set(key, now);
+            const token = options.getAuthToken ? options.getAuthToken() : '';
+            if (!token || typeof fetch !== 'function') return;
+            fetch('/api/srs/lookups', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ word: key }),
+            }).then(res => (res.ok ? res.json() : null)).then(data => {
+                if (!data || typeof data.count !== 'number') return;
+                lookupCounts.set(key, data.count);
+                if (isOpen() && currentCard && lookupKey(currentCard.token) === key) {
+                    renderLookupCount();
+                    renderImportance();
+                }
+            }).catch(() => null);
+        }
+
+        function reloadSaved() {
+            if (saving && saving.reload) saving.reload();
+        }
+
+        function hideUndoToast() {
+            toast.hidden = true;
+        }
+
+        function showUndoToast() {
+            toast.hidden = false;
+        }
+
+        function finishRemoval() {
+            const pending = pendingRemoval;
+            if (!pending) return Promise.resolve();
+            pendingRemoval = null;
+            clearTimeout(pending.timer);
+            hideUndoToast();
+            const remove = saving && (saving.remove || saving.toggle);
+            if (!remove) { refreshSaved(); return Promise.resolve(); }
+            return Promise.resolve(remove(pending.item)).catch(() => null).then(() => refreshSaved());
+        }
+
+        function startRemoval(item) {
+            if (pendingRemoval) finishRemoval();
+            const pending = { key: lookupKey(item.token), item: Object.assign({}, item), timer: null };
+            pending.timer = setTimeout(finishRemoval, undoMs);
+            pendingRemoval = pending;
+            showUndoToast();
+            refreshSaved();
+        }
+
+        function undoRemoval() {
+            const pending = pendingRemoval;
+            if (!pending) return;
+            pendingRemoval = null;
+            clearTimeout(pending.timer);
+            hideUndoToast();
+            refreshSaved();
+        }
 
         function setPhraseHighlight(list) {
             phraseEls.forEach(el => el.classList && el.classList.remove('is-phrase-word'));
@@ -637,6 +760,8 @@
         const isOpen = () => !pop.hidden;
 
         function close() {
+            // Closing the card ends the undo window: the removal (if any) is committed now.
+            if (pendingRemoval) finishRemoval();
             resetEtymology();
             lookupGeneration++;
             trail.length = 0;
@@ -700,18 +825,27 @@
             const entries = saving.entries(currentCard.token) || [];
             els.importance.hidden = entries.length === 0;
             if (!entries.length) return;
-            const level = Math.max(...entries.map(w => w.importance || 3));
+            const key = lookupKey(currentCard.token);
+            const count = lookupCounts.get(key) || 0;
+            const automatic = lookupImportance(count);
+            // Existing importance (the highest-rated card of the word) still wins when it is higher.
+            const existing = Math.max(...entries.map(w => w.importance || 3));
+            const level = Math.max(existing, automatic);
+            els.importance.title = automatic > existing ? T.importanceLookupTitle(count, automatic) : '';
+            els.importance.dataset.lookupImportance = String(automatic);
             els.importance.querySelectorAll('button[data-level]').forEach(btn => {
                 const n = Number(btn.dataset.level);
                 btn.classList.toggle('filled', n <= level);
-                btn.title = T.importanceTitle(n);
+                btn.title = automatic > existing && n === automatic
+                    ? T.importanceLookupTitle(count, automatic) : T.importanceTitle(n);
             });
         }
 
         function refreshSaved() {
             renderImportance();
             if (!saving || !currentCard) return;
-            const saved = saving.isSaved(currentCard);
+            const pending = Boolean(pendingRemoval && pendingRemoval.key === lookupKey(currentCard.token));
+            const saved = !pending && saving.isSaved(currentCard);
             els.star.classList.toggle('active', saved);
             els.star.title = saved ? T.popoverSaved : T.popoverStarTitle;
         }
@@ -939,6 +1073,7 @@
             els.phonetic.hidden = !phonetic;
             renderDict(item);
             renderContext(item);
+            renderLookupCount();
             refreshSaved();
             refreshIcons();
             position();
@@ -1004,7 +1139,7 @@
             }
         }
 
-        const foldText = text => String(text || '').normalize('NFC').replace(/’/g, "'").toLowerCase().replace(/\s+/g, ' ').trim();
+        const foldText = normalizeWord;
 
         async function show(rawWord, element, context = {}, navigation = {}) {
             if (!element) return;
@@ -1028,6 +1163,10 @@
             pressedSinceShow = false;
             pop.hidden = false;
             pop.style.display = 'flex';
+            // Another surface may have saved/removed words since this page loaded; and this open
+            // counts as a lookup (the client and server both debounce repeated opens).
+            reloadSaved();
+            trackLookup(word);
             if (activeEl && activeEl !== element && activeEl.classList) activeEl.classList.remove('is-active-word');
             activeEl = element.classList ? element : null;
             if (activeEl) activeEl.classList.add('is-active-word');
@@ -1103,7 +1242,7 @@
                 return;
             }
 
-            const lower = word.toLowerCase().replace(/’/g, "'");
+            const lower = normalizeWord(word);
             const elided = (lower.match(ELISION_RE) || [])[2];
             // Elided forms such as "l'" are read as their full word.
             // Meaning from the selection bar passes silent: true so it only opens the card.
@@ -1203,10 +1342,16 @@
         els.phonetic.addEventListener('click', (e) => { e.stopPropagation(); replay(); });
         els.star.addEventListener('click', async (e) => {
             e.stopPropagation();
-            if (saving && currentCard) {
-                await saving.toggle(currentCard);
-                refreshSaved();
-            }
+            if (!saving || !currentCard) return;
+            // A second press while the undo toast is showing restores the save.
+            if (pendingRemoval && pendingRemoval.key === lookupKey(currentCard.token)) { undoRemoval(); return; }
+            if (saving.isSaved(currentCard)) { startRemoval(currentCard); return; }
+            await saving.toggle(currentCard);
+            refreshSaved();
+        });
+        toastUndo.addEventListener('click', (e) => {
+            e.stopPropagation();
+            undoRemoval();
         });
         els.importance.addEventListener('click', async (e) => {
             const btn = e.target.closest('button[data-level]');
@@ -1326,6 +1471,12 @@
         // Mobile browser chrome show/hide fires scroll; ignore briefly after open
         root.addEventListener('scroll', () => { if (isOpen() && !settling()) close(); }, { passive: true });
         root.addEventListener('resize', () => { if (isOpen()) position(); }, { passive: true });
+        // Coming back to the tab: saved words may have changed on another device or page.
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') reloadSaved();
+        });
+        // Never leave a pending removal unsent when the page goes away.
+        root.addEventListener('pagehide', () => { if (pendingRemoval) finishRemoval(); });
         // Capture phase, so these keys win over the page's own shortcuts while the popover is open
         document.addEventListener('keydown', (e) => {
             if (!isOpen()) return;
@@ -1356,8 +1507,10 @@
      *   onSaved(note), onRemoved(sentence, cardId), onChange(), onError(err)
      */
     function createWordBook(options) {
-        const byText = new Map();  // lower-cased word -> [{card_id, sentence, importance}]
-        const keyOf = (token) => (token || '').trim().toLowerCase();
+        const byText = new Map();  // normalized word -> [{card_id, sentence, importance}]
+        // Curly apostrophes and non-breaking spaces must not make one word look like two.
+        const keyOf = (token) => normalizeWord(token);
+        const escapeRe = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const changed = () => { if (options.onChange) options.onChange(); };
 
         async function call(method, path, body) {
@@ -1381,36 +1534,43 @@
             const clean = keyOf(token);
             if (!clean) return false;
             for (const [text, list] of byText.entries()) {
-                if (text.includes(' ') || text.includes("'") || text.includes("’")) {
-                    const re = new RegExp(`(^|[\\s'’])${clean}([\\s'’]|$)`, 'i');
+                if (text.includes(' ') || text.includes("'")) {
+                    const re = new RegExp(`(^|[\\s'])${escapeRe(clean)}([\\s']|$)`, 'i');
                     if (re.test(text)) {
                         if (!sentence) return true;
-                        const sKey = (s) => (s || '').replace(/’/g, "'").replace(/ /g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
-                        if (list.some(w => sKey(w.sentence) === sKey(sentence))) return true;
+                        if (list.some(w => keyOf(w.sentence) === keyOf(sentence))) return true;
                     }
                 }
             }
             return false;
         }
 
+        // Opens, tab-returns and undo all reload the deck. A slow older response must not overwrite
+        // the words of a newer one, so only the latest request writes byText.
+        let loadGeneration = 0;
         async function load() {
-            byText.clear();
+            const generation = ++loadGeneration;
+            let words = [];
             if (options.getToken()) {
                 try {
                     const data = await call('GET', '/api/srs/words');
-                    (data.words || []).forEach(w => {
-                        const key = keyOf(w.text);
-                        if (!byText.has(key)) byText.set(key, []);
-                        byText.get(key).push(w);
-                    });
+                    words = data.words || [];
                 } catch (err) {
                     console.warn('Failed to load saved words:', err);
                 }
             }
+            if (generation !== loadGeneration) return;
+            byText.clear();
+            words.forEach(w => {
+                const key = keyOf(w.text);
+                if (!byText.has(key)) byText.set(key, []);
+                byText.get(key).push(w);
+            });
             changed();
         }
 
         function clear() {
+            loadGeneration++;
             byText.clear();
             changed();
         }
@@ -1422,14 +1582,13 @@
             const elsewhere = entries(clean);
             const chunkElsewhere = [];
             if (!local && elsewhere.length === 0) {
-                const cKey = clean.toLowerCase();
+                const cKey = keyOf(clean);
                 for (const [text, list] of byText.entries()) {
-                    if (text.includes(' ') || text.includes("'") || text.includes("’")) {
-                        const re = new RegExp(`(^|[\\s'’])${cKey}([\\s'’]|$)`, 'i');
+                    if (text.includes(' ') || text.includes("'")) {
+                        const re = new RegExp(`(^|[\\s'])${escapeRe(cKey)}([\\s']|$)`, 'i');
                         if (re.test(text)) {
-                            const sKey = (s) => (s || '').replace(/’/g, "'").replace(/ /g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
                             list.forEach(w => {
-                                if (!sentence || sKey(w.sentence) === sKey(sentence)) chunkElsewhere.push(w);
+                                if (!sentence || keyOf(w.sentence) === keyOf(sentence)) chunkElsewhere.push(w);
                             });
                         }
                     }
@@ -1446,7 +1605,7 @@
                         [...elsewhere, ...chunkElsewhere].forEach(w => options.onRemoved(w.sentence, w.card_id));
                     }
                 } else {
-                    const inSentence = Boolean(sentence) && sentence.toLowerCase().includes(clean.toLowerCase());
+                    const inSentence = Boolean(sentence) && keyOf(sentence).includes(keyOf(clean));
                     // A word that is not in this sentence (e.g. from an AI answer) is saved on its own
                     const payload = inSentence ? options.notePayload(sentence) : { sentence: clean };
                     let targetText = clean;
@@ -1457,6 +1616,40 @@
                     // Only the word's own card: never add sentence-level (listen/speak) cards here.
                     const note = await call('POST', '/api/srs/notes', payload);
                     if (options.onSaved) options.onSaved(note);
+                }
+            } catch (err) {
+                if (options.onError) options.onError(err);
+            }
+            await load();
+        }
+
+        // Undo passes through here: remove exactly what this word saved, wherever it came from.
+        async function removeSaved({ token, sentence }) {
+            const clean = (token || '').trim();
+            if (!clean) return;
+            const key = keyOf(clean);
+            const local = options.findLocal ? options.findLocal(sentence || '', clean) : null;
+            const elsewhere = entries(clean);
+            const chunkElsewhere = [];
+            if (!local && elsewhere.length === 0) {
+                for (const [text, list] of byText.entries()) {
+                    if (text.includes(' ') || text.includes("'")) {
+                        const re = new RegExp(`(^|[\\s'])${escapeRe(key)}([\\s']|$)`, 'i');
+                        if (re.test(text)) {
+                            list.forEach(w => {
+                                if (!sentence || keyOf(w.sentence) === keyOf(sentence)) chunkElsewhere.push(w);
+                            });
+                        }
+                    }
+                }
+            }
+            try {
+                const ids = new Set([...elsewhere, ...chunkElsewhere].map(w => w.card_id));
+                if (local) ids.add(local.id);
+                for (const id of ids) await call('DELETE', `/api/srs/cards/${encodeURIComponent(id)}`);
+                if (options.onRemoved) {
+                    if (local) options.onRemoved(sentence || clean, local.id);
+                    [...elsewhere, ...chunkElsewhere].forEach(w => options.onRemoved(w.sentence, w.card_id));
                 }
             } catch (err) {
                 if (options.onError) options.onError(err);
@@ -1489,10 +1682,12 @@
                     hook: c.hook,
                 },
             }),
+            remove: (c) => removeSaved({ token: c.token, sentence: c.sentence || '' }),
+            reload: load,
             setImportance,
         };
 
-        return { load, clear, entries, isSaved, toggle, setImportance, popoverSaving };
+        return { load, clear, entries, isSaved, toggle, remove: removeSaved, setImportance, popoverSaving };
     }
 
     // The element whose box is nearest to a point, within `slop` pixels (0 inside it); null if none is

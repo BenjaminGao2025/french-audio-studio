@@ -87,6 +87,10 @@ class SrsImportanceRequest(BaseModel):
     importance: int = Field(ge=1, le=5)
 
 
+class WordLookupRequest(BaseModel):
+    word: str = Field(min_length=1, max_length=200)
+
+
 @router.post("/api/srs/importance")
 def srs_set_importance(req: SrsImportanceRequest, authorization: str | None = Header(default=None)):
     return {"updated": srs.set_importance(_require_user_id(authorization), req.card_ids, req.importance)}
@@ -95,6 +99,15 @@ def srs_set_importance(req: SrsImportanceRequest, authorization: str | None = He
 @router.get("/api/srs/words")
 def srs_saved_words(authorization: str | None = Header(default=None)):
     return {"words": srs.saved_words(_require_user_id(authorization))}
+
+
+@router.post("/api/srs/lookups")
+def srs_record_lookup(req: WordLookupRequest, authorization: str | None = Header(default=None)):
+    """One card open of a word: increments its per-user lookup count (5s debounced)."""
+    try:
+        return srs.record_word_lookup(_require_user_id(authorization), req.word)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail={"message": str(exc)})
 
 
 @router.post("/api/srs/notes")
