@@ -720,7 +720,7 @@
             renderFooter();
         }
 
-        // The footer holds the word's lookup history and, once saved, its importance stars.
+        // The footer holds every word's lookup history and importance stars.
         function renderFooter() {
             if (!els.footer) return;
             els.footer.hidden = els.lookupCount.hidden && els.importance.hidden;
@@ -929,21 +929,22 @@
         }
 
         function renderImportance() {
-            if (!saving || !currentCard) { els.importance.hidden = true; renderFooter(); return; }
-            const entries = saving.entries(currentCard.token) || [];
-            els.importance.hidden = entries.length === 0;
-            if (!entries.length) { renderFooter(); return; }
+            if (!currentCard) { els.importance.hidden = true; renderFooter(); return; }
+            const entries = saving ? (saving.entries(currentCard.token) || []) : [];
+            // Lookup-derived importance also belongs to words outside the saved word book.
+            els.importance.hidden = false;
             const key = lookupKey(currentCard.token);
             const count = lookupCounts.get(key) || 0;
             const automatic = lookupImportance(count);
             // Existing importance (the highest-rated card of the word) still wins when it is higher.
-            const existing = Math.max(...entries.map(w => w.importance || 3));
+            const existing = Math.max(3, ...entries.map(w => w.importance || 3));
             const level = Math.max(existing, automatic);
             els.importance.title = automatic > existing ? T.importanceLookupTitle(count, automatic) : '';
             els.importance.dataset.lookupImportance = String(automatic);
             els.importance.querySelectorAll('button[data-level]').forEach(btn => {
                 const n = Number(btn.dataset.level);
                 btn.classList.toggle('filled', n <= level);
+                btn.disabled = !entries.length || typeof saving?.setImportance !== 'function';
                 btn.title = automatic > existing && n === automatic
                     ? T.importanceLookupTitle(count, automatic) : T.importanceTitle(n);
             });

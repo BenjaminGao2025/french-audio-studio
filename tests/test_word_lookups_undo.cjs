@@ -103,6 +103,76 @@ test('a higher manual importance is kept when the lookup count is lower', async 
     assert.equal(card.element.querySelectorAll('.importance-stars button.filled').length, 5);
 });
 
+for (const mode of ['without saving', 'unsaved', 'saved']) {
+    test(`importance stays visible ${mode} across lookup tiers and reopens`, async (t) => {
+        const { w, el } = page();
+        t.after(() => w.close());
+        const counts = { zero: 0, alors: 1, quatre: 4, cinq: 5, failli: 6, neuf: 9, dix: 10 };
+        w.fetch = async (url, init) => {
+            assert.equal(url, '/api/srs/lookups');
+            const { word } = JSON.parse(init.body);
+            return { ok: true, json: async () => ({ count: counts[word] }) };
+        };
+        const saving = mode === 'without saving' ? undefined : {
+            isSaved: () => mode === 'saved',
+            entries: () => mode === 'saved' ? [{ importance: 3 }] : [],
+            setImportance: async () => {},
+        };
+        const card = w.FrenchWordPopover.create({
+            speak() {}, getAuthToken: () => 'token', saving,
+            localLookup: word => ({ token: word, explanation_en: 'meaning' }),
+        });
+        function check(count) {
+            const row = card.element.querySelector('.popover-importance');
+            assert.equal(row.hidden, false, `${mode}, count ${count}: row visible`);
+            assert.equal(card.element.querySelector('.popover-footer').hidden, false);
+            assert.equal(row.querySelectorAll('button').length, 5);
+            assert.equal(row.querySelectorAll('button.filled').length, count >= 10 ? 5 : count >= 5 ? 4 : 3);
+            assert.equal(row.querySelectorAll('button:disabled').length, mode === 'saved' ? 0 : 5);
+            assert.equal(card.element.querySelector('.popover-lookup-count').textContent,
+                count ? `Looked up ${count} ${count === 1 ? 'time' : 'times'}` : '');
+        }
+        for (const [word, count] of Object.entries(counts)) {
+            await card.show(word, el);
+            await flush();
+            check(count);
+            card.close();
+            await card.show(word, el); // cached count / debounce path
+            check(count);
+        }
+    });
+}
+
+test('saved snapshot shows importance and keeps it after the word is removed', async (t) => {
+    const { w, el } = page();
+    t.after(() => w.close());
+    w.fetch = async url => ({
+        ok: true, status: 200,
+        json: async () => url === '/api/srs/lookups' ? { count: 6 } : { words: [{
+            text: 'failli', card_id: 'snapshot-card', sentence: "J’ai failli tomber.", importance: 3,
+            target_meta: { snap: '1', dict_en: 'almost', lemma: 'faillir' },
+        }] },
+    });
+    const book = w.FrenchWordPopover.createWordBook({ getToken: () => 'token' });
+    await book.load();
+    const card = w.FrenchWordPopover.create({
+        speak() {}, getAuthToken: () => 'token', saving: book.popoverSaving,
+        localLookup: word => {
+            const snapshot = book.savedMeaning(word);
+            assert.ok(snapshot);
+            return { token: word, explanation_en: snapshot.explanation_en };
+        },
+    });
+    await card.show('failli', el);
+    await flush();
+    assert.equal(card.element.querySelector('.popover-importance').hidden, false);
+    assert.equal(card.element.querySelectorAll('.importance-stars button.filled').length, 4);
+    book.clear();
+    card.refreshSaved();
+    assert.equal(card.element.querySelector('.popover-importance').hidden, false);
+    assert.equal(card.element.querySelectorAll('.importance-stars button.filled').length, 4);
+});
+
 test('removal star waits five seconds and the toast can undo it', async (t) => {
     const { w, dom, el } = page();
     t.after(() => w.close());
