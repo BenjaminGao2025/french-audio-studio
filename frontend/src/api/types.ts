@@ -75,7 +75,14 @@ export interface SrsCard {
   answer?: string | undefined;
   /** Backend `target` (the word of a cloze/recognize card). */
   target?: string | undefined;
+  archived?: boolean | undefined;
   [k: string]: unknown;
+}
+
+/** GET /api/srs/settings: `new_limit` is null until the learner saves one. */
+export interface SrsSettings {
+  new_limit: number | null;
+  default_new_limit: number;
 }
 
 export interface SrsQueue {

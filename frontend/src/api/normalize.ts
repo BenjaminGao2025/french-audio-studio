@@ -32,6 +32,7 @@ export interface RawSrsCard {
   state: CardState;
   target?: string | undefined;
   target_meta?: Record<string, string> | undefined;
+  archived?: boolean | undefined;
   importance: number;
   intervals?: SrsCard["intervals"] | undefined;
   note?:

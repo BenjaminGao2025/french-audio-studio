@@ -111,6 +111,22 @@ export const real = {
       });
       return normalizeQueue(res);
     },
+    /** Soft archive ("mastered") or restore; the card and its history stay. */
+    archive: async (id: string, archived: boolean) =>
+      normalizeCard(
+        await request<RawSrsCard>(`/api/srs/cards/${encodeURIComponent(id)}/archive`, {
+          method: "POST",
+          body: { archived },
+        }),
+      ),
+    /** Every card the learner marked mastered (the library list, filtered). */
+    mastered: async () =>
+      (await request<{ cards: RawSrsCard[] }>("/api/srs/cards")).cards
+        .filter((c) => c.archived === true)
+        .map(normalizeCard),
+    getSettings: () => request<T.SrsSettings>("/api/srs/settings"),
+    putSettings: (new_limit: number) =>
+      request<{ new_limit: number }>("/api/srs/settings", { method: "PUT", body: { new_limit } }),
     addNote: (note: {
       sentence: string;
       translation_zh?: string | undefined;

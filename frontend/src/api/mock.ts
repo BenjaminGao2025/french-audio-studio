@@ -232,6 +232,8 @@ const mkCard = (
   intervals: { "1": 60, "2": 480, "3": 86400, "4": 345600 },
 });
 
+let archivedCards: T.SrsCard[] = [];
+let newLimit: number | null = null;
 let queue: T.SrsCard[] = [
   mkCard(
     "c1",
@@ -647,6 +649,24 @@ export const mock: Api = {
           total: cards.length,
         },
       });
+    },
+    archive: (id, archived) => {
+      const card = queue.find((c) => c.id === id) ?? archivedCards.find((c) => c.id === id);
+      if (!card) return delay(mkCard(id, "", "", "", "speak", "review"));
+      if (archived) {
+        queue = queue.filter((c) => c.id !== id);
+        archivedCards = [...archivedCards.filter((c) => c.id !== id), { ...card, archived: true }];
+      } else {
+        archivedCards = archivedCards.filter((c) => c.id !== id);
+        queue = [{ ...card, archived: false }, ...queue];
+      }
+      return delay(structuredClone({ ...card, archived }));
+    },
+    mastered: () => delay(structuredClone(archivedCards)),
+    getSettings: () => delay({ new_limit: newLimit, default_new_limit: 10 }),
+    putSettings: (n) => {
+      newLimit = n;
+      return delay({ new_limit: n });
     },
     addNote: () => delay({ ok: true }),
     lookupNotes: (sentences) => delay({ existing: sentences.slice(0, 1) }),

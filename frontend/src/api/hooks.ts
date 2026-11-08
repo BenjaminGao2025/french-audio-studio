@@ -121,6 +121,21 @@ export function useReviewCard() {
   });
 }
 
+export const useMasteredCards = (enabled: boolean) =>
+  useQuery({ queryKey: ["srs-mastered"], queryFn: () => api.srs.mastered(), enabled });
+
+export function useArchiveCard() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, archived }: { id: string; archived: boolean }) =>
+      api.srs.archive(id, archived),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["srs-queue"] });
+      qc.invalidateQueries({ queryKey: ["srs-mastered"] });
+    },
+  });
+}
+
 /** Follow position order, excluding the current block even before cache refresh. */
 export function nextBlock<B extends { id: string; status: string; position: number }>(
   blocks: B[],
