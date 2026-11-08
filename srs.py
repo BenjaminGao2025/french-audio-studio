@@ -528,6 +528,7 @@ def saved_words(user_id: int) -> list[dict[str, Any]]:
             "sentence": r["sentence"],
             "mode": r["mode"],
             "importance": r["importance"],
+            "target_meta": json.loads(r["target_json"] or "{}"),
         }
         for r in rows
     ]

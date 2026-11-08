@@ -242,6 +242,11 @@ class ImportanceAndWordsTests(unittest.TestCase):
         words = srs.saved_words(self.user_id)
         self.assertEqual([(w["text"], w["sentence"]) for w in words], [("Voici", "Voici l'examen.")])
 
+    def test_saved_words_carry_the_kept_meaning(self):
+        srs.add_note(self.user_id, "Voici l'examen.", targets=[{"text": "Voici", "meta": {"snap": "1", "dict_zh": "这是"}}])
+        meta = srs.saved_words(self.user_id)[0]["target_meta"]
+        self.assertEqual(meta["dict_zh"], "这是")
+
     def test_api_importance_and_words(self):
         note = self.client_post({"sentence": "Voici le test.", "targets": [{"text": "Voici", "importance": 4}]})
         card_id = note["cards"][0]["id"]

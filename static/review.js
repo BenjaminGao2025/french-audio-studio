@@ -443,6 +443,13 @@
         const result = { meaning_zh: meta.ctx_zh || '', meaning_en: meta.ctx_en || '', why_zh: meta.why_zh || '' };
         return Promise.resolve({ ...result, state: result.meaning_zh || result.meaning_en || result.why_zh ? 'ready' : 'empty' });
     }
+    // Another saved card for the tapped word, in the very sentence it was saved from: its kept 语境 shows with no request.
+    function savedContext(target) {
+        const saved = wordBook.savedMeaning(target.word);
+        const fold = text => String(text || '').normalize('NFC').replace(/’/g, "'").replace(/\s+/g, ' ').trim();
+        if (!saved || !(saved.ctx_zh || saved.ctx_en || saved.why_zh) || fold(saved.sentence) !== fold(target.sentence)) return null;
+        return Promise.resolve({ meaning_zh: saved.ctx_zh, meaning_en: saved.ctx_en, why_zh: saved.why_zh, state: 'ready' });
+    }
     const wordPopover = window.FrenchWordPopover.create({
         speak: (text) => playFrench(text, 1, { once: true }),
         getAuthToken: () => getToken(),
@@ -470,12 +477,16 @@
                 if (occurrence < 0) return null;
                 return { sentence: context.sentence, word, occurrence, ...spans[occurrence] };
             },
-            explain: (target, hints) => snapshotContext(target) || wordContextClient.explain(target, hints),
+            explain: (target, hints) => snapshotContext(target) || savedContext(target) || wordContextClient.explain(target, hints),
         },
         localLookup(lower) {
             const card = session.current;
             const meta = (card && card.target_meta) || {};
-            if (!card || !card.target || card.target.toLowerCase() !== lower) return null;
+            if (!card || !card.target || card.target.toLowerCase() !== lower) {
+                // Not this card's word: another saved card for it keeps the dictionary gloss, else a live lookup
+                const saved = wordBook.savedMeaning(lower);
+                return saved ? { lemma: saved.lemma, pos: saved.pos, phonetic: saved.phonetic, explanation_en: saved.explanation_en, explanation_cn: saved.explanation_zh } : null;
+            }
             // The dictionary gloss kept when the word was saved; older cards only have their one meaning
             const dictZh = meta.dict_zh || (meta.snap ? '' : meta.meaning_zh);
             const dictEn = meta.dict_en || (meta.snap ? '' : meta.meaning_en);

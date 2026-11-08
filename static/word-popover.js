@@ -1792,6 +1792,23 @@
             }
         }
 
+        // The meaning kept on another saved card for this word (its single-word cards only), or null:
+        // lets a tap show it with no live lookup. Cards saved before snapshots only have one meaning.
+        function savedMeaning(token) {
+            for (const entry of entries(token)) {
+                const meta = entry.target_meta || {};
+                const dictZh = meta.dict_zh || (meta.snap ? '' : meta.meaning_zh) || '';
+                const dictEn = meta.dict_en || (meta.snap ? '' : meta.meaning_en) || '';
+                if (!dictZh && !dictEn) continue;
+                return {
+                    lemma: meta.lemma, pos: meta.pos, phonetic: meta.ipa, explanation_zh: dictZh, explanation_en: dictEn,
+                    sentence: entry.sentence || '',
+                    ctx_zh: meta.snap ? meta.ctx_zh || '' : '', ctx_en: meta.snap ? meta.ctx_en || '' : '', why_zh: meta.snap ? meta.why_zh || '' : '',
+                };
+            }
+            return null;
+        }
+
         // Ready-made `saving` option for create(): the popover star and importance stars
         const popoverSaving = {
             isSaved: (item) => isSaved(item.sentence, item.token),
@@ -1814,7 +1831,7 @@
             setImportance,
         };
 
-        return { load, clear, entries, isSaved, toggle, remove: removeSaved, setImportance, popoverSaving };
+        return { load, clear, entries, savedMeaning, isSaved, toggle, remove: removeSaved, setImportance, popoverSaving };
     }
 
     // The element whose box is nearest to a point, within `slop` pixels (0 inside it); null if none is
