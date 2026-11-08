@@ -93,6 +93,8 @@
             notStarted: 'not started', dueNow: 'due', dueIn: (t) => `in ${t}`,
             deckStats: (notes, cards, searching) => `${notes} sentences · ${cards} cards${searching ? ' (search results)' : ''}`,
             deleteCard: 'Delete this card',
+            mastered: 'Mastered', masteredTitle: 'Mastered: stop showing this card in review',
+            masteredToast: 'Removed from review', undo: 'Undo', restore: 'Restore', restoreTitle: 'Put this card back into review', masteredLabel: 'mastered',
             deckEmpty: 'No cards yet. On the Study page, tap "Add to review" or the star next to a word.',
             interval: (s) => s < 60 ? '<1 min' : s < 3600 ? `${Math.round(s / 60)} min` : s < 86400 ? `${Math.round(s / 3600)} h`
                 : s < 30 * 86400 ? `${Math.round(s / 86400)} d` : s < 365 * 86400 ? `${(s / 2592000).toFixed(1).replace(/\.0$/, '')} mo`
@@ -157,6 +159,8 @@
             notStarted: '未开始', dueNow: '已到期', dueIn: (t) => `${t}后`,
             deckStats: (notes, cards, searching) => `${notes} 个句子 · ${cards} 张卡片${searching ? '（搜索结果）' : ''}`,
             deleteCard: '删除这张卡',
+            mastered: '已掌握', masteredTitle: '已掌握：不再出现在复习里',
+            masteredToast: '已移出复习', undo: '撤销', restore: '恢复', restoreTitle: '把这张卡放回复习', masteredLabel: '已掌握',
             deckEmpty: '还没有卡片。在「拆解与复述」页点「加入复习」或单词旁的 ⭐。',
             interval: (s) => s < 60 ? '<1分钟' : s < 3600 ? `${Math.round(s / 60)}分钟` : s < 86400 ? `${Math.round(s / 3600)}小时`
                 : s < 30 * 86400 ? `${Math.round(s / 86400)}天` : s < 365 * 86400 ? `${(s / 2592000).toFixed(1).replace(/\.0$/, '')}个月`
@@ -214,6 +218,7 @@
         practiceExit: $('practice-exit'),
         practiceShownBtn: $('practice-shown-btn'),
         cardImportance: $('card-importance'),
+        masterBtn: $('master-btn'),
         error: $('review-error'),
     };
 
@@ -228,6 +233,7 @@
         scoring: false,
         reviewed: 0,
         total: 0,
+        mastering: false,
         practice: false,  // a set of cards the learner picked in the library
     };
     let shownCardIds = [];
@@ -927,6 +933,82 @@
         }
     }
 
+    // ---------------------------------------------------------------------
+    // Mastered: soft-archive a card (server keeps it and its history), with a few seconds to undo
+    // ---------------------------------------------------------------------
+    const UNDO_MS = 6000;
+    const countEl = card => (card.state === 'new' ? els.countNew
+        : card.state === 'review' ? els.countReview : els.countLearning);
+    const bumpCount = (card, delta) => {
+        const el = countEl(card);
+        el.textContent = Math.max(0, (Number(el.textContent) || 0) + delta);
+    };
+    const toast = document.createElement('div');
+    toast.className = 'word-card-toast review-toast';
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
+    toast.hidden = true;
+    toast.innerHTML = '<span class="word-card-toast-text"></span><button class="word-card-toast-undo" type="button"></button>';
+    document.body.appendChild(toast);
+    const toastText = toast.querySelector('.word-card-toast-text');
+    const toastUndo = toast.querySelector('.word-card-toast-undo');
+    let toastTimer = 0;
+    let undoAction = null;
+    function hideToast() {
+        clearTimeout(toastTimer);
+        toast.hidden = true;
+        undoAction = null;
+    }
+    function showUndoToast(text, undo) {
+        clearTimeout(toastTimer);
+        toastText.textContent = text;
+        toastUndo.textContent = T.undo;
+        undoAction = undo;
+        toast.hidden = false;
+        toastTimer = setTimeout(hideToast, UNDO_MS);
+    }
+    toastUndo.addEventListener('click', () => {
+        const action = undoAction;
+        hideToast();
+        if (action) action().catch(err => showError(err.message));
+    });
+
+    const archiveCard = (card, archived) => api('POST', `/api/srs/cards/${encodeURIComponent(card.id)}/archive`, { archived });
+
+    // The queue's counters and progress follow the card out (and back in on undo); it is not a review.
+    function putBackInSession(card) {
+        const learning = card.state === 'learning' || card.state === 'relearning';
+        if (learning) session.learning.unshift(card);
+        else session.queue.unshift(card);
+        session.total += 1;
+        bumpCount(card, 1);
+        updateProgress();
+        if (!session.current) showNext();
+    }
+
+    async function master() {
+        const card = session.current;
+        if (!card || session.grading || session.mastering) return;
+        session.mastering = true;
+        try {
+            await archiveCard(card, true);
+        } catch (err) {
+            showError(T.saveFailed + err.message);
+            return;
+        } finally {
+            session.mastering = false;
+        }
+        showError('');
+        stopAudio();
+        session.total = Math.max(0, session.total - 1);
+        bumpCount(card, -1);
+        showNext();
+        showUndoToast(T.masteredToast, async () => {
+            await archiveCard(card, false);
+            putBackInSession(card);
+        });
+    }
+
     function nextCard() {
         session.learning.sort((a, b) => Date.parse(a.due) - Date.parse(b.due));
         if (session.learning.length && Date.parse(session.learning[0].due) <= Date.now()) {
@@ -1074,10 +1156,13 @@
                     </div>
                     <div class="deck-note-cards">
                         ${cards.map(card => `
-                            <span class="deck-card-chip mode-${card.mode}">
+                            <span class="deck-card-chip mode-${card.mode}${card.archived ? ' is-mastered' : ''}">
                                 <i data-lucide="${(MODE_INFO[card.mode] || MODE_INFO.listen).icon}"></i>
                                 ${MODE_INFO[card.mode] ? MODE_INFO[card.mode].label : card.mode}${card.target ? `：${escapeHtml(card.target)}` : ''} ${'★'.repeat(card.importance || 3)}
-                                <em>${STATE_LABELS[card.state] || ''} · ${dueLabel(card)}</em>
+                                <em>${card.archived ? T.masteredLabel : `${STATE_LABELS[card.state] || ''} · ${dueLabel(card)}`}</em>
+                                ${card.archived
+                                    ? `<button class="chip-master" type="button" data-card-id="${escapeHtml(card.id)}" data-archived="0" title="${T.restoreTitle}">${T.restore}</button>`
+                                    : `<button class="chip-master" type="button" data-card-id="${escapeHtml(card.id)}" data-archived="1" title="${T.masteredTitle}">${T.mastered}</button>`}
                                 <button class="chip-delete" type="button" data-card-id="${escapeHtml(card.id)}" title="${T.deleteCard}">×</button>
                             </span>`).join('')}
                     </div>
@@ -1120,6 +1205,18 @@
             startPractice(practise.dataset.cardIds.split(',')).catch(err => showError(err.message));
             return;
         }
+        const mastery = e.target.closest('.chip-master');
+        if (mastery) {
+            const card = { id: mastery.dataset.cardId };
+            const archived = mastery.dataset.archived === '1';
+            archiveCard(card, archived)
+                .then(() => {
+                    renderBrowser();
+                    if (archived) showUndoToast(T.masteredToast, async () => { await archiveCard(card, false); await renderBrowser(); });
+                })
+                .catch(err => showError(err.message));
+            return;
+        }
         const del = e.target.closest('.chip-delete');
         if (del) {
             api('DELETE', `/api/srs/cards/${encodeURIComponent(del.dataset.cardId)}`)
@@ -1127,6 +1224,8 @@
                 .catch(err => showError(err.message));
         }
     });
+
+    els.masterBtn.addEventListener('click', master);
 
     els.revealBtn.addEventListener('click', () => {
         if (session.current && (session.current.mode === 'cloze' || session.current.mode === 'grammar')) {

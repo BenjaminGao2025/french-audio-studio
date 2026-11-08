@@ -870,3 +870,60 @@ kbd {
 .practice-bar .btn {
     min-height: 36px;
 }
+
+
+/* Mastered: leave the review queue without deleting the card */
+.master-btn,
+.chip-master {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 32px;
+    padding: 4px 10px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--muted);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.master-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+.master-btn:hover,
+.chip-master:hover {
+    background: var(--primary-soft);
+    color: var(--primary);
+    border-color: var(--primary-line, var(--line-strong));
+}
+
+.master-btn:focus-visible,
+.chip-master:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.chip-master {
+    min-height: 22px;
+    padding: 0 8px;
+    border-radius: 999px;
+    font-size: 11px;
+}
+
+.deck-card-chip.is-mastered {
+    opacity: 0.7;
+}
+
+@media (max-width: 480px) {
+    .card-meta-right {
+        gap: 8px;
+    }
+    .master-btn {
+        min-height: 44px;
+    }
+}

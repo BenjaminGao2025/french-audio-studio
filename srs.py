@@ -99,6 +99,9 @@ def init_db() -> None:
         columns = {row[1] for row in conn.execute("PRAGMA table_info(srs_cards)")}
         if "importance" not in columns:
             conn.execute("ALTER TABLE srs_cards ADD COLUMN importance INTEGER NOT NULL DEFAULT 3")
+        # Additive soft archive ("mastered"): the card stays, with its history, but leaves the review queue.
+        if "archived_at" not in columns:
+            conn.execute("ALTER TABLE srs_cards ADD COLUMN archived_at TEXT")
     _initialized_db_paths.add(db_path)
 
 
@@ -414,6 +417,7 @@ def _card_payload(row: sqlite3.Row, now: datetime.datetime, with_preview: bool =
         "target_meta": json.loads(row["target_json"] or "{}"),
         "due": row["due"],
         "importance": row["importance"],
+        "archived": bool(row["archived_at"]),
         "state": _state_name(fsrs_card),
         "created_at": row["created_at"],
     }
@@ -632,6 +636,21 @@ def lookup_notes(user_id: int, sentences: Iterable[str]) -> list[dict[str, Any]]
     return [get_note(user_id, row["id"]) for row in rows]
 
 
+def set_archived(user_id: int, card_id: str, archived: bool, now: datetime.datetime | None = None) -> dict[str, Any]:
+    """Mark a card mastered (out of the review queue) or bring it back. Nothing is deleted; KeyError if unknown."""
+    now = now or _now()
+    with _connect() as conn:
+        updated = conn.execute(
+            "UPDATE srs_cards SET archived_at = ? WHERE id = ? AND user_id = ?",
+            (_iso(now) if archived else None, card_id, user_id),
+        ).rowcount
+        if not updated:
+            raise KeyError(card_id)
+        conn.commit()
+        row = conn.execute(_CARD_WITH_NOTE_SQL + " AND c.id = ?", (user_id, card_id)).fetchone()
+    return _card_payload(row, now, with_preview=True)
+
+
 def delete_card(user_id: int, card_id: str) -> bool:
     with _connect() as conn:
         row = conn.execute("SELECT note_id FROM srs_cards WHERE id = ? AND user_id = ?", (card_id, user_id)).fetchone()
@@ -720,7 +739,7 @@ def build_queue(
     with _connect() as conn:
         touched_notes, new_done, reviews_done = _today_activity(conn, user_id, day_start)
         rows = conn.execute(
-            _CARD_WITH_NOTE_SQL + " AND (c.is_new = 1 OR c.due <= ?) AND c.importance >= ?",
+            _CARD_WITH_NOTE_SQL + " AND c.archived_at IS NULL AND (c.is_new = 1 OR c.due <= ?) AND c.importance >= ?",
             (user_id, max(horizon, day_end), _clamp_importance(min_importance)),
         ).fetchall()
 

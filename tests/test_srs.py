@@ -282,6 +282,75 @@ class ImportanceAndWordsTests(unittest.TestCase):
             self.assertEqual(conn.execute("SELECT importance FROM srs_cards WHERE id = 'c1'").fetchone()[0], 3)
 
 
+    def test_old_database_gets_archived_column_and_keeps_its_cards(self):
+        import sqlite3
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+
+        path = Path(tempfile.mkdtemp()) / "users.db"
+        with sqlite3.connect(path) as conn:
+            conn.execute(
+                "CREATE TABLE srs_cards (id TEXT PRIMARY KEY, note_id TEXT NOT NULL, user_id INTEGER NOT NULL, "
+                "mode TEXT NOT NULL, target TEXT NOT NULL DEFAULT '', target_json TEXT NOT NULL DEFAULT '{}', "
+                "fsrs_json TEXT NOT NULL, due TEXT NOT NULL, is_new INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL)"
+            )
+            conn.execute("INSERT INTO srs_cards VALUES ('c1', 'n1', 1, 'listen', '', '{}', '{}', 'x', 1, 'x')")
+        for _ in range(2):  # idempotent
+            srs._initialized_db_paths.discard(str(path))
+            with patch("auth_db._get_db_path", return_value=path):
+                srs.init_db()
+        with sqlite3.connect(path) as conn:
+            self.assertIsNone(conn.execute("SELECT archived_at FROM srs_cards WHERE id = 'c1'").fetchone()[0])
+
+
+class ArchiveTests(unittest.TestCase):
+    def setUp(self):
+        self.client = TestClient(tts_service.app)
+        self.user_id, self.headers = _new_user()
+        for i in range(3):
+            srs.add_note(self.user_id, f"Phrase archivable {i}.", modes=["listen"])
+        self.cards = srs.build_queue(self.user_id, 0, 10)["cards"]
+
+    def test_archived_card_leaves_the_queue_and_counts_but_stays_listed(self):
+        before = srs.build_queue(self.user_id, 0, 10)
+        self.assertEqual(before["counts"]["new"], 3)
+        card_id = self.cards[0]["id"]
+        done = srs.set_archived(self.user_id, card_id, True)
+        self.assertTrue(done["archived"])
+        after = srs.build_queue(self.user_id, 0, 10)
+        self.assertEqual(after["counts"]["new"], 2)
+        self.assertNotIn(card_id, [c["id"] for c in after["cards"]])
+        listed = {c["id"]: c for c in srs.list_cards(self.user_id)}
+        self.assertTrue(listed[card_id]["archived"])  # soft: still in the library, history kept
+        self.assertFalse(any(c["archived"] for cid, c in listed.items() if cid != card_id))
+
+    def test_unarchive_restores_the_card_and_is_private(self):
+        card_id = self.cards[0]["id"]
+        srs.set_archived(self.user_id, card_id, True)
+        other_id, _ = _new_user()
+        with self.assertRaises(KeyError):
+            srs.set_archived(other_id, card_id, False)
+        self.assertEqual(len(srs.build_queue(self.user_id, 0, 10)["cards"]), 2)
+        srs.set_archived(self.user_id, card_id, False)
+        queue = srs.build_queue(self.user_id, 0, 10)
+        self.assertEqual(queue["counts"]["new"], 3)
+        self.assertIn(card_id, [c["id"] for c in queue["cards"]])
+
+    def test_archive_endpoint(self):
+        card_id = self.cards[0]["id"]
+        url = f"/api/srs/cards/{card_id}/archive"
+        self.assertEqual(self.client.post(url, json={}).status_code, 401)
+        self.assertEqual(self.client.post("/api/srs/cards/nope/archive", headers=self.headers, json={}).status_code, 404)
+        res = self.client.post(url, headers=self.headers, json={"archived": True})
+        self.assertEqual(res.status_code, 200)
+        self.assertTrue(res.json()["archived"])
+        self.assertEqual(self.client.get("/api/srs/queue", headers=self.headers).json()["counts"]["new"], 2)
+        res = self.client.post(url, headers=self.headers, json={"archived": False})
+        self.assertFalse(res.json()["archived"])
+        self.assertEqual(self.client.get("/api/srs/queue", headers=self.headers).json()["counts"]["new"], 3)
+
+
 class SrsApiTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(tts_service.app)

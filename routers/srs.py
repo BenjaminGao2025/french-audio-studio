@@ -157,6 +157,23 @@ def srs_delete_card(card_id: str, authorization: str | None = Header(default=Non
     return {"success": srs.delete_card(_require_user_id(authorization), card_id)}
 
 
+class SrsArchiveRequest(BaseModel):
+    archived: bool = True
+
+
+@router.post("/api/srs/cards/{card_id}/archive")
+def srs_archive_card(
+    card_id: str,
+    req: SrsArchiveRequest,
+    authorization: str | None = Header(default=None),
+):
+    """Mark a card mastered (soft archive, out of the queue) or restore it. Never deletes."""
+    try:
+        return srs.set_archived(_require_user_id(authorization), card_id, req.archived)
+    except KeyError:
+        raise HTTPException(status_code=404, detail={"message": "卡片不存在。"})
+
+
 @router.post("/api/srs/cards/{card_id}/review")
 def srs_review_card(
     card_id: str,
