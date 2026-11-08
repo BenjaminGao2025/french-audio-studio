@@ -2,7 +2,7 @@
 const fs=require('fs'), path=require('path'), assert=require('node:assert/strict');
 const {chromium}=require('/home/mgacai/.npm/_npx/e41f203b7505f1fb/node_modules/playwright-core');
 const root=path.resolve(__dirname,'../static');
-const pages={'/':'index','/study':'study','/review':'review','/coach':'coach','/write':'write','/speak':'speak','/listen':'listen'};
+const pages={'/':'index','/study':'study','/review':'review','/write':'write','/speak':'speak','/listen':'listen'};
 const state={level:36,xp:2210,next_level_xp:2220,progress:.9,hours_total:80,streak_days:1,today:{minutes:90,target:360,logs:[],combo:0},week:{number:2,minutes:180,target:2520,by_lane:{},lane_targets:{},skills:{},focus_skill:{skill:'EE',link:'/write'}}};
 (async()=>{
  const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome-stable',headless:true,args:['--no-sandbox']});let checks=0;

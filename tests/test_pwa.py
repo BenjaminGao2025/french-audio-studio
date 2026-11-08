@@ -81,7 +81,6 @@ class PwaTests(unittest.TestCase):
             "/listen",
             "/speak",
             "/write",
-            "/coach",
             "/grammar",
             "/home",
             "/account",

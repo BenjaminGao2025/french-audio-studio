@@ -61,6 +61,12 @@ const bar = document.querySelector('.read-selection-bar');
 const wait = ms => new Promise(r => setTimeout(r, ms));
 const by = (part) => [...document.querySelectorAll('.interactive-word')].find(w => (w.dataset.word || '').includes(part) || w.textContent.includes(part));
 
+// The settle window is wall-clock (Date.now() + 700ms) while this test sleeps ~680ms of real
+// timers before the scroll step, so a slow CI runner expired it mid-test. Freeze the page clock and
+// advance it explicitly: the sleeps still run the real timers, only the settle check is deterministic.
+let clock = Date.now();
+window.Date.now = () => clock;
+
 (async () => {
     const from = by('également');
     const to = by('publics');
@@ -101,6 +107,7 @@ const by = (part) => [...document.querySelectorAll('.interactive-word')].find(w 
 
     // After settle, tapping empty non-word area still closes
     await wait(800);
+    clock += 800;
     line.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, button: 0, clientX: 15, clientY: 130 }));
     assert.equal(popover.isOpen(), false, 'after settle, mousedown outside still closes');
 

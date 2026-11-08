@@ -2,7 +2,7 @@
 const fs = require('fs'), path = require('path'), assert = require('node:assert/strict');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || '/home/mgacai/.npm/_npx/e41f203b7505f1fb/node_modules/playwright-core');
 const root = path.resolve(__dirname, '../static');
-const pages = {'/':'index', '/study':'study', '/review':'review', '/listen':'listen', '/write':'write', '/speak':'speak', '/coach':'coach', '/homework':'study', '/home':'landing', '/privacy':'privacy', '/for-institutions':'for-institutions'};
+const pages = {'/':'index', '/study':'study', '/review':'review', '/listen':'listen', '/write':'write', '/speak':'speak', '/homework':'study', '/home':'landing', '/privacy':'privacy', '/for-institutions':'for-institutions'};
 (async () => {
  const browser = await chromium.launch({executablePath:'/usr/bin/google-chrome-stable', headless:true, args:['--no-sandbox']});
  let checks = 0;

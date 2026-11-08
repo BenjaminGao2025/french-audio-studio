@@ -11,7 +11,7 @@ import tts_service
 class SingleAudioTests(unittest.TestCase):
     def test_pages_load_controller_before_players(self):
         client = TestClient(tts_service.app)
-        for route in ("/", "/study", "/review", "/speak", "/listen", "/write", "/coach", "/home"):
+        for route in ("/", "/study", "/review", "/speak", "/listen", "/write", "/home"):
             with self.subTest(route=route):
                 response = client.get(route)
                 self.assertEqual(response.status_code, 200)

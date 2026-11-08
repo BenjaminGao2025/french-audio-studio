@@ -158,7 +158,7 @@ Compose 单独覆盖 `AGY_BASE_URL` 为 `http://127.0.0.1:3425/v1`、`AGY_MODEL`
 
 ## 🧭 前端与架构
 
-当前界面由 `static/` 中的 HTML、CSS 和原生 JavaScript 提供，无需构建步骤。旧 React SPA（源码 `frontend/`，构建产物 `static/app/`）及其后端接口（`/api/today`、`/api/listening/*`、`/api/reading/*` 等）仍保留；`/app` 默认关闭并跳转到 `/study`，设置 `APP_SHELL_ENABLED=1` 后重新提供。更多实现细节见 [ARCHITECTURE.md](ARCHITECTURE.md)，界面规范见 [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)。
+当前界面由 `static/` 中的 HTML、CSS 和原生 JavaScript 提供，无需构建步骤。旧 React SPA 与 `/coach` 页面已删除，`/app`、`/app/*`、`/coach` 只做 302 跳转到 `/study`；SPA 使用的后端接口（`/api/today`、`/api/listening/*`、`/api/reading/*` 等）暂时保留。更多实现细节见 [ARCHITECTURE.md](ARCHITECTURE.md)，界面规范见 [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)。
 
 ## 🧪 运行测试
 
@@ -206,12 +206,7 @@ docker exec tts-service python scripts/backup_db.py --label manual  # 手动备�
 
 旧版 README 曾声明 MIT，但仓库缺少许可证文件；在版权人确认并补充许可证之前，请勿假定已获得授权。
 
-## 学习教练与个人表达训练
-
-`/coach` 从目标、截止日期、四项自评水平、学习日、时段和限制生成个人安排。
-每天的任务总分钟数受可用时间限制；AI 补充追问、任务侧重和每周复盘建议。
-AI 不可用时保留已有计划；用户用“更新安排”或修改时间采纳调整。
-站内提醒需主动开启，仅在页面打开且可见时工作。
+## 个人表达训练
 
 `/study?mode=personal`（Study 内的“练我想说的话”，旧 `/homework` 自动跳转）将 [1000H 启动任务](https://1000h.org/training-tasks/kick-off.html) 的个人表达、反复练习和每日存档用于法语：
 自己的中文内容 → 简单法语和范读 → 第一遍录音 → 跟读、朗读、脱稿换细节 → 最后一遍录音 → 心得。
@@ -230,9 +225,6 @@ AI 不可用时保留已有计划；用户用“更新安排”或修改时间�
 ```bash
 # 容器中的依赖可用于隔离测试，仓库以只读方式挂载
  docker run --rm --network none -v "$PWD:/app:ro" deploygrow-tts:latest python -m unittest discover -s tests -q
-# 先生成临时数据库里的界面样本，再运行模拟浏览器流程
- docker run --rm --network none -v "$PWD:/app:ro" deploygrow-tts:latest python tools/coach-fixture.py > /tmp/tts-coach-fixture.json
- node tools/coach-ui-check.cjs
 ```
 
 

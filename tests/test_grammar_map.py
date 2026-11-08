@@ -247,7 +247,7 @@ class GrammarPageTests(unittest.TestCase):
             self.assertIn(f"/static/{asset}?v={v}", html)
         self.assertNotIn("__ASSET_VERSION__", html)
         self.assertNotIn("<script>", html, "no inline scripts (CSP)")
-        self.assertIn('href="/coach" class="nav-tab', html)
+        self.assertNotIn('href="/coach"', html)
         self.assertIn('href="/grammar" class="nav-tab active" aria-current="page"', html)
         self.assertIn('id="grammar-login"', html)
         self.assertIn("'/grammar'", _read("static/sw.js"))

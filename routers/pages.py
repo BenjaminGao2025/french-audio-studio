@@ -194,9 +194,12 @@ async def speak_page():
     return _html_page("speak.html")
 
 
-@router.get("/coach")
-async def coach_page():
-    return _html_page("coach.html")
+# The retired /app mobile SPA and /coach page: old bookmarks and installed PWAs land on Study.
+@router.api_route("/app", methods=["GET", "HEAD"], include_in_schema=False)
+@router.api_route("/app/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
+@router.api_route("/coach", methods=["GET", "HEAD"], include_in_schema=False)
+async def retired_pages(path: str = ""):
+    return RedirectResponse("/study", status_code=302)
 
 
 @router.get("/homework")

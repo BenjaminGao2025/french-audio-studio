@@ -16,7 +16,6 @@ from starlette.concurrency import run_in_threadpool
 
 import edge_compat  # noqa: F401  (Microsoft moved the synthesis host; must load before edge_tts is used)
 import episodes
-import routers.app_shell
 import routers.auth
 import routers.coach
 import routers.cockpit
@@ -53,7 +52,6 @@ for _routes in (
     routers.grammar,
     routers.comprehension,
     routers.cockpit,
-    routers.app_shell,
     routers.studio,
     routers.pages,
     routers.tutor,

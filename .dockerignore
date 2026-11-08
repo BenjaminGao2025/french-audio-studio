@@ -7,7 +7,6 @@ cloudflared.log
 outputs/
 tests/
 models/
-frontend/
 node_modules/
 # Never in the build context: secrets, local agent state, tunnel config, untracked scratch modules
 .env

@@ -1,9 +1,7 @@
 import datetime as dt
 import json
-import re
 import unittest
 import uuid
-from unittest.mock import AsyncMock, patch
 
 import testenv  # noqa: F401
 from fastapi.testclient import TestClient
@@ -45,37 +43,16 @@ class CoachTests(unittest.TestCase):
         self.uid, self.auth = user()
         self.client = TestClient(tts_service.app)
 
-    def test_requires_login_and_keeps_profiles_private(self):
-        self.assertEqual(self.client.get("/api/coach").status_code, 401)
-        self.assertEqual(self.client.post("/api/coach/profile", headers=self.auth, json=profile()).status_code, 200)
-        _, other = user()
-        self.assertFalse(self.client.get("/api/coach", headers=other).json()["setup"])
-
     def test_capacity_and_seven_day_schedule(self):
-        d = self.client.post("/api/coach/profile", headers=self.auth, json=profile()).json()
+        coach.save_profile(self.uid, profile())
+        d = coach.dashboard(self.uid)
         self.assertEqual(len(d["schedule"]), 7)
         self.assertEqual(d["capacity"]["weekly_minutes"], 255)
         for slot in d["schedule"]:
             day = dt.date.fromisoformat(slot["day"])
             self.assertEqual(sum(t["minutes"] for t in slot["tasks"]), coach.budget(profile(), day))
             self.assertTrue(all(t["minutes"] > 0 for t in slot["tasks"]))
-        saved = self.client.get("/api/coach", headers=self.auth).json()
-        self.assertEqual(saved["schedule"], d["schedule"])
-
-    def test_invalid_availability(self):
-        for changes in [
-            dict(study_days=[8]),
-            dict(study_days=[1, 1]),
-            dict(timezone="No/Such"),
-            dict(weekday_minutes=0, weekend_minutes=0),
-            dict(weekday_start="23:30", weekday_minutes=60),
-            dict(deadline="2020-01-01"),
-        ]:
-            p = profile()
-            p.update(changes)
-            self.assertEqual(
-                self.client.post("/api/coach/profile", headers=self.auth, json=p).status_code, 422, changes
-            )
+        self.assertEqual(coach.dashboard(self.uid)["schedule"], d["schedule"])
 
     def test_rewards_are_idempotent_and_capped(self):
         self.assertEqual(coach.record(self.uid, "write", "one"), 10)
@@ -109,7 +86,8 @@ class CoachTests(unittest.TestCase):
         coach.save_profile(self.uid, p)
         d = coach.dashboard(self.uid)
         kind = d["tasks"][0]["kind"]
-        d = self.client.post("/api/coach/complete", headers=self.auth, json={"kind": kind}).json()
+        coach.record(self.uid, "self", f"{d['day']}:{kind}", {"kind": kind, "note": ""}, 0)
+        d = coach.dashboard(self.uid)
         task = next(t for t in d["tasks"] if t["kind"] == kind)
         self.assertTrue(task["self_reported"])
         self.assertFalse(task["verified"])
@@ -135,39 +113,6 @@ class CoachTests(unittest.TestCase):
         self.assertNotIn("evil", plan["task_weights"])
         self.assertEqual(coach.get_profile(self.uid)["profile"]["weekday_minutes"], 45)
         self.assertIn("Chinese hints", plan["interview_notes"])
-
-    @patch("services.ai.post_chat", new_callable=AsyncMock)
-    def test_llm_plan_and_review(self, chat):
-        coach.save_profile(self.uid, profile())
-        chat.return_value = (
-            {},
-            json.dumps(
-                {"summary": "Short daily practice.", "questions": ["What is hard?"], "task_weights": {"listen": 4}}
-            ),
-        )
-        d = self.client.post("/api/coach/plan", headers=self.auth, json={"note": "Listening is hard."}).json()
-        self.assertEqual(d["plan"]["source"], "llm")
-        review = self.client.post("/api/coach/review", headers=self.auth, json={"note": "Too much vocabulary."}).json()
-        self.assertEqual(review["last_review"]["source"], "llm")
-        self.assertFalse(review["review_due"])
-
-    @patch("services.ai.post_chat", new_callable=AsyncMock)
-    def test_prompt_example_weights_are_the_default_16_hour_split(self, chat):
-        coach.save_profile(self.uid, profile())
-        chat.return_value = ({}, json.dumps({"summary": "Short daily practice.", "questions": []}))
-        self.client.post("/api/coach/plan", headers=self.auth, json={"note": ""})
-        system = chat.call_args.args[1]["messages"][0]["content"]
-        example = json.loads(re.search(r'"task_weights":(\{[^}]*\})', system).group(1))
-        self.assertEqual(example, coach.DEFAULT_WEIGHTS)
-
-    @patch("services.ai.post_chat", new_callable=AsyncMock)
-    def test_llm_failure_preserves_baseline(self, chat):
-        coach.save_profile(self.uid, profile())
-        chat.side_effect = RuntimeError("offline")
-        d = self.client.post("/api/coach/plan", headers=self.auth, json={"note": ""}).json()
-        self.assertFalse(d["ai_available"])
-        self.assertEqual(d["plan"]["source"], "rules")
-        self.assertTrue(d["schedule"])
 
     def test_game_uses_personal_budget(self):
         coach.save_profile(self.uid, profile())

@@ -10,7 +10,3 @@ body {
         padding-bottom: env(safe-area-inset-bottom, 0px);
     }
 }
-.coach-notice {
-    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
-    right: calc(20px + env(safe-area-inset-right, 0px));
-}
