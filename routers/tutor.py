@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import re
+import time
 from typing import Any, Literal
 
 import httpx
@@ -15,6 +16,7 @@ from starlette.concurrency import run_in_threadpool
 
 import analysis
 import auth_db
+import offline_dictionary
 import phrase_context
 import srs
 import word_context
@@ -460,21 +462,91 @@ async def request_word_lookup(word: str, api_key: str, model: str = ai.DEFAULT_M
     return result
 
 
+# Shared public-source work only. User context never enters these tasks or the cache.
+_dictionary_reads: dict[str, asyncio.Task] = {}
+_dictionary_translations: dict[str, asyncio.Task] = {}
+_dictionary_failures: dict[str, float] = {}
+
+
+async def _offline_read(clean):
+    task = _dictionary_reads.get(clean)
+    if task is None:
+        task = asyncio.create_task(run_in_threadpool(offline_dictionary.lookup, clean))
+        _dictionary_reads[clean] = task
+        task.add_done_callback(lambda _: _dictionary_reads.pop(clean, None))
+    return await asyncio.shield(task)
+
+
+async def _translate_dictionary(result, api_key):
+    key = result["translation_key"]
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            _, raw = await ai.post_chat(
+                client,
+                offline_dictionary.translation_payload(result, ai.AGY_MODEL),
+                {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            )
+        translations = offline_dictionary.parse_translation(raw, result)
+        await run_in_threadpool(offline_dictionary.translation_save, key, translations)
+        return translations
+    except Exception:
+        # A source hit stays a source hit: errors never trigger dictionary generation.
+        if len(_dictionary_failures) >= 2048:
+            _dictionary_failures.clear()
+        _dictionary_failures[key] = time.monotonic() + 300
+        logger.warning("Dictionary translation unavailable; retaining French source")
+        return None
+
+
 @router.get("/api/lookup")
 async def lookup_word(
     word: str = Query(min_length=1, max_length=LOOKUP_MAX_CHARS),
     model: str = ai.DEFAULT_MODEL,
     authorization: str | None = Header(default=None),
 ):
-    clean = word.strip()
-    if not clean:
+    user_id = _require_user_id(authorization)
+    clean = offline_dictionary.normalize(word)
+    if not clean or any(ord(c) < 32 for c in clean):
         raise HTTPException(status_code=400, detail={"message": "请提供待查询单词"})
-    if clean.lower() in LOOKUP_CACHE:  # cached: still login-only, but free
-        _require_user_id(authorization)
-        return LOOKUP_CACHE[clean.lower()]
+    rate_limit(user_id, "dictionary")
+    result = await _offline_read(clean)
+    if result is not None:
+        key = result["translation_key"]
+        try:
+            translations = await run_in_threadpool(offline_dictionary.translation_get, key)
+        except Exception:
+            translations = None
+        result["translation_state"] = "cached" if translations else "source_only"
+        if not translations and _dictionary_failures.get(key, 0) <= time.monotonic():
+            task = _dictionary_translations.get(key)
+            if task is None:
+                try:
+                    # Only a paid miss spends AI quota. Offline/cache reads are free.
+                    api_key = ai.upstream_key(authorization)
+                except HTTPException:
+                    result["translation_state"] = "unavailable"
+                else:
+                    task = asyncio.create_task(_translate_dictionary(result, api_key))
+                    _dictionary_translations[key] = task
+                    task.add_done_callback(lambda _: _dictionary_translations.pop(key, None))
+            else:
+                # A joining caller must independently pass entitlement. No AI call/quota spent.
+                info = await run_in_threadpool(auth_db.get_user_status, user_id)
+                if not info or not info.get("is_valid"):
+                    task = None
+            if task is not None:
+                translations = await asyncio.shield(task)
+                result["translation_state"] = "translated" if translations else "failed"
+        if translations:
+            result["translations_zh"] = translations
+            result["explanation_cn"] = "；".join(translations[0])
+        return result
+    # Old global generated answers are considered only after a corpus miss.
+    if clean in LOOKUP_CACHE:
+        return {**LOOKUP_CACHE[clean], "dictionary_source": "generated"}
     api_key = ai.upstream_key(authorization)
     result = await request_word_lookup(clean, api_key, model=model)
-    return result
+    return {**result, "dictionary_source": "generated"}
 
 
 class EtymologyRequest(BaseModel):

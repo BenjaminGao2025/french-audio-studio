@@ -463,6 +463,7 @@
                 <div class="popover-content">
                     <div class="popover-cn-text"></div>
                     <div class="popover-en-text"></div>
+                    <div class="popover-source-text" hidden></div>
                 </div>
             </section>
             <section class="popover-context" aria-label="${escapeHtml(T.contextTitle)}" hidden>
@@ -500,6 +501,8 @@
             </div>
         </div>`;
     }
+
+    const dictionaryRequests = new Map();
 
     function refreshIcons() {
         if (root.lucide && typeof root.lucide.createIcons === 'function') root.lucide.createIcons();
@@ -827,7 +830,70 @@
             els.en.textContent = EN ? '' : `${forms.word} = ${forms.parts}: ${forms.en}${forms.other ? `; or ${forms.other.en}` : ''}`;
         }
 
+        function renderOffline(item) {
+            const box = pop.querySelector('.popover-source-text');
+            box.replaceChildren();
+            box.hidden = item.dictionary_source !== 'offline';
+            if (box.hidden) return;
+            const entries = item.entries || [];
+            entries.forEach((entry, i) => {
+                const row = document.createElement('p');
+                row.className = 'popover-source-entry';
+                const title = document.createElement('strong');
+                title.textContent = `${entry.lemma} · ${entry.pos_title || entry.pos}${entry.gender ? ' · ' + entry.gender : ''}${entry.number ? ' · ' + entry.number : ''}`;
+                row.append(title);
+                if (entry.phonetic) row.append(document.createTextNode(` ${entry.phonetic}`));
+                if (entry.form_info) {
+                    const form = document.createElement('span');
+                    form.textContent = `（${item.token} → ${entry.lemma}；可能的词形：${entry.form_info}）`;
+                    row.append(form);
+                }
+                (entry.senses || []).forEach((sense, j) => {
+                    const line = document.createElement('span');
+                    line.className = 'popover-source-sense';
+                    line.lang = 'fr';
+                    line.textContent = `${j + 1}. ${sense}`;
+                    row.append(line);
+                    const zh = item.translations_zh?.[i]?.[j];
+                    if (zh) {
+                        const translation = document.createElement('span');
+                        translation.className = 'popover-source-sense';
+                        translation.textContent = zh;
+                        row.append(translation);
+                    }
+                });
+                const link = (label, url) => {
+                    const a = document.createElement('a');
+                    a.textContent = label; a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+                    row.append(document.createTextNode(' · '), a);
+                };
+                // URLs are constructed here from the entry title, never accepted from source/model HTML.
+                link('词条', `https://fr.wiktionary.org/wiki/${encodeURIComponent(entry.lemma)}#fr`);
+                link('贡献者历史', `https://fr.wiktionary.org/w/index.php?title=${encodeURIComponent(entry.lemma)}&action=history`);
+                if (i === 0 || /^d['’]accord$/i.test(item.token)) box.append(row);
+                else {
+                    const details = document.createElement('details');
+                    const summary = document.createElement('summary');
+                    summary.textContent = `${entry.lemma} · ${entry.pos_title || entry.pos}（其他词条）`;
+                    details.append(summary, row); box.append(details);
+                }
+            });
+            const credit = document.createElement('p');
+            credit.className = 'popover-source-credit';
+            credit.append(document.createTextNode('Wiktionnaire via Kaikki / Lexique 3 · 短释义经选取、节选；中文为翻译改编。同方式共享 '));
+            const license = document.createElement('a');
+            license.textContent = 'CC BY-SA 4.0'; license.href = 'https://creativecommons.org/licenses/by-sa/4.0/';
+            license.target = '_blank'; license.rel = 'noopener noreferrer';
+            credit.append(license);
+            const authors = document.createElement('span');
+            authors.textContent = ' · Wiktionnaire 贡献者；Kaikki: Tatu Ylonen；Lexique 3: Boris New、Christophe Pallier 及贡献者。';
+            credit.append(authors);
+            if (!item.translations_zh) credit.append(document.createTextNode(' 中文翻译暂不可用，保留法语原释义。'));
+            box.append(credit);
+        }
+
         function renderDict(item) {
+            renderOffline(item);
             const shown = dictState !== 'none';
             els.dict.hidden = !shown;
             const label = posLabel(item.pos);
@@ -853,13 +919,18 @@
                 row.textContent = `d’ = ${de.lemma}（元音前省略）`;
                 const accord = document.createElement('p');
                 accord.className = 'popover-dict-use';
-                accord.textContent = `accord = ${constituent.explanation_cn || BASIC_FRENCH_WORDS.accord.explanation_cn}（阳性名词 / n.m.）`;
+                accord.textContent = item.dictionary_source === 'offline'
+                    ? 'accord（阳性名词 / n.m.）· 原词释义见下方。'
+                    : `accord = ${constituent.explanation_cn || BASIC_FRENCH_WORDS.accord.explanation_cn}（阳性名词 / n.m.）`;
                 els.cn.replaceChildren(row, accord);
                 els.en.textContent = EN ? 'de (elided before a vowel) + accord (agreement; masculine noun)' : '';
                 return;
             }
             const forms = contractionOf(item.token);
             if (forms) { renderContraction(forms); return; }
+            if (item.dictionary_source === 'offline') {
+                els.cn.textContent = ''; els.en.textContent = ''; return;
+            }
             if (dictState === 'failed' || (!item.explanation_cn && !item.explanation_en)) {
                 els.cn.textContent = T.noDefinition;
                 els.en.textContent = dictState === 'failed' ? dictError : '';
@@ -973,20 +1044,33 @@
         async function lookUp(word, requestId, base, decorate) {
             try {
                 const token = options.getAuthToken ? options.getAuthToken() : '';
-                const res = await fetch(`/api/lookup?word=${encodeURIComponent(word)}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok) throw new Error(data.detail?.message || T.lookupFailed);
-                const item = Object.assign({}, data, { sentence: base.sentence, sentence_cn: base.sentence_cn });
-                remember(word.toLowerCase(), item);
+                const key = `${token}:${foldText(word)}`;
+                let pending = dictionaryRequests.get(key);
+                if (!pending) {
+                    pending = (async () => {
+                        const res = await fetch(`/api/lookup?word=${encodeURIComponent(word)}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+                        const data = await res.json().catch(() => ({}));
+                        if (!res.ok) throw new Error(data.detail?.message || T.lookupFailed);
+                        return Object.assign({}, data, { dictionary_checked: true });
+                    })();
+                    dictionaryRequests.set(key, pending);
+                    pending.finally(() => dictionaryRequests.delete(key)).catch(() => {});
+                }
+                const data = await pending;
+                remember(foldText(word), data);
+                const item = Object.assign({}, data, { token: word, sentence: base.sentence, sentence_cn: base.sentence_cn });
                 if (requestId !== lookupGeneration || !isOpen()) return;
                 dictState = 'ready';
                 render(decorate(item));
             } catch (err) {
                 if (requestId !== lookupGeneration || !isOpen()) return;
                 // The card keeps everything else it shows (语境, a fixed expression)
-                dictState = 'failed';
+                const lower = foldText(word);
+                const local = options.localLookup ? options.localLookup(lower, word, { sentence: base.sentence }) : null;
+                const fallback = local || BASIC_FRENCH_WORDS[lower];
+                dictState = fallback ? 'ready' : 'failed';
                 dictError = err.message || T.lookupFailed;
-                render(currentCard || decorate(base));
+                render(fallback ? decorate(Object.assign({}, fallback, { token: word, sentence: base.sentence, sentence_cn: base.sentence_cn })) : (currentCard || decorate(base)));
             }
         }
 
@@ -1090,38 +1174,16 @@
             }
 
             const lower = word.toLowerCase().replace(/’/g, "'");
-            const elided = (lower.match(ELISION_RE) || [])[2];
             // Elided forms such as "l'" are read as their full word.
             // Meaning from the selection bar passes silent: true so it only opens the card.
             if (!silent) {
                 speak((word.endsWith("'") || word.endsWith('’')) ? (BASIC_FRENCH_WORDS[lower]?.lemma || word) : word);
             }
 
-            // 词典 never takes the meaning of this sentence: that is 语境's.
-            // 1. The page's own dictionary data (the card being reviewed)
-            // A nested word must resolve individually, rather than being redirected back to
-            // the surrounding sentence's fixed expression (e.g. venir -> viens de).
-            const local = !navigation.nested && options.localLookup ? options.localLookup(lower, word, context) : null;
-            if (local) { dictState = 'ready'; render(decorate(withContext(Object.assign({ token: word }, local)))); return; }
-
-            // 2. Already looked up, or in the built-in A1 dictionary
-            const cached = lookupCache.get(lower);
-            const known = (navigation.nested && cached?.token?.toLowerCase() !== lower ? null : cached) || (elided && lookupCache.get(elided))
-                || BASIC_FRENCH_WORDS[lower] || (elided && BASIC_FRENCH_WORDS[elided]);
-            if (known) {
-                const item = withContext(Object.assign({}, known, { token: word }));
-                remember(lower, item);
-                dictState = 'ready';
-                render(decorate(item));
-                return;
-            }
-
-            // A whole fixed expression (a table chunk, a selection): its meaning is the expression's
-            const hit = phraseState.hit && phraseState.hit.phrase;
-            if (hit && [hit.text, hit.phrase].some(text => text && foldText(text) === foldText(word))) {
-                dictState = 'none';
-                render(decorate(withContext({ token: word, lemma: '', pos: '', phonetic: '', explanation_cn: '', explanation_en: '' })));
-                return;
+            // Only answers checked against the server corpus can bypass lookup.
+            const cached = lookupCache.get(foldText(word));
+            if (cached?.dictionary_checked) {
+                dictState = 'ready'; render(decorate(withContext(Object.assign({}, cached, { token: word })))); return;
             }
 
             // 3. Server lookup. The card opens at once with what the page knows of the word's form.

@@ -1,0 +1,13 @@
+# OPTIONAL future release override. Do not apply to a running trial/production service.
+# docker compose -f compose.yml -f compose.dictionary.yml ... (only after release approval)
+services:
+  tts-service:
+    environment:
+      FRENCH_DICTIONARY_PATH: /app/dictionary/french.sqlite
+    volumes:
+      - type: bind
+        source: /home/mgacai/tts-dictionary-data/french-v1.sqlite
+        target: /app/dictionary/french.sqlite
+        read_only: true
+        bind:
+          create_host_path: false

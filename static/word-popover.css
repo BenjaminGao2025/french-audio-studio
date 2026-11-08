@@ -653,3 +653,9 @@
     font-weight: 500;
     color: var(--muted);
 }
+
+/* Selected corpus excerpts and attribution stay inside the scrollable dictionary section. */
+.popover-source-entry { margin: 0 0 .65rem; font-size: .86rem; line-height: 1.45; overflow-wrap: anywhere; }
+.popover-source-sense { display: block; margin-top: .2rem; }
+.popover-source-credit { font-size: .72rem; line-height: 1.4; color: var(--text-secondary, #666); overflow-wrap: anywhere; }
+.popover-source-text a { text-decoration: underline; }

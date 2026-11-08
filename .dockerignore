@@ -15,3 +15,10 @@ node_modules/
 config.yml
 *.db
 eb_common*
+# Offline corpus belongs outside the checkout/image, even in a future accidental local copy.
+*.sqlite
+*.sqlite-*
+*.jsonl
+*.jsonl.gz
+*Lexique*.tsv
+tts-dictionary-data/
