@@ -359,7 +359,8 @@
     // ---------------------------------------------------------------------
     const pageLane = PAGE_LANES[root.location.pathname] || null;
     let lastActivity = Date.now();
-    let pendingSeconds = 0;
+    // Seconds earned and not yet sent, per lane (a beat can belong to the page's lane or to audio's)
+    const pending = {};
     let flushing = false;
     let laneOverride = null;
     let laneOverrideUntil = 0;
@@ -367,6 +368,8 @@
     function currentLane() {
         return laneOverride && Date.now() < laneOverrideUntil ? laneOverride : pageLane;
     }
+
+    const pendingTotal = () => Object.values(pending).reduce((sum, v) => sum + v, 0);
 
     function showLocalTime(lane, seconds) {
         if (!state) return;  // the server stays the source of truth
@@ -380,66 +383,61 @@
 
     async function flush(keepalive = false) {
         if (flushing) return;
-        const lane = currentLane();
-        const seconds = Math.floor(pendingSeconds);
-        if (!lane || seconds < 1) return;
         flushing = true;
         try {
-            // Only drop what the server accepted: a failed beat leaves its seconds pending.
-            // The server takes at most 120 s per beat; long locked-phone stretches go in chunks.
-            for (let sent = 0; sent < seconds; sent += 120) {
-                const chunk = Math.min(120, seconds - sent);
-                try {
-                    await api('POST', '/api/game/heartbeat', { lane, seconds: chunk, tz_offset: tz() }, keepalive);
-                } catch (_) {
-                    break;  // keep them; the next tick retries
+            for (const lane of Object.keys(pending)) {
+                const seconds = Math.floor(pending[lane]);
+                // Only drop what the server accepted: a failed beat leaves its seconds pending.
+                // The server takes at most 120 s per beat; long locked-phone stretches go in chunks.
+                for (let sent = 0; sent < seconds; sent += 120) {
+                    const chunk = Math.min(120, seconds - sent);
+                    try {
+                        await api('POST', '/api/game/heartbeat', { lane, seconds: chunk, tz_offset: tz() }, keepalive);
+                    } catch (_) {
+                        return;  // keep them; the next tick retries
+                    }
+                    pending[lane] = Math.max(0, pending[lane] - chunk);
+                    showLocalTime(lane, chunk);
                 }
-                pendingSeconds = Math.max(0, pendingSeconds - chunk);
-                showLocalTime(lane, chunk);
             }
         } finally {
             flushing = false;
         }
     }
 
-    // Audio pages count the seconds actually played, even with the phone locked
-    // (the position jump is added when the page wakes up again).
-    function trackPlayback() {
-        const lastPos = new WeakMap();
-        const take = (audio) => {
-            const before = lastPos.get(audio);
-            const now = audio.currentTime || 0;
-            if (before !== undefined && now > before && now - before < 1800) pendingSeconds += now - before;
-            lastPos.set(audio, now);
+    // The page's own active time and any audio that is really playing (also with the phone locked or
+    // the tab in the background) share one beat, so a second is never counted twice (static/media-time.js).
+    // /listen only counts audio; the other pages count use of the page, and audio on top of it adds
+    // nothing while the page is being used.
+    function trackTime() {
+        const audioLane = (el) => {
+            if (el && el.dataset && el.dataset.coach === 'listening') return 'listening';
+            if (pageLane) return pageLane === 'car' ? 'car' : currentLane();
+            return 'listening';
         };
-        document.addEventListener('play', (e) => { if (e.target instanceof HTMLMediaElement) { setLane(e.target.dataset.coach === 'listening' ? 'listening' : 'car', 3600); lastPos.set(e.target, e.target.currentTime || 0); } }, true);
-        document.addEventListener('seeked', (e) => { if (e.target instanceof HTMLMediaElement) lastPos.set(e.target, e.target.currentTime || 0); }, true);
-        ['timeupdate', 'pause', 'ended'].forEach(ev => document.addEventListener(ev, (e) => {
-            if (e.target instanceof HTMLMediaElement) take(e.target);
-            if (pendingSeconds >= FLUSH_SECONDS) flush();
-        }, true));
-        document.addEventListener('visibilitychange', () => {
-            document.querySelectorAll('audio').forEach(a => { if (!a.paused) take(a); });
-            if (document.hidden) flush(true); else { flush(); loadState(); }
+        root.FrenchMediaTime.create({
+            alwaysTick: pageLane && pageLane !== 'car',
+            isActive: () => Boolean(pageLane && pageLane !== 'car' && !document.hidden
+                && !document.querySelector('#study-personal:not([hidden])') && Date.now() - lastActivity < IDLE_MS),
+            laneFor: (el) => (el ? audioLane(el) : currentLane()),
+            onSeconds(lane, seconds) {
+                if (!LANES.includes(lane)) return;
+                pending[lane] = (pending[lane] || 0) + seconds;
+                if (pendingTotal() >= FLUSH_SECONDS) flush();
+            },
         });
+        document.addEventListener('visibilitychange', () => { if (document.hidden) flush(true); else { flush(); loadState(); } });
         root.addEventListener('pagehide', () => flush(true));
     }
 
     document.addEventListener('study:modechange', () => flush());
 
     function startTracking() {
-        if (!pageLane) return;
-        if (pageLane === 'car') { trackPlayback(); return; }
         const mark = () => { lastActivity = Date.now(); };
         ['pointerdown', 'keydown', 'wheel', 'touchstart', 'input', 'mousemove'].forEach(ev =>
             document.addEventListener(ev, mark, { passive: true, capture: true }));
-        setInterval(() => {
-            if (!document.hidden && !document.querySelector('#study-personal:not([hidden])') && Date.now() - lastActivity < IDLE_MS) pendingSeconds += TICK_MS / 1000;
-            if (pendingSeconds >= FLUSH_SECONDS) flush();
-        }, TICK_MS);
-        document.addEventListener('visibilitychange', () => { if (document.hidden) flush(true); else loadState(); });
-        root.addEventListener('pagehide', () => flush(true));
-        setInterval(loadState, 5 * 60 * 1000);
+        trackTime();
+        if (pageLane && pageLane !== 'car') setInterval(loadState, 5 * 60 * 1000);
     }
 
     function setLane(lane, seconds = 120) {

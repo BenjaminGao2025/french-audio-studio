@@ -70,6 +70,8 @@ function initStudyWorkbench() {
             needInvite: 'Please enter your invite code.', registerSuccess: 'Account created. Your 60-day free trial has started.',
             membership: 'Membership',
             studyTimeTitle: 'Study time', studyToday: 'Today', studyWeek: 'This week', studyTotal: 'Total',
+            goalDetail: (left, avg, date) => `${left} h to go · ${avg} h/week lately${date ? ` · on pace to finish ${date}` : ''}`,
+            goalNoPace: (left) => `${left} h to go · no study in the last 4 weeks, so no finish date yet`, goalDone: 'You reached 1000 hours.',
             devicesTitle: 'Signed-in devices (up to 3)', thisDevice: 'This device', signOutDevice: 'Sign out',
             lastActive: (when) => `Last active ${when}`,
             signedOutElsewhere: 'This device was signed out: an account can be signed in on up to 3 devices. Please log in again.',
@@ -216,6 +218,8 @@ function initStudyWorkbench() {
             needInvite: '请填写邀请码。', registerSuccess: '注册成功！60 天免费试用已开始。',
             membership: '会员',
             studyTimeTitle: '学习时间', studyToday: '今天', studyWeek: '本周', studyTotal: '累计',
+            goalDetail: (left, avg, date) => `还差 ${left} 小时 · 近 4 周平均每周 ${avg} 小时${date ? ` · 按此进度预计 ${date} 完成` : ''}`,
+            goalNoPace: (left) => `还差 ${left} 小时 · 近 4 周没有学习记录，暂无法估算完成日期`, goalDone: '已达成 1000 小时。',
             devicesTitle: '已登录设备（最多 3 台）', thisDevice: '当前设备', signOutDevice: '退出',
             lastActive: (when) => `最近使用 ${when}`,
             signedOutElsewhere: '这台设备已退出登录：账号最多同时登录 3 台设备。请重新登录。',
@@ -3281,6 +3285,24 @@ function initStudyWorkbench() {
         return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m`;
     }
 
+    // Progress toward 1000 hours: total, what is left, and the finish date at the last 4 weeks' pace
+    function renderGoal(data) {
+        const box = document.getElementById('profile-goal');
+        if (!box || typeof data.goal_hours !== 'number') return;
+        const hours = (seconds) => Math.round((Number(seconds) || 0) / 360) / 10;
+        const total = hours(data.total_seconds);
+        document.getElementById('goal-hours').textContent = `${total} / ${data.goal_hours} h`;
+        document.getElementById('goal-percent').textContent = `${Math.round(data.progress * 1000) / 10}%`;
+        const bar = document.getElementById('goal-bar');
+        bar.style.width = `${Math.max(data.progress > 0 ? 1 : 0, data.progress * 100)}%`;
+        bar.parentElement.setAttribute('aria-valuenow', String(total));
+        const left = hours(data.remaining_seconds);
+        const avg = hours(data.average_week_seconds);
+        document.getElementById('goal-detail').textContent = !data.remaining_seconds ? T.goalDone
+            : data.projected_finish ? T.goalDetail(left, avg, data.projected_finish) : T.goalNoPace(left);
+        box.hidden = false;
+    }
+
     async function loadStudyTime() {
         const token = localStorage.getItem(userTokenKey);
         const panel = document.getElementById('profile-study');
@@ -3293,6 +3315,7 @@ function initStudyWorkbench() {
             document.getElementById('study-week').textContent = formatStudyTime(data.week_seconds);
             document.getElementById('study-total').textContent = formatStudyTime(data.total_seconds);
             panel.hidden = false;
+            renderGoal(data);
         } catch (e) {
             console.warn('Load study time failed:', e);
         }

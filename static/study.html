@@ -18,6 +18,7 @@
     <script src="/static/study-init.js?v=__ASSET_VERSION__"></script>
     <script src="/static/vendor/lucide.min.js?v=__ASSET_VERSION__" defer></script>
     <script src="/static/i18n.js?v=__ASSET_VERSION__" defer></script>
+    <script src="/static/media-time.js?v=__ASSET_VERSION__" defer></script>
     <script src="/static/game.js?v=__ASSET_VERSION__" defer></script>
     <script src="/static/playback.js?v=__ASSET_VERSION__" defer></script>
     <script src="/static/speech-eval.js?v=__ASSET_VERSION__" defer></script>
@@ -350,6 +351,11 @@
                             <div class="study-stat"><strong id="study-today">–</strong><span data-i18n="studyToday">今天</span></div>
                             <div class="study-stat"><strong id="study-week">–</strong><span data-i18n="studyWeek">本周</span></div>
                             <div class="study-stat"><strong id="study-total">–</strong><span data-i18n="studyTotal">累计</span></div>
+                        </div>
+                        <div id="profile-goal" class="profile-goal" hidden>
+                            <div class="goal-head"><strong id="goal-hours">–</strong><span id="goal-percent"></span></div>
+                            <div class="goal-track" role="progressbar" aria-valuemin="0" aria-valuemax="1000" aria-labelledby="goal-hours"><div id="goal-bar" class="goal-bar"></div></div>
+                            <p id="goal-detail" class="goal-detail"></p>
                         </div>
                         <div class="profile-devices">
                             <h5 data-i18n="devicesTitle">已登录设备（最多 3 台）</h5>

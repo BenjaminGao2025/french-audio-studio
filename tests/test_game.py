@@ -236,6 +236,31 @@ class StudySummaryTests(unittest.TestCase):
         got = game.study_summary(self.user_id, monday)
         self.assertEqual((got["today_seconds"], got["week_seconds"], got["total_seconds"]), (0, 0, 15 * 60))
 
+    def test_progress_toward_1000_hours_and_the_finish_date(self):
+        now = _at("2026-10-28", 10)
+        # 28 days ending today: 14 h in total = 30 min a day. The same stretch counts once.
+        for offset in range(28):
+            day = (datetime.date(2026, 10, 28) - datetime.timedelta(days=offset)).isoformat()
+            game.log_time(self.user_id, "reading", 30, "", PDT, _at(day, 10))
+        game.log_time(self.user_id, "reading", 60, "", PDT, _at("2026-08-01", 10))  # older: total only
+        got = game.study_summary(self.user_id, now)
+        self.assertEqual(got["goal_hours"], 1000)
+        self.assertEqual(got["total_seconds"], 15 * 3600)
+        self.assertAlmostEqual(got["progress"], 15 / 1000)
+        self.assertEqual(got["remaining_seconds"], 985 * 3600)
+        self.assertEqual(got["average_week_seconds"], 3.5 * 3600)  # 14 h over 4 weeks
+        self.assertEqual(got["projected_finish"], (datetime.date(2026, 10, 28) + datetime.timedelta(days=1970)).isoformat())
+
+    def test_no_recent_study_has_no_finish_date_and_a_reached_goal_has_none_left(self):
+        game.log_time(self.user_id, "reading", 60, "", PDT, _at("2026-08-01", 10))
+        got = game.study_summary(self.user_id, _at("2026-10-28", 10))
+        self.assertEqual((got["average_week_seconds"], got["projected_finish"]), (0, None))
+        for i in range(4):  # 4 x 300 min a day in the last days, far past 1000 h is not needed: fake the total
+            game.log_time(self.user_id, "reading", 300, "", PDT, _at(f"2026-10-2{i}", 10))
+        with patch.object(game, "GOAL_HOURS", 1):
+            got = game.study_summary(self.user_id, _at("2026-10-28", 10))
+        self.assertEqual((got["remaining_seconds"], got["projected_finish"], got["progress"]), (0, None, 1.0))
+
     def test_endpoint(self):
         self.assertEqual(self.client.get("/api/game/study-time").status_code, 401)
         self.client.post("/api/game/heartbeat", headers=self.headers, json={"lane": "review", "seconds": 60, "tz_offset": 420})

@@ -65,6 +65,8 @@ DAY_TARGET_MIN = (160, 160, 160, 160, 160, 120, 40)  # Monday = 0; sums to WEEK_
 DAY_FULL_XP_MIN = 300  # beyond 5 effective hours a day, XP is halved
 # The account panel's study-time summary counts days and weeks in this zone, whatever device reports
 SUMMARY_TZ = ZoneInfo("America/Vancouver")
+GOAL_HOURS = 1000
+AVERAGE_DAYS = 28  # the pace for the finish date is the last four weeks' average
 STREAK_MIN = 30  # minutes that make a weekday count for the streak
 
 # One level per hour (60 XP): level 1000 = 1000 hours, the "1000H" goal
@@ -522,7 +524,8 @@ def study_summary(user_id: int, now=None) -> dict[str, Any]:
         rows = conn.execute(
             "SELECT day, SUM(seconds) AS seconds FROM study_time WHERE user_id = ? GROUP BY day", (user_id,)
         ).fetchall()
-    total = today_seconds = week_seconds = 0
+    window_start = today - datetime.timedelta(days=AVERAGE_DAYS - 1)
+    total = today_seconds = week_seconds = recent = 0
     for row in rows:
         seconds = int(row["seconds"] or 0)
         day = datetime.date.fromisoformat(row["day"])
@@ -531,6 +534,18 @@ def study_summary(user_id: int, now=None) -> dict[str, Any]:
             today_seconds += seconds
         if week_start <= day <= week_start + datetime.timedelta(days=6):
             week_seconds += seconds
+        if window_start <= day <= today:
+            recent += seconds
+    goal_seconds = GOAL_HOURS * 3600
+    remaining = max(0, goal_seconds - total)
+    finish = None
+    if remaining and recent:
+        # remaining / (seconds per day over the last 28 days), rounded up to whole days
+        days = -(-remaining * AVERAGE_DAYS // recent)
+        try:
+            finish = (today + datetime.timedelta(days=days)).isoformat()
+        except OverflowError:  # a trickle of minutes: the date is beyond any calendar
+            finish = None
     return {
         "today_seconds": today_seconds,
         "week_seconds": week_seconds,
@@ -538,6 +553,11 @@ def study_summary(user_id: int, now=None) -> dict[str, Any]:
         "day": today.isoformat(),
         "week_start": week_start.isoformat(),
         "timezone": "America/Vancouver",
+        "goal_hours": GOAL_HOURS,
+        "progress": min(1.0, total / goal_seconds),
+        "remaining_seconds": remaining,
+        "average_week_seconds": round(recent * 7 / AVERAGE_DAYS),
+        "projected_finish": finish,
     }
 
 

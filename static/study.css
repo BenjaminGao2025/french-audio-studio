@@ -1183,6 +1183,56 @@
     font-size: 12px;
 }
 
+/* Progress toward the 1000-hour goal */
+.profile-goal {
+    display: grid;
+    gap: 6px;
+    margin-top: -6px;
+}
+
+.profile-goal[hidden] {
+    display: none;
+}
+
+.goal-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.goal-head strong {
+    color: var(--ink);
+    font-size: 15px;
+    font-variant-numeric: tabular-nums;
+}
+
+.goal-head span {
+    color: var(--muted);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+}
+
+.goal-track {
+    height: 8px;
+    border-radius: 999px;
+    background: var(--surface-muted);
+    overflow: hidden;
+}
+
+.goal-bar {
+    height: 100%;
+    border-radius: 999px;
+    background: var(--primary);
+}
+
+.goal-detail {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
 .profile-devices h5 {
     margin: 0 0 8px;
     color: var(--muted);

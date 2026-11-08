@@ -1,12 +1,12 @@
 import { audioController } from "@/lib/audio-controller";
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Headphones, Plus, Trash2 } from "lucide-react";
 import { AppShell, Chip } from "@/components/fr/kit";
 import { btn, meta } from "@/components/fr/kit-utils";
 import { useEpisodes } from "@/api/hooks";
 import { DataView, EmptyState } from "@/components/fr/states";
-import { BlockTimer } from "@/components/fr/widgets";
+import { trackListening } from "@/lib/media-time";
 import { api } from "@/api";
 
 export const Route = createFileRoute("/episodes")({
@@ -22,14 +22,15 @@ function Episodes() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [playing, setPlaying] = useState<string | null>(null);
+  // Played seconds count as study time, also with the screen locked
+  useEffect(() => trackListening("car"), []);
 
   return (
     <AppShell>
-      <BlockTimer lane="car" active={playing !== null} />
       <div className="mx-auto max-w-xl px-4 py-10 md:px-10">
         <h1 className="fr text-3xl">Listen on the go</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Passive playback — logged as Input hours, never toward the 1000h goal.
+          Passive playback — the time you really listen counts toward your study time.
         </p>
 
         <form
@@ -137,7 +138,7 @@ function Episodes() {
                   )}
                   {playing === ep.id && (
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Playing — car lane heartbeat active.
+                      Playing — listening time is being counted.
                     </p>
                   )}
                 </li>
