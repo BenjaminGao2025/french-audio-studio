@@ -62,7 +62,7 @@ class SrsImportRequest(BaseModel):
 @router.get("/api/srs/queue")
 def srs_queue(
     tz_offset: int = Query(default=0, ge=-840, le=840),
-    new_limit: int = Query(default=srs.DEFAULT_NEW_LIMIT, ge=0, le=100),
+    new_limit: int | None = Query(default=None, ge=0, le=srs.MAX_NEW_LIMIT),
     min_importance: int = Query(default=1, ge=1, le=5),
     modes: str = Query(default="", max_length=80),
     authorization: str | None = Header(default=None),
@@ -71,6 +71,21 @@ def srs_queue(
     return srs.build_queue(
         _require_user_id(authorization), tz_offset, new_limit, min_importance=min_importance, modes=wanted
     )
+
+
+class SrsSettingsRequest(BaseModel):
+    new_limit: int = Field(ge=0, le=srs.MAX_NEW_LIMIT)
+
+
+@router.get("/api/srs/settings")
+def srs_get_settings(authorization: str | None = Header(default=None)):
+    """The learner's review settings: new_limit is None until they set one (then clients use their own)."""
+    return {"new_limit": srs.get_new_limit(_require_user_id(authorization)), "default_new_limit": srs.DEFAULT_NEW_LIMIT}
+
+
+@router.put("/api/srs/settings")
+def srs_put_settings(req: SrsSettingsRequest, authorization: str | None = Header(default=None)):
+    return {"new_limit": srs.set_new_limit(_require_user_id(authorization), req.new_limit)}
 
 
 class SrsPracticeRequest(BaseModel):

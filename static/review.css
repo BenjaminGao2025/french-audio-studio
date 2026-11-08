@@ -43,6 +43,31 @@
     font-weight: 600;
 }
 
+.new-limit-control .new-limit-input {
+    width: 4.5em;
+    min-height: 36px;
+    border: 1px solid var(--line-strong);
+    border-radius: 7px;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    padding: 0 8px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.new-limit-input:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.new-limit-note {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 500;
+    white-space: normal;
+}
+
 .new-limit-control select {
     min-height: 36px;
     border: 1px solid var(--line-strong);

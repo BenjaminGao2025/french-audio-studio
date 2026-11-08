@@ -27,6 +27,7 @@ import auth_db
 MODES = ("listen", "cloze", "grammar", "speak", "recognize")
 MODE_ORDER = {mode: index for index, mode in enumerate(MODES)}
 DEFAULT_NEW_LIMIT = 10
+MAX_NEW_LIMIT = 200
 DEFAULT_IMPORTANCE = 3  # 1-5 stars, like Eudic's word book
 DAY_ROLLOVER_HOUR = 4  # like Anki: a study day starts at 04:00 local time
 LEARN_AHEAD = datetime.timedelta(minutes=20)
@@ -86,6 +87,12 @@ def init_db() -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_srs_reviews_user_time ON srs_reviews(user_id, reviewed_at);
             -- Additive: lookup counts are their own table, so existing srs_cards and notes are untouched.
+            -- Additive: per-user review settings (the daily new-card limit), synced across devices.
+            CREATE TABLE IF NOT EXISTS srs_settings (
+                user_id INTEGER PRIMARY KEY,
+                new_limit INTEGER,
+                updated_at TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS word_lookup_counts (
                 user_id INTEGER NOT NULL,
                 word TEXT NOT NULL,
@@ -117,6 +124,27 @@ def _now() -> datetime.datetime:
 def _iso(value: datetime.datetime) -> str:
     # Fixed width so due dates compare correctly as strings in SQL.
     return value.astimezone(datetime.timezone.utc).isoformat(timespec="microseconds")
+
+
+def get_new_limit(user_id: int) -> int | None:
+    """The learner's saved daily new-card limit, or None when they never set one."""
+    with _connect() as conn:
+        row = conn.execute("SELECT new_limit FROM srs_settings WHERE user_id = ?", (user_id,)).fetchone()
+    return row["new_limit"] if row and row["new_limit"] is not None else None
+
+
+def set_new_limit(user_id: int, new_limit: int, now: datetime.datetime | None = None) -> int:
+    """Save the daily new-card limit (0 to MAX_NEW_LIMIT) and return it. ValueError when out of range."""
+    if isinstance(new_limit, bool) or not isinstance(new_limit, int) or not 0 <= new_limit <= MAX_NEW_LIMIT:
+        raise ValueError(f"new_limit must be a whole number from 0 to {MAX_NEW_LIMIT}")
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO srs_settings (user_id, new_limit, updated_at) VALUES (?, ?, ?) "
+            "ON CONFLICT(user_id) DO UPDATE SET new_limit = excluded.new_limit, updated_at = excluded.updated_at",
+            (user_id, new_limit, _iso(now or _now())),
+        )
+        conn.commit()
+    return new_limit
 
 
 def sentence_key(sentence: str) -> str:
@@ -727,7 +755,7 @@ def _today_activity(conn: sqlite3.Connection, user_id: int, day_start: datetime.
 def build_queue(
     user_id: int,
     tz_offset_minutes: int = 0,
-    new_limit: int = DEFAULT_NEW_LIMIT,
+    new_limit: int | None = None,
     now: datetime.datetime | None = None,
     min_importance: int = 1,
     modes: Iterable[str] = (),
@@ -741,6 +769,9 @@ def build_queue(
     "speak"/"cloze" of the same sentence follow on later days.
     """
     now = now or _now()
+    if new_limit is None:  # not asked for explicitly: the learner's saved limit, synced across devices
+        saved = get_new_limit(user_id)
+        new_limit = DEFAULT_NEW_LIMIT if saved is None else saved
     day_start = study_day_start(now, tz_offset_minutes)
     # FSRS due times carry the time of day of the last review; like Anki, a
     # review card counts as due for the whole study day it falls on.

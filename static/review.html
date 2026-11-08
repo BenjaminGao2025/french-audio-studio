@@ -17,6 +17,7 @@
     <link rel="stylesheet" href="/static/ui.css?v=__ASSET_VERSION__">
     <script src="/static/vendor/lucide.min.js?v=__ASSET_VERSION__" defer></script>
     <script src="/static/i18n.js?v=__ASSET_VERSION__" defer></script>
+    <script src="/static/new-limit.js?v=__ASSET_VERSION__" defer></script>
     <script src="/static/media-time.js?v=__ASSET_VERSION__" defer></script>
     <script src="/static/game.js?v=__ASSET_VERSION__" defer></script>
     <script src="/static/playback.js?v=__ASSET_VERSION__" defer></script>
@@ -85,15 +86,10 @@
                     <p><span class="copy-zh">专注眼前这张卡，巩固已经学过的内容。</span><span class="copy-en">One card at a time. Strengthen what you have learned.</span></p>
                 </div>
                 <div class="review-settings">
-                        <label class="new-limit-control" title="每天最多引入多少张新卡" data-i18n-title="newLimitTitle">
+                        <label class="new-limit-control" title="每天最多引入多少张新卡（0–200）" data-i18n-title="newLimitTitle">
                             <span data-i18n="newLimit">每天新卡</span>
-                            <select id="new-limit-select">
-                                <option value="0">0</option>
-                                <option value="5">5</option>
-                                <option value="10">10</option>
-                                <option value="15">15</option>
-                                <option value="20">20</option>
-                            </select>
+                            <input id="new-limit-select" class="new-limit-input" type="number" min="0" max="200" step="1" inputmode="numeric" value="10" aria-describedby="new-limit-note">
+                            <span id="new-limit-note" class="new-limit-note" role="status" aria-live="polite" hidden></span>
                         </label>
                         <label class="new-limit-control" title="只复习重要度不低于所选星级的卡片" data-i18n-title="priorityTitle">
                             <span data-i18n="priority">重点</span>

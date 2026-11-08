@@ -1062,11 +1062,6 @@ function initStudyWorkbench() {
         return localStorage.getItem(userTokenKey) || '';
     }
 
-    function getNewCardLimit() {
-        const saved = parseInt(localStorage.getItem('frenchStudio.srs.newLimit') || '', 10);
-        return Number.isFinite(saved) ? saved : 10;
-    }
-
     // Cloudflare turns upstream 502/504 into an HTML page: never let that surface as a JSON parse error
     async function readJsonSafely(res) {
         try {
@@ -1187,7 +1182,9 @@ function initStudyWorkbench() {
             return;
         }
         try {
-            const data = await srsApi('GET', `/api/srs/queue?tz_offset=${new Date().getTimezoneOffset()}&new_limit=${getNewCardLimit()}`);
+            // The account's saved new-card limit applies (an older value in this browser is uploaded first)
+            if (window.FrenchNewLimit) await window.FrenchNewLimit.syncOnce();
+            const data = await srsApi('GET', `/api/srs/queue?tz_offset=${new Date().getTimezoneOffset()}`);
             const { total, review, learning, new: fresh, reviewed_today: done } = data.counts;
             if (dueCardBadge) {
                 dueCardBadge.textContent = String(total);

@@ -304,6 +304,52 @@ class ImportanceAndWordsTests(unittest.TestCase):
             self.assertIsNone(conn.execute("SELECT archived_at FROM srs_cards WHERE id = 'c1'").fetchone()[0])
 
 
+class NewLimitSettingTests(unittest.TestCase):
+    def setUp(self):
+        self.client = TestClient(tts_service.app)
+        self.user_id, self.headers = _new_user()
+        for i in range(30):
+            srs.add_note(self.user_id, f"Phrase de la limite {i}.", modes=["listen"])
+
+    def test_unset_limit_is_none_and_the_queue_uses_the_default(self):
+        self.assertIsNone(srs.get_new_limit(self.user_id))
+        self.assertEqual(srs.build_queue(self.user_id)["counts"]["new"], srs.DEFAULT_NEW_LIMIT)
+
+    def test_any_number_from_0_to_200_is_saved_per_user_and_drives_the_queue(self):
+        other_id, _ = _new_user()
+        self.assertEqual(srs.set_new_limit(self.user_id, 17), 17)
+        self.assertEqual(srs.build_queue(self.user_id)["counts"]["new"], 17)
+        self.assertEqual(srs.build_queue(self.user_id)["counts"]["new_limit"], 17)
+        self.assertIsNone(srs.get_new_limit(other_id))
+        srs.set_new_limit(self.user_id, 0)
+        self.assertEqual(srs.build_queue(self.user_id)["counts"]["new"], 0)
+        srs.set_new_limit(self.user_id, 200)
+        self.assertEqual(srs.get_new_limit(self.user_id), 200)
+        # An explicit limit (the SPA's blocks) still wins
+        self.assertEqual(srs.build_queue(self.user_id, new_limit=3)["counts"]["new"], 3)
+
+    def test_out_of_range_values_are_rejected(self):
+        for bad in (-1, 201, 1.5, "5", True, None):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                srs.set_new_limit(self.user_id, bad)
+
+    def test_endpoints_sync_the_limit_across_devices(self):
+        self.assertEqual(self.client.get("/api/srs/settings").status_code, 401)
+        first = self.client.get("/api/srs/settings", headers=self.headers).json()
+        self.assertEqual((first["new_limit"], first["default_new_limit"]), (None, 10))
+        res = self.client.put("/api/srs/settings", headers=self.headers, json={"new_limit": 25})
+        self.assertEqual(res.json(), {"new_limit": 25})
+        # Another device (same account, new session) sees it, and the queue without a param follows it
+        second_session = auth_db.login_user(auth_db.get_user_status(self.user_id)["email"], "password123", "phone")
+        phone = {"Authorization": f"Bearer {second_session['token']}"}
+        self.assertEqual(self.client.get("/api/srs/settings", headers=phone).json()["new_limit"], 25)
+        self.assertEqual(self.client.get("/api/srs/queue", headers=phone).json()["counts"]["new"], 25)
+        for bad in (-1, 201, "x"):
+            self.assertEqual(self.client.put("/api/srs/settings", headers=self.headers, json={"new_limit": bad}).status_code, 422)
+        self.assertEqual(self.client.get("/api/srs/queue?new_limit=201", headers=self.headers).status_code, 422)
+        self.assertEqual(self.client.get("/api/srs/queue?new_limit=200", headers=self.headers).status_code, 200)
+
+
 class ArchiveTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(tts_service.app)

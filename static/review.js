@@ -12,7 +12,6 @@
     'use strict';
 
     const TOKEN_KEY = 'frenchStudio.userToken';
-    const NEW_LIMIT_KEY = 'frenchStudio.srs.newLimit';
     const MIN_IMPORTANCE_KEY = 'frenchStudio.srs.minImportance';
     const CARD_TYPE_KEY = 'frenchStudio.srs.cardType';
     const LEGACY_DECK_KEY = 'frenchStudio.ankiDeck';
@@ -39,7 +38,8 @@
             pageTitle: "Today's Review - 1000H French",
             heading: "Today's Review",
             navAria: 'Pages', navAudio: 'Audio Studio', navStudy: 'Study', navWrite: 'Write', navSpeak: 'Speak', navReview: 'Review', navListen: 'Listen',
-            newLimit: 'New / day', newLimitTitle: 'Maximum number of new cards introduced per day',
+            newLimit: 'New / day', newLimitTitle: 'Maximum number of new cards introduced per day (0-200)',
+            newLimitSaved: 'Saved on all your devices', newLimitLocalOnly: 'Saved on this device only', newLimitUpdated: 'Updated from another device',
             priority: 'Priority', priorityTitle: 'Only review cards at least this important',
             cardType: 'Cards', cardTypeTitle: 'Review only one kind of card', cardTypeAll: 'All', cardTypeListen: 'Listen', cardTypeSpeak: 'Speak', cardTypeFill: 'Fill in', cardTypeGrammar: 'Grammar',
             practise: 'Practise', practiseTitle: 'Practise the cards of this sentence now', practiseShown: (n) => `Practise these ${n} cards`,
@@ -105,7 +105,8 @@
             pageTitle: '今日复习 - 1000H French',
             heading: '今日复习',
             navAria: '页面切换', navAudio: '音频工作台', navStudy: '拆解与复述', navWrite: '写作', navSpeak: '口语', navReview: '今日复习', navListen: '开车听',
-            newLimit: '每天新卡', newLimitTitle: '每天最多引入多少张新卡',
+            newLimit: '每天新卡', newLimitTitle: '每天最多引入多少张新卡（0–200）',
+            newLimitSaved: '已同步到你的所有设备', newLimitLocalOnly: '仅保存在本设备', newLimitUpdated: '已从另一台设备更新',
             priority: '重点', priorityTitle: '只复习重要度不低于所选星级的卡片',
             cardType: '卡片', cardTypeTitle: '只复习这一种卡片', cardTypeAll: '全部', cardTypeListen: '听', cardTypeSpeak: '说', cardTypeFill: '填空', cardTypeGrammar: '语法',
             practise: '练这句', practiseTitle: '现在就练这个句子的卡片', practiseShown: (n) => `练这 ${n} 张卡`,
@@ -213,6 +214,7 @@
         deckStats: $('deck-stats'),
         deckList: $('deck-list'),
         newLimitSelect: $('new-limit-select'),
+        newLimitNote: $('new-limit-note'),
         minImportanceSelect: $('min-importance-select'),
         cardTypeSelect: $('card-type-select'),
         practiceBar: $('practice-bar'),
@@ -282,9 +284,10 @@
         });
     }
 
+    // The daily new-card limit: any 0-200, per account on the server (static/new-limit.js)
+    let newLimit = window.FrenchNewLimit.local() ?? window.FrenchNewLimit.DEFAULT;
     function getNewLimit() {
-        const saved = parseInt(localStorage.getItem(NEW_LIMIT_KEY) || '', 10);
-        return Number.isFinite(saved) ? saved : 10;
+        return newLimit;
     }
 
     function showError(message) {
@@ -1344,9 +1347,38 @@
     });
 
     els.newLimitSelect.value = String(getNewLimit());
-    els.newLimitSelect.addEventListener('change', () => {
-        localStorage.setItem(NEW_LIMIT_KEY, els.newLimitSelect.value);
+    let newLimitNoteTimer = 0;
+    function noteNewLimit(text) {
+        els.newLimitNote.textContent = text;
+        els.newLimitNote.hidden = !text;
+        clearTimeout(newLimitNoteTimer);
+        if (text) newLimitNoteTimer = setTimeout(() => noteNewLimit(''), 3500);
+    }
+    // Typed numbers are applied when the field is left or Enter is pressed (not on every keystroke)
+    els.newLimitSelect.addEventListener('change', async () => {
+        const typed = window.FrenchNewLimit.clamp(els.newLimitSelect.value);
+        if (typed === null) {  // empty or not a number: back to the current limit
+            els.newLimitSelect.value = String(getNewLimit());
+            return;
+        }
+        els.newLimitSelect.value = String(typed);
+        newLimit = typed;
+        const saved = await window.FrenchNewLimit.save(typed);
+        noteNewLimit(!getToken() || saved.saved ? T.newLimitSaved : T.newLimitLocalOnly);
         if (getToken()) loadQueue().catch(err => showError(err.message));
+    });
+    els.newLimitSelect.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); els.newLimitSelect.blur(); }
+    });
+    // Another device may have changed it: pick the new value up when this page comes back to the front
+    document.addEventListener('visibilitychange', async () => {
+        if (document.hidden || !getToken() || document.activeElement === els.newLimitSelect) return;
+        const latest = await window.FrenchNewLimit.sync();
+        if (latest !== newLimit && document.activeElement !== els.newLimitSelect) {
+            newLimit = latest;
+            els.newLimitSelect.value = String(latest);
+            noteNewLimit(T.newLimitUpdated);
+        }
     });
 
     // ---------------------------------------------------------------------
@@ -1362,5 +1394,9 @@
     }
     setupLegacyImport();
     wordBook.load();
-    loadQueue().catch(err => showError(err.message));
+    // The saved limit first (it decides how many new cards the queue holds); the page's own if offline
+    window.FrenchNewLimit.sync().then((latest) => {
+        newLimit = latest;
+        els.newLimitSelect.value = String(latest);
+    }).finally(() => loadQueue().catch(err => showError(err.message)));
 })();
