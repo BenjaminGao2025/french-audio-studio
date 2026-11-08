@@ -182,8 +182,9 @@ class EndpointTests(unittest.TestCase):
                 self.assertEqual(got.status_code, 200, got.text)
                 self.assertEqual(got.json()["state"], "ready")
                 self.assertIn(f"⟦{word}⟧", _user_message(post_chat))
-        got = self._post("Est-ce que tu viens ?", word="est-ce que")
-        self.assertEqual(got.status_code, 200)
+        with mock.patch("services.ai.post_chat", return_value=_reply(reply)):
+            got = self._post("Est-ce que tu viens ?", word="est-ce que")
+        self.assertEqual(got.status_code, 200, got.text)
 
     def test_ton_sac_and_ton_amie_are_separate_answers_cached_per_user(self):
         with mock.patch("services.ai.post_chat", return_value=_reply(TON_SAC)) as post_chat:

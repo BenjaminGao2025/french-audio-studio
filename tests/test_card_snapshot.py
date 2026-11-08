@@ -1,7 +1,6 @@
 import contextlib
 import importlib.util
 import io
-import json
 import pathlib
 import unittest
 import uuid
