@@ -19,7 +19,7 @@
             etymologyLoading: 'Loading etymology…', etymologyFailed: 'Could not load etymology. Please try again.',
             baseForm: 'base form: ', readAs: 'Read as: ',
             back: 'Back to ', lemmaLookup: word => `Look up ${word} and hear it`,
-            lookingUpMeaning: 'Looking up the meaning...', lookupFailed: 'Lookup failed', noDefinition: 'Could not get the meaning',
+            lookingUpMeaning: 'Looking up the meaning...', lookupFailed: 'Lookup failed', noDefinition: 'Could not get the meaning', lookupTimeout: 'The lookup timed out, try again later',
             phraseTag: 'Fixed expression',
             dictTitle: 'Dictionary', contextTitle: 'In this sentence', meaningHere: 'Here: ', whyLabel: 'Why: ', whyTitle: 'Why',
             contextLoading: 'Working out how it is used here…', contextFailed: 'Could not explain this use right now.',
@@ -43,7 +43,7 @@
             etymologyLoading: '正在查询词源…', etymologyFailed: '暂无法获取词源，请重试。',
             baseForm: '原形: ', readAs: '读作：',
             back: '返回 ', lemmaLookup: word => `查 ${word} 的释义和发音`,
-            lookingUpMeaning: '正在查询字义...', lookupFailed: '查词失败', noDefinition: '暂无法获取释义',
+            lookingUpMeaning: '正在查询字义...', lookupFailed: '查词失败', noDefinition: '暂无释义', lookupTimeout: '查询超时，请稍后再试',
             phraseTag: '固定搭配',
             dictTitle: '词典', contextTitle: '语境', meaningHere: '这里的意思：', whyLabel: '为什么：', whyTitle: '为什么',
             contextLoading: '正在分析它在这句里的用法…', contextFailed: '暂时无法获取语境说明。',
@@ -426,6 +426,9 @@
 
     // One canonical spelling for word keys and phrase matching: curly apostrophes become ',
     // non-breaking spaces become normal spaces (so "il y a" == "il y a"), then lower-case.
+    // A server lookup that has not answered by then is abandoned (retried once, then '暂无释义')
+    const LOOKUP_TIMEOUT_MS = 10000;
+
     function normalizeWord(text) {
         return String(text == null ? '' : text).normalize('NFC')
             .replace(/[’ʼʹ]/g, "'")
@@ -1166,19 +1169,62 @@
         }
 
         function remember(lower, item) {
+            lower = normalizeWord(lower);
             lookupCache.set(lower, item);
             if (options.remember) options.remember(lower, item);
+        }
+
+        // One attempt at the server lookup. It always settles: a request that never answers is
+        // aborted after LOOKUP_TIMEOUT_MS, so a card can never wait on it forever.
+        function lookupOnce(word) {
+            const controller = typeof AbortController === 'function' ? new AbortController() : null;
+            let timer;
+            const timeout = new Promise((_, reject) => {
+                timer = setTimeout(() => {
+                    if (controller) controller.abort();
+                    reject(Object.assign(new Error(T.lookupTimeout), { retryable: true }));
+                }, Number.isFinite(options.lookupTimeoutMs) ? options.lookupTimeoutMs : LOOKUP_TIMEOUT_MS);
+            });
+            const call = (async () => {
+                if (options.lookup) return options.lookup(word);
+                const token = options.getAuthToken ? options.getAuthToken() : '';
+                let res;
+                try {
+                    res = await fetch(`/api/lookup?word=${encodeURIComponent(word)}`, {
+                        headers: token ? { Authorization: `Bearer ${token}` } : {},
+                        signal: controller ? controller.signal : undefined,
+                    });
+                } catch (err) {
+                    throw Object.assign(new Error(T.lookupFailed), { retryable: true });
+                }
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw Object.assign(new Error(data.detail?.message || T.lookupFailed), { retryable: res.status >= 500 });
+                return data;
+            })();
+            call.catch(() => {});
+            return Promise.race([call, timeout]).finally(() => clearTimeout(timer));
+        }
+
+        // Taps on the same word, in any letter case, share one request (plus one retry after a
+        // timeout or network error). The entry leaves the map the moment it settles, so a failed
+        // or aborted lookup is never remembered as "still pending".
+        const pendingLookups = new Map();
+        function lookupWord(word) {
+            const key = normalizeWord(word);
+            if (pendingLookups.has(key)) return pendingLookups.get(key);
+            const request = lookupOnce(word)
+                .catch(err => (err && err.retryable ? lookupOnce(word) : Promise.reject(err)))
+                .finally(() => { if (pendingLookups.get(key) === request) pendingLookups.delete(key); });
+            pendingLookups.set(key, request);
+            return request;
         }
 
         // The word's own meaning from the server (cached there for everyone, and here per page)
         async function lookUp(word, requestId, base, decorate) {
             try {
-                const token = options.getAuthToken ? options.getAuthToken() : '';
-                const res = options.lookup ? null : await fetch(`/api/lookup?word=${encodeURIComponent(word)}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-                const data = options.lookup ? await options.lookup(word) : await res.json().catch(() => ({}));
-                if (res && !res.ok) throw new Error(data.detail?.message || T.lookupFailed);
+                const data = await lookupWord(word);
                 const item = Object.assign({ token: word, lemma: word }, data, { sentence: base.sentence, sentence_cn: base.sentence_cn });
-                remember(word.toLowerCase(), item);
+                remember(word, item);
                 if (requestId !== lookupGeneration || !isOpen()) return;
                 dictState = 'ready';
                 render(decorate(item));
@@ -1187,7 +1233,7 @@
                 // The card keeps everything else it shows (语境, a fixed expression)
                 dictState = 'failed';
                 dictError = err.message || T.lookupFailed;
-                render(currentCard || decorate(base));
+                try { render(currentCard || decorate(base)); } catch (renderError) { console.warn('Word card render failed:', renderError); }
             }
         }
 
@@ -1335,8 +1381,11 @@
                 token: word, lemma: (entry && entry.lemma) || word, pos: '', phonetic: (entry && entry.phonetic) || '',
                 explanation_cn: '', explanation_en: '',
             });
-            render(decorate(base));
-            position(element);
+            // Whatever the first paint does, the lookup is still sent and the card never keeps waiting
+            try {
+                render(decorate(base));
+                position(element);
+            } catch (err) { console.warn('Word card render failed:', err); }
             await lookUp(word, requestId, base, decorate);
         }
 
@@ -1398,7 +1447,9 @@
             // A second press while the undo toast is showing restores the save.
             if (pendingRemoval && pendingRemoval.key === lookupKey(currentCard.token)) { undoRemoval(); return; }
             if (saving.isSaved(currentCard)) { startRemoval(currentCard); return; }
-            await saving.toggle(currentCard);
+            const saved = currentCard;
+            const snapshot = await meaningSnapshot();
+            await saving.toggle(saved, snapshot);
             refreshSaved();
         });
         toastUndo.addEventListener('click', (e) => {
@@ -1538,6 +1589,29 @@
             if (e.key === 'r' || e.key === 'R') { replay(); e.preventDefault(); e.stopImmediatePropagation(); return; }
             if ((e.key === 's' || e.key === 'S') && saving) { els.star.click(); e.preventDefault(); e.stopImmediatePropagation(); }
         }, true);
+
+        // What the card shows now, kept on the saved card so reviewing it needs no live lookup: the
+        // word's own dictionary gloss and its meaning in this sentence. A 语境 still on its way is
+        // waited for briefly.
+        async function meaningSnapshot() {
+            const ctx = ctxState;
+            if (ctx && ctx.request && (ctx.status === 'loading' || ctx.status === 'waiting')) {
+                await Promise.race([ctx.request.catch(() => null), new Promise(resolve => setTimeout(resolve, 4000))]);
+            }
+            const card = currentCard;
+            const snapshot = { snap: '1' };
+            if (card && dictState === 'ready') {
+                snapshot.dict_zh = card.explanation_cn || '';
+                snapshot.dict_en = card.explanation_en || '';
+            }
+            if (ctx && ctxState === ctx && !ctx.phrase) {
+                const here = meaningHere(ctx);
+                snapshot.ctx_zh = here.meaning_zh;
+                snapshot.ctx_en = here.meaning_en;
+                snapshot.why_zh = ctx.status === 'ready' && ctx.result ? ctx.result.why_zh || '' : '';
+            }
+            return snapshot;
+        }
 
         // The open card's meaning in its sentence (语境), or null
         function contextMeaning() {
@@ -1722,7 +1796,7 @@
         const popoverSaving = {
             isSaved: (item) => isSaved(item.sentence, item.token),
             entries,
-            toggle: (c) => toggle({
+            toggle: (c, snapshot) => toggle({
                 token: c.token,
                 sentence: c.sentence || '',
                 meta: {
@@ -1732,6 +1806,7 @@
                     pos: c.pos,
                     ipa: c.phonetic,
                     hook: c.hook,
+                    ...(snapshot || {}),
                 },
             }),
             remove: (c) => removeSaved({ token: c.token, sentence: c.sentence || '' }),

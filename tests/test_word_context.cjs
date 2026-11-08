@@ -353,7 +353,7 @@ const snippetBefore = () => $('.popover-context-snippet').firstChild.textContent
     await tap('fail', 'matin');
     await settle();
     window.fetch = realFetch;
-    assert.match(text('.popover-dict'), /暂无法获取释义/);
+    assert.match(text('.popover-dict'), /暂无释义/);
     assert.match(text('.popover-dict'), /查词服务忙/);
     assert.equal(visible('.popover-context'), true);
     assert.match(text('.popover-context-why'), /il faut 后面用不定式/);

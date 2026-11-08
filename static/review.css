@@ -927,3 +927,35 @@ kbd {
         min-height: 44px;
     }
 }
+
+/* Saved meaning of the card's word: dictionary and this sentence */
+.meaning-snapshot {
+    display: grid;
+    gap: 4px;
+    margin-top: 6px;
+}
+
+.meaning-row,
+.meaning-why {
+    margin: 0;
+}
+
+.meaning-row {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+}
+
+.meaning-label {
+    flex: none;
+    min-width: 3em;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+}
+
+.meaning-why {
+    color: var(--muted);
+    font-size: 14px;
+}

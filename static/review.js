@@ -93,6 +93,7 @@
             notStarted: 'not started', dueNow: 'due', dueIn: (t) => `in ${t}`,
             deckStats: (notes, cards, searching) => `${notes} sentences · ${cards} cards${searching ? ' (search results)' : ''}`,
             deleteCard: 'Delete this card',
+            dictLabel: 'Dictionary', contextLabel: 'In this sentence',
             mastered: 'Mastered', masteredTitle: 'Mastered: stop showing this card in review',
             masteredToast: 'Removed from review', undo: 'Undo', restore: 'Restore', restoreTitle: 'Put this card back into review', masteredLabel: 'mastered',
             deckEmpty: 'No cards yet. On the Study page, tap "Add to review" or the star next to a word.',
@@ -159,6 +160,7 @@
             notStarted: '未开始', dueNow: '已到期', dueIn: (t) => `${t}后`,
             deckStats: (notes, cards, searching) => `${notes} 个句子 · ${cards} 张卡片${searching ? '（搜索结果）' : ''}`,
             deleteCard: '删除这张卡',
+            dictLabel: '词典', contextLabel: '语境',
             mastered: '已掌握', masteredTitle: '已掌握：不再出现在复习里',
             masteredToast: '已移出复习', undo: '撤销', restore: '恢复', restoreTitle: '把这张卡放回复习', masteredLabel: '已掌握',
             deckEmpty: '还没有卡片。在「拆解与复述」页点「加入复习」或单词旁的 ⭐。',
@@ -429,6 +431,15 @@
         return { sentence: row ? row.dataset.sentence : (card?.note?.sentence || '') };
     }
     const wordContextClient = window.FrenchWordContext.createClient({ getToken });
+    // The review card's own word: its 语境 was kept when it was saved, so it is shown with no request.
+    function snapshotContext(target) {
+        const card = session.current;
+        const meta = (card && card.target_meta) || {};
+        const fold = text => String(text || '').normalize('NFC').replace(/’/g, "'").replace(/\s+/g, ' ').trim().toLowerCase();
+        if (!card || !card.target || !meta.snap || fold(card.target) !== fold(target.word) || target.sentence !== card.note.sentence) return null;
+        const result = { meaning_zh: meta.ctx_zh || '', meaning_en: meta.ctx_en || '', why_zh: meta.why_zh || '' };
+        return Promise.resolve({ ...result, state: result.meaning_zh || result.meaning_en || result.why_zh ? 'ready' : 'empty' });
+    }
     const wordPopover = window.FrenchWordPopover.create({
         speak: (text) => playFrench(text, 1, { once: true }),
         getAuthToken: () => getToken(),
@@ -456,14 +467,17 @@
                 if (occurrence < 0) return null;
                 return { sentence: context.sentence, word, occurrence, ...spans[occurrence] };
             },
-            explain: (target, hints) => wordContextClient.explain(target, hints),
+            explain: (target, hints) => snapshotContext(target) || wordContextClient.explain(target, hints),
         },
         localLookup(lower) {
             const card = session.current;
             const meta = (card && card.target_meta) || {};
             if (!card || !card.target || card.target.toLowerCase() !== lower) return null;
-            if (!meta.meaning_en && !meta.meaning_zh) return null;
-            return { lemma: meta.lemma, pos: meta.pos, phonetic: meta.ipa, explanation_en: meta.meaning_en, explanation_cn: meta.meaning_zh };
+            // The dictionary gloss kept when the word was saved; older cards only have their one meaning
+            const dictZh = meta.dict_zh || (meta.snap ? '' : meta.meaning_zh);
+            const dictEn = meta.dict_en || (meta.snap ? '' : meta.meaning_en);
+            if (!dictEn && !dictZh) return null;
+            return { lemma: meta.lemma, pos: meta.pos, phonetic: meta.ipa, explanation_en: dictEn, explanation_cn: dictZh };
         },
         saving: wordBook.popoverSaving,
     });
@@ -798,6 +812,16 @@
             </div>`;
     }
 
+    // The meaning snapshot kept at save time: dictionary and this sentence, no lookup needed
+    function snapshotHtml(meta) {
+        const dict = EN ? pick(meta.dict_zh, meta.dict_en) : [meta.dict_zh, meta.dict_en].filter(Boolean).join(' · ');
+        const here = EN ? pick(meta.ctx_zh, meta.ctx_en) : [meta.ctx_zh, meta.ctx_en].filter(Boolean).join(' · ');
+        if (!dict && !here && !meta.why_zh) return '';
+        const row = (label, value) => (value
+            ? `<p class="meaning-row"><span class="meaning-label">${label}</span><span>${escapeHtml(value)}</span></p>` : '');
+        return `<div class="meaning-snapshot">${row(T.dictLabel, dict)}${row(T.contextLabel, here)}${meta.why_zh ? `<p class="meaning-why">${escapeHtml(meta.why_zh)}</p>` : ''}</div>`;
+    }
+
     function renderAnswer(card) {
         if (card.mode === 'grammar') {
             renderGrammarAnswer(card);
@@ -826,10 +850,10 @@
                 <div class="answer-target">
                     <strong>${clickableFr(card.target)}</strong>
                     ${metaBits.length ? `<span class="target-meta">${metaBits.map(escapeHtml).join(' · ')}</span>` : ''}
-                    ${EN
+                    ${snapshotHtml(meta) || (EN
                         ? (pick(meta.meaning_zh, meta.meaning_en) ? `<p>${escapeHtml(pick(meta.meaning_zh, meta.meaning_en))}</p>` : '')
                         : `${meta.meaning_zh ? `<p>${escapeHtml(meta.meaning_zh)}</p>` : ''}
-                           ${meta.meaning_en ? `<p class="answer-en">${escapeHtml(meta.meaning_en)}</p>` : ''}`}
+                           ${meta.meaning_en ? `<p class="answer-en">${escapeHtml(meta.meaning_en)}</p>` : ''}`)}
                     ${meta.hook ? `<p class="target-hook">${T.memoryHook}${escapeHtml(meta.hook)}</p>` : ''}
                 </div>` : ''}
             ${grammar.length ? `

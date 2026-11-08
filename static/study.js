@@ -529,7 +529,7 @@ function initStudyWorkbench() {
         } : null,
         saving: {
             ...wordBook.popoverSaving,
-            async toggle(item) {
+            async toggle(item, snapshot) {
                 // Saving a word of an expression saves the expression, with its meaning here
                 const tap = phraseTap && phraseTap.element === wordPopover.activeElement() ? phraseTap : null;
                 chunkForToggle = item.phrase ? item.phrase.text : (tap ? '' : null);
@@ -544,7 +544,9 @@ function initStudyWorkbench() {
                     }) : here ? Object.assign({}, item, {
                         explanation_cn: here.meaning_zh || item.explanation_cn,
                         explanation_en: here.meaning_en || item.explanation_en,
-                    }) : item);
+                    }) : item, p ? Object.assign({}, snapshot, {
+                        ctx_zh: p.meaning_zh || '', ctx_en: p.meaning_en || '', why_zh: p.literal_zh || '',
+                    }) : snapshot);
                 } finally {
                     chunkForToggle = null;
                 }

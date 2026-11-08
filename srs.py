@@ -434,6 +434,9 @@ def _card_payload(row: sqlite3.Row, now: datetime.datetime, with_preview: bool =
     return payload
 
 
+SNAPSHOT_MAX_CHARS = 600
+
+
 def _clean_meta(meta: dict[str, Any] | None) -> dict[str, str]:
     allowed = (
         "meaning_zh",
@@ -442,6 +445,14 @@ def _clean_meta(meta: dict[str, Any] | None) -> dict[str, str]:
         "pos",
         "ipa",
         "hook",
+        # Meaning snapshot taken when the word was saved (dictionary + this sentence), so reviewing the
+        # card needs no live lookup. "snap" marks a card that has been through the snapshot step.
+        "dict_zh",
+        "dict_en",
+        "ctx_zh",
+        "ctx_en",
+        "why_zh",
+        "snap",
         # grammar cards
         "rule",
         "prompt_fr",
@@ -450,7 +461,7 @@ def _clean_meta(meta: dict[str, Any] | None) -> dict[str, str]:
         "full_fr",
         "full_en",
     )
-    return {key: str(meta[key]).strip() for key in allowed if meta and meta.get(key)}
+    return {key: str(meta[key]).strip()[:SNAPSHOT_MAX_CHARS] for key in allowed if meta and meta.get(key)}
 
 
 def _clamp_importance(value: Any) -> int:
