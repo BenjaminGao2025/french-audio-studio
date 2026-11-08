@@ -172,6 +172,19 @@ def srs_delete_card(card_id: str, authorization: str | None = Header(default=Non
     return {"success": srs.delete_card(_require_user_id(authorization), card_id)}
 
 
+class SrsMetaRequest(BaseModel):
+    meta: dict[str, str] = Field(default_factory=dict)
+
+
+@router.patch("/api/srs/cards/{card_id}/meta")
+def srs_patch_card_meta(card_id: str, req: SrsMetaRequest, authorization: str | None = Header(default=None)):
+    """Fill a card's missing meaning snapshot (after a live lookup); never overwrites a real meaning."""
+    try:
+        return {"target_meta": srs.patch_card_meta(_require_user_id(authorization), card_id, req.meta)}
+    except KeyError:
+        raise HTTPException(status_code=404, detail={"message": "卡片不存在。"})
+
+
 class SrsArchiveRequest(BaseModel):
     archived: bool = True
 

@@ -599,5 +599,42 @@ class CardBalanceTests(unittest.TestCase):
         self.assertEqual(second["created"], 0)
 
 
+class PlaceholderMeaningTests(unittest.TestCase):
+    def setUp(self):
+        self.user_id, self.headers = _new_user()
+
+    def test_placeholder_text_is_never_stored_as_a_meaning(self):
+        for text in ("查询中...", "查询中…", "正在查询字义...", "Looking up the meaning...", "暂无释义", "查词失败", "Lookup failed", "Could not get the meaning"):
+            self.assertTrue(srs.is_placeholder_meaning(text), text)
+        self.assertFalse(srs.is_placeholder_meaning("权利；法律"))
+        self.assertFalse(srs.is_placeholder_meaning("looking glass"))
+        note = srs.add_note(
+            self.user_id, "Le droit est clair.",
+            targets=[{"text": "droit", "meta": {"meaning_zh": "查询中...", "dict_zh": "查询中...", "dict_en": "right, law", "ctx_en": "Looking up the meaning...", "snap": "1"}}],
+        )
+        meta = note["cards"][0]["target_meta"]
+        self.assertNotIn("meaning_zh", meta)
+        self.assertNotIn("dict_zh", meta)
+        self.assertNotIn("ctx_en", meta)
+        self.assertEqual(meta["dict_en"], "right, law")
+
+    def test_patch_fills_only_missing_or_placeholder_fields(self):
+        note = srs.add_note(self.user_id, "Le droit est clair.", targets=[{"text": "droit", "meta": {"dict_en": "right, law"}}])
+        card_id = note["cards"][0]["id"]
+        with srs._connect() as conn:  # a card saved before the fix
+            conn.execute("UPDATE srs_cards SET target_json = ? WHERE id = ?", ('{"meaning_zh": "查询中...", "dict_zh": "查询中...", "dict_en": "right, law"}', card_id))
+            conn.commit()
+        client = TestClient(tts_service.app)
+        self.assertEqual(client.patch(f"/api/srs/cards/{card_id}/meta", json={"meta": {}}).status_code, 401)
+        res = client.patch(f"/api/srs/cards/{card_id}/meta", headers=self.headers, json={"meta": {"dict_zh": "权利；法律", "dict_en": "other", "snap": "1"}})
+        self.assertEqual(res.status_code, 200)
+        meta = res.json()["target_meta"]
+        self.assertEqual(meta["dict_zh"], "权利；法律")
+        self.assertEqual(meta["dict_en"], "right, law")  # a real meaning is never overwritten
+        self.assertNotIn("meaning_zh", meta)  # the stored placeholder is dropped
+        other_user, other_headers = _new_user()
+        self.assertEqual(client.patch(f"/api/srs/cards/{card_id}/meta", headers=other_headers, json={"meta": {"dict_zh": "x"}}).status_code, 404)
+
+
 if __name__ == "__main__":
     unittest.main()

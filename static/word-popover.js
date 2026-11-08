@@ -438,6 +438,17 @@
             .toLowerCase();
     }
 
+    // Status text the card shows while a lookup is pending or failed: never a meaning to save or show.
+    const PLACEHOLDER_RE = /^\s*(?:正在)?查询(?:中|字义|词义|释义)?\s*(?:\.{2,}|…+|。+)?\s*$|^\s*查词失败\s*$|^\s*查询超时.*$|^\s*暂无(?:释义|字义|定义)[。.]?\s*$|^\s*暂无法获取.*$|^\s*(?:looking up|loading|lookup failed|lookup timed out|could not get the meaning|no definition)\b.*$/i;
+    const isPlaceholderMeaning = (text) => typeof text === 'string' && PLACEHOLDER_RE.test(text);
+    const MEANING_KEYS = ['meaning_zh', 'meaning_en', 'dict_zh', 'dict_en', 'ctx_zh', 'ctx_en', 'why_zh', 'hook'];
+    // meta without placeholder meanings
+    function cleanMeaningMeta(meta) {
+        const out = Object.assign({}, meta);
+        MEANING_KEYS.forEach(key => { if (isPlaceholderMeaning(out[key])) delete out[key]; });
+        return out;
+    }
+
     function escapeHtml(str) {
         return String(str == null ? '' : str)
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -680,6 +691,8 @@
         // 词典: the word on its own. 'ready', 'loading', 'failed', or 'none' (the tap is a whole fixed
         // expression: its meaning is in 语境)
         let dictState = 'ready';
+        // The lookup of the open card, while it is pending (the star waits for it)
+        let dictRequest = null;
         let dictError = '';
         // 语境 of the open card, one object per show(): {status, target, entry, hints, phrase, result,
         // request}. A late answer updates the object it was asked for, and repaints only while that
@@ -1490,7 +1503,8 @@
                 render(decorate(base));
                 position(element);
             } catch (err) { console.warn('Word card render failed:', err); }
-            await lookUp(word, requestId, base, decorate);
+            dictRequest = lookUp(word, requestId, base, decorate);
+            await dictRequest;
         }
 
         function replay() {
@@ -1551,6 +1565,12 @@
             // A second press while the undo toast is showing restores the save.
             if (pendingRemoval && pendingRemoval.key === lookupKey(currentCard.token)) { undoRemoval(); return; }
             if (saving.isSaved(currentCard)) { startRemoval(currentCard); return; }
+            // Pressed while the lookup is pending: wait for it (briefly), so no placeholder is saved as the meaning
+            if (dictState === 'loading' && dictRequest) {
+                const opened = currentCard.token;
+                await Promise.race([dictRequest.catch(() => null), new Promise(resolve => setTimeout(resolve, 6000))]);
+                if (!currentCard || currentCard.token !== opened) return;
+            }
             const saved = currentCard;
             const snapshot = await meaningSnapshot();
             await saving.toggle(saved, snapshot);
@@ -1705,8 +1725,8 @@
             const card = currentCard;
             const snapshot = { snap: '1' };
             if (card && dictState === 'ready') {
-                snapshot.dict_zh = card.explanation_cn || '';
-                snapshot.dict_en = card.explanation_en || '';
+                snapshot.dict_zh = isPlaceholderMeaning(card.explanation_cn) ? '' : card.explanation_cn || '';
+                snapshot.dict_en = isPlaceholderMeaning(card.explanation_en) ? '' : card.explanation_en || '';
             }
             if (ctx && ctxState === ctx && !ctx.phrase) {
                 const here = meaningHere(ctx);
@@ -1842,7 +1862,7 @@
                     if (inSentence && options.resolveChunk) {
                         targetText = options.resolveChunk(sentence, clean) || clean;
                     }
-                    payload.targets = [{ text: targetText, mode: inSentence ? 'cloze' : 'recognize', meta: meta || {} }];
+                    payload.targets = [{ text: targetText, mode: inSentence ? 'cloze' : 'recognize', meta: cleanMeaningMeta(meta || {}) }];
                     // Only the word's own card: never add sentence-level (listen/speak) cards here.
                     const note = await call('POST', '/api/srs/notes', payload);
                     if (options.onSaved) options.onSaved(note);
@@ -1901,13 +1921,14 @@
         function savedMeaning(token) {
             for (const entry of entries(token)) {
                 const meta = entry.target_meta || {};
-                const dictZh = meta.dict_zh || (meta.snap ? '' : meta.meaning_zh) || '';
-                const dictEn = meta.dict_en || (meta.snap ? '' : meta.meaning_en) || '';
+                const clean = cleanMeaningMeta(meta);
+                const dictZh = clean.dict_zh || (meta.snap ? '' : clean.meaning_zh) || '';
+                const dictEn = clean.dict_en || (meta.snap ? '' : clean.meaning_en) || '';
                 if (!dictZh && !dictEn) continue;
                 return {
                     lemma: meta.lemma, pos: meta.pos, phonetic: meta.ipa, explanation_zh: dictZh, explanation_en: dictEn,
                     sentence: entry.sentence || '',
-                    ctx_zh: meta.snap ? meta.ctx_zh || '' : '', ctx_en: meta.snap ? meta.ctx_en || '' : '', why_zh: meta.snap ? meta.why_zh || '' : '',
+                    ctx_zh: meta.snap ? clean.ctx_zh || '' : '', ctx_en: meta.snap ? clean.ctx_en || '' : '', why_zh: meta.snap ? clean.why_zh || '' : '',
                 };
             }
             return null;
@@ -1920,7 +1941,7 @@
             toggle: (c, snapshot) => toggle({
                 token: c.token,
                 sentence: c.sentence || '',
-                meta: {
+                meta: cleanMeaningMeta({
                     meaning_zh: c.explanation_cn,
                     meaning_en: c.explanation_en,
                     lemma: c.lemma,
@@ -1928,7 +1949,7 @@
                     ipa: c.phonetic,
                     hook: c.hook,
                     ...(snapshot || {}),
-                },
+                }),
             }),
             remove: (c) => removeSaved({ token: c.token, sentence: c.sentence || '' }),
             reload: load,
@@ -1952,5 +1973,5 @@
         return best;
     }
 
-    root.FrenchWordPopover = { create, createWordBook, nearestElement, numberReading: frenchNumberReading, basicWords: BASIC_FRENCH_WORDS };
+    root.FrenchWordPopover = { create, createWordBook, isPlaceholderMeaning, cleanMeaningMeta, nearestElement, numberReading: frenchNumberReading, basicWords: BASIC_FRENCH_WORDS };
 })(window);

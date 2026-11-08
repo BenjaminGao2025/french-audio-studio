@@ -465,6 +465,20 @@ def _card_payload(row: sqlite3.Row, now: datetime.datetime, with_preview: bool =
 SNAPSHOT_MAX_CHARS = 600
 
 
+# UI status text that must never be stored as a meaning (a star pressed while the lookup was pending)
+_PLACEHOLDER_RE = re.compile(
+    r"^\s*(?:正在)?查询(?:中|字义|词义|释义)?\s*(?:\.{2,}|…+|。+)?\s*$"
+    r"|^\s*查词失败\s*$|^\s*查询超时.*$|^\s*暂无(?:释义|字义|定义)[。.]?\s*$|^\s*暂无法获取.*$"
+    r"|^\s*(?:looking up|loading|lookup failed|lookup timed out|could not get the meaning|no definition)\b.*$",
+    re.IGNORECASE,
+)
+_MEANING_KEYS = ("meaning_zh", "meaning_en", "dict_zh", "dict_en", "ctx_zh", "ctx_en", "why_zh", "hook")
+
+
+def is_placeholder_meaning(value: Any) -> bool:
+    return isinstance(value, str) and bool(_PLACEHOLDER_RE.match(value))
+
+
 def _clean_meta(meta: dict[str, Any] | None) -> dict[str, str]:
     allowed = (
         "meaning_zh",
@@ -489,7 +503,11 @@ def _clean_meta(meta: dict[str, Any] | None) -> dict[str, str]:
         "full_fr",
         "full_en",
     )
-    return {key: str(meta[key]).strip()[:SNAPSHOT_MAX_CHARS] for key in allowed if meta and meta.get(key)}
+    return {
+        key: str(meta[key]).strip()[:SNAPSHOT_MAX_CHARS]
+        for key in allowed
+        if meta and meta.get(key) and not (key in _MEANING_KEYS and is_placeholder_meaning(str(meta[key])))
+    }
 
 
 def _clamp_importance(value: Any) -> int:
@@ -689,6 +707,26 @@ def set_archived(user_id: int, card_id: str, archived: bool, now: datetime.datet
         conn.commit()
         row = conn.execute(_CARD_WITH_NOTE_SQL + " AND c.id = ?", (user_id, card_id)).fetchone()
     return _card_payload(row, now, with_preview=True)
+
+
+def patch_card_meta(user_id: int, card_id: str, meta: dict[str, Any]) -> dict[str, str]:
+    """Fill the empty (or placeholder) snapshot fields of a card; never overwrites a real meaning."""
+    clean = _clean_meta(meta)
+    with _connect() as conn:
+        row = conn.execute("SELECT target_json FROM srs_cards WHERE id = ? AND user_id = ?", (card_id, user_id)).fetchone()
+        if not row:
+            raise KeyError(card_id)
+        current = json.loads(row["target_json"] or "{}")
+        for key, value in clean.items():
+            if key in _MEANING_KEYS and current.get(key) and not is_placeholder_meaning(current[key]):
+                continue
+            current[key] = value
+        for key in _MEANING_KEYS:
+            if is_placeholder_meaning(current.get(key)):
+                current.pop(key)
+        conn.execute("UPDATE srs_cards SET target_json = ? WHERE id = ?", (json.dumps(current, ensure_ascii=False), card_id))
+        conn.commit()
+    return current
 
 
 def delete_card(user_id: int, card_id: str) -> bool:

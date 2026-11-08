@@ -493,6 +493,17 @@
             if (!dictEn && !dictZh) return null;
             return { lemma: meta.lemma, pos: meta.pos, phonetic: meta.ipa, explanation_en: dictEn, explanation_cn: dictZh };
         },
+        // A live lookup of the card's own word that its snapshot lacks: keep it on the card
+        remember(lower, item) {
+            const card = session.current;
+            const meta = card && card.target_meta;
+            if (!meta || !card.target || String(card.target).toLowerCase() !== String(lower).toLowerCase()) return;
+            if (meta.dict_zh || meta.dict_en || (!meta.snap && (meta.meaning_zh || meta.meaning_en))) return;
+            const clean = window.FrenchWordPopover.cleanMeaningMeta({ dict_zh: item.explanation_cn, dict_en: item.explanation_en });
+            if (!clean.dict_zh && !clean.dict_en) return;
+            Object.assign(meta, clean, { snap: '1' });
+            api('PATCH', `/api/srs/cards/${encodeURIComponent(card.id)}/meta`, { meta: { ...clean, snap: '1' } }).catch(() => {});
+        },
         saving: wordBook.popoverSaving,
     });
 
@@ -1112,7 +1123,14 @@
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
+    // A stored placeholder ("查询中...") counts as no meaning at all: the card then does a live lookup
+    function dropPlaceholders(cards) {
+        (cards || []).forEach(c => { if (c && c.target_meta) c.target_meta = window.FrenchWordPopover.cleanMeaningMeta(c.target_meta); });
+        return cards;
+    }
+
     function applyQueue(data) {
+        dropPlaceholders(data.cards);
         const now = Date.now();
         const notYetDue = c => (c.state === 'learning' || c.state === 'relearning') && Date.parse(c.due) > now;
         session.queue = (data.cards || []).filter(c => !notYetDue(c));
