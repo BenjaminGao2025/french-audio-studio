@@ -37,7 +37,7 @@ for(const mode of ['recall','dictation'])for(const scope of ['whole','steps'])te
  if(scope==='steps'){
   card.querySelector('.dictation-input').value='La semaine commence';card.querySelector('.dictation-check').click();await flush();card.querySelector('.dictation-next-step').click();
  }
- card.querySelector('.dictation-input').value='La semàine commence cette semaine étrange';card.querySelector('.dictation-check').click();await flush();
+ card.querySelector('.dictation-input').value='La semàine commence cette semaine semaine';card.querySelector('.dictation-check').click();await flush();
  assert.ok(card.querySelector('.dt-accent .dt-fix .interactive-word'));
  assert.ok(card.querySelector('.dt-missing .interactive-word'));
  assert.ok(card.querySelector('.dt-wrong .dt-fix .interactive-word'));
@@ -45,7 +45,8 @@ for(const mode of ['recall','dictation'])for(const scope of ['whole','steps'])te
  right.click();await flush();assert.match(doc.querySelector('.popover-context-why').textContent,/第 2 个/,JSON.stringify({state:doc.querySelector('.popover-context').dataset.state,calls}));
  assert.equal(calls.filter(x=>x.url==='/api/word-context').at(-1).body.occurrence,1);
  doc.querySelector('.popover-close-btn').click();
- const wrong=card.querySelector('.dt-yours .interactive-word');wrong.click();await flush();assert.equal(doc.querySelector('.popover-context').dataset.state,'unavailable');
+ const wrong=card.querySelector('.dt-wrong .dt-yours .interactive-word');
+ assert.equal(wrong.dataset.word,'semaine','learner error also occurs elsewhere in the correct sentence');wrong.click();await flush();assert.equal(doc.querySelector('.popover-context').dataset.state,'unavailable');
  doc.querySelector('.popover-close-btn').click();
  const answer=Array.from(card.querySelectorAll('.dictation-answer-text .interactive-word')).filter(x=>x.dataset.word==='semaine')[1];
  select(e,answer);await flush(300);doc.querySelector('[data-rs="meaning"]').click();await flush(800);
