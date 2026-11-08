@@ -497,6 +497,7 @@
             if (options.onEnd) options.onEnd();
         };
         window.FrenchAudio.bind(audio, stopPlayback);
+        audio.addEventListener('ended', () => { if (!repeat) stopPlayback(); });
         if (repeat) {
             window.FrenchPlayback.setActive(true, stopAudio);
             audio.addEventListener('ended', () => {
@@ -526,6 +527,8 @@
                 utterance.rate = rate;
                 window.speechSynthesis.cancel();
                 window.FrenchAudio.bind(utterance, stopPlayback, audio);
+                utterance.onend = stopPlayback;
+                utterance.onerror = stopPlayback;
                 window.speechSynthesis.speak(utterance);
             } else if (options.onEnd) options.onEnd();
         });
