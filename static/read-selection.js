@@ -369,7 +369,7 @@
         // started on would be dropped. So the mousedown is answered here and the selection is
         // painted word by word while the mouse moves; on mouseup the usual evaluation shows the
         // bar. A long press on a phone selects natively and is not touched by this.
-        const FRENCH_LINE = '.sentence-french-text, .buildup-fr-text, .dictation-diff, .dictation-answer-text';
+        const FRENCH_LINE = '.sentence-french-text, .buildup-fr-text, .dictation-diff, .dictation-answer-text, .deck-note-sentence, .answer-fr, .prompt-fr, .prompt-word';
         let dragFrom = null;
 
         const frenchLineOf = (target) => (target && target.closest ? target.closest(FRENCH_LINE) : null);
@@ -535,7 +535,7 @@
         // that click can land on the word under the bar. Swallow only clicks near the bar's last
         // box — a tap on a different word elsewhere must still open that word.
         doc.addEventListener('click', (e) => {
-            if (!actedAt || Date.now() - actedAt >= GHOST_MS || bar.contains(e.target)) return;
+            if (!actedAt || Date.now() - actedAt >= GHOST_MS || bar.contains(e.target) || inCard(e.target)) return;
             const box = remembered && remembered.barBox;
             if (box) {
                 const pad = 12;

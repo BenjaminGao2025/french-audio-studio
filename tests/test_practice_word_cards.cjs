@@ -67,3 +67,17 @@ test('default no-context consumer displays dictionary then honest context fallba
  const p=w.FrenchWordPopover.create({speak(){},localLookup:()=>({token:'semaine',lemma:'semaine',pos:'n.f.',explanation_cn:'周',explanation_en:'week'})});await p.show('semaine',el);
  const dict=p.element.querySelector('.popover-dict'),ctx=p.element.querySelector('.popover-context');assert.equal(ctx.hidden,false);assert.equal(ctx.dataset.state,'unavailable');assert.ok(dict.compareDocumentPosition(ctx)&w.Node.DOCUMENT_POSITION_FOLLOWING);w.close();
 });
+
+test('a late dictionary answer cannot reset pending etymology for the same card',async(t)=>{
+ const dom=new JSDOM('<body><span lang="fr" id="anchor">semaine</span></body>',{runScripts:'outside-only',pretendToBeVisual:true,url:'http://localhost'});const w=dom.window;t.after(()=>w.close());
+ for(const f of ['i18n.js','speech-eval.js','word-popover.js'])w.eval(read(f));
+ const el=w.document.querySelector('#anchor');el.getBoundingClientRect=()=>({left:30,right:120,top:80,bottom:100,width:90,height:20});
+ let dictionary,etymology;
+ w.fetch=(url)=>new Promise(resolve=>{if(url.startsWith('/api/lookup'))dictionary=resolve;else etymology=resolve});
+ const p=w.FrenchWordPopover.create({speak(){}});const shown=p.show('semaine',el);
+ p.element.querySelector('.popover-etymology-button').click();
+ dictionary({ok:true,json:async()=>({token:'semaine',lemma:'semaine',pos:'n.f.',explanation_cn:'周'})});await shown;
+ assert.equal(p.element.querySelector('.popover-etymology-button').disabled,true);
+ etymology({ok:true,json:async()=>({text:'mock semaine origin'})});await flush();
+ assert.match(p.element.querySelector('.popover-etymology-text').textContent,/mock semaine origin/);
+});

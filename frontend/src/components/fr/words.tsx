@@ -618,7 +618,12 @@ export function FrenchWords({
   const showMeaning = () => {
     const current = barRef.current;
     if (!current) return;
-    openEntry(current.text, -1, {
+    const picked = pickRef.current;
+    const index =
+      current.source === "range" && picked
+        ? Math.min(picked.start, picked.end ?? picked.start)
+        : -1;
+    openEntry(current.text, index, {
       getBoundingClientRect: () => toBox(rectOf.current?.() ?? current.rect),
     });
   };

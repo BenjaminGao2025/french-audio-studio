@@ -1092,7 +1092,8 @@
     // ---------------------------------------------------------------------
     document.addEventListener('click', (e) => {
         const word = e.target.closest('.fr-word');
-        if (word) {
+        if (word && !window.FrenchReadSelection.isDrag(e)) {
+            window.FrenchReadSelection.dismiss();
             // A word in the card library belongs to that row's sentence, otherwise to the current card
             const row = word.closest('[data-sentence]');
             const card = session.current;
