@@ -1148,6 +1148,41 @@
     text-decoration: none;
 }
 
+/* Study time under the email: today / this week / all time */
+.profile-study {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: -4px;
+}
+
+.profile-study[hidden] {
+    display: none;
+}
+
+.study-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--surface-subtle);
+}
+
+.study-stat strong {
+    color: var(--ink);
+    font-size: 15px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.study-stat span {
+    color: var(--muted);
+    font-size: 12px;
+}
+
 .profile-devices h5 {
     margin: 0 0 8px;
     color: var(--muted);

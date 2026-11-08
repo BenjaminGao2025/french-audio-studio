@@ -56,6 +56,12 @@ def game_heartbeat(req: GameHeartbeat, authorization: str | None = Header(defaul
     return {"stored_seconds": stored}
 
 
+@router.get("/api/game/study-time")
+def game_study_time(authorization: str | None = Header(default=None)):
+    """Study time today / this week / all time (America/Vancouver), for the account panel."""
+    return game.study_summary(_require_user_id(authorization))
+
+
 @router.post("/api/game/log")
 def game_log(req: GameLog, authorization: str | None = Header(default=None)):
     user_id = _require_user_id(authorization)

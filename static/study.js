@@ -69,6 +69,7 @@ function initStudyWorkbench() {
             haveInvite: 'Have an invite code? Sign up', haveAccount: 'Already have an account? Log in',
             needInvite: 'Please enter your invite code.', registerSuccess: 'Account created. Your 60-day free trial has started.',
             membership: 'Membership',
+            studyTimeTitle: 'Study time', studyToday: 'Today', studyWeek: 'This week', studyTotal: 'Total',
             devicesTitle: 'Signed-in devices (up to 3)', thisDevice: 'This device', signOutDevice: 'Sign out',
             lastActive: (when) => `Last active ${when}`,
             signedOutElsewhere: 'This device was signed out: an account can be signed in on up to 3 devices. Please log in again.',
@@ -214,6 +215,7 @@ function initStudyWorkbench() {
             haveInvite: '有邀请码？注册', haveAccount: '已有账号？登录',
             needInvite: '请填写邀请码。', registerSuccess: '注册成功！60 天免费试用已开始。',
             membership: '会员',
+            studyTimeTitle: '学习时间', studyToday: '今天', studyWeek: '本周', studyTotal: '累计',
             devicesTitle: '已登录设备（最多 3 台）', thisDevice: '当前设备', signOutDevice: '退出',
             lastActive: (when) => `最近使用 ${when}`,
             signedOutElsewhere: '这台设备已退出登录：账号最多同时登录 3 台设备。请重新登录。',
@@ -3261,6 +3263,7 @@ function initStudyWorkbench() {
             if (authFormContainer) authFormContainer.hidden = true;
             if (authUserProfile) authUserProfile.hidden = false;
             loadDevices();
+            loadStudyTime();
         } else {
             if (authFormContainer) authFormContainer.hidden = false;
             if (authUserProfile) authUserProfile.hidden = true;
@@ -3268,6 +3271,31 @@ function initStudyWorkbench() {
         }
         if (authModal) authModal.hidden = false;
         refreshIcons();
+    }
+
+    // Study time under the email: today / this week (Monday, America/Vancouver) / all time
+    function formatStudyTime(seconds) {
+        const minutes = Math.floor((Number(seconds) || 0) / 60);
+        const h = Math.floor(minutes / 60);
+        const m = minutes % 60;
+        return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m`;
+    }
+
+    async function loadStudyTime() {
+        const token = localStorage.getItem(userTokenKey);
+        const panel = document.getElementById('profile-study');
+        if (!panel || !token) return;
+        try {
+            const res = await fetch('/api/game/study-time', { headers: { 'Authorization': `Bearer ${token}` } });
+            if (!res.ok) return;
+            const data = await res.json();
+            document.getElementById('study-today').textContent = formatStudyTime(data.today_seconds);
+            document.getElementById('study-week').textContent = formatStudyTime(data.week_seconds);
+            document.getElementById('study-total').textContent = formatStudyTime(data.total_seconds);
+            panel.hidden = false;
+        } catch (e) {
+            console.warn('Load study time failed:', e);
+        }
     }
 
     // Signed-in devices: the account allows a few; any other one can be signed out from here

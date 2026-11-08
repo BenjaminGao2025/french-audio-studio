@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import auth_db
 import coach
@@ -62,6 +63,8 @@ MAINTENANCE_WEEK_TARGET_MIN = 300  # May-Aug 2027 (new baby): 5 h a week
 MAINTENANCE = (datetime.date(2027, 5, 1), datetime.date(2027, 8, 31))
 DAY_TARGET_MIN = (160, 160, 160, 160, 160, 120, 40)  # Monday = 0; sums to WEEK_TARGET_MIN (PRD appendix C)
 DAY_FULL_XP_MIN = 300  # beyond 5 effective hours a day, XP is halved
+# The account panel's study-time summary counts days and weeks in this zone, whatever device reports
+SUMMARY_TZ = ZoneInfo("America/Vancouver")
 STREAK_MIN = 30  # minutes that make a weekday count for the streak
 
 # One level per hour (60 XP): level 1000 = 1000 hours, the "1000H" goal
@@ -501,6 +504,40 @@ def state(user_id: int, tz_offset: int, now=None) -> dict[str, Any]:
         },
         "streak_days": _weekday_streak(active_days, family_days, today),
         "days_studied_7d": days_studied_7d,
+    }
+
+
+def study_summary(user_id: int, now=None) -> dict[str, Any]:
+    """Tracked study time as plain seconds: today, this week (Monday on) and all time.
+
+    Every study_time row counts (heartbeats and hand-logged time) at its real length: unlike
+    the XP/hero level, car listening is not halved here. The study day rolls over at 04:00 and the
+    week starts on Monday, both in America/Vancouver, so the three numbers do not move with the device.
+    """
+    now = now or _now()
+    local = now.astimezone(SUMMARY_TZ) - datetime.timedelta(hours=srs.DAY_ROLLOVER_HOUR)
+    today = local.date()
+    week_start = today - datetime.timedelta(days=today.weekday())
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT day, SUM(seconds) AS seconds FROM study_time WHERE user_id = ? GROUP BY day", (user_id,)
+        ).fetchall()
+    total = today_seconds = week_seconds = 0
+    for row in rows:
+        seconds = int(row["seconds"] or 0)
+        day = datetime.date.fromisoformat(row["day"])
+        total += seconds
+        if day == today:
+            today_seconds += seconds
+        if week_start <= day <= week_start + datetime.timedelta(days=6):
+            week_seconds += seconds
+    return {
+        "today_seconds": today_seconds,
+        "week_seconds": week_seconds,
+        "total_seconds": total,
+        "day": today.isoformat(),
+        "week_start": week_start.isoformat(),
+        "timezone": "America/Vancouver",
     }
 
 

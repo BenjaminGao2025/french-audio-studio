@@ -210,6 +210,39 @@ class StudyTimeTests(unittest.TestCase):
         self.assertEqual(game.state(self.user_id, PDT, now)["xp"], game.WAVE_CLEARED_XP)
 
 
+class StudySummaryTests(unittest.TestCase):
+    """Study time today / this week / all time, counted in America/Vancouver (Monday weeks)."""
+
+    def setUp(self):
+        self.client = TestClient(tts_service.app)
+        self.user_id, self.headers = _new_user()
+
+    def test_today_week_and_total(self):
+        game.log_time(self.user_id, "reading", 10, "", PDT, _at("2026-10-04", 10))  # Sunday: last week
+        game.log_time(self.user_id, "reading", 20, "", PDT, _at("2026-10-05", 10))  # Monday
+        game.record_time(self.user_id, "car", 90, PDT, _at("2026-10-07", 10))  # Wednesday (today)
+        game.record_time(self.user_id, "car", 30, PDT, _at("2026-10-07", 11))
+        got = game.study_summary(self.user_id, _at("2026-10-07", 12))
+        self.assertEqual(got["today_seconds"], 120)  # real seconds: car listening is not halved here
+        self.assertEqual(got["week_seconds"], 20 * 60 + 120)
+        self.assertEqual(got["total_seconds"], 30 * 60 + 120)
+        self.assertEqual((got["week_start"], got["timezone"]), ("2026-10-05", "America/Vancouver"))
+
+    def test_the_day_rolls_over_at_four_in_vancouver_and_the_week_on_monday(self):
+        game.log_time(self.user_id, "reading", 15, "", PDT, _at("2026-10-11", 10))  # Sunday
+        sunday_night = _at("2026-10-12", 2)  # Monday 02:00 still belongs to Sunday's study day
+        self.assertEqual(game.study_summary(self.user_id, sunday_night)["today_seconds"], 15 * 60)
+        monday = _at("2026-10-12", 5)
+        got = game.study_summary(self.user_id, monday)
+        self.assertEqual((got["today_seconds"], got["week_seconds"], got["total_seconds"]), (0, 0, 15 * 60))
+
+    def test_endpoint(self):
+        self.assertEqual(self.client.get("/api/game/study-time").status_code, 401)
+        self.client.post("/api/game/heartbeat", headers=self.headers, json={"lane": "review", "seconds": 60, "tz_offset": 420})
+        got = self.client.get("/api/game/study-time", headers=self.headers).json()
+        self.assertEqual(got["total_seconds"], 60)
+
+
 class RetiredCourseLaneTests(unittest.TestCase):
     """Time logged under the old course lane stays in history but belongs to no lane or target."""
 
