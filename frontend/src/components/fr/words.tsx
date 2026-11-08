@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent, MouseEvent } from "react";
-import { TextCursor, Volume2, X } from "lucide-react";
+import { TextCursor, Volume2 } from "lucide-react";
 import { api } from "@/api";
 import { audioController } from "@/lib/audio-controller";
 import {
   WORD_TAP_SLOP,
   glossFor,
   nearestElement,
-  normalizeLookup,
   tokenizeFrench,
   type WordGloss,
 } from "@/lib/french-words";
@@ -24,6 +23,7 @@ import {
   type Rect,
 } from "@/lib/read-selection";
 import { cn } from "@/lib/utils";
+import { closeSharedWordCard, showSharedWordCard } from "@/lib/shared-word-card";
 import { ReadBar } from "./read-bar";
 
 // Only one word card is open on a page: opening another closes this one.
@@ -132,11 +132,14 @@ export function FrenchWords({
   const pressing = useRef(false);
   // The bar was used: a selection that collapses because of that press must not take it away
   const used = useRef(false);
+  const consumedRange = useRef<Range | null>(null);
+  const dragJustEnded = useRef(false);
   useEffect(() => {
     openRef.current = open;
   });
 
   const close = useCallback(() => {
+    closeSharedWordCard();
     setOpen(null);
     setAudioError(null);
   }, []);
@@ -164,7 +167,10 @@ export function FrenchWords({
   useEffect(
     () => () => {
       if (audio.current) audioController.stop(audio.current);
-      if (closeOpenCard === close) closeOpenCard = null;
+      if (closeOpenCard === close) {
+        closeSharedWordCard();
+        closeOpenCard = null;
+      }
     },
     [close],
   );
@@ -243,17 +249,44 @@ export function FrenchWords({
     if (closeOpenCard && closeOpenCard !== close) closeOpenCard();
     closeOpenCard = close;
     speak(word);
-    const gloss = glossFor(word, glosses);
-    setOpen({ index, word, gloss, status: gloss ? "ready" : "loading", style: placeCard(anchor) });
-    if (gloss) return;
-    const settle = (found: WordGloss | null) =>
-      setOpen((cur) =>
-        cur && cur.word === word ? { ...cur, gloss: found, status: found ? "ready" : "none" } : cur,
-      );
-    void Promise.resolve()
-      .then(() => api.analyze.lookup(word))
-      .then((raw) => settle(normalizeLookup(word, raw)))
-      .catch(() => settle(null));
+    let start =
+      index >= 0 ? tokens.slice(0, index).reduce((n, token) => n + token.text.length, 0) : -1;
+    let sourceRange: Range | null = null;
+    const selection = window.getSelection();
+    if (index < 0 && selection?.rangeCount && line.current) {
+      const range = selection.getRangeAt(0);
+      if (
+        line.current.contains(range.startContainer) &&
+        line.current.contains(range.endContainer)
+      ) {
+        sourceRange = range.cloneRange();
+        const prefix = document.createRange();
+        prefix.selectNodeContents(line.current);
+        prefix.setEnd(range.startContainer, range.startOffset);
+        start = prefix.toString().length;
+      }
+    }
+    used.current = true;
+    consumedRange.current = sourceRange;
+    setOpen({ index, word, gloss: null, status: "ready", style: placeCard(anchor) });
+    void showSharedWordCard(
+      word,
+      text,
+      start,
+      {
+        getBoundingClientRect: () => anchor.getBoundingClientRect(),
+        coversRange: (other) =>
+          Boolean(
+            sourceRange &&
+            sourceRange.compareBoundaryPoints(Range.START_TO_START, other) === 0 &&
+            sourceRange.compareBoundaryPoints(Range.END_TO_END, other) === 0,
+          ),
+      },
+      speak,
+      () => setOpen(null),
+      glossFor(word, glosses),
+      line.current,
+    );
   };
 
   const openWord = (el: HTMLElement) => {
@@ -356,6 +389,7 @@ export function FrenchWords({
       }
       const snapped = snapRangeToWords(range, el);
       if (!snapped) return;
+      dragJustEnded.current = true;
       const selection = window.getSelection();
       selection?.removeAllRanges();
       selection?.addRange(snapped.range);
@@ -386,6 +420,15 @@ export function FrenchWords({
     const evaluate = () => {
       if (rangeRef.current) return;
       const found = snap();
+      const consumed = consumedRange.current;
+      if (
+        used.current &&
+        found &&
+        consumed &&
+        consumed.compareBoundaryPoints(Range.START_TO_START, found.range) === 0 &&
+        consumed.compareBoundaryPoints(Range.END_TO_END, found.range) === 0
+      )
+        return;
       if (!found) {
         if (barRef.current?.source === "native" && !pressing.current && !used.current) hideBar();
         return;
@@ -408,6 +451,9 @@ export function FrenchWords({
       later(snap() ? SETTLE_MS : COLLAPSE_MS);
     };
     const onMouseDown = (e: globalThis.MouseEvent) => {
+      if (e.target instanceof Element && e.target.closest("[data-word-card], [data-fr-card]"))
+        return;
+      used.current = false;
       if (e.button === 0 && !inBar(e.target)) mouseHeld = true;
     };
     const onMouseUp = (e: globalThis.MouseEvent) => {
@@ -435,6 +481,7 @@ export function FrenchWords({
     const drag = { x: 0, y: 0, from: null as HTMLElement | null };
     const startDrag = (e: globalThis.MouseEvent) => {
       if (e.button !== 0 || inBar(e.target) || rangeRef.current) return;
+      dragJustEnded.current = false;
       const el = e.target instanceof Element ? e.target : null;
       // Only a press on this text is taken over; anywhere else the browser may select
       if (!el || !line.current?.contains(el)) return;
@@ -530,10 +577,15 @@ export function FrenchWords({
   // be turned into a tap on the nearest word. A click without a position (keyboard, script) only
   // counts on a word itself. In range mode no selection can exist, so only the drag counts.
   const wordOf = (e: MouseEvent<HTMLElement>): HTMLElement | null => {
-    if (endedDrag() || (!rangeMode && hasSelectedText())) return null;
+    if (dragJustEnded.current) {
+      dragJustEnded.current = false;
+      return null;
+    }
+    if (endedDrag()) return null;
     const direct =
       e.target instanceof Element ? e.target.closest<HTMLElement>("[data-fr-word]") : null;
     if (direct) return direct;
+    if (!rangeMode && hasSelectedText()) return null;
     if (e.detail === 0) return null;
     return nearestElement(
       e.currentTarget.querySelectorAll<HTMLElement>("[data-fr-word]"),
@@ -584,10 +636,6 @@ export function FrenchWords({
         ? "Tap the last word"
         : ""
     : "";
-  const gloss = open?.gloss;
-  const meta = [gloss?.pos, gloss?.lemma && `base form: ${gloss.lemma}`]
-    .filter(Boolean)
-    .join(" · ");
   const sentenceBtn =
     "inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-full border border-border bg-card px-3 text-sm font-medium transition hover:bg-secondary disabled:opacity-40 aria-pressed:border-primary aria-pressed:bg-accent aria-busy:bg-accent";
   return (
@@ -678,56 +726,11 @@ export function FrenchWords({
           }}
         />
       )}
-      {open && (
-        <div
-          role="dialog"
-          aria-label={`Meaning of ${open.word}`}
-          data-fr-card
-          className="panel absolute z-30 space-y-2 p-3 text-sm"
-          style={open.style}
-        >
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <span className="fr text-lg font-semibold" lang="fr">
-                {open.word}
-              </span>
-              {gloss?.ipa && <span className="ipa ml-2">{gloss.ipa}</span>}
-            </div>
-            <button
-              type="button"
-              aria-label="Close"
-              onClick={close}
-              className="-mr-1 -mt-1 grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:bg-secondary pointer-coarse:h-11 pointer-coarse:w-11"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          {meta && <p className="text-xs text-muted-foreground">{meta}</p>}
-          {open.status === "loading" && <p role="status">Looking up…</p>}
-          {open.status === "none" && (
-            <p className="text-muted-foreground">No meaning found for this word.</p>
-          )}
-          {gloss?.en && <p>{gloss.en}</p>}
-          {gloss?.zh && <p>{gloss.zh}</p>}
-          {gloss?.why && <p className="text-xs text-muted-foreground">{gloss.why}</p>}
-          {gloss?.note && <p className="text-xs text-muted-foreground">{gloss.note}</p>}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              aria-label={`Hear ${open.word}`}
-              onClick={() => speak(open.word)}
-              className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 hover:bg-secondary pointer-coarse:min-h-11"
-            >
-              <Volume2 className="h-4 w-4" />
-              Hear
-            </button>
-            {audioError === "word" && (
-              <span role="alert" className="text-xs text-destructive">
-                Audio unavailable — try again.
-              </span>
-            )}
-          </div>
-        </div>
+
+      {open && audioError === "word" && (
+        <span role="alert" className="text-xs text-destructive">
+          Audio unavailable — try again.
+        </span>
       )}
     </div>
   );

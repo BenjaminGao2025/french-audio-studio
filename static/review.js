@@ -394,12 +394,13 @@
 
     // French text with every word wrapped so a tap reads it aloud
     function clickableFr(text) {
+        let offset = 0;
         return String(text || '')
             .split(/([A-Za-zÀ-ÖØ-öø-ÿŒœ0-9]+(?:['’-][A-Za-zÀ-ÖØ-öø-ÿŒœ]+)*)/)
-            .map((part, i) => (i % 2
-                ? `<span class="fr-word" lang="fr" data-speech="${escapeHtml(part)}">${escapeHtml(part)}</span>`
-                : escapeHtml(part)))
-            .join('');
+            .map((part, i) => {
+                const start = offset; offset += part.length;
+                return i % 2 ? `<span class="fr-word" lang="fr" data-context-start="${start}" data-speech="${escapeHtml(part)}">${escapeHtml(part)}</span>` : escapeHtml(part);
+            }).join('');
     }
 
     // Word popover and word book shared with the study page (static/word-popover.js):
@@ -416,14 +417,40 @@
     });
 
     // The card's own target word already carries its meaning, so it shows instantly.
+    function reviewContextFor(element) {
+        const row = element?.closest?.('[data-sentence]');
+        const card = session.current;
+        return { sentence: row ? row.dataset.sentence : (card?.note?.sentence || '') };
+    }
+    const wordContextClient = window.FrenchWordContext.createClient({ getToken });
     const wordPopover = window.FrenchWordPopover.create({
         speak: (text) => playFrench(text, 1, { once: true }),
         getAuthToken: () => getToken(),
         wordSelector: '.fr-word',
-        contextFor(element) {
-            const row = element && element.closest('[data-sentence]');
-            const card = session.current;
-            return { sentence: row ? row.dataset.sentence : (card && card.note ? card.note.sentence : '') };
+        contextFor: reviewContextFor,
+        selectionPopover: false,
+        wordContext: {
+            target(word, element, context) {
+                const WC = window.FrenchWordContext;
+                if (!WC.cleanWord(word) || !context.sentence) return null;
+                const spans = WC.spans(word, context.sentence);
+                const range = element.sourceRange;
+                const source = range ? (range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement) : element;
+                const row = source?.closest?.('[data-sentence]');
+                let start = -1;
+                if (row && row.textContent.startsWith(context.sentence)) {
+                    const prefix = document.createRange(); prefix.selectNodeContents(row);
+                    if (range) {
+                        if (!row.contains(range.endContainer) || range.toString().trim().toLowerCase() !== word.toLowerCase()) return null;
+                        prefix.setEnd(range.startContainer, range.startOffset);
+                    } else prefix.setEndBefore(element);
+                    start = prefix.toString().normalize('NFC').length;
+                }
+                const occurrence = start >= 0 ? spans.findIndex(sp => sp.start === start) : spans.length === 1 ? 0 : -1;
+                if (occurrence < 0) return null;
+                return { sentence: context.sentence, word, occurrence, ...spans[occurrence] };
+            },
+            explain: (target, hints) => wordContextClient.explain(target, hints),
         },
         localLookup(lower) {
             const card = session.current;
@@ -433,6 +460,14 @@
             return { lemma: meta.lemma, pos: meta.pos, phonetic: meta.ipa, explanation_en: meta.meaning_en, explanation_cn: meta.meaning_zh };
         },
         saving: wordBook.popoverSaving,
+    });
+
+    window.FrenchReadSelection.create({
+        wordSelector: '.fr-word',
+        speak: (text, onEnd) => playFrench(text, 1, { once: true, onEnd }),
+        contextFor: reviewContextFor,
+        meaning: (text, anchor, context) => wordPopover.show(text, anchor, context, { silent: true }),
+        openWord: () => wordPopover.activeElement(),
     });
 
     // The blank plus the punctuation right after it never break apart ("… ? ." on two lines)
@@ -730,7 +765,7 @@
         els.answerArea.innerHTML = `
             ${session.attempt ? session.attempt.html : ''}
             <div class="answer-sentence">
-                <p class="answer-fr">${clickableFr(before)}<mark>${clickableFr(meta.answer)}</mark>${clickableFr(after)}</p>
+                <p class="answer-fr" data-sentence="${escapeHtml(meta.full_fr || '')}">${clickableFr(before)}<mark>${clickableFr(meta.answer)}</mark>${clickableFr(after)}</p>
                 ${audioButtons(meta.full_fr || '')}
                 ${meta.full_en ? `<p class="answer-en">${escapeHtml(meta.full_en)}</p>` : ''}
             </div>
@@ -741,7 +776,7 @@
             </div>
             <div class="answer-origin">
                 <span class="origin-label">${T.originLabel}</span>
-                <p class="answer-fr origin-fr">${clickableFr(note.sentence)}
+                <p class="answer-fr origin-fr" data-sentence="${escapeHtml(note.sentence)}">${clickableFr(note.sentence)}
                     <button class="icon-btn btn-play" type="button" data-speech="${escapeHtml(note.sentence)}" data-rate="1" title="${T.playOriginal}"><i data-lucide="volume-2"></i></button>
                 </p>
                 ${pick(note.translation_zh, note.translation_en) ? `<p class="answer-en">${escapeHtml(pick(note.translation_zh, note.translation_en))}</p>` : ''}
@@ -765,7 +800,7 @@
         els.answerArea.innerHTML = `
             ${session.attempt ? session.attempt.html : ''}
             <div class="answer-sentence">
-                <p class="answer-fr">${sentenceHtml}</p>
+                <p class="answer-fr" data-sentence="${escapeHtml(note.sentence)}">${sentenceHtml}</p>
                 ${audioButtons(note.sentence)}
                 ${EN
                     ? (pick(note.translation_zh, note.translation_en) ? `<p class="answer-zh">${escapeHtml(pick(note.translation_zh, note.translation_en))}</p>` : '')

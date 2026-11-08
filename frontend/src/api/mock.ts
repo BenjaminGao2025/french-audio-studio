@@ -717,6 +717,8 @@ export const mock: Api = {
   analyze: {
     text: () => delay(structuredClone(passage.analysis)),
     lookup: (word) => delay({ word, en: "…", zh: "…" }),
+    etymology: (word) => delay({ text: `Mock etymology: ${word}` }),
+    wordContext: () => delay({ context: {}, state: "empty" }),
   },
   write: {
     tasks: () =>

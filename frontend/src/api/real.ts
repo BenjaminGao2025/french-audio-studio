@@ -190,6 +190,13 @@ export const real = {
         }),
       ),
     lookup: (word: string) => request<unknown>("/api/lookup", { query: { word } }),
+    etymology: (word: string, lemma?: string) =>
+      request<{ text: string }>("/api/etymology", { method: "POST", body: { word, lemma } }),
+    wordContext: (body: { sentence: string; word: string; occurrence: number }) =>
+      request<{
+        context: { meaning_zh?: string; meaning_en?: string; why_zh?: string };
+        state: string;
+      }>("/api/word-context", { method: "POST", body }),
   },
   write: {
     tasks: async (): Promise<{

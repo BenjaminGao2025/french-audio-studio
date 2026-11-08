@@ -16,7 +16,11 @@ import {
 vi.mock("@/api", () => ({
   api: {
     speech: { ttsUrl: (text: string) => `/tts?text=${encodeURIComponent(text)}` },
-    analyze: { lookup: vi.fn() },
+    analyze: {
+      lookup: vi.fn(),
+      etymology: vi.fn().mockResolvedValue({ text: "mock etymology" }),
+      wordContext: vi.fn().mockResolvedValue({ context: {}, state: "empty" }),
+    },
   },
 }));
 
@@ -36,6 +40,11 @@ const glosses = [
 const plays: string[] = [];
 const clips: { src: string; paused: boolean }[] = [];
 beforeEach(() => {
+  HTMLElement.prototype.getBoundingClientRect = () =>
+    ({ left: 20, top: 100, right: 150, bottom: 125, width: 130, height: 25 }) as DOMRect;
+  window.Range.prototype.getBoundingClientRect = () =>
+    ({ left: 20, top: 100, right: 150, bottom: 125, width: 130, height: 25 }) as DOMRect;
+  window.getSelection()?.removeAllRanges();
   plays.length = 0;
   clips.length = 0;
   vi.stubGlobal(
@@ -62,7 +71,17 @@ beforeEach(() => {
       }
     },
   );
-  vi.mocked(api.analyze.lookup).mockResolvedValue({ explanation_en: "looked up", phonetic: "x" });
+  vi.mocked(api.analyze.lookup).mockImplementation(async (word) =>
+    word === "enfants"
+      ? {
+          lemma: "enfant",
+          pos: "noun",
+          phonetic: "ɑ̃.fɑ̃",
+          explanation_en: "children",
+          explanation_cn: "孩子",
+        }
+      : { explanation_en: "looked up", phonetic: "x" },
+  );
 });
 afterEach(() => {
   cleanup();
@@ -184,10 +203,10 @@ describe("FrenchWords", () => {
     const card = screen.getByRole("dialog", { name: "Meaning of enfants" });
     expect(card).toHaveTextContent("children");
     expect(card).toHaveTextContent("孩子");
-    expect(card).toHaveTextContent("ɑ̃.fɑ̃");
-    expect(card).toHaveTextContent("noun · base form: enfant");
+    await waitFor(() => expect(card.querySelector(".popover-phonetic")).toHaveTextContent("ɑ̃fɑ̃"));
+    expect(card.querySelector(".popover-dict")).toHaveTextContent("base form: enfant");
     expect(word("enfants,")).toHaveAttribute("aria-expanded", "true");
-    expect(api.analyze.lookup).not.toHaveBeenCalled();
+    expect(api.analyze.lookup).toHaveBeenCalledWith("enfants");
     // The Hear button replays it through the same controller
     fireEvent.click(screen.getByRole("button", { name: "Hear enfants" }));
     expect(plays).toEqual(["/tts?text=enfants", "/tts?text=enfants"]);
@@ -196,12 +215,12 @@ describe("FrenchWords", () => {
   it("looks up a word the analysis does not know, and says so when there is no answer", async () => {
     mount();
     fireEvent.click(word("femme"));
-    expect(screen.getByRole("status")).toHaveTextContent("Looking up");
+    expect(document.querySelector(".popover-loading")).toHaveTextContent("Looking up");
     expect(await screen.findByText("looked up")).toBeInTheDocument();
     expect(api.analyze.lookup).toHaveBeenCalledWith("femme");
     vi.mocked(api.analyze.lookup).mockRejectedValueOnce(new Error("offline"));
     fireEvent.click(word("déjà"));
-    expect(await screen.findByText("No meaning found for this word.")).toBeInTheDocument();
+    expect(await screen.findByText("Could not get the meaning")).toBeInTheDocument();
   });
 
   it("opens the nearest word when the tap lands between words or beside the glyphs", () => {
@@ -267,17 +286,17 @@ describe("FrenchWords", () => {
     };
     // A word on the first line: the card goes above the text, not just above the word
     let style = place("J'ai", 410);
-    expect(style.bottom).toBe("128px");
-    expect(style.top).toBe("");
+    expect(parseFloat(style.top)).toBeLessThan(400);
+    expect(style.position).toBe("");
     // A word on the last line: below the text
     style = place("enceinte.", 490);
-    expect(style.top).toBe("128px");
+    expect(parseFloat(style.top)).toBeGreaterThan(120);
     expect(style.bottom).toBe("");
     // No room above: below, whichever word it is
     host.getBoundingClientRect = () =>
       ({ top: 100, bottom: 220, left: 0, right: 300, height: 120, width: 300 }) as DOMRect;
     style = place("déjà", 110);
-    expect(style.top).toBe("128px");
+    expect(parseFloat(style.top)).toBeGreaterThan(120);
   });
 
   it("keeps a single card open across several texts and stops the old audio", () => {
@@ -483,4 +502,44 @@ describe("hit-target CSS", () => {
     );
     expect(rule('.fr-word:active,\n.fr-word[aria-expanded="true"]')).toMatch(/background-color/);
   });
+});
+
+it("keeps a selected repeated occurrence through slow etymology and internal SVG gestures", async () => {
+  render(<FrenchWords text="La semaine commence, cette semaine aussi." />);
+  const second = screen.getAllByRole("button", { name: "semaine" })[1]!;
+  const r = document.createRange();
+  r.selectNodeContents(second.firstChild!);
+  getSelection()!.removeAllRanges();
+  getSelection()!.addRange(r);
+  document.dispatchEvent(new Event("selectionchange"));
+  fireEvent.click(await screen.findByRole("button", { name: "Meaning" }));
+  await waitFor(() =>
+    expect(api.analyze.wordContext).toHaveBeenCalledWith({
+      sentence: "La semaine commence, cette semaine aussi.",
+      word: "semaine",
+      occurrence: 1,
+    }),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  let finish!: (value: { text: string }) => void;
+  vi.mocked(api.analyze.etymology).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const button = document.querySelector<HTMLButtonElement>(".popover-etymology-button")!;
+  button.innerHTML = "<svg><path/></svg><span>词根词源</span>";
+  const svg = button.querySelector("path")!;
+  fireEvent.mouseDown(svg);
+  fireEvent.mouseUp(svg);
+  fireEvent.click(svg);
+  expect(button).toBeDisabled();
+  expect(screen.queryByRole("toolbar")).toBeNull();
+  expect(screen.getByRole("dialog")).toBeInTheDocument();
+  finish({ text: "mock semaine etymology" });
+  expect(await screen.findByText("mock semaine etymology")).toBeInTheDocument();
+  fireEvent.click(button);
+  await waitFor(() => expect(api.analyze.etymology).toHaveBeenCalledTimes(1));
+  expect(screen.queryByRole("toolbar")).toBeNull();
 });

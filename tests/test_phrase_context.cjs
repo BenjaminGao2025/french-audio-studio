@@ -276,7 +276,7 @@ const phraseCalls = () => calls.filter(c => c.url === '/api/phrase-context').len
     const chunkLookups = lookups();
     await popover.show('à partir des', chip, { sentence: SENTENCE }, { silent: true });
     assert.equal($('.popover-phrase').hidden, false);
-    assert.equal($('.popover-dict').hidden, true, 'the whole expression: its meaning is in 语境 only');
+    assert.equal($('.popover-dict').hidden, false, 'dictionary heading remains explicit; expression meaning stays in 语境');
     assert.equal(lookups(), chunkLookups, 'and nothing to look up');
     assert.deepEqual(highlighted(), []);
     // ...but a partial selection does not claim it

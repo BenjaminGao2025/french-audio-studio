@@ -340,6 +340,18 @@
             ensureItem(state).then(() => { if (states.get(card) === state && !state.checked) updateStats(state); });
         }
 
+        function contextFor(element) {
+            const card = element?.closest?.('.sentence-card');
+            const state = card && states.get(card);
+            if (!state || !element.closest('.dictation-result')) return null;
+            const expected = state.wordTarget || '';
+            const full = state.data.sentence || '';
+            // Prefix build-up steps share the full sentence cache. A non-prefix/rearranged step
+            // is its own actual sentence; never guess its occurrence in the full sentence.
+            const sentence = full.startsWith(expected) ? full : expected;
+            return { sentence, sentence_cn: state.data.translationZh || '', practice: true };
+        }
+
         function close(card) {
             const state = states.get(card);
             if (!state) return false;
@@ -575,23 +587,35 @@
             showResult(state, task, target, result, saveState);
         }
 
-        function opHtml(op) {
-            const sr = `<span class="dictation-sr">${esc(T.srKind[op.kind])}</span>`;
-            switch (op.kind) {
-                case 'ok':
-                    return `<span class="dt-word dt-ok">${sr}${esc(op.expected)}</span>`;
-                case 'accent':
-                case 'wrong':
-                    return `<span class="dt-word dt-${op.kind}" title="${esc(`${T.youWrote}: ${op.actual}`)}">${sr}<s class="dt-yours">${esc(op.actual)}</s><span class="dt-fix">${esc(op.expected)}</span></span>`;
-                case 'missing':
-                    return `<span class="dt-word dt-missing">${sr}<span class="dt-fix">${esc(op.expected)}</span></span>`;
-                default:
-                    return `<span class="dt-word dt-extra">${sr}<s class="dt-yours">${esc(op.actual)}</s></span>`;
-            }
+        // Each visible French token carries its proven offset in the exercise target. Wrong
+        // learner text is deliberately unmapped, even if that word occurs elsewhere in the target.
+        function practiceWord(word, start, end, actual = false) {
+            return `<span class="interactive-word" lang="fr" role="button" tabindex="0" data-word="${esc(word)}" ${actual || start < 0 ? 'data-context-unavailable="true"' : `data-context-start="${start}" data-context-end="${end}"`}>${esc(word)}</span>`;
+        }
+
+        function resultWords(result, expected) {
+            let cursor = 0;
+            return result.ops.map(op => {
+                const at = op.expected ? expected.indexOf(op.expected, cursor) : -1;
+                if (at >= 0) cursor = at + op.expected.length;
+                const right = practiceWord(op.expected || '', at, at + (op.expected || '').length);
+                const wrong = practiceWord(op.actual || '', -1, -1, true);
+                const sr = `<span class="dictation-sr" lang="en">${esc(T.srKind[op.kind])}</span>`;
+                if (op.kind === 'ok') return `<span class="dt-word dt-ok">${sr}${right}</span>`;
+                if (op.kind === 'missing') return `<span class="dt-word dt-missing">${sr}<span class="dt-fix">${right}</span></span>`;
+                if (op.kind === 'wrong' || op.kind === 'accent') return `<span class="dt-word dt-${op.kind}" title="${esc(`${T.youWrote}: ${op.actual}`)}">${sr}<s class="dt-yours">${wrong}</s><span class="dt-fix">${right}</span></span>`;
+                return `<span class="dt-word dt-extra">${sr}<s class="dt-yours">${wrong}</s></span>`;
+            }).join(' ');
+        }
+
+        function answerWords(expected) {
+            return expected.replace(/[\p{L}\p{M}]+(?:['’\-][\p{L}\p{M}]+)*['’]?/gu,
+                (word, start) => practiceWord(word, start, start + word.length));
         }
 
         function showResult(state, task, target, result, saveState) {
             state.checked = true;
+            state.wordTarget = target.expected;
             const box = task.querySelector('.dictation-result');
             const n = state.targets.length - 1;
             const expected = result ? result.expected : target.expected;
@@ -605,7 +629,7 @@
                         <strong class="dictation-accuracy">${esc(result.accuracy)}%</strong>
                         <span class="dictation-verdict">${esc(verdict)}</span>
                     </div>
-                    <p class="dictation-diff" lang="fr">${result.ops.map(opHtml).join(' ')}</p>
+                    <p class="dictation-diff" lang="fr">${resultWords(result, expected)}</p>
                     <p class="dictation-legend">${KINDS.filter(k => result.counts[k]).map(k => `<span class="dt-key dt-key-${k}">${esc(T.legend[k])} ${esc(result.counts[k])}</span>`).join('')}</p>
                 `;
                 if (state.scope === 'steps') state.done[target.step] = result.accuracy;
@@ -620,7 +644,7 @@
                 ${scoreHtml}
                 <div class="dictation-answer">
                     <span class="dictation-answer-label">${esc(T.correctAnswer)}</span>
-                    <p class="dictation-answer-text" lang="fr">${esc(expected)}</p>
+                    <p class="dictation-answer-text" lang="fr">${answerWords(expected)}</p>
                     <button class="btn btn-secondary dictation-play-answer" type="button"><i data-lucide="volume-2"></i><span>${esc(T.listenAnswer)}</span></button>
                 </div>
                 ${note ? `<p class="dictation-note">${esc(note)}</p>` : ''}
@@ -694,7 +718,7 @@
             `;
         }
 
-        return { open, close, isOpen: card => states.has(card) };
+        return { contextFor, open, close, isOpen: card => states.has(card) };
     }
 
     const api = { tokenize, grade, localTargets, create, revealTab, ACCENT_CREDIT, TEXT };

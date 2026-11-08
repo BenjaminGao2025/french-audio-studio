@@ -492,6 +492,8 @@ function initStudyWorkbench() {
     const GLOSS_TAP_SELECTOR = '.gloss-fr, .buildup-steps-list:not(.is-blind-mode) .buildup-new-token';
 
     function sentenceContextFor(element) {
+        const practice = dictation && dictation.contextFor(element);
+        if (practice) return practice;
         const card = element && element.closest('.sentence-card');
         if (!card) return {};
         return {
@@ -645,6 +647,9 @@ function initStudyWorkbench() {
         const line = element && element.closest && element.classList && element.classList.contains('interactive-word')
             ? element.closest('.sentence-french-text, .buildup-fr-text') : null;
         if (!line) {
+            const target = wordContextTarget(word, element, context);
+            const targetOccurrence = target && PC.occurrences(info.phrases, info.sentence).find(o => o.start < target.end && target.start < o.end);
+            if (targetOccurrence) return { phrase: phraseCard(targetOccurrence, info.sentence), highlight: [] };
             // A chunk from the word table or the gloss, or a selection: only the expression itself
             const own = PC.fold(word).replace(/\s+/g, ' ').trim();
             const p = info.phrases.find(q => PC.fold(q.text) === own || PC.fold(q.phrase) === own);
@@ -695,7 +700,15 @@ function initStudyWorkbench() {
         let occurrence = -1;
         const range = element.sourceRange;
         const line = element.classList && element.classList.contains('interactive-word') ? element.closest('.sentence-french-text') : null;
-        if (range) {
+        const source = range ? (range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement) : element;
+        const practiceWord = source?.closest?.('.dictation-result .interactive-word');
+        if (context.practice) {
+            if (!practiceWord || practiceWord.dataset.contextUnavailable) return null;
+            if (range && (!practiceWord.contains(range.endContainer) || norm(range.toString()) !== norm(clean))) return null;
+            const start = Number(practiceWord.dataset.contextStart);
+            const end = Number(practiceWord.dataset.contextEnd);
+            occurrence = spans.findIndex(sp => sp.start === start && sp.end === end);
+        } else if (range) {
             // Meaning has a virtual positioning anchor. Resolve its actual selected occurrence from
             // the cloned source range, without changing getBoundingClientRect or coversRange.
             const source = range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement;
@@ -2216,6 +2229,7 @@ function initStudyWorkbench() {
                 dictationDataByCard.set(card, {
                     sentence: sentenceText,
                     translationEn: transEn,
+                    translationZh: transZh,
                     // Steps only where the Steps tab shows them
                     steps: hasValidBuildup ? s.build_up : [],
                     voice: frenchVoiceFor(sentenceText),
@@ -2594,7 +2608,8 @@ function initStudyWorkbench() {
                 e.stopPropagation();
                 const word = interactiveWord.dataset.word || interactiveWord.dataset.token || interactiveWord.textContent.trim();
                 showPopoverForElement(word, interactiveWord, {
-                    sentence: targetSentence,
+                    ...sentenceContextFor(interactiveWord),
+                    sentence: sentenceContextFor(interactiveWord).sentence || targetSentence,
                     sentence_cn: transCn
                 });
                 return;
@@ -4057,11 +4072,11 @@ function initStudyWorkbench() {
         if (wordEl && window.FrenchReadSelection.isTap(e)) {
             e.stopPropagation();
             const card = wordEl.closest('.sentence-card');
-            const targetSentence = card ? (card.querySelector('.sentence-french-text')?.textContent || '') : '';
+            const targetSentence = sentenceContextFor(wordEl).sentence || '';
             const transCn = card ? (card.querySelector('.translation-cn')?.textContent || '') : '';
             const word = wordEl.dataset.word || wordEl.dataset.token || wordEl.textContent.trim();
             showPopoverForElement(word, wordEl, {
-                sentence: targetSentence,
+                ...sentenceContextFor(wordEl), sentence: targetSentence,
                 sentence_cn: transCn
             });
         }

@@ -73,7 +73,7 @@
     function frenchRegionOf(node) {
         const el = node && (node.nodeType === 1 ? node : node.parentElement);
         const region = el && el.closest('[lang]');
-        return region && /^fr(?:-|$)/i.test(region.lang) && !region.closest('.read-selection-bar, .floating-word-popover') ? region : null;
+        return region && /^fr(?:-|$)/i.test(region.lang) && !region.closest('.read-selection-bar, [data-word-card], .floating-word-popover, [data-fr-card]') ? region : null;
     }
 
     // The French text nodes a range touches, with the two outer ends moved out to word edges.
@@ -195,7 +195,7 @@
         // Meaning owns this range until the user selects a different span. Native selections often
         // remain painted while buttons are pressed; do not offer the same selection again.
         let meaningRange = null;
-        const inCard = node => Boolean(node && (node.nodeType === 1 ? node : node.parentElement)?.closest('.floating-word-popover'));
+        const inCard = node => Boolean(node && (node.nodeType === 1 ? node : node.parentElement)?.closest('[data-word-card], .floating-word-popover, [data-fr-card]'));
         const sameRange = (a, b) => Boolean(a && b && a.startContainer === b.startContainer
             && a.startOffset === b.startOffset && a.endContainer === b.endContainer && a.endOffset === b.endOffset);
         let pressing = false;
@@ -369,7 +369,7 @@
         // started on would be dropped. So the mousedown is answered here and the selection is
         // painted word by word while the mouse moves; on mouseup the usual evaluation shows the
         // bar. A long press on a phone selects natively and is not touched by this.
-        const FRENCH_LINE = '.sentence-french-text, .buildup-fr-text';
+        const FRENCH_LINE = '.sentence-french-text, .buildup-fr-text, .dictation-diff, .dictation-answer-text';
         let dragFrom = null;
 
         const frenchLineOf = (target) => (target && target.closest ? target.closest(FRENCH_LINE) : null);

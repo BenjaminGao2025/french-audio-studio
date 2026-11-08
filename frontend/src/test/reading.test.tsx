@@ -19,9 +19,13 @@ vi.mock("@/components/fr/kit", () => ({
 }));
 vi.mock("@/api", () => ({
   api: {
+    analyze: {
+      lookup: vi.fn().mockResolvedValue({ explanation_en: "dictionary gloss" }),
+      etymology: vi.fn().mockResolvedValue({ text: "mock" }),
+      wordContext: vi.fn().mockResolvedValue({ context: {}, state: "empty" }),
+    },
     reading: { create: vi.fn(), get: vi.fn(), done: vi.fn(), addWord: vi.fn() },
     speech: { ttsUrl: (text: string) => `/tts?text=${encodeURIComponent(text)}` },
-    analyze: { lookup: vi.fn() },
   },
 }));
 const passage: Passage = {
@@ -61,6 +65,9 @@ const passage: Passage = {
   })),
 };
 beforeEach(() => {
+  HTMLElement.prototype.getBoundingClientRect = () =>
+    ({ left: 20, top: 100, right: 150, bottom: 125, width: 130, height: 25 }) as DOMRect;
+
   vi.mocked(api.reading.create).mockResolvedValue(passage);
   vi.mocked(api.reading.addWord).mockResolvedValue({});
   vi.mocked(api.reading.done).mockResolvedValue({

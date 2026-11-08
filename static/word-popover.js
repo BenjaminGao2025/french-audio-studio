@@ -529,8 +529,11 @@
 
         const pop = document.createElement('div');
         pop.className = 'floating-word-popover';
+        pop.dataset.wordCard = 'true';
+        pop.setAttribute('data-fr-card', '');
         pop.hidden = true;
         pop.setAttribute('aria-live', 'polite');
+        pop.setAttribute('role', 'dialog');
         pop.innerHTML = popoverMarkup();
         document.body.appendChild(pop);
         const q = (sel) => pop.querySelector(sel);
@@ -593,6 +596,7 @@
             els.etymologyText.hidden = true;
         }
 
+        const etymologyCache = new Map();
         els.etymologyButton.addEventListener('click', async (e) => {
             e.stopPropagation();
             if (!currentCard || els.etymologyButton.disabled) return;
@@ -604,14 +608,20 @@
             position();
             try {
                 const token = options.getAuthToken ? options.getAuthToken() : '';
-                const res = await fetch('/api/etymology', {
+                const key = `${token}:${word.toLowerCase()}`;
+                let text = etymologyCache.get(key);
+                if (!text) {
+                const res = options.etymology ? { ok: true, json: () => options.etymology(word, lemma) } : await fetch('/api/etymology', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
                     body: JSON.stringify({ word, lemma }),
                 });
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok || typeof data.text !== 'string' || !data.text.trim()) throw new Error(T.etymologyFailed);
-                if (generation === etymologyGeneration && isOpen()) els.etymologyText.textContent = data.text;
+                text = data.text;
+                etymologyCache.set(key, text);
+                }
+                if (generation === etymologyGeneration && isOpen()) els.etymologyText.textContent = text;
             } catch (err) {
                 if (generation === etymologyGeneration && isOpen()) els.etymologyText.textContent = T.etymologyFailed;
             } finally {
@@ -633,6 +643,7 @@
             els.back.hidden = true;
             pop.hidden = true;
             pop.style.display = 'none';
+            if (options.onClose) options.onClose();
             els.loading.hidden = true;
             els.loading.style.display = 'none';
             if (activeEl && activeEl.classList) activeEl.classList.remove('is-active-word');
@@ -917,8 +928,11 @@
         }
 
         function render(item) {
-            resetEtymology();
+            if (currentCard && currentCard.token !== item.token) resetEtymology();
             currentCard = item;
+            pop.setAttribute('aria-label', `Meaning of ${item.token}`);
+            els.close.setAttribute('aria-label', 'Close');
+            els.speak.setAttribute('aria-label', `Hear ${item.token}`);
             renderFrenchWords(els.word, item.token);
             const phonetic = formatFriendlyPhonetic(item.phonetic || '');
             els.phonetic.textContent = phonetic;
@@ -973,10 +987,10 @@
         async function lookUp(word, requestId, base, decorate) {
             try {
                 const token = options.getAuthToken ? options.getAuthToken() : '';
-                const res = await fetch(`/api/lookup?word=${encodeURIComponent(word)}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok) throw new Error(data.detail?.message || T.lookupFailed);
-                const item = Object.assign({}, data, { sentence: base.sentence, sentence_cn: base.sentence_cn });
+                const res = options.lookup ? null : await fetch(`/api/lookup?word=${encodeURIComponent(word)}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+                const data = options.lookup ? await options.lookup(word) : await res.json().catch(() => ({}));
+                if (res && !res.ok) throw new Error(data.detail?.message || T.lookupFailed);
+                const item = Object.assign({ token: word, lemma: word }, data, { sentence: base.sentence, sentence_cn: base.sentence_cn });
                 remember(word.toLowerCase(), item);
                 if (requestId !== lookupGeneration || !isOpen()) return;
                 dictState = 'ready';
@@ -1037,11 +1051,11 @@
             const wc = options.wordContext;
             const wcTarget = wc && !navigation.nested && !number ? wc.target(word, element, context) : null;
             const entry = wcTarget && wcTarget.entry ? wcTarget.entry : null;
-            const ctx = (wc || phraseState.hit || (found && found.pending)) ? {
+            const ctx = {
                 status: 'unavailable', target: wcTarget, entry, phrase: phraseState.hit ? phraseState.hit.phrase : null,
                 hints: entry ? { meaning_zh: entry.meaning_zh, meaning_en: entry.meaning_en, note_en: entry.why_en, lemma: entry.lemma, pos: entry.pos } : {},
                 result: null, request: null, phrasePending: false,
-            } : null;
+            };
             ctxState = ctx;
             if (ctx) {
                 // A word of a fixed expression: the expression is its meaning here, nothing to ask
@@ -1107,7 +1121,7 @@
             // 2. Already looked up, or in the built-in A1 dictionary
             const cached = lookupCache.get(lower);
             const known = (navigation.nested && cached?.token?.toLowerCase() !== lower ? null : cached) || (elided && lookupCache.get(elided))
-                || BASIC_FRENCH_WORDS[lower] || (elided && BASIC_FRENCH_WORDS[elided]);
+                || (!options.lookup && (BASIC_FRENCH_WORDS[lower] || (elided && BASIC_FRENCH_WORDS[elided])));
             if (known) {
                 const item = withContext(Object.assign({}, known, { token: word }));
                 remember(lower, item);
@@ -1119,7 +1133,7 @@
             // A whole fixed expression (a table chunk, a selection): its meaning is the expression's
             const hit = phraseState.hit && phraseState.hit.phrase;
             if (hit && [hit.text, hit.phrase].some(text => text && foldText(text) === foldText(word))) {
-                dictState = 'none';
+                dictState = 'ready';
                 render(decorate(withContext({ token: word, lemma: '', pos: '', phonetic: '', explanation_cn: '', explanation_en: '' })));
                 return;
             }
@@ -1292,7 +1306,7 @@
             selectionTimer = setTimeout(showSelectedPhrase, delay);
         };
         document.addEventListener('mousedown', (e) => {
-            if (e.button !== 0 || pop.contains(e.target)) return;
+            if (e.button !== 0 || e.target.closest?.('[data-word-card], .floating-word-popover, [data-fr-card]')) return;
             mouseHeld = true;
             if (isOpen()) pressedSinceShow = true;
         });
@@ -1307,7 +1321,7 @@
             // After Meaning, the bar is already hidden; the synthetic mousedown can land between
             // word chips and would close the card we just opened.
             if (settling()) return;
-            if (isOpen() && !pop.contains(e.target) && !(wordSelector && e.target.closest(wordSelector))) close();
+            if (isOpen() && !e.target.closest?.('[data-word-card], .floating-word-popover, [data-fr-card]') && !(wordSelector && e.target.closest(wordSelector))) close();
         });
         // Mobile browser chrome show/hide fires scroll; ignore briefly after open
         root.addEventListener('scroll', () => { if (isOpen() && !settling()) close(); }, { passive: true });

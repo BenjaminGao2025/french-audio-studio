@@ -4,11 +4,9 @@
  * word by word (phonetic-normalized Levenshtein), returning a 0-100 score.
  */
 (function (root, factory) {
-    if (typeof module === 'object' && module.exports) {
-        module.exports = factory();
-    } else {
-        root.SpeechEval = factory();
-    }
+    const api = factory();
+    if (typeof module === 'object' && module.exports) module.exports = api;
+    if (root) root.SpeechEval = api;
 })(typeof self !== 'undefined' ? self : this, function () {
     // Rating labels follow the UI language of static/i18n.js; Chinese when it is absent (e.g. node tests).
     const RATING_TEXT = {

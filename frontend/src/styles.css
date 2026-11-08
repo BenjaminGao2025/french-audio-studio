@@ -395,3 +395,11 @@
     min-width: 44px;
   }
 }
+
+/* The shared study/review word card uses the SPA theme tokens as well. */
+.floating-word-popover {
+  --surface: var(--card);
+  --line: var(--border);
+  --radius-md: 12px;
+  color: var(--foreground);
+}
