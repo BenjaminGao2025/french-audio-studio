@@ -180,6 +180,36 @@
    "word": "ton",
    "sentence": "",
    "spans": []
+  },
+  {
+   "word": "est-ce que",
+   "sentence": "Est-ce que tu viens ce soir ?",
+   "spans": [
+    [
+     0,
+     10
+    ]
+   ]
+  },
+  {
+   "word": "avez-vous",
+   "sentence": "Pendant la nuit avez-vous entendu quelque chose ?",
+   "spans": [
+    [
+     16,
+     25
+    ]
+   ]
+  },
+  {
+   "word": "t-il",
+   "sentence": "Peut-être a-t-il raison.",
+   "spans": [
+    [
+     12,
+     16
+    ]
+   ]
   }
  ],
  "clean": [
@@ -194,10 +224,6 @@
   {
    "value": "aujourd’hui",
    "clean": "aujourd’hui"
-  },
-  {
-   "value": "ton sac",
-   "clean": ""
   },
   {
    "value": "2026",
@@ -226,6 +252,26 @@
   {
    "value": "élève",
    "clean": "élève"
+  },
+  {
+   "value": "ton sac",
+   "clean": "ton sac"
+  },
+  {
+   "value": "avez-vous",
+   "clean": "avez-vous"
+  },
+  {
+   "value": "  Est-ce   que ",
+   "clean": "Est-ce que"
+  },
+  {
+   "value": "t-il",
+   "clean": "t-il"
+  },
+  {
+   "value": "un deux trois quatre cinq",
+   "clean": ""
   }
  ]
 }

@@ -313,15 +313,15 @@ const snippetBefore = () => $('.popover-context-snippet').firstChild.textContent
     assert.equal($('.popover-context').dataset.state, 'phrase');
     assert.equal(text('.popover-phrase-mark'), 'À partir des');
 
-    // 7. No 语境 for what is not one word of the sentence: a number, a chunk (selection Meaning)
+    // 7. No 语境 for what is not in the sentence: a number, a chunk it lacks (selection Meaning)
     const n = contextCalls().length;
     await tap('partir', '2026');
     await settle();
     assert.equal($('.popover-context').dataset.state, 'unavailable');
     const chip = document.getElementById('outside');
-    await popover.show('ton sac', { getBoundingClientRect: () => rect }, ctxOf('sac'), { silent: true });
+    await popover.show('ton chat', { getBoundingClientRect: () => rect }, ctxOf('sac'), { silent: true });
     await settle();
-    assert.equal($('.popover-context').dataset.state, 'unavailable', 'no single-word grammar for a chunk');
+    assert.equal($('.popover-context').dataset.state, 'unavailable', 'a chunk the sentence does not have');
     assert.equal(visible('.popover-dict'), true);
     assert.match(text('.popover-dict'), /查到的词义/);
     await popover.show('ton', chip, {}, {});

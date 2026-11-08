@@ -105,7 +105,9 @@
         for (const piece of pieces) {
             const region = frenchRegionOf(piece.node);
             // French words that sit in different elements (one per gloss column) need a space between
-            if (lastRegion && region !== lastRegion && !region.contains(lastRegion) && !lastRegion.contains(region)) text += ' ';
+            // ...but not inside a hyphenated word: "avez-" and "vous" are two spans of one "avez-vous"
+            if (lastRegion && region !== lastRegion && !region.contains(lastRegion) && !lastRegion.contains(region)
+                && !/-$/.test(text) && !piece.node.nodeValue.slice(piece.from, piece.to).startsWith('-')) text += ' ';
             text += piece.node.nodeValue.slice(piece.from, piece.to);
             lastRegion = region;
         }

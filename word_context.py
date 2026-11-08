@@ -30,6 +30,7 @@ VERSION = 2
 SENTENCE_MAX_CHARS = phrase_context.SENTENCE_MAX_CHARS
 TRANSLATION_MAX_CHARS = 600
 WORD_MAX_CHARS = 40
+MAX_CHUNK_WORDS = 4  # words of a chunk such as "est-ce que" (spaces + 1)
 MAX_OCCURRENCE = 49
 # Upper bounds for each answer field, in characters
 FIELD_LIMITS = {"meaning_zh": 24, "meaning_en": 80, "why_zh": 200}
@@ -51,12 +52,15 @@ def clean_sentence(value: str) -> str:
 
 
 def clean_word(value: str) -> str:
-    """A single French word as the page shows it: letters, apostrophes and hyphens. '' when it is not one."""
-    word = unicodedata.normalize("NFC", (value or "").strip())
-    if not word or len(word) > WORD_MAX_CHARS:
+    """A French word or short chunk as the page shows it: letters, apostrophes, hyphens, single spaces.
+
+    "avez-vous", "est-ce que" and "peut-être" all qualify. '' when it is not one.
+    """
+    word = " ".join(unicodedata.normalize("NFC", (value or "")).split())
+    if not word or len(word) > WORD_MAX_CHARS or word.count(" ") >= MAX_CHUNK_WORDS:
         return ""
     if not all(
-        ch.isalpha() or ch in APOSTROPHES or ch == "-" or unicodedata.category(ch).startswith("M") for ch in word
+        ch.isalpha() or ch in APOSTROPHES or ch in "- " or unicodedata.category(ch).startswith("M") for ch in word
     ):
         return ""
     return word if any(ch.isalpha() for ch in word) else ""
@@ -68,7 +72,7 @@ def _fold_case(text: str) -> str:
 
 def word_spans(word: str, sentence: str) -> list[tuple[int, int]]:
     """(start, end) of every whole-word occurrence of `word` in `sentence`, in order."""
-    want = _fold_case(word)
+    want = " ".join(_fold_case(word).split())
     have = _fold_case(sentence)
     if not want or len(have) != len(sentence):  # lower() changed a length: offsets would be wrong
         return []
@@ -119,9 +123,10 @@ def is_empty(result: dict[str, str]) -> bool:
 # The model call (on demand, when a learner opens the card of a word)
 # ---------------------------------------------------------------------------
 SYSTEM_PROMPT = (
-    "You explain how ONE word works in ONE French sentence, for an A1–A2 learner whose native language is "
+    "You explain how ONE word, hyphenated form or short chunk (e.g. avez-vous, est-ce que) works in ONE French sentence, for an A1–A2 learner whose native language is "
     "Chinese.\n"
-    f"The word is marked like {OPEN_MARK}this{CLOSE_MARK} in the sentence. Explain only that occurrence.\n"
+    f"The word is marked like {OPEN_MARK}this{CLOSE_MARK} in the sentence. Explain only that occurrence. For a chunk, "
+    "say what it means as a whole and what each part does.\n"
     "Return:\n"
     "- meaning_zh: what the word means HERE, 1–10 Chinese characters, e.g. '你的'.\n"
     "- meaning_en: the same in at most 6 simple English words, e.g. 'your'.\n"

@@ -693,7 +693,7 @@ function initStudyWorkbench() {
         const spans = WC.spans(clean, sentence);
         if (!spans.length) return null;
         const key = srsSentenceKey(sentence);
-        const norm = text => (text || '').normalize('NFC').replace(/’/g, "'").trim().toLowerCase();
+        const norm = text => (text || '').normalize('NFC').replace(/’/g, "'").replace(/\s+/g, ' ').trim().toLowerCase();
         const table = wordTables.get(key) || [];
         const rows = table.filter(w => norm(w.fr || w.token) === norm(clean));
         const rowPerOccurrence = rows.length === spans.length;

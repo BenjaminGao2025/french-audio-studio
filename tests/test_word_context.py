@@ -164,7 +164,7 @@ class EndpointTests(unittest.TestCase):
             self.assertEqual(self._post(hints={"note_en": "n" * 5000}).status_code, 422)
             self.assertEqual(self._post(occurrence=-1).status_code, 422)
             self.assertEqual(self._post(occurrence=word_context.MAX_OCCURRENCE + 1).status_code, 422)
-            self.assertEqual(self._post(word="ton sac").json()["detail"]["code"], "word_context_invalid")
+            self.assertEqual(self._post(word="un deux trois quatre cinq").json()["detail"]["code"], "word_context_invalid")
             self.assertEqual(self._post(word="2026").status_code, 422)
             self.assertEqual(self._post("   ").status_code, 422)
             # A chunk, a word the sentence lacks, an occurrence it does not have
@@ -172,6 +172,18 @@ class EndpointTests(unittest.TestCase):
             self.assertEqual(self._post(word="ton", occurrence=1).json()["detail"]["code"], "word_not_in_sentence")
             self.assertEqual(self._post("C'est sa sœur.", word="s").status_code, 422)
         post_chat.assert_not_called()
+
+    def test_hyphenated_and_multi_token_chunks_get_a_context(self):
+        sentence = "Pendant la nuit avez-vous entendu quelque chose ?"
+        reply = {"meaning_zh": "你们……吗", "meaning_en": "do you", "why_zh": "avez-vous 是 vous avez 的倒装疑问。"}
+        for word in ("avez-vous", "la nuit"):
+            with self.subTest(word=word), mock.patch("services.ai.post_chat", return_value=_reply(reply)) as post_chat:
+                got = self._post(sentence, word=word)
+                self.assertEqual(got.status_code, 200, got.text)
+                self.assertEqual(got.json()["state"], "ready")
+                self.assertIn(f"⟦{word}⟧", _user_message(post_chat))
+        got = self._post("Est-ce que tu viens ?", word="est-ce que")
+        self.assertEqual(got.status_code, 200)
 
     def test_ton_sac_and_ton_amie_are_separate_answers_cached_per_user(self):
         with mock.patch("services.ai.post_chat", return_value=_reply(TON_SAC)) as post_chat:

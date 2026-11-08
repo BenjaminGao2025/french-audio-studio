@@ -11,21 +11,24 @@
     'use strict';
 
     const WORD_MAX = 40;
+    const MAX_CHUNK_WORDS = 4;  // words of a chunk such as "est-ce que"
     const isWordChar = ch => /[\p{L}\p{N}\p{M}_]/u.test(ch);
     const isApostrophe = ch => ch === "'" || ch === '’';
     const foldCase = text => String(text || '').normalize('NFC').replace(/’/g, "'").toLowerCase();
     const normalized = text => foldCase(text).replace(/\s+/g, ' ').trim();
 
-    // A single French word as the page shows it: letters, apostrophes and hyphens ('' otherwise)
+    // A French word or short chunk as the page shows it: letters, apostrophes, hyphens and single
+    // spaces ("avez-vous", "est-ce que"); '' otherwise
     function cleanWord(value) {
-        const word = String(value || '').normalize('NFC').trim();
-        if (!word || word.length > WORD_MAX || !/^[\p{L}\p{M}'’-]+$/u.test(word) || !/\p{L}/u.test(word)) return '';
+        const word = String(value || '').normalize('NFC').replace(/\s+/g, ' ').trim();
+        if (!word || word.length > WORD_MAX || word.split(' ').length > MAX_CHUNK_WORDS
+            || !/^[\p{L}\p{M}'’ -]+$/u.test(word) || !/\p{L}/u.test(word)) return '';
         return word;
     }
 
     // [start, end) of every whole-word occurrence of `word` in `sentence`, in order
     function spans(word, sentence) {
-        const want = foldCase(word);
+        const want = foldCase(word).replace(/\s+/g, ' ');
         const text = String(sentence || '').normalize('NFC');
         const have = foldCase(text);
         if (!want || have.length !== text.length) return [];
