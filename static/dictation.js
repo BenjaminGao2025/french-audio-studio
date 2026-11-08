@@ -609,8 +609,13 @@
         }
 
         function answerWords(expected) {
-            return expected.replace(/[\p{L}\p{M}]+(?:['’\-][\p{L}\p{M}]+)*['’]?/gu,
-                (word, start) => practiceWord(word, start, start + word.length));
+            let html = '', cursor = 0;
+            for (const match of expected.matchAll(/[\p{L}\p{M}]+(?:['’\-][\p{L}\p{M}]+)*['’]?/gu)) {
+                html += esc(expected.slice(cursor, match.index));
+                html += practiceWord(match[0], match.index, match.index + match[0].length);
+                cursor = match.index + match[0].length;
+            }
+            return html + esc(expected.slice(cursor));
         }
 
         function showResult(state, task, target, result, saveState) {

@@ -82,3 +82,11 @@ test('a late dictionary answer cannot reset pending etymology for the same card'
  etymology({ok:true,json:async()=>({text:'mock semaine origin'})});await flush();
  assert.match(p.element.querySelector('.popover-etymology-text').textContent,/mock semaine origin/);
 });
+
+test('revealed French keeps markup and punctuation as escaped text',async(t)=>{
+ const e=await page();t.after(()=>e.w.close());const expected='La semaine <img src=x onerror="bad()"> commence & continue.';
+ const controller=e.w.FrenchDictation.create({getToken:()=>'',lang:'zh'});controller.open(e.card,{sentence:expected,translationEn:'A test'},'write');
+ e.card.querySelector('.dictation-reveal').click();const answer=e.card.querySelector('.dictation-answer-text');
+ assert.equal(answer.textContent,expected);assert.equal(answer.querySelector('img,script'),null);assert.ok(answer.innerHTML.includes('&lt;'));
+ await flush(100);
+});
