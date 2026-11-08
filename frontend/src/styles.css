@@ -403,3 +403,18 @@
   --radius-md: 12px;
   color: var(--foreground);
 }
+.floating-word-popover {
+  --ink: var(--foreground);
+  --muted: var(--muted-foreground);
+  --surface-muted: var(--secondary);
+  --surface-subtle: var(--secondary);
+  --line-strong: var(--border);
+  --primary-contrast: var(--primary-foreground);
+  --primary-hover: var(--primary);
+  --primary-soft: var(--secondary);
+  --primary-line: var(--border);
+  --accent: var(--primary);
+  --accent-soft: var(--secondary);
+  --text-xs: 12px;
+  --text-sm: 14px;
+}

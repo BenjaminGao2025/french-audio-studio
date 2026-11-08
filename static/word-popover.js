@@ -518,7 +518,23 @@
     }
 
     function refreshIcons() {
-        if (root.lucide && typeof root.lucide.createIcons === 'function') root.lucide.createIcons();
+        if (root.lucide && typeof root.lucide.createIcons === 'function') { root.lucide.createIcons(); return; }
+        // The bundled SPA does not load the legacy global icon library. Keep the same controls
+        // visible there, using fixed SVG paths (never source/model markup).
+        const paths = {
+            'volume-2': ['M11 5 6 9H3v6h3l5 4V5Z', 'M15 8a6 6 0 0 1 0 8', 'M18 5a10 10 0 0 1 0 14'],
+            x: ['m6 6 12 12', 'M6 18 18 6'],
+            star: ['m12 3 3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1Z'],
+            loader: ['M12 3v3m0 12v3M3 12h3m12 0h3M6 6l2 2m8 8 2 2M6 18l2-2m8-8 2-2'],
+        };
+        document.querySelectorAll('.floating-word-popover i[data-lucide]').forEach(icon => {
+            const shape = paths[icon.dataset.lucide];
+            if (!shape) return;
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            for (const [key, value] of Object.entries({ viewBox: '0 0 24 24', width: '20', height: '20', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true', class: icon.className })) svg.setAttribute(key, value);
+            shape.forEach(d => { const path = document.createElementNS(svg.namespaceURI, 'path'); path.setAttribute('d', d); svg.append(path); });
+            icon.replaceWith(svg);
+        });
     }
 
     /**

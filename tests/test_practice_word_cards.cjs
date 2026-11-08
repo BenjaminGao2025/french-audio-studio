@@ -37,7 +37,7 @@ for(const mode of ['recall','dictation'])for(const scope of ['whole','steps'])te
  if(scope==='steps'){
   card.querySelector('.dictation-input').value='La semaine commence';card.querySelector('.dictation-check').click();await flush();card.querySelector('.dictation-next-step').click();
  }
- card.querySelector('.dictation-input').value='La semàine commence cette semaine étrange';card.querySelector('.dictation-check').click();await flush();
+ card.querySelector('.dictation-input').value='La semàine commence cette semaine semaine';card.querySelector('.dictation-check').click();await flush();
  assert.ok(card.querySelector('.dt-accent .dt-fix .interactive-word'));
  assert.ok(card.querySelector('.dt-missing .interactive-word'));
  assert.ok(card.querySelector('.dt-wrong .dt-fix .interactive-word'));
@@ -45,7 +45,8 @@ for(const mode of ['recall','dictation'])for(const scope of ['whole','steps'])te
  right.click();await flush();assert.match(doc.querySelector('.popover-context-why').textContent,/第 2 个/,JSON.stringify({state:doc.querySelector('.popover-context').dataset.state,calls}));
  assert.equal(calls.filter(x=>x.url==='/api/word-context').at(-1).body.occurrence,1);
  doc.querySelector('.popover-close-btn').click();
- const wrong=card.querySelector('.dt-yours .interactive-word');wrong.click();await flush();assert.equal(doc.querySelector('.popover-context').dataset.state,'unavailable');
+ const wrong=card.querySelector('.dt-wrong .dt-yours .interactive-word');
+ assert.equal(wrong.dataset.word,'semaine','learner error also occurs elsewhere in the correct sentence');wrong.click();await flush();assert.equal(doc.querySelector('.popover-context').dataset.state,'unavailable');
  doc.querySelector('.popover-close-btn').click();
  const answer=Array.from(card.querySelectorAll('.dictation-answer-text .interactive-word')).filter(x=>x.dataset.word==='semaine')[1];
  select(e,answer);await flush(300);doc.querySelector('[data-rs="meaning"]').click();await flush(800);
@@ -80,4 +81,12 @@ test('a late dictionary answer cannot reset pending etymology for the same card'
  assert.equal(p.element.querySelector('.popover-etymology-button').disabled,true);
  etymology({ok:true,json:async()=>({text:'mock semaine origin'})});await flush();
  assert.match(p.element.querySelector('.popover-etymology-text').textContent,/mock semaine origin/);
+});
+
+test('revealed French keeps markup and punctuation as escaped text',async(t)=>{
+ const e=await page();t.after(()=>e.w.close());const expected='La semaine <img src=x onerror="bad()"> commence & continue.';
+ const controller=e.w.FrenchDictation.create({getToken:()=>'',lang:'zh'});controller.open(e.card,{sentence:expected,translationEn:'A test'},'write');
+ e.card.querySelector('.dictation-reveal').click();const answer=e.card.querySelector('.dictation-answer-text');
+ assert.equal(answer.textContent,expected);assert.equal(answer.querySelector('img,script'),null);assert.ok(answer.innerHTML.includes('&lt;'));
+ await flush(100);
 });

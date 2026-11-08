@@ -600,7 +600,7 @@
                 if (at >= 0) cursor = at + op.expected.length;
                 const right = practiceWord(op.expected || '', at, at + (op.expected || '').length);
                 const wrong = practiceWord(op.actual || '', -1, -1, true);
-                const sr = `<span class="dictation-sr" lang="en">${esc(T.srKind[op.kind])}</span>`;
+                const sr = `<span class="dictation-sr" lang="${T === TEXT.en ? 'en' : 'zh'}">${esc(T.srKind[op.kind])}</span>`;
                 if (op.kind === 'ok') return `<span class="dt-word dt-ok">${sr}${right}</span>`;
                 if (op.kind === 'missing') return `<span class="dt-word dt-missing">${sr}<span class="dt-fix">${right}</span></span>`;
                 if (op.kind === 'wrong' || op.kind === 'accent') return `<span class="dt-word dt-${op.kind}" title="${esc(`${T.youWrote}: ${op.actual}`)}">${sr}<s class="dt-yours">${wrong}</s><span class="dt-fix">${right}</span></span>`;
@@ -609,8 +609,13 @@
         }
 
         function answerWords(expected) {
-            return expected.replace(/[\p{L}\p{M}]+(?:['’\-][\p{L}\p{M}]+)*['’]?/gu,
-                (word, start) => practiceWord(word, start, start + word.length));
+            let html = '', cursor = 0;
+            for (const match of expected.matchAll(/[\p{L}\p{M}]+(?:['’\-][\p{L}\p{M}]+)*['’]?/gu)) {
+                html += esc(expected.slice(cursor, match.index));
+                html += practiceWord(match[0], match.index, match.index + match[0].length);
+                cursor = match.index + match[0].length;
+            }
+            return html + esc(expected.slice(cursor));
         }
 
         function showResult(state, task, target, result, saveState) {

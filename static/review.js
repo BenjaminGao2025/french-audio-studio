@@ -492,8 +492,12 @@
         audio.playbackRate = rate;
         currentAudio = audio;
         // A replaced media/speech owner must not stop the new playback session.
-        const stopPlayback = () => { if (currentAudio === audio) stopAudio(); };
+        const stopPlayback = () => {
+            if (currentAudio === audio) stopAudio();
+            if (options.onEnd) options.onEnd();
+        };
         window.FrenchAudio.bind(audio, stopPlayback);
+        audio.addEventListener('ended', () => { if (!repeat) stopPlayback(); });
         if (repeat) {
             window.FrenchPlayback.setActive(true, stopAudio);
             audio.addEventListener('ended', () => {
@@ -514,6 +518,7 @@
             // iOS can block card autoplay; let the Play/Slow tap retry synchronously.
             if (err && err.name === 'NotAllowedError') {
                 stopAudio();
+                if (options.onEnd) options.onEnd();
                 return;
             }
             if ('speechSynthesis' in window) {
@@ -522,8 +527,10 @@
                 utterance.rate = rate;
                 window.speechSynthesis.cancel();
                 window.FrenchAudio.bind(utterance, stopPlayback, audio);
+                utterance.onend = stopPlayback;
+                utterance.onerror = stopPlayback;
                 window.speechSynthesis.speak(utterance);
-            }
+            } else if (options.onEnd) options.onEnd();
         });
     }
 
