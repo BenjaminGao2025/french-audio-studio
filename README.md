@@ -158,7 +158,7 @@ Compose 单独覆盖 `AGY_BASE_URL` 为 `http://127.0.0.1:3425/v1`、`AGY_MODEL`
 
 ## 🧭 前端与架构
 
-当前界面由 `static/` 中的 HTML、CSS 和原生 JavaScript 提供，无需构建步骤。旧 React SPA（源码 `frontend/`，构建产物 `static/app/`）及其后端接口（`/api/today`、`/api/listening/*`、`/api/reading/*` 等）仍保留；`/app` 默认关闭并跳转到 `/study`，设置 `APP_SHELL_ENABLED=1` 后重新提供。更多实现细节见 [ARCHITECTURE.md](ARCHITECTURE.md)，界面规范见 [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)。
+当前界面由 `static/` 中的 HTML、CSS 和原生 JavaScript 提供，无需构建步骤。按 1000H French 新设计重做的前端在 `web/`（React SPA，挂在 `/app/`），由 Docker 构建阶段编译，产物不进 git；开发时在 `web/` 中运行 `npm ci && npm run dev`（`/api` 代理到本机 8000 端口），测试用 `npm test` 和 `npm run typecheck`。更多实现细节见 [ARCHITECTURE.md](ARCHITECTURE.md)，界面规范见 [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)。
 
 ## 🧪 运行测试
 

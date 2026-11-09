@@ -1,10 +1,10 @@
-"""The legacy React SPA at /app: off by default (redirects to /study), served again with
-APP_SHELL_ENABLED=1."""
+"""The React SPA at /app (source web/, built into static/app by the Docker build).
 
-import os
+The build is not in git, so these tests serve a small fake build from a temporary APP_DIR.
+"""
+
 import re
-import subprocess
-import sys
+import tempfile
 import unittest
 from html.parser import HTMLParser
 from pathlib import Path
@@ -17,9 +17,21 @@ import tts_service
 from routers import app_shell
 
 ROOT = Path(__file__).resolve().parents[1]
+WEB = ROOT / "web"
 
-APP_DIR = Path(tts_service.STATIC_DIR) / "app"
-INDEX = APP_DIR / "index.html"
+FAKE_INDEX = """<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>1000H French</title>
+    <script type="module" crossorigin src="/app/assets/index-abc123.js"></script>
+    <link rel="stylesheet" crossorigin href="/app/assets/index-abc123.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
+"""
 
 
 class _Tags(HTMLParser):
@@ -31,88 +43,28 @@ class _Tags(HTMLParser):
         self.tags.append((tag, dict(attrs)))
 
 
-def _parse_index():
-    parser = _Tags()
-    parser.feed(INDEX.read_text(encoding="utf-8"))
-    return parser.tags
-
-
-def _entry_js():
-    scripts = [a["src"] for t, a in _parse_index() if t == "script"]
-    return scripts[0]
-
-
-class AppShellDisabledTests(unittest.TestCase):
-    """The shell is off by default: /app must never be reachable from a browser."""
-
-    @classmethod
-    def setUpClass(cls):
-        cls.client = TestClient(tts_service.app)
-
-    def test_app_urls_redirect_to_study(self):
-        self.assertFalse(app_shell.APP_SHELL_ENABLED)
-        for path in ("/app", "/app/", "/app/hours", "/app/cards?block=x", "/app/login", "/app/assets/x.js"):
-            with self.subTest(path=path):
-                res = self.client.get(path, follow_redirects=False)
-                self.assertEqual(res.status_code, 302)
-                self.assertEqual(res.headers["location"], "/study")
-
-    def test_head_request_redirects(self):
-        res = self.client.head("/app", follow_redirects=False)
-        self.assertEqual(res.status_code, 302)
-        self.assertEqual(res.headers["location"], "/study")
-
-    def test_study_still_serves(self):
-        self.assertEqual(self.client.get("/study").status_code, 200)
-        self.assertEqual(self.client.get("/static/study.html").status_code, 200)
-
-    def test_no_static_page_links_to_the_app(self):
-        for path in Path(tts_service.STATIC_DIR).glob("*.html"):
-            with self.subTest(page=path.name):
-                self.assertNotIn('href="/app/', path.read_text(encoding="utf-8"))
-                self.assertNotIn("href='/app/", path.read_text(encoding="utf-8"))
-
-
-class AppShellToggleTests(unittest.TestCase):
-    """APP_SHELL_ENABLED is read once at import; only explicit truthy values turn the shell on."""
-
-    def _flag(self, value):
-        env = {k: v for k, v in os.environ.items() if k != "APP_SHELL_ENABLED"}
-        if value is not None:
-            env["APP_SHELL_ENABLED"] = value
-        out = subprocess.run(
-            [sys.executable, "-c", "from routers import app_shell; print(app_shell.APP_SHELL_ENABLED)"],
-            cwd=ROOT,
-            env=env,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return out.stdout.strip()
-
-    def test_off_unless_explicitly_enabled(self):
-        for value in (None, "", "0", "false", "no", "off", "maybe"):
-            with self.subTest(value=value):
-                self.assertEqual(self._flag(value), "False")
-        for value in ("1", "true", "TRUE", "yes", "on", " On "):
-            with self.subTest(value=value):
-                self.assertEqual(self._flag(value), "True")
-
-
 class AppShellTests(unittest.TestCase):
-    """Router internals, exercised with the kill switch explicitly turned back on."""
-
     @classmethod
     def setUpClass(cls):
-        cls._enabled = mock.patch.object(app_shell, "APP_SHELL_ENABLED", True)
-        cls._enabled.start()
-        cls.addClassCleanup(cls._enabled.stop)
+        tmp = tempfile.TemporaryDirectory()
+        cls.addClassCleanup(tmp.cleanup)
+        cls.app_dir = Path(tmp.name).resolve() / "app"
+        assets = cls.app_dir / "assets"
+        assets.mkdir(parents=True)
+        (cls.app_dir / "index.html").write_text(FAKE_INDEX, encoding="utf-8")
+        (assets / "index-abc123.js").write_text("console.log('app');", encoding="utf-8")
+        (assets / "index-abc123.css").write_text("body{margin:0}", encoding="utf-8")
+        (assets / "font-abc123.woff2").write_bytes(b"wOF2")
+        (cls.app_dir / "robots.txt").write_text("User-agent: *", encoding="utf-8")
+        patcher = mock.patch.object(app_shell, "APP_DIR", cls.app_dir)
+        patcher.start()
+        cls.addClassCleanup(patcher.stop)
         cls.client = TestClient(tts_service.app)
 
     def test_shell_served_for_app_root_and_deep_links(self):
-        for path in ("/app", "/app/", "/app/hours", "/app/cards?block=x", "/app/login"):
+        for path in ("/app", "/app/", "/app/study", "/app/review/session", "/app/progress/history?tab=x", "/app/login"):
             with self.subTest(path=path):
-                res = self.client.get(path)
+                res = self.client.get(path, follow_redirects=False)
                 self.assertEqual(res.status_code, 200)
                 self.assertIn("text/html", res.headers["content-type"])
                 self.assertIn('<div id="root">', res.text)
@@ -125,49 +77,28 @@ class AppShellTests(unittest.TestCase):
 
     def test_shell_requires_no_login(self):
         # The SPA itself redirects to /app/login when an API call returns 401.
-        self.assertEqual(self.client.get("/app/me").status_code, 200)
+        self.assertEqual(self.client.get("/app/settings").status_code, 200)
 
-    def test_shell_has_no_inline_scripts(self):
-        tags = _parse_index()
-        scripts = [attrs for tag, attrs in tags if tag == "script"]
-        self.assertGreaterEqual(len(scripts), 1)
-        for attrs in scripts:
-            self.assertTrue(attrs.get("src", "").startswith("/app/assets/"), attrs)
-        for tag, attrs in tags:
-            for name in attrs:
-                self.assertFalse(name.startswith("on"), f"inline handler {name} on <{tag}>")
-            for name in ("src", "href"):
-                self.assertFalse(
-                    re.match(r"(?i)(https?:)?//", attrs.get(name) or ""),
-                    f"external {name}: {attrs.get(name)}",
-                )
-        # No script body either: parser text data inside <script> would show up here.
-        html = INDEX.read_text(encoding="utf-8")
-        self.assertIsNone(re.search(r"<script(?![^>]*\bsrc=)[^>]*>", html))
-
-    def test_shell_references_existing_assets(self):
-        refs = re.findall(r'(?:src|href)="(/app/assets/[^"]+)"', INDEX.read_text(encoding="utf-8"))
-        self.assertTrue(refs)
-        for ref in refs:
-            with self.subTest(ref=ref):
-                self.assertTrue((APP_DIR / ref.removeprefix("/app/")).is_file())
-                res = self.client.get(ref)
+    def test_assets_are_immutable_with_explicit_types(self):
+        for path, kind in (
+            ("/app/assets/index-abc123.js", "javascript"),
+            ("/app/assets/index-abc123.css", "text/css"),
+            ("/app/assets/font-abc123.woff2", "font/woff2"),
+        ):
+            with self.subTest(path=path):
+                res = self.client.get(path)
                 self.assertEqual(res.status_code, 200)
+                self.assertIn(kind, res.headers["content-type"])
                 self.assertIn("immutable", res.headers["cache-control"])
 
-    def test_js_asset_mime_type(self):
-        res = self.client.get(_entry_js())
+    def test_top_level_file_is_served_without_immutable_cache(self):
+        res = self.client.get("/app/robots.txt")
         self.assertEqual(res.status_code, 200)
-        self.assertIn("javascript", res.headers["content-type"])
-
-    def test_css_and_font_mime_types(self):
-        css = re.search(r'href="(/app/assets/[^"]+\.css)"', INDEX.read_text(encoding="utf-8")).group(1)
-        self.assertIn("text/css", self.client.get(css).headers["content-type"])
-        woff2 = next((APP_DIR / "assets").glob("*.woff2")).name
-        self.assertIn("font/woff2", self.client.get(f"/app/assets/{woff2}").headers["content-type"])
+        self.assertIn("text/plain", res.headers["content-type"])
+        self.assertNotIn("immutable", res.headers.get("cache-control", ""))
 
     def test_csp_header_on_shell_is_unchanged(self):
-        for path in ("/app", _entry_js()):
+        for path in ("/app", "/app/assets/index-abc123.js"):
             with self.subTest(path=path):
                 csp = self.client.get(path).headers["content-security-policy"]
                 self.assertEqual(csp, tts_service.CONTENT_SECURITY_POLICY)
@@ -200,34 +131,49 @@ class AppShellTests(unittest.TestCase):
             with self.subTest(path=path[:40]):
                 self.assertEqual(client.get(path).status_code, 404)
 
-    def test_no_external_fonts_in_build(self):
-        for path in APP_DIR.rglob("*"):
-            if path.is_file() and path.suffix in {".html", ".css", ".js"}:
-                text = path.read_text(encoding="utf-8", errors="ignore")
-                self.assertNotIn("fonts.googleapis.com", text, path.name)
-                self.assertNotIn("fonts.gstatic.com", text, path.name)
-        self.assertTrue(list((APP_DIR / "assets").glob("*.woff2")))
+    def test_unbuilt_frontend_gives_503_with_hint(self):
+        with mock.patch.object(app_shell, "APP_DIR", self.app_dir / "does-not-exist"):
+            res = self.client.get("/app/study")
+        self.assertEqual(res.status_code, 503)
+        self.assertIn("npm run build", res.text)
 
-    def test_legacy_pages_survive_build(self):
-        # Guards the emptyOutDir mistake: the build must never clear static/ itself.
-        for name in ("index.html", "study.html", "review.html", "landing.html", "i18n.js"):
-            with self.subTest(name=name):
-                self.assertTrue((Path(tts_service.STATIC_DIR) / name).is_file())
+    def test_old_pages_still_serve(self):
         self.assertEqual(self.client.get("/study").status_code, 200)
         self.assertEqual(self.client.get("/static/study.html").status_code, 200)
 
-    def test_legacy_pages_with_no_nav_link_to_the_app(self):
-        for name in ("index", "study", "review", "listen", "write", "speak", "coach"):
-            with self.subTest(page=name):
-                html = (Path(tts_service.STATIC_DIR) / f"{name}.html").read_text(encoding="utf-8")
-                self.assertNotIn('href="/app/', html)
-                self.assertIn('href="/coach" class="nav-tab', html)
 
-    def test_unbuilt_frontend_gives_503_with_hint(self):
-        with mock.patch.object(app_shell, "APP_DIR", APP_DIR / "does-not-exist"):
-            res = self.client.get("/app/hours")
-        self.assertEqual(res.status_code, 503)
-        self.assertIn("npm run build", res.text)
+class WebSourceTests(unittest.TestCase):
+    """The SPA source must build into something the site's CSP allows."""
+
+    def test_index_has_no_inline_scripts_or_external_urls(self):
+        html = (WEB / "index.html").read_text(encoding="utf-8")
+        parser = _Tags()
+        parser.feed(html)
+        scripts = [attrs for tag, attrs in parser.tags if tag == "script"]
+        self.assertEqual([a.get("src") for a in scripts], ["/src/main.tsx"])
+        for tag, attrs in parser.tags:
+            for name in attrs:
+                self.assertFalse(name.startswith("on"), f"inline handler {name} on <{tag}>")
+            for name in ("src", "href"):
+                self.assertFalse(re.match(r"(?i)(https?:)?//", attrs.get(name) or ""), f"external {name}")
+        self.assertIsNone(re.search(r"<script(?![^>]*\bsrc=)[^>]*>", html))
+
+    def test_vite_builds_under_app(self):
+        config = (WEB / "vite.config.ts").read_text(encoding="utf-8")
+        self.assertIn('base: "/app/"', config)
+        self.assertIn('outDir: "dist"', config)
+
+    def test_no_external_fonts_in_source(self):
+        for path in (WEB / "src").rglob("*"):
+            if path.is_file() and path.suffix in {".css", ".ts", ".tsx"}:
+                text = path.read_text(encoding="utf-8")
+                self.assertNotIn("fonts.googleapis.com", text, path.name)
+                self.assertNotIn("fonts.gstatic.com", text, path.name)
+
+    def test_build_output_is_not_committed(self):
+        ignored = (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+        for entry in ("static/app/", "web/dist/", "web/node_modules/"):
+            self.assertIn(entry, ignored)
 
 
 if __name__ == "__main__":

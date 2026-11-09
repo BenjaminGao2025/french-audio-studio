@@ -1,3 +1,11 @@
+# Build the SPA (web/) on its own stage; only its dist/ reaches the final image.
+FROM node:22-slim AS web
+WORKDIR /web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY web/ ./
+RUN npm run build
+
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -18,6 +26,7 @@ COPY services /app/services
 COPY scripts /app/scripts
 COPY data /app/data
 COPY static /app/static
+COPY --from=web /web/dist /app/static/app
 
 RUN mkdir -p /app/outputs
 

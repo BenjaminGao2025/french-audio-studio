@@ -7,8 +7,11 @@ cloudflared.log
 outputs/
 tests/
 models/
-frontend/
 node_modules/
+# The image builds web/ itself; a local build or install must not leak in
+web/node_modules/
+web/dist/
+static/app/
 # Never in the build context: secrets, local agent state, tunnel config, untracked scratch modules
 .env
 .claude/
