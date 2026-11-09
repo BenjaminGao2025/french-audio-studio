@@ -52,10 +52,10 @@ TCF_SKILL_LANES = {
     "shared": ("review",),
 }
 TCF_SKILL_LINKS = {
-    "CO": "/listen",
-    "CE": "/study",
-    "EE": "/write",
-    "EO": "/speak",
+    "CO": "/app/practice/episodes",
+    "CE": "/app/study",
+    "EE": "/app/practice/write",
+    "EO": "/app/practice/speak",
 }
 PLAN_START = datetime.date(2026, 10, 5)  # week 1 of the plan
 WEEK_TARGET_MIN = round(sum(m * LANE_WEIGHTS.get(lane, 1) for lane, m in LANE_WEEK_TARGETS.items()))
