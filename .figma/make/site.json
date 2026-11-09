@@ -1,0 +1,10 @@
+{
+  "description": "This request describes project setup and deployment checks, not the web app’s features or intended users, so its purpose cannot be determined.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

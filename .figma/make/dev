@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Serves the standalone design prototype (prototype/) with Vite HMR on $PORT.
+set -euo pipefail
+cd "$(dirname "$0")/../../prototype"
+exec npx --no-install vite --port "$PORT" --host 0.0.0.0 --strictPort

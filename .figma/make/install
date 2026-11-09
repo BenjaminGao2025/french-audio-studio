@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Installs the standalone design prototype only (prototype/). The FastAPI app is not installed or run.
+set -euo pipefail
+cd "$(dirname "$0")/../../prototype"
+exec npm ci --no-audit --no-fund

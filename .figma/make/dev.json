@@ -1,0 +1,6 @@
+{
+  // Reinstall when the prototype's dependency metadata changes.
+  "installOn": ["prototype/package.json", "prototype/package-lock.json"],
+  // Vite does not hot-reload its own config.
+  "restartOn": ["prototype/vite.config.ts"],
+}

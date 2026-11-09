@@ -1,0 +1,3 @@
+# Toolchain for the standalone design prototype in prototype/ (Node only; the FastAPI app is not run here).
+[tools]
+node = "22"
