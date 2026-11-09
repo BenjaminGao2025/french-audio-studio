@@ -155,6 +155,35 @@ describe("Task C — Anki-style review card", () => {
     expect(text).toContain("Blank means:");
     expect(text).toContain("有（助动词）");
   });
+
+  it("before the reveal, R on a cloze and a speak card never calls sayFrench", async () => {
+    const spy = vi.spyOn(store, "sayFrench").mockImplementation(() => {});
+    await mount(card({ id: "cloze-r" }));
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "r", bubbles: true }));
+    });
+    expect(spy).not.toHaveBeenCalled();
+
+    await mount(card({ id: "speak-r", mode: "speak", kind: "Speak", prompt: "We took the bus.", target: FR }));
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "R", bubbles: true }));
+    });
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("a recognize front shows the French word, no typing, and speaks the word on show", async () => {
+    const spy = vi.spyOn(store, "sayFrench").mockImplementation(() => {});
+    await mount(card({ id: "rec-1", mode: "recognize", kind: "Fill-in", target: "soleil", prompt: "" }));
+    expect(spy).toHaveBeenCalledWith("soleil");
+    expect(host.textContent).toContain("What does it mean?");
+    expect(host.querySelector('.fr-word[data-word="soleil"]')).toBeTruthy();
+    expect(host.querySelector("#rev-input")).toBeNull();
+  });
+
+  it("'Blank means' is absent on a Recall card, which has no blank", async () => {
+    await mount(card({ id: "recall-1", kind: "Recall", prompt: "We took the bus.", target: FR }));
+    expect(host.textContent).not.toContain("Blank means:");
+  });
 });
 
 describe("Task C — Saved as a table", () => {
@@ -180,5 +209,13 @@ describe("Task C — Saved as a table", () => {
     const sentenceRow = rows.find((r) => r.querySelector(".saved-sentence"));
     expect(sentenceRow).toBeTruthy();
     expect(sentenceRow!.querySelector('[data-col="imp"]')?.textContent?.trim()).toBe("—");
+
+    // Due and Saved stay compact and on one line (no "in a minute" / "9 Nov 2026" wrapping).
+    const cells = rows[0].querySelectorAll("td");
+    const dueCell = cells[4];  // French, Type, Meaning, Status, Due, Importance, Saved, Actions
+    const savedCell = cells[6];
+    expect(dueCell.textContent).toMatch(/^(now|overdue \d+ d|\d+ min|\d+ h|\d+ d|—)$/);
+    expect(savedCell.textContent!.length).toBeLessThan(12);
+    expect(table.textContent).not.toContain("in a minute");
   });
 });

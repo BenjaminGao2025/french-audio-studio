@@ -119,11 +119,11 @@ describe("Task B — Study word card, selection and steps", () => {
       header.dispatchEvent(new Event("pointerup", { bubbles: true }));
     });
     await wait(150);
-    expect(spy).toHaveBeenCalledWith("madame est-ce que");
-    expect(document.querySelector(".wp-headword")?.textContent).toBe("madame est-ce que");
+    expect(spy).toHaveBeenCalledWith("madame, est-ce que");
+    expect(document.querySelector(".wp-headword")?.textContent).toBe("madame, est-ce que");
     const wc = fake.calls.filter((c) => c.path === "/api/word-context");
     expect(wc).toHaveLength(1);
-    expect(wc[0].body).toMatchObject({ word: "madame est-ce que", occurrence: 0, sentence: FR });
+    expect(wc[0].body).toMatchObject({ word: "madame, est-ce que", occurrence: 0, sentence: FR });
   });
 
   it("regression: after step 1 has ended, playing step 2 starts playback with step 2's text", async () => {

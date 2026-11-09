@@ -19,6 +19,11 @@ import { cx } from "../lib/format";
 import { lookupKey } from "../lib/lookup";
 import { announce, get, patchStudy, sayFrench, useApp } from "../state/store";
 import { Banner, Button, Importance, Pill, Skeleton, Spinner } from "../components/ui";
+import { findWordSpans } from "../components/FrText";
+
+/** Server limits from word_context.py: a long free selection is spoken but not looked up. */
+const WORD_MAX_CHARS = 40;
+const MAX_CHUNK_SPACES = 4;
 
 /** Remembers that a word of this sentence was looked up, so Add to review can offer it as a Fill-in card. */
 function pick(sentenceId: string, wordIndex: number) {
@@ -44,24 +49,17 @@ function phraseOverlaps(pick: string, phraseText: string): boolean {
   return Boolean(p && q && (p.includes(q) || q.includes(p)));
 }
 
-const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-/** The sentence with every word of the pick highlighted using --mark-bg. */
-function Highlight({ sentence, pick }: { sentence: string; pick: string }) {
-  const words = Array.from(new Set(wordChars(pick).filter((w) => w.length > 1)));
-  if (!words.length) return <>{sentence}</>;
-  const re = new RegExp(`(${words.map(escapeRe).join("|")})`, "gi");
-  const parts = sentence.split(re);
-  const set = new Set(words);
+/** The sentence with only the picked whole-word occurrence highlighted (never a substring of another word). */
+function Highlight({ sentence, pick, occurrence = 0 }: { sentence: string; pick: string; occurrence?: number }) {
+  const spans = findWordSpans(sentence, pick);
+  const span = spans[Math.min(Math.max(occurrence, 0), Math.max(0, spans.length - 1))];
+  if (!span) return <>{sentence}</>;
+  const [start, end] = span;
   return (
     <>
-      {parts.map((part, i) =>
-        set.has(part.toLocaleLowerCase("fr")) ? (
-          <mark key={i} className="wp-mark">{part}</mark>
-        ) : (
-          <span key={i}>{part}</span>
-        ),
-      )}
+      {sentence.slice(0, start)}
+      <mark className="wp-mark">{sentence.slice(start, end)}</mark>
+      {sentence.slice(end)}
     </>
   );
 }
@@ -97,6 +95,9 @@ export function WordPanel({
 }) {
   const w = wordIndex !== undefined ? sentence.raw?.words?.[wordIndex] : undefined;
   const isAnalysis = w !== undefined;
+  // A long free selection is still spoken, but the server rejects it: show a hint instead of asking
+  // /api/word-context or the dictionary. Analysis words always keep their stored meaning.
+  const tooLong = !isAnalysis && (text.length > WORD_MAX_CHARS || (text.split(" ").length - 1) >= MAX_CHUNK_SPACES);
   const translation_zh = sentence.raw?.translation_zh ?? "";
   const hints = useMemo<WordContextHints>(
     () => (w ? { meaning_zh: w.meaning_zh, meaning_en: w.meaning, note_en: w.why, lemma: w.lemma, pos: w.type } : EMPTY_HINTS),
@@ -116,12 +117,12 @@ export function WordPanel({
   const lemmaForEty = baseForm || text;
 
   const [dict, setDict] = useState<DictionaryEntry | null>(null);
-  const [dictSt, setDictSt] = useState<LoadState>("loading");
+  const [dictSt, setDictSt] = useState<LoadState>(tooLong ? "idle" : "loading");
   const [dictErr, setDictErr] = useState("");
   const [dictMore, setDictMore] = useState(false);
 
   const [ctx, setCtx] = useState<WordContextResult | null>(null);
-  const [ctxSt, setCtxSt] = useState<LoadState>(isAnalysis ? "idle" : "loading");
+  const [ctxSt, setCtxSt] = useState<LoadState>(isAnalysis || tooLong ? "idle" : "loading");
 
   const [phrases, setPhrases] = useState<Phrase[]>([]);
 
@@ -134,11 +135,14 @@ export function WordPanel({
   const alive = () => !abort.current.signal.aborted;
 
   useEffect(() => {
+    // StrictMode's simulated unmount aborts the initial controller; recreate a live one on (each) mount.
+    abort.current = new AbortController();
     loadFavorites().catch(() => undefined);
     return () => abort.current.abort();
   }, []);
 
   const loadDict = useCallback(() => {
+    if (tooLong) return;
     setDictSt("loading");
     lookupWord(shown)
       .then((d) => {
@@ -152,10 +156,10 @@ export function WordPanel({
         setDictSt("error");
         announce("Dictionary request failed.", true);
       });
-  }, [shown]);
+  }, [shown, tooLong]);
 
   const loadCtx = useCallback(() => {
-    if (isAnalysis) return;
+    if (isAnalysis || tooLong) return;
     setCtxSt("loading");
     wordContext({ sentence: sentence.fr, word: text, occurrence, translation_zh, hints }, abort.current.signal)
       .then((r) => {
@@ -166,7 +170,7 @@ export function WordPanel({
       .catch(() => {
         if (alive()) setCtxSt("error");
       });
-  }, [isAnalysis, sentence.fr, text, occurrence, translation_zh, hints]);
+  }, [isAnalysis, tooLong, sentence.fr, text, occurrence, translation_zh, hints]);
 
   const loadEty = useCallback(() => {
     setEtySt("loading");
@@ -254,7 +258,13 @@ export function WordPanel({
           {/* L2 — meaning in this sentence */}
           <section className="stack gap-1" aria-label="In this sentence">
             <span className="wp-label">In this sentence</span>
-            {isAnalysis ? (
+            {tooLong ? (
+              <div className="wp-insentence">
+                <p className="t-support">Pick a few words to see their meaning here.</p>
+                {translation_zh && <p className="t-support" lang="zh">{translation_zh}</p>}
+                {sentence.en && <p className="t-support">{sentence.en}</p>}
+              </div>
+            ) : isAnalysis ? (
               <div className="wp-insentence">
                 <p className="wp-insentence-zh" lang="zh">{w!.meaning_zh || "—"}</p>
                 <p className="wp-insentence-en">{w!.meaning}</p>
@@ -277,7 +287,7 @@ export function WordPanel({
           {/* L2 — context */}
           <section className="stack gap-1" aria-label="Context">
             <span className="wp-label">Context</span>
-            <p className="t-body" lang="fr"><Highlight sentence={sentence.fr} pick={text} /></p>
+            <p className="t-body" lang="fr"><Highlight sentence={sentence.fr} pick={text} occurrence={occurrence} /></p>
             {translation_zh && <p className="t-support" lang="zh">{translation_zh}</p>}
             <p className="t-support">{sentence.en}</p>
             {overlapping && (
@@ -310,30 +320,32 @@ export function WordPanel({
         </>
       )}
 
-      {/* L3 — dictionary (clamped to three lines) */}
-      <section className="stack gap-1" aria-label="Dictionary">
-        <span className="wp-label">Dictionary{dict?.lemma && dict.lemma.toLowerCase() !== shown.toLowerCase() ? ` · ${dict.lemma}` : ""}</span>
-        {dictSt === "loading" && <><Spinner label="Looking up the dictionary entry…" /><Skeleton lines={2} /></>}
-        {dictSt === "error" && (
-          <Banner tone="error" title="Dictionary request failed" live="assertive" actions={<Button kind="secondary" onClick={loadDict}>Retry</Button>}>
-            {dictErr || "The dictionary didn’t respond."}
-          </Banner>
-        )}
-        {dictSt === "ready" && dictText && (
-          <>
-            <div className={cx("wp-dict", !dictMore && "wp-clamp")}>
-              {dictText.explanation_cn && <span lang="zh">{dictText.explanation_cn}</span>}
-              {dictText.explanation_cn && dictText.explanation_en && <span aria-hidden> · </span>}
-              {dictText.explanation_en && <span>{dictText.explanation_en}</span>}
-            </div>
-            <Button kind="tertiary" className="btn--sm-text" aria-expanded={dictMore} onClick={() => setDictMore(!dictMore)}>
-              {dictMore ? "Less" : "More"}
-            </Button>
-          </>
-        )}
-      </section>
+      {/* L3 — dictionary (clamped to three lines). Skipped for a long free selection. */}
+      {!tooLong && (
+        <section className="stack gap-1" aria-label="Dictionary">
+          <span className="wp-label">Dictionary{dict?.lemma && dict.lemma.toLowerCase() !== shown.toLowerCase() ? ` · ${dict.lemma}` : ""}</span>
+          {dictSt === "loading" && <><Spinner label="Looking up the dictionary entry…" /><Skeleton lines={2} /></>}
+          {dictSt === "error" && (
+            <Banner tone="error" title="Dictionary request failed" live="assertive" actions={<Button kind="secondary" onClick={loadDict}>Retry</Button>}>
+              {dictErr || "The dictionary didn’t respond."}
+            </Banner>
+          )}
+          {dictSt === "ready" && dictText && (
+            <>
+              <div className={cx("wp-dict", !dictMore && "wp-clamp")}>
+                {dictText.explanation_cn && <span lang="zh">{dictText.explanation_cn}</span>}
+                {dictText.explanation_cn && dictText.explanation_en && <span aria-hidden> · </span>}
+                {dictText.explanation_en && <span>{dictText.explanation_en}</span>}
+              </div>
+              <Button kind="tertiary" className="btn--sm-text" aria-expanded={dictMore} onClick={() => setDictMore(!dictMore)}>
+                {dictMore ? "Less" : "More"}
+              </Button>
+            </>
+          )}
+        </section>
+      )}
 
-      {!nested && (
+      {!nested && !text.includes(" ") && !tooLong && (
         /* L3 — roots & origin (fetched only when expanded) */
         <section className={cx("wp-collapsible wp-ety", etyOpen && "wp-ety--open")} aria-label="Roots and origin">
           <button type="button" className="wp-toggle" aria-expanded={etyOpen} onClick={openEty}>

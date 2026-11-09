@@ -63,19 +63,33 @@ export function dueIn(iso: string, now = Date.now()): string {
   return d === 1 ? "tomorrow" : `in ${d} days`;
 }
 
-/** Relative due date for the Saved table. */
-export function relativeDue(iso: string | undefined, now = Date.now()): string {
+/** Compact one-line due label for the Saved table: now / N min / N h / N d / overdue N d. */
+export function compactDue(iso: string | undefined, now = Date.now()): string {
   if (!iso) return "—";
   const ms = Date.parse(iso) - now;
   if (!Number.isFinite(ms)) return "—";
-  return ms < -60_000 ? "overdue" : dueIn(iso, now);
+  if (ms < -60_000) {
+    const d = Math.max(1, Math.round(-ms / 86_400_000));
+    return `overdue ${d} d`;
+  }
+  if (ms <= 60_000) return "now";
+  const min = Math.round(ms / 60_000);
+  if (min < 60) return `${min} min`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `${h} h`;
+  return `${Math.round(h / 24)} d`;
 }
 
-/** "Saved" column: a short date for server timestamps, a stable label for demo order indexes. */
-function savedDate(n: number): string {
+/** Short Saved date: "9 Nov", with the year only when it isn't the current year. */
+export function shortSavedDate(n: number, now = new Date()): string {
   if (!n) return "—";
   const ms = n > 1e12 ? n : Date.UTC(2026, 0, 1) + n * 1000;
-  return new Date(ms).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  const d = new Date(ms);
+  if (Number.isNaN(d.getTime())) return "—";
+  const opts: Intl.DateTimeFormatOptions = d.getFullYear() === now.getFullYear()
+    ? { day: "numeric", month: "short" }
+    : { day: "numeric", month: "short", year: "numeric" };
+  return d.toLocaleDateString("en-GB", opts);
 }
 
 /** Old T.interval: <1 min / N min / N h / N d / N mo / N y from a seconds preview. */
@@ -106,7 +120,7 @@ const RATINGS: { value: 1 | 2 | 3 | 4; label: string }[] = [
   { value: 3, label: "Good" },
   { value: 4, label: "Easy" },
 ];
-const MODE_LABEL: Record<ReviewMode, string> = { listen: "Listen", speak: "Speak", cloze: "Fill-in", recognize: "Fill-in", grammar: "Grammar" };
+const MODE_LABEL: Record<ReviewMode, string> = { listen: "Listen", speak: "Speak", cloze: "Fill-in", recognize: "Recall", grammar: "Grammar" };
 const LEARN_AHEAD_MS = 20 * 60 * 1000;
 
 /** The full sentence as FrText segments, with the target word(s) highlighted using --mark-bg. */
@@ -430,6 +444,8 @@ function ReviewSession() {
   const narrow = useNarrow();
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const card: ReviewCard | undefined = cards[review.index];
+  // A learn-ahead re-queue can return the very same id; keying on index:id re-runs the per-show effects.
+  const cardPos = `${review.index}:${card?.id}`;
   const [pick, setPick] = useState<{ text: string; anchor: HTMLElement; wordIndex?: number; occurrence: number } | null>(null);
 
   // Freeze sessionCards on mount if not already frozen.
@@ -444,16 +460,17 @@ function ReviewSession() {
   }, [card?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const shownAt = useRef(Date.now());
-  useEffect(() => { shownAt.current = Date.now(); }, [card?.id]);
+  useEffect(() => { shownAt.current = Date.now(); }, [cardPos]);
 
   useEffect(() => { if (review.phase === "complete") loadQueue().catch(() => undefined); }, [review.phase]);
 
-  // Listen / Recognize cards read the target aloud as soon as they are shown.
+  // Listen / Recognize cards read the target aloud as soon as they are shown. Before the reveal a
+  // typed or Speak front never speaks the answer.
   useEffect(() => {
     if (!card) return;
     const m = card.mode ?? "listen";
     if (m === "listen" || m === "recognize") sayFrench(m === "recognize" ? card.target : card.sentenceFr);
-  }, [card?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cardPos]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const curId = card?.id ?? "";
   const u: ReviewUI = (card ? ui[curId] : undefined) ?? { draft: "", phase: "answering", hint: false, revealed: false };
@@ -467,7 +484,7 @@ function ReviewSession() {
   const grammar = card?.grammar ?? [];
   const sentenceFr = card?.sentenceFr ?? "";
   const revealed = u.revealed || Boolean(u.result) || u.phase === "graded" || u.phase === "techfail";
-  const typed = mode === "cloze" || mode === "recognize" || mode === "grammar" || card?.kind === "Recall";
+  const typed = mode === "cloze" || mode === "grammar" || card?.kind === "Recall";
   const isWordCard = mode === "cloze" || mode === "recognize" || mode === "grammar";
   const markTarget = isWordCard ? card?.target ?? "" : "";
   const suggested: number | undefined = u.suggested ?? (u.result ? (u.result.correct ? (u.hinted || u.hint ? 2 : 3) : 1) : undefined);
@@ -530,7 +547,10 @@ function ReviewSession() {
 
   const replay = () => {
     if (!card) return;
-    sayFrench(revealed ? cardSpeech(card) : mode === "recognize" ? card.target : card.sentenceFr);
+    if (revealed) return sayFrench(cardSpeech(card));
+    // Before the reveal, audio exists only for listen and recognize cards; never speak the answer.
+    if (mode === "listen") sayFrench(sentenceFr);
+    else if (mode === "recognize") sayFrench(card.target);
   };
 
   // Keyboard shortcuts. A single listener reads a ref so the latest handlers are always used.
@@ -646,7 +666,18 @@ function ReviewSession() {
                 <Disclosure summary="Show initials"><p className="rev-initials" lang="fr">{initialsHint(sentenceFr)}</p></Disclosure>
               </div>
             )}
-            {(mode === "cloze" || mode === "recognize" || mode === "grammar" || card.kind === "Recall") && (
+            {mode === "recognize" && (
+              <div className="stack gap-3">
+                <FrText segments={tokenizeFrench(card.target)} className="t-fr-lg" onPick={onWordPick} />
+                <p className="t-support">What does it mean?</p>
+                <div className="btn-row">
+                  <Button kind="primary" className="rev-play-big" iconOnly icon={<Play aria-hidden />} aria-label="Play the word" onClick={() => sayFrench(card.target)} />
+                  <Button kind="secondary" icon={<Volume2 aria-hidden />} onClick={() => sayFrench(card.target, 0.75)}>Slow 0.75×</Button>
+                </div>
+                <p className="t-meta">Press R to replay · Space to show the answer</p>
+              </div>
+            )}
+            {(mode === "cloze" || mode === "grammar" || card.kind === "Recall") && (
               <div className="stack gap-3">
                 {mode === "grammar" && meta.rule && <Pill>{meta.rule}</Pill>}
                 {card.kind === "Recall" ? (
@@ -659,7 +690,7 @@ function ReviewSession() {
                     {mode === "grammar" ? meta.full_en : (translationZh || translationEn)}
                   </p>
                 )}
-                {(meta.meaning_zh || meta.meaning_en) && <p className="t-support">Blank means: {meta.meaning_zh || meta.meaning_en}</p>}
+                {card.kind === "Fill-in" && (meta.meaning_zh || meta.meaning_en) && <p className="t-support">Blank means: {meta.meaning_zh || meta.meaning_en}</p>}
                 {mode === "grammar" && meta.hint && <p className="t-support">Hint: {meta.hint}</p>}
                 <Disclosure summary="Show initials"><p className="rev-initials" lang="fr">{initialsHint(card.target)}</p></Disclosure>
               </div>
@@ -969,25 +1000,25 @@ function Library({ mode }: { mode: "library" | "saved" }) {
           <div className="table-wrap saved-table-wrap">
             <table className="saved-table">
               <colgroup>
-                {selecting && <col className="saved-col-check" />}
+                {selecting && <col className="saved-col-hide saved-col-check" />}
                 <col className="saved-col-french" />
-                <col className="saved-col-type" />
+                <col className="saved-col-hide saved-col-type" />
                 <col className="saved-col-hide saved-col-meaning" />
-                <col className="saved-col-status" />
+                <col className="saved-col-hide saved-col-status" />
                 <col className="saved-col-due" />
-                <col className="saved-col-imp" />
+                <col className="saved-col-hide saved-col-imp" />
                 <col className="saved-col-hide saved-col-saved" />
                 <col className="saved-col-actions" />
               </colgroup>
               <thead>
                 <tr>
-                  {selecting && <th scope="col"><span className="sr-only">Select</span></th>}
+                  {selecting && <th scope="col" className="saved-col-hide"><span className="sr-only">Select</span></th>}
                   <th scope="col">French</th>
-                  <th scope="col">Type</th>
+                  <th scope="col" className="saved-col-hide">Type</th>
                   <th scope="col" className="saved-col-hide">Meaning</th>
-                  <th scope="col">Status</th>
+                  <th scope="col" className="saved-col-hide">Status</th>
                   {sortHeader("due", "Due")}
-                  {sortHeader("importance", "Importance")}
+                  {sortHeader("importance", "Importance", true)}
                   {sortHeader("saved", "Saved", true)}
                   <th scope="col"><span className="sr-only">Actions</span></th>
                 </tr>
@@ -1000,23 +1031,25 @@ function Library({ mode }: { mode: "library" | "saved" }) {
                   return (
                     <tr key={c.id} data-card-id={c.id} data-saved={c.savedAt}>
                       {selecting && (
-                        <td>
+                        <td className="saved-col-hide">
                           {c.saved && <input type="checkbox" aria-label={`Select ${c.kind} card${c.word ? ` for ${c.word}` : ""}`} checked={!!sel[c.id]} onChange={(e) => setSel({ ...sel, [c.id]: e.target.checked })} />}
                         </td>
                       )}
-                      <td className="saved-french">
-                        {c.word ? <strong lang="fr">{c.word}</strong> : <span lang="fr" className="saved-sentence" title={s?.fr ?? ""}>{s?.fr ?? ""}</span>}
+                      <td className="saved-french" title={c.word || s?.fr || ""}>
+                        <span className="saved-cell">{c.word ? <strong lang="fr">{c.word}</strong> : <span lang="fr" className="saved-sentence">{s?.fr ?? ""}</span>}</span>
                       </td>
-                      <td>{c.kind}</td>
-                      <td className="saved-col-hide">{c.meaning || s?.en || "—"}</td>
-                      <td>{c.mastered ? "Mastered" : STATUS_LABEL[c.status]}</td>
-                      <td className="num">{relativeDue(c.due)}</td>
-                      <td data-col="imp">{wordLookups !== null ? <span className="saved-imp"><Importance count={wordLookups} /></span> : "—"}</td>
-                      <td className="saved-col-hide num">{savedDate(c.savedAt)}</td>
+                      <td className="saved-col-hide"><span className="saved-cell">{c.kind}</span></td>
+                      <td className="saved-col-hide saved-meaning" title={c.meaning || s?.en || ""}><span className="saved-cell">{c.meaning || s?.en || "—"}</span></td>
+                      <td className="saved-col-hide"><span className="saved-cell">{c.mastered ? "Mastered" : STATUS_LABEL[c.status]}</span></td>
+                      <td className="num"><span className="saved-cell">{compactDue(c.due)}</span></td>
+                      <td className="saved-col-hide" data-col="imp"><span className="saved-cell">{wordLookups !== null ? <span className="saved-imp"><Importance count={wordLookups} /></span> : "—"}</span></td>
+                      <td className="saved-col-hide num"><span className="saved-cell">{shortSavedDate(c.savedAt)}</span></td>
                       <td className="saved-actions">
-                        <Button kind="tertiary" iconOnly aria-label={`Play ${c.word || "sentence"}`} icon={<Play aria-hidden />} onClick={() => sayFrench(speech)} />
-                        <Button kind="tertiary" iconOnly aria-pressed={fav} aria-label={fav ? "Remove favorite" : "Favorite"} icon={fav ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />} onClick={() => void setFavorite(speech, !fav)} />
-                        <Button kind="tertiary" iconOnly aria-label={c.mastered ? "Restore" : "Mark mastered"} icon={<Archive aria-hidden />} onClick={() => (c.mastered ? void restoreMastered(c.id) : masterCard(c.id))} />
+                        <span className="saved-action-btns">
+                          <Button kind="tertiary" iconOnly aria-label={`Play ${c.word || "sentence"}`} icon={<Play aria-hidden />} onClick={() => sayFrench(speech)} />
+                          <Button kind="tertiary" iconOnly aria-pressed={fav} aria-label={fav ? "Remove favorite" : "Favorite"} icon={fav ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />} onClick={() => void setFavorite(speech, !fav)} />
+                          <Button kind="tertiary" iconOnly aria-label={c.mastered ? "Restore" : "Mark mastered"} icon={<Archive aria-hidden />} onClick={() => (c.mastered ? void restoreMastered(c.id) : masterCard(c.id))} />
+                        </span>
                       </td>
                     </tr>
                   );

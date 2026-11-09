@@ -36,6 +36,13 @@ function sameTexts(a: string[] | undefined, b: string[]): boolean {
   return !!a && a.length === b.length && a.every((x, i) => x === b[i]);
 }
 
+/* Each study control owns a distinct playback label, so a button reflects only its own playback. */
+const SENTENCE_LABEL = (n: number) => `Study audio · Sentence ${n}`;
+const ALL_SENTENCES_LABEL = "Study audio · All sentences";
+const STEP_LABEL = (n: number) => `Study audio · Step ${n}`;
+const ALL_STEPS_LABEL = "Study audio · All steps";
+const isLive = (status: string) => status === "playing" || status === "buffering" || status === "loading";
+
 export function StudyLearn() {
   const study = useApp((s) => s.study);
   const forcedSentence = useApp((s) => s.ss["SCR-STU-02"]);
@@ -233,7 +240,10 @@ export function StudyLearn() {
 function StudyPlayer({ practising }: { practising: boolean }) {
   const study = useApp((s) => s.study);
   const p = useApp((s) => s.player);
-  const mine = p && p.owner.kind === "study" ? p : null;
+  const label = `Sentence ${study.index + 1}`;
+  const sentenceLabel = SENTENCE_LABEL(study.index + 1);
+  // Only this header's own playback drives its controls; a step / all-steps playback is separate.
+  const mine = p && p.owner.kind === "study" && (p.owner.label === sentenceLabel || p.owner.label === ALL_SENTENCES_LABEL) ? p : null;
 
   if (practising) return null; // exercises use their own neutral "Practice audio" control
 
@@ -241,14 +251,13 @@ function StudyPlayer({ practising }: { practising: boolean }) {
   const wanted = [cur.fr];
   const allTexts = study.sentences.map((x) => x.fr);
   const dur = (ts: string[]) => ts.reduce((a, t) => a + estimate(t), 0);
-  const label = `Sentence ${study.index + 1}`;
   const sameWanted = sameTexts(mine?.texts, wanted);
   const sameAll = sameTexts(mine?.texts, allTexts);
 
   const startSentence = () =>
-    startPlayback({ kind: "study", label: `Study audio · ${label}`, route: "study" }, dur(wanted), { texts: wanted });
+    startPlayback({ kind: "study", label: sentenceLabel, route: "study" }, dur(wanted), { texts: wanted });
   const startAll = () =>
-    startPlayback({ kind: "study", label: "Study audio · All sentences", route: "study" }, dur(allTexts), { texts: allTexts });
+    startPlayback({ kind: "study", label: ALL_SENTENCES_LABEL, route: "study" }, dur(allTexts), { texts: allTexts });
 
   // If the player's texts differ from what this button wants, always start fresh instead of
   // resuming/restarting the OLD texts (the step-1 → step-2 bug).
@@ -269,7 +278,13 @@ function StudyPlayer({ practising }: { practising: boolean }) {
   const statusText = !mine
     ? "Ready"
     : { loading: "Loading audio…", playing: "Playing", paused: "Paused", ended: "Ended", error: "Couldn’t play", buffering: "Buffering…" }[mine.status];
-  const playing = mine?.status === "playing" || mine?.status === "buffering";
+  // The big button pauses only when the player's texts are exactly this sentence.
+  const sentenceStatus = mine?.owner.label === sentenceLabel ? mine.status : undefined;
+  const allStatus = mine?.owner.label === ALL_SENTENCES_LABEL ? mine.status : undefined;
+  const playing = sentenceStatus === "playing" || sentenceStatus === "buffering";
+  const loading = sentenceStatus === "loading";
+  const errored = sentenceStatus === "error";
+  const allPlaying = allStatus === "playing" || allStatus === "buffering" || allStatus === "loading";
 
   return (
     <div className="player" role="group" aria-label="Sentence player">
@@ -278,9 +293,9 @@ function StudyPlayer({ practising }: { practising: boolean }) {
           kind="primary"
           className="play-btn"
           iconOnly
-          busy={mine?.status === "loading"}
-          aria-label={`${playing ? "Pause" : mine?.status === "error" ? "Retry" : "Play"} ${label}`}
-          icon={playing ? <Pause aria-hidden /> : mine?.status === "error" ? <RotateCcw aria-hidden /> : <Play aria-hidden />}
+          busy={loading}
+          aria-label={`${playing ? "Pause" : errored ? "Retry" : "Play"} ${label}`}
+          icon={playing ? <Pause aria-hidden /> : errored ? <RotateCcw aria-hidden /> : <Play aria-hidden />}
           onClick={toggle}
         />
         <div className="grow stack gap-1" style={{ minWidth: 160 }}>
@@ -315,7 +330,9 @@ function StudyPlayer({ practising }: { practising: boolean }) {
         </Button>
       </div>
       <div className="btn-row">
-        <Button kind="secondary" icon={<Play aria-hidden />} onClick={toggleAll}>Play all sentences</Button>
+        <Button kind="secondary" icon={allPlaying ? <Pause aria-hidden /> : <Play aria-hidden />} onClick={toggleAll}>
+          {allPlaying ? "Pause all sentences" : "Play all sentences"}
+        </Button>
       </div>
       {mine?.status === "error" && (
         <Banner tone="error" title="Audio couldn’t play" live="assertive" actions={<Button kind="secondary" onClick={retryPlayback}>Retry</Button>}>
@@ -332,29 +349,35 @@ function StudyPlayer({ practising }: { practising: boolean }) {
 /* ---------------- SCR-STU-03: every step, played directly ---------------- */
 function StepsPanel({ sentence, onPick }: { sentence: StudySentence; onPick: (p: FrPick) => void }) {
   const player = useApp((s) => s.player);
-  const playingText =
-    player && player.owner.kind === "study" &&
-    (player.status === "playing" || player.status === "loading" || player.status === "buffering") &&
-    player.texts && player.texts.length === 1
-      ? player.texts[0]
-      : null;
+  // The one live study playback, by its owner label: a step button shows Pause only for its own step.
+  const liveLabel = player && player.owner.kind === "study" && isLive(player.status) ? player.owner.label : null;
+  const allStepsPlaying = liveLabel === ALL_STEPS_LABEL;
 
   const playStep = (i: number) => {
     const texts = [stepText(sentence.steps[i])];
     const p = get().player;
     const mine = p && p.owner.kind === "study" ? p : null;
-    if (mine && sameTexts(mine.texts, texts)) {
-      if (mine.status === "playing" || mine.status === "buffering" || mine.status === "loading") return updatePlayer({ status: "paused" });
+    if (mine && mine.owner.label === STEP_LABEL(i + 1) && sameTexts(mine.texts, texts)) {
+      if (isLive(mine.status)) return updatePlayer({ status: "paused" });
       if (mine.status === "paused") return updatePlayer({ status: "playing" });
       if (mine.status === "ended") return updatePlayer({ status: "playing", position: 0 });
       if (mine.status === "error") return retryPlayback();
       return;
     }
-    startPlayback({ kind: "study", label: `Study audio · Step ${i + 1}`, route: "study" }, estimate(texts[0]), { texts });
+    startPlayback({ kind: "study", label: STEP_LABEL(i + 1), route: "study" }, estimate(texts[0]), { texts });
   };
   const playAllSteps = () => {
     const texts = sentence.steps.map(stepText);
-    startPlayback({ kind: "study", label: "Study audio · All steps", route: "study" }, texts.reduce((a, t) => a + estimate(t), 0), { texts });
+    const p = get().player;
+    const mine = p && p.owner.kind === "study" ? p : null;
+    if (mine && mine.owner.label === ALL_STEPS_LABEL) {
+      if (isLive(mine.status)) return updatePlayer({ status: "paused" });
+      if (mine.status === "paused") return updatePlayer({ status: "playing" });
+      if (mine.status === "ended") return updatePlayer({ status: "playing", position: 0 });
+      if (mine.status === "error") return retryPlayback();
+      return;
+    }
+    startPlayback({ kind: "study", label: ALL_STEPS_LABEL, route: "study" }, texts.reduce((a, t) => a + estimate(t), 0), { texts });
   };
 
   return (
@@ -363,12 +386,13 @@ function StepsPanel({ sentence, onPick }: { sentence: StudySentence; onPick: (p:
         <p className="t-support">
           Build the sentence a piece at a time. Each step marks what is <mark className="added">new</mark>.
         </p>
-        <Button kind="secondary" icon={<Play aria-hidden />} onClick={playAllSteps}>Play all steps</Button>
+        <Button kind="secondary" icon={allStepsPlaying ? <Pause aria-hidden /> : <Play aria-hidden />} onClick={playAllSteps}>
+          {allStepsPlaying ? "Pause all steps" : "Play all steps"}
+        </Button>
       </div>
       <ol className="list" style={{ padding: "0 16px" }}>
         {sentence.steps.map((st, i) => {
-          const text = stepText(st);
-          const isPlaying = playingText === text;
+          const isPlaying = liveLabel === STEP_LABEL(i + 1);
           return (
             <li
               key={i}
@@ -392,10 +416,10 @@ function StepsPanel({ sentence, onPick }: { sentence: StudySentence; onPick: (p:
                   kind="tertiary"
                   className="btn--sm-text"
                   style={{ alignSelf: "flex-start", marginLeft: -12 }}
-                  icon={<Play aria-hidden />}
+                  icon={isPlaying ? <Pause aria-hidden /> : <Play aria-hidden />}
                   onClick={(e) => { e.stopPropagation(); playStep(i); }}
                 >
-                  Play step {i + 1}
+                  {isPlaying ? `Pause step ${i + 1}` : `Play step ${i + 1}`}
                 </Button>
               </div>
             </li>

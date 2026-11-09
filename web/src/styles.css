@@ -384,6 +384,10 @@ a { color: var(--primary); }
 .fr-word:hover, .fr-word:focus-visible {
   background: var(--primary-weak); text-decoration-color: var(--primary); text-decoration-thickness: 2px;
 }
+/* The keyboard-active word is highlighted like hover, but only while the root has keyboard focus. */
+.fr-text:focus-visible .fr-word.is-active {
+  background: var(--primary-weak); text-decoration-color: var(--primary); text-decoration-thickness: 2px;
+}
 .fr-added { background: var(--mark-bg); border-radius: 4px; box-shadow: inset 0 -2px 0 var(--warning); }
 .step-fr { font-size: 20px; line-height: 30px; font-weight: 500; }
 .step-badge {
@@ -568,33 +572,39 @@ details.disc > .disc-body { padding-bottom: var(--s3); }
 
 /* ===== Saved table (Task C) ===== */
 .saved-table-wrap { border: 1px solid var(--divider); }
-.saved-table { width: 100%; min-width: 760px; border-collapse: collapse; table-layout: fixed; font-size: 14px; line-height: 20px; font-variant-numeric: tabular-nums; }
-.saved-table col.saved-col-check { width: 44px; }
-.saved-table col.saved-col-french { width: 20%; }
-.saved-table col.saved-col-type { width: 8%; }
-.saved-table col.saved-col-meaning { width: 18%; }
-.saved-table col.saved-col-status { width: 9%; }
-.saved-table col.saved-col-due { width: 11%; }
-.saved-table col.saved-col-imp { width: 12%; }
-.saved-table col.saved-col-saved { width: 10%; }
-.saved-table col.saved-col-actions { width: 12%; }
-.saved-table th, .saved-table td { height: 40px; padding: var(--s2) var(--s3); border-bottom: 1px solid var(--divider); text-align: left; vertical-align: middle; overflow: hidden; }
+.saved-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 14px; line-height: 20px; font-variant-numeric: tabular-nums; }
+/* Fixed widths for the short columns leave the flexible French column the rest, so the table
+   always fits the content column and the Actions column is never clipped. */
+.saved-table col.saved-col-check { width: 40px; }
+.saved-table col.saved-col-french { width: auto; }
+.saved-table col.saved-col-type { width: 68px; }
+.saved-table col.saved-col-meaning { width: 120px; }
+.saved-table col.saved-col-status { width: 80px; }
+.saved-table col.saved-col-due { width: 68px; }
+.saved-table col.saved-col-imp { width: 64px; }
+.saved-table col.saved-col-saved { width: 64px; }
+.saved-table col.saved-col-actions { width: 120px; }
+.saved-table th, .saved-table td { height: 40px; padding: var(--s1) var(--s2); border-bottom: 1px solid var(--divider); text-align: left; vertical-align: middle; overflow: hidden; white-space: nowrap; }
 .saved-table thead th { position: sticky; top: 0; z-index: 1; background: var(--surface); color: var(--text); font-weight: 600; border-bottom: 2px solid var(--border-strong); }
 .saved-table tbody tr:hover { background: var(--primary-weak); }
 .saved-sort { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; font: inherit; font-weight: 600; color: var(--text); cursor: pointer; }
 .saved-sort:hover { color: var(--primary); }
 .saved-sort-mark { color: var(--text-2); font-weight: 400; }
+/* Every cell stays on one line; long French and Meaning text is clipped with an ellipsis. */
+.saved-cell { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .saved-french strong { font-weight: 600; }
-.saved-sentence { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .saved-imp .t-support { display: none; }
 .saved-actions { white-space: nowrap; }
-.saved-actions .btn { width: 32px; min-width: 32px; height: 32px; padding: 0; }
+.saved-action-btns { display: flex; gap: 2px; }
+/* Override .btn's 44px min-height so the action buttons never make a row taller than 40px. */
+.saved-actions .btn { width: 30px; min-width: 30px; height: 30px; min-height: 30px; padding: 0; }
 .saved-actions .btn svg { width: 16px; height: 16px; }
 .saved-actions .btn--tertiary { color: var(--text-2); }
 .saved-actions .btn--tertiary:hover { color: var(--primary); }
 .saved-pager { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); margin-top: var(--s3); }
 
 @container app (max-width: 640px) {
+  /* Only French, Due and Actions remain; hiding the <col> and its cells keeps the table at 100%. */
   .saved-table .saved-col-hide { display: none; }
   .lib-card { grid-template-columns: 24px minmax(0, 1fr) auto; }
 }

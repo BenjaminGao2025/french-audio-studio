@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { blankOut, ratingFor, toLibrary, toReviewCard, type ServerCard } from "./review";
-import { dueIn } from "../screens/Review";
+import { compactDue, dueIn, shortSavedDate } from "../screens/Review";
 
 const card = (p: Partial<ServerCard> & Pick<ServerCard, "id" | "mode">): ServerCard => ({
   note_id: "n1",
@@ -56,6 +56,27 @@ describe("ratings and dates", () => {
     expect(dueIn("2026-01-01T00:10:00Z", now)).toBe("in 10 minutes");
     expect(dueIn("2026-01-02T00:00:00Z", now)).toBe("tomorrow");
     expect(dueIn("2026-01-05T00:00:00Z", now)).toBe("in 4 days");
+  });
+});
+
+describe("Saved compact labels", () => {
+  it("compactDue is compact and stays on one line", () => {
+    const now = Date.parse("2026-01-01T00:00:00Z");
+    expect(compactDue("2026-01-01T00:00:00Z", now)).toBe("now");
+    expect(compactDue("2026-01-01T00:12:00Z", now)).toBe("12 min");
+    expect(compactDue("2026-01-01T03:00:00Z", now)).toBe("3 h");
+    expect(compactDue("2026-01-03T00:00:00Z", now)).toBe("2 d");
+    expect(compactDue("2025-12-30T00:00:00Z", now)).toBe("overdue 2 d");
+    expect(compactDue(undefined, now)).toBe("—");
+  });
+
+  it("shortSavedDate omits the year when it is the current year", () => {
+    const now = new Date(Date.UTC(2026, 10, 9, 12));
+    const sameYear = shortSavedDate(Date.UTC(2026, 10, 9, 12), now);
+    expect(sameYear).not.toContain("2026");
+    expect(sameYear).toMatch(/^\d{1,2} [A-Z][a-z]{2}$/); // "9 Nov"
+    expect(shortSavedDate(Date.UTC(2025, 10, 9, 12), now)).toContain("2025"); // "9 Nov 2025"
+    expect(shortSavedDate(0, now)).toBe("—");
   });
 });
 
