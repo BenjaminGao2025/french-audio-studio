@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Pause, Play, Repeat, RotateCcw, History as HistoryIcon, PencilLine, Plus, Check } from "lucide-react";
-import type { StudySentence } from "../data/fixtures";
+import { ApiError } from "../api/client";
+import { lookupWord } from "../api/lookup";
+import { cardKey, saveNote, useSavedCards, type NoteTarget } from "../api/srs";
+import { stepText, type ApiWord } from "../api/study";
+import type { DerivedCard, StudySentence } from "../data/fixtures";
 import { fmtClock, plural } from "../lib/format";
-import { lookupKey } from "../lib/lookup";
 import {
   announce,
   get,
@@ -10,21 +13,15 @@ import {
   patchStudy,
   retryPlayback,
   set,
-  simulate,
   startPlayback,
   stopPlayback,
-  syncChange,
   updatePlayer,
   useApp,
   type PlayerState,
 } from "../state/store";
-import { Banner, Button, Dialog, DemoNote, PageHead, Popover, Segmented, Skeleton, Spinner, Tabs, useNarrow } from "../components/ui";
+import { Banner, Button, Dialog, PageHead, Popover, Segmented, Skeleton, Spinner, Tabs, useNarrow } from "../components/ui";
 import { WordPanel } from "./WordPopup";
 import { Exercise } from "./Exercise";
-import { STUDY_FIXTURES } from "../data/fixtures";
-
-const SENTENCE_SECONDS = 4.5;
-const STEP_SECONDS = 2.5;
 
 export function StudyLearn() {
   const study = useApp((s) => s.study);
@@ -33,7 +30,7 @@ export function StudyLearn() {
   const s = study.sentences[study.index];
   const total = study.sentences.length;
   const practising = study.tab === "recall" || study.tab === "dictation";
-  const [word, setWord] = useState<{ entry: string; el: HTMLElement } | null>(null);
+  const [word, setWord] = useState<{ entry: string; el: HTMLElement; seg: number; wi?: number } | null>(null);
   const [srcOpen, setSrcOpen] = useState(study.sourceOpen);
   const sentRef = useRef<HTMLDivElement>(null);
   const narrow = useNarrow();
@@ -44,7 +41,7 @@ export function StudyLearn() {
     if (!entry) return;
     requestAnimationFrame(() => {
       const el = document.querySelector<HTMLElement>(`[data-word="${entry}"]`);
-      if (el) setWord({ entry, el });
+      if (el) setWord({ entry, el, seg: -1 });
     });
   }, [forcedSentence, forcedWord]);
 
@@ -128,9 +125,9 @@ export function StudyLearn() {
                       type="button"
                       className="word-btn"
                       data-word={g.t}
-                      aria-expanded={word?.entry === g.t}
+                      aria-expanded={word?.seg === i}
                       aria-haspopup="dialog"
-                      onClick={(e) => setWord(word?.entry === g.t ? null : { entry: g.t, el: e.currentTarget })}
+                      onClick={(e) => setWord(word?.seg === i ? null : { entry: g.t, el: e.currentTarget, seg: i, wi: g.wi })}
                     >
                       {g.t}
                     </button>
@@ -143,7 +140,7 @@ export function StudyLearn() {
               <p className="t-meta" style={{ marginTop: 4 }}>Select a word or phrase to see its meaning.</p>
               {word && !narrow && (
                 <Popover anchor={word.el} container={sentRef.current} onClose={() => setWord(null)} label={`Meaning of ${word.entry}`}>
-                  <WordPanel entry={word.entry} sentenceId={s.id} onGrammar={() => { setWord(null); patchStudy({ tab: "grammar" }); }} onClose={() => setWord(null)} />
+                  <WordPanel entry={word.entry} sentence={s} wordIndex={word.wi} onGrammar={() => { setWord(null); patchStudy({ tab: "grammar" }); }} onClose={() => setWord(null)} />
                 </Popover>
               )}
             </div>
@@ -191,7 +188,7 @@ export function StudyLearn() {
                     fr: s.fr,
                     en: s.en,
                     label: `Sentence ${study.index + 1}`,
-                    steps: s.steps.map((st) => ({ fr: st.parts.map((p) => p.t).join(""), en: st.en })),
+                    steps: s.steps.map((st) => ({ fr: stepText(st), en: st.en })),
                   },
                 ]}
                 onDone={() => patchStudy({ tab: "steps" })}
@@ -204,7 +201,7 @@ export function StudyLearn() {
 
       {word && narrow && (
         <Dialog sheet title={`Meaning of “${word.entry}”`} onClose={() => setWord(null)}>
-          <WordPanel entry={word.entry} sentenceId={s.id} onGrammar={() => { setWord(null); patchStudy({ tab: "grammar" }); }} onClose={() => setWord(null)} inSheet />
+          <WordPanel entry={word.entry} sentence={s} wordIndex={word.wi} onGrammar={() => { setWord(null); patchStudy({ tab: "grammar" }); }} onClose={() => setWord(null)} inSheet />
         </Dialog>
       )}
     </div>
@@ -217,14 +214,16 @@ function StudyPlayer({ practising }: { practising: boolean }) {
   const p = useApp((s) => s.player);
   const [scope, setScope] = useState<NonNullable<PlayerState["scope"]>>("sentence");
   const mine = p && p.owner.kind === "study" ? p : null;
-  const total = study.sentences.length;
 
   if (practising) return null; // exercises use their own neutral "Practice audio" control
 
-  const duration = scope === "all" ? total * SENTENCE_SECONDS : scope === "sentence" ? SENTENCE_SECONDS : STEP_SECONDS;
+  const cur = study.sentences[study.index];
+  const texts =
+    scope === "all" ? study.sentences.map((x) => x.fr) : scope === "sentence" ? [cur.fr] : [stepText(cur.steps[study.step] ?? cur.steps[0])];
+  const duration = texts.reduce((a, t) => a + Math.max(1, t.length / 13), 0);
   const scopeLabel = scope === "all" ? "All sentences" : scope === "sentence" ? `Sentence ${study.index + 1}` : `Step ${study.step + 1} of sentence ${study.index + 1}`;
   const start = () =>
-    startPlayback({ kind: "study", label: `Study audio · ${scopeLabel}`, route: "study" }, duration, { scope });
+    startPlayback({ kind: "study", label: `Study audio · ${scopeLabel}`, route: "study" }, duration, { scope, texts });
 
   const toggle = () => {
     if (!mine) return start();
@@ -299,12 +298,11 @@ function StudyPlayer({ practising }: { practising: boolean }) {
       </div>
       {mine?.status === "error" && (
         <Banner tone="error" title="Audio couldn’t play" live="assertive" actions={<Button kind="secondary" onClick={retryPlayback}>Retry</Button>}>
-          The simulated voice didn’t load. Your place in the sentence is kept.
+          The voice didn’t load. Your place in the sentence is kept.
         </Banner>
       )}
       <p className="row t-meta">
-        <span>Canadian French · Demo voice</span>
-        <DemoNote>Simulated audio — while this tab is hidden, position is kept and 0 s are counted</DemoNote>
+        <span>Canadian French voice</span>
       </p>
     </div>
   );
@@ -341,7 +339,10 @@ function StepsPanel({ sentence }: { sentence: StudySentence }) {
                 )}
               </p>
               <p className="t-support">{st.en}</p>
-              <p className="t-body"><span className="t-strong">{st.addedLabel}.</span> {st.how}</p>
+              <p className="t-body">
+                <span className="t-strong">{/[.!?…]$/.test(st.addedLabel) ? st.addedLabel : `${st.addedLabel}.`}</span>
+                {st.how && ` ${st.how}`}
+              </p>
               {i === step ? (
                 <p className="t-meta">Current step · choose “Current step” in the player to hear only this part.</p>
               ) : (
@@ -366,23 +367,9 @@ function GrammarPanel({ sentence }: { sentence: StudySentence }) {
   const forced = useApp((s) => s.ss["SCR-GRA-01"]);
   const index = useApp((s) => s.study.index);
   const step = useApp((s) => s.study.step);
-  const [state, setState] = useState<"loading" | "content" | "none" | "error">("loading");
-  const [n, setN] = useState(0);
-  useEffect(() => {
-    if (forced && forced !== "auto") {
-      setState(forced as typeof state);
-      return;
-    }
-    setState("loading");
-    let live = true;
-    simulate("grammar", 700, sentence.grammar)
-      .then((g) => live && setState(g ? "content" : "none"))
-      .catch(() => live && setState("error"));
-    return () => {
-      live = false;
-    };
-  }, [sentence.id, n, forced]);
-  const notes = sentence.grammar ?? STUDY_FIXTURES[0].grammar!;
+  // The notes arrive with the analysis, so there is nothing to load.
+  const state = forced && forced !== "auto" ? forced : sentence.grammar ? "content" : "none";
+  const notes = sentence.grammar ?? [];
   return (
     <div className="stack gap-4" aria-busy={state === "loading"}>
       <p className="t-support">Grammar for this sentence. Your place is kept: sentence {index + 1}, step {step + 1}.</p>
@@ -393,24 +380,27 @@ function GrammarPanel({ sentence }: { sentence: StudySentence }) {
         </>
       )}
       {state === "none" && (
-        <Banner tone="neutral" title="No grammar explanation for this sentence yet">
+        <Banner tone="neutral" title="No grammar explanation for this sentence">
           The words here follow patterns you’ve likely seen. Use the word meanings and Steps instead.
         </Banner>
       )}
       {state === "error" && (
-        <Banner tone="error" title="Grammar notes didn’t load" live="assertive" actions={<Button kind="secondary" onClick={() => setN(n + 1)}>Retry</Button>}>
+        <Banner tone="error" title="Grammar notes didn’t load" live="assertive">
           Your place in the sentence is kept.
         </Banner>
       )}
       {state === "content" && (
         <ul className="list">
           {notes.map((g) => (
-            <li key={g.title} className="stack gap-2" style={{ padding: 16 }}>
-              <h3 className="t-strong" lang="fr">{g.title}</h3>
-              <p>{g.body}</p>
-              <p className="t-support">
-                <span lang="fr" className="t-strong" style={{ color: "var(--text)" }}>{g.example}</span> — {g.exampleEn}
-              </p>
+            <li key={g.title + g.body} className="stack gap-2" style={{ padding: 16 }}>
+              <h3 className="t-strong">{g.title}</h3>
+              {g.body && <p>{g.body}</p>}
+              {g.example && (
+                <p className="t-support">
+                  <span className="t-strong" style={{ color: "var(--text)" }}>{g.example}</span>
+                  {g.exampleEn && ` — ${g.exampleEn}`}
+                </p>
+              )}
             </li>
           ))}
         </ul>
@@ -423,22 +413,69 @@ function GrammarPanel({ sentence }: { sentence: StudySentence }) {
 }
 
 /* ---------------- SCR-SAV-01 ---------------- */
+interface SaveOption {
+  key: string;
+  kind: DerivedCard["kind"];
+  label: string;
+  word?: ApiWord;
+  text?: string;
+}
+
+/** Listen and Speak cards for the sentence, plus a Fill-in card for each word looked up in it. */
+function saveOptions(sentence: StudySentence, picked: number[]): SaveOption[] {
+  const opts: SaveOption[] = [
+    { key: cardKey("listen"), kind: "Listen", label: "Listen card · whole sentence" },
+    { key: cardKey("speak"), kind: "Speak", label: "Speak card · whole sentence" },
+  ];
+  const seen = new Set<string>();
+  for (const wi of picked) {
+    const w = sentence.raw?.words?.[wi];
+    if (!w) continue;
+    const key = cardKey("cloze", w.fr);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    opts.push({ key, kind: "Fill-in", label: `Fill-in card · ${w.fr}`, word: w, text: w.fr });
+  }
+  return opts;
+}
+
+async function clozeTarget(w: ApiWord): Promise<NoteTarget> {
+  // The dictionary entry is already cached from the lookup that made this word a choice.
+  const dict = await lookupWord(w.lemma || w.fr).catch(() => null);
+  const meta: Record<string, string> = {
+    meaning_en: w.meaning,
+    meaning_zh: w.meaning_zh,
+    lemma: w.lemma,
+    pos: w.type,
+    ipa: w.ipa,
+    ctx_en: w.meaning,
+    ctx_zh: w.meaning_zh,
+    dict_en: dict?.explanation_en ?? "",
+    dict_zh: dict?.explanation_cn ?? "",
+    snap: "1",
+  };
+  return { text: w.fr, mode: "cloze", meta: Object.fromEntries(Object.entries(meta).filter(([, v]) => v)) };
+}
+
 function AddToReview({ sentence }: { sentence: StudySentence }) {
-  const saved = useApp((s) => s.saved);
-  const auth = useApp((s) => s.auth);
+  const saved = useSavedCards(sentence.fr);
+  const picked = useApp((s) => s.study.picked[sentence.id]);
   const forced = useApp((s) => s.ss["SCR-SAV-01"]);
   const narrow = useNarrow();
   const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState<"choose" | "saving" | "added" | "failed">("choose");
+  const [error, setError] = useState("");
   const [count, setCount] = useState(0);
   const wrap = useRef<HTMLDivElement>(null);
-  const available = sentence.cards.filter((c) => !saved[c.id]);
+  const options = saveOptions(sentence, picked ?? []);
+  const available = options.filter((c) => !saved.has(c.key));
+  // Only unticked cards are stored: everything not yet saved starts ticked, with no render in between.
   const [sel, setSel] = useState<Record<string, boolean>>({});
   const allSaved = available.length === 0;
-  const savedCount = sentence.cards.length - available.length;
+  const savedCount = options.length - available.length;
 
   useEffect(() => {
-    setSel(Object.fromEntries(available.map((c) => [c.id, true])));
+    setSel({});
     setPhase("choose");
   }, [sentence.id, open]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -451,90 +488,69 @@ function AddToReview({ sentence }: { sentence: StudySentence }) {
     }
   }, [forced]);
 
-  const chosen = available.filter((c) => sel[c.id]);
-  const save = () => {
+  const chosen = available.filter((c) => sel[c.key] !== false);
+  const save = async () => {
     setPhase("saving");
+    setError("");
     announce("Saving cards…");
-    simulate("save", 900, true)
-      .then(() => {
-        set((s) => {
-          const nextSaved = { ...s.saved };
-          chosen.forEach((c) => (nextSaved[c.id] = true));
-          const exists = s.sentences.some((x) => x.id === sentence.id);
-          const maxAt = s.cards.reduce((m, c) => Math.max(m, c.savedAt), 0);
-          return {
-            saved: nextSaved,
-            sentences: exists ? s.sentences : [...s.sentences, { id: sentence.id, fr: sentence.fr, en: sentence.en, topic: "From Study", number: s.sentences.length + 1 }],
-            cards: [
-              ...s.cards,
-              ...chosen
-                .filter((c) => !s.cards.some((x) => x.id === c.id))
-                .map((c, i) => ({
-                  id: c.id,
-                  sentenceId: sentence.id,
-                  kind: c.kind,
-                  word: c.kind === "Fill-in" ? c.label.split("· ")[1] : undefined,
-                  savedAt: maxAt + 1 + i,
-                  status: "new" as const,
-                  mastered: false,
-                  favorite: false,
-                  lookups: s.lookups[lookupKey(c.label.split("· ")[1] ?? "")]?.count ?? 0,
-                  saved: true,
-                })),
-            ],
-          };
-        });
-        setCount(chosen.length);
-        setPhase("added");
-        announce(`${plural(chosen.length, "card")} saved to your library.`);
-        syncChange();
-      })
-      .catch(() => {
-        setPhase("failed");
-        announce("Couldn’t save. Nothing was added.", true);
+    try {
+      const raw = sentence.raw;
+      await saveNote({
+        sentence: sentence.fr,
+        translation_en: sentence.en,
+        translation_zh: raw?.translation_zh ?? "",
+        modes: chosen.filter((c) => c.kind !== "Fill-in").map((c) => (c.kind === "Listen" ? "listen" : "speak")),
+        targets: await Promise.all(chosen.filter((c) => c.word).map((c) => clozeTarget(c.word!))),
+        extra: raw?.grammar_points?.length ? { grammar: raw.grammar_points } : {},
       });
+      setCount(chosen.length);
+      setPhase("added");
+      announce(`${plural(chosen.length, "card")} saved to your library.`);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "");
+      setPhase("failed");
+      announce("Couldn’t save. Nothing was added.", true);
+    }
   };
 
   const label = allSaved ? `Already saved · ${plural(savedCount, "card")}` : savedCount ? `Add to review · ${savedCount} saved` : "Add to review";
   const body =
-    auth === "out" ? (
-      <Banner tone="info" title="Sign in to save cards">Saved cards belong to your account. Use the demo account to continue.</Banner>
-    ) : phase === "added" ? (
+    phase === "added" ? (
       <Banner tone="success" title={`${plural(count, "card")} added to your library`} live="polite">
         They’ll appear in Review as new cards. Adding them didn’t use today’s new-card limit.
       </Banner>
     ) : allSaved ? (
-      <Banner tone="neutral" title="Already saved">All {plural(sentence.cards.length, "card")} from this sentence are already in your library. Nothing will be duplicated.</Banner>
+      <Banner tone="neutral" title="Already saved">All {plural(options.length, "card")} from this sentence are already in your library. Nothing will be duplicated.</Banner>
     ) : (
       <>
         <p className="t-support">Save selected cards to your library. Saving does not use today’s new-card limit.</p>
         <fieldset style={{ border: 0, margin: 0, padding: 0 }}>
           <legend className="sr-only">Cards from this sentence</legend>
-          {sentence.cards.map((c) => (
-            <label key={c.id} className="check">
+          {options.map((c) => (
+            <label key={c.key} className="check">
               <input
                 type="checkbox"
-                checked={saved[c.id] ? true : !!sel[c.id]}
-                disabled={saved[c.id] || phase === "saving"}
-                onChange={(e) => setSel({ ...sel, [c.id]: e.target.checked })}
+                checked={saved.has(c.key) ? true : sel[c.key] !== false}
+                disabled={saved.has(c.key) || phase === "saving"}
+                onChange={(e) => setSel({ ...sel, [c.key]: e.target.checked })}
               />
               <span className="stack">
                 <span>{c.label}</span>
-                {saved[c.id] && <span className="t-meta">Already saved</span>}
+                {saved.has(c.key) && <span className="t-meta">Already saved</span>}
               </span>
             </label>
           ))}
         </fieldset>
+        {!picked?.length && <p className="t-meta">Look up a word in the sentence to add a Fill-in card for it.</p>}
         {phase === "failed" && (
-          <Banner tone="error" title="Couldn’t save" live="assertive">Nothing was added. Your selection is kept — try again.</Banner>
+          <Banner tone="error" title="Couldn’t save" live="assertive">
+            {error || "The server didn’t respond."} Nothing was added. Your selection is kept — try again.
+          </Banner>
         )}
-        <p className="t-meta">Saved means the card is in your library. Favorite is a separate bookmark on a word. Neither sets importance or mastery.</p>
       </>
     );
   const footer =
-    auth === "out" ? (
-      <Button kind="primary" onClick={() => { setOpen(false); go("review"); }}>Continue with demo account</Button>
-    ) : phase === "added" || allSaved ? (
+    phase === "added" || allSaved ? (
       <>
         <Button kind="secondary" onClick={() => { setOpen(false); go("review/saved"); }}>View saved cards</Button>
         <Button kind="primary" onClick={() => setOpen(false)} data-autofocus>Done</Button>
@@ -568,7 +584,7 @@ function AddToReview({ sentence }: { sentence: StudySentence }) {
             <div className="btn-row btn-row--end">{footer}</div>
           </Popover>
         ))}
-      {!open && phase === "choose" && !allSaved && auth === "in" && <span className="sr-only">Not added yet</span>}
+      {!open && phase === "choose" && !allSaved && <span className="sr-only">Not added yet</span>}
     </div>
   );
 }

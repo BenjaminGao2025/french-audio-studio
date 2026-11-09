@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Camera, ChevronLeft, Image as ImageIcon, Mic2, PenLine, Trash2, X, Headphones } from "lucide-react";
-import { EXAMPLE_TEXT, IDEAS_EXAMPLE, OCR_LIMIT, SAMPLE_PHOTOS } from "../data/fixtures";
+import { ApiError } from "../api/client";
+import { photoExtract, photoToDataUrl } from "../api/study";
+import { EXAMPLE_TEXT, IDEAS_EXAMPLE, OCR_LIMIT } from "../data/fixtures";
 import { nf, plural } from "../lib/format";
 import { LIMITS, STAGES, cancelAnalysis, runAnalysis, validate } from "../state/study";
-import { announce, get, go, patchStudy, simulate, useApp } from "../state/store";
+import { announce, get, go, patchStudy, useApp } from "../state/store";
 import { Banner, Button, Dialog, DisabledReason, PageHead, Segmented, Spinner } from "../components/ui";
 
 /* ---------------- SCR-STU-01 + SCR-ANA-01 ---------------- */
@@ -200,7 +202,7 @@ function AnalysisStatus() {
         </ol>
         {a.status === "long" && (
           <Banner tone="info" title="This is taking longer than usual">
-            You can keep waiting or cancel. Your text stays here either way. We don’t show a percentage because the demo can’t measure one honestly.
+            Long texts are analysed a few sentences at a time. You can keep waiting or cancel — your text stays here either way.
           </Banner>
         )}
       </div>
@@ -214,7 +216,7 @@ function AnalysisStatus() {
   if (a.status === "failed")
     return (
       <Banner tone="error" title="Analysis did not finish" live="assertive" actions={<Button kind="secondary" onClick={() => runAnalysis(mode === "ideas" ? "My own idea" : "Pasted text")}>Retry</Button>}>
-        The demo analysis service did not respond. Your text is kept exactly as you typed it.
+        {a.error ?? "The analysis service didn’t respond."} Your text is kept exactly as you typed it.
       </Banner>
     );
   if (a.status === "nofrench")
@@ -227,45 +229,61 @@ function AnalysisStatus() {
 }
 
 /* ---------------- SCR-OCR-01 / SCR-OCR-02 ---------------- */
+// The chosen photo lives outside the store: it is a local file the learner picked on this page.
+let photoFile: { file: File; url: string } | null = null;
+
 export function StudyPhoto() {
   const ocr = useApp((s) => s.study.ocr);
-  const [pending, setPending] = useState<string | undefined>(ocr.photoId);
-  const runRef = useRef(0);
-  const photo = SAMPLE_PHOTOS.find((p) => p.id === (ocr.photoId ?? pending));
+  const [photo, setPhoto] = useState(photoFile);
+  const [error, setError] = useState("");
+  const runRef = useRef<AbortController | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const patch = (p: Partial<typeof ocr>) => patchStudy({ ocr: { ...get().study.ocr, ...p } });
 
-  const start = () => {
-    if (!pending) return;
-    const run = ++runRef.current;
-    patch({ phase: "processing", photoId: pending });
-    announce("Reading text from the sample photo.");
-    const ph = SAMPLE_PHOTOS.find((p) => p.id === pending)!;
-    simulate("ocr", 1800, ph, { needsNetwork: true })
-      .then((p) => {
-        if (run !== runRef.current || get().study.ocr.phase !== "processing") return;
-        if (p.outcome === "none") {
-          patch({ phase: "none" });
-          announce("No readable text found in this photo.");
-          return;
-        }
-        patch({
-          phase: "results",
-          partial: p.outcome === "partial",
-          lines: p.lines.map((l, i) => ({ ...l, selected: p.outcome === "overlimit" ? true : i < 99 })),
-        });
-        announce(`${p.lines.length} sentences found. Review them before continuing.`);
-        requestAnimationFrame(() => document.getElementById("ocr-results-h")?.focus());
-      })
-      .catch(() => {
-        if (run !== runRef.current) return;
-        patch({ phase: "failed" });
-        announce("The photo could not be read. Your photo selection is kept.", true);
-      });
+  const choose = (file: File | undefined) => {
+    if (!file) return;
+    if (photoFile) URL.revokeObjectURL(photoFile.url);
+    photoFile = { file, url: URL.createObjectURL(file) };
+    setPhoto(photoFile);
+    patch({ phase: "select", photoId: file.name });
+  };
+
+  const start = async () => {
+    if (!photo) return;
+    runRef.current?.abort();
+    const ctl = new AbortController();
+    runRef.current = ctl;
+    patch({ phase: "processing" });
+    setError("");
+    announce("Reading French text from the photo.");
+    try {
+      const items = await photoExtract(await photoToDataUrl(photo.file), ctl.signal);
+      if (ctl.signal.aborted) return;
+      const lines = items.map((it, i) => ({ id: `p${i}`, text: it.fr, selected: i < OCR_LIMIT }));
+      if (!lines.length) {
+        patch({ phase: "none" });
+        announce("No French text found in this photo.");
+        return;
+      }
+      patch({ phase: "results", partial: false, lines });
+      announce(`${plural(lines.length, "sentence")} found. Review them before continuing.`);
+      requestAnimationFrame(() => document.getElementById("ocr-results-h")?.focus());
+    } catch (e) {
+      if (ctl.signal.aborted) return;
+      if (e instanceof ApiError && e.code === "photo_no_french") {
+        patch({ phase: "none" });
+        announce("No French text found in this photo.");
+        return;
+      }
+      setError(e instanceof ApiError ? e.message : "");
+      patch({ phase: "failed" });
+      announce("The photo could not be read. Your photo is kept.", true);
+    }
   };
   const cancel = () => {
-    runRef.current++;
+    runRef.current?.abort();
     patch({ phase: "cancelled" });
-    announce("Import cancelled. Your photo selection is kept.");
+    announce("Import cancelled. Your photo is kept.");
   };
 
   const back = (
@@ -274,77 +292,87 @@ export function StudyPhoto() {
     </Button>
   );
 
-  if (ocr.phase === "results") return <OcrResults back={back} photoTitle={photo?.title ?? "Sample photo"} />;
+  if (ocr.phase === "results") return <OcrResults back={back} photoTitle={photo?.file.name ?? "your photo"} />;
 
+  const busy = ocr.phase === "processing";
   return (
     <div className="page">
       <PageHead
         back={back}
         title="Import from photo"
-        desc="Choose a sample photo. This prototype never opens your camera or uploads files — the photos and text recognition are simulated."
+        desc="Take or choose a photo of French text — a page, a sign, your notes. We find the French sentences; you check them before studying."
       />
       <div className="stack gap-5">
-        <div role="radiogroup" aria-label="Sample photos" className="grid-2">
-          {SAMPLE_PHOTOS.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              role="radio"
-              aria-checked={pending === p.id}
-              className="photo-card"
-              disabled={ocr.phase === "processing"}
-              onClick={() => {
-                setPending(p.id);
-                if (ocr.phase !== "processing") patch({ phase: "select", photoId: p.id });
-              }}
-            >
-              <span className={`photo-thumb thumb-${p.id === "note" ? "note" : p.id}`} aria-hidden>
-                <ImageIcon width={28} height={28} />
-              </span>
-              <span className="t-strong">{p.title}</span>
-              <span className="t-support">{p.desc}</span>
-            </button>
-          ))}
-        </div>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          className="sr-only"
+          tabIndex={-1}
+          aria-hidden
+          onChange={(e) => {
+            choose(e.target.files?.[0]);
+            e.target.value = "";
+          }}
+        />
+        {photo ? (
+          <div className="panel stack gap-3">
+            <img src={photo.url} alt="The photo you chose" style={{ maxWidth: "100%", maxHeight: 320, objectFit: "contain", borderRadius: 8, alignSelf: "flex-start" }} />
+            <div className="row gap-2">
+              <span className="t-support grow">{photo.file.name}</span>
+              <Button kind="tertiary" className="btn--sm-text" icon={<ImageIcon aria-hidden />} disabled={busy} onClick={() => inputRef.current?.click()}>
+                Choose another photo
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <button type="button" className="photo-card" onClick={() => inputRef.current?.click()}>
+            <span className="photo-thumb" aria-hidden>
+              <Camera width={28} height={28} />
+            </span>
+            <span className="t-strong">Take or choose a photo</span>
+            <span className="t-support">JPEG, PNG or HEIC. Large photos are made smaller before upload.</span>
+          </button>
+        )}
 
-        {ocr.phase === "processing" && (
+        {busy && (
           <div className="row row--between">
-            <Spinner label={`Reading text from “${photo?.title}”…`} />
+            <Spinner label="Reading French text from the photo…" />
             <Button kind="secondary" icon={<X aria-hidden />} onClick={cancel}>Cancel</Button>
           </div>
         )}
         {ocr.phase === "cancelled" && (
           <Banner tone="neutral" title="Import cancelled" live="polite">
-            Nothing was lost. “{photo?.title}” is still selected — read it again, or choose another photo.
+            Nothing was lost. Your photo is still selected — read it again, or choose another one.
           </Banner>
         )}
         {ocr.phase === "failed" && (
           <Banner tone="error" title="We couldn’t read this photo" live="assertive">
-            The demo text reader didn’t respond. Your photo choice is kept; try again.
+            {error || "The text reader didn’t respond."} Your photo is kept; try again.
           </Banner>
         )}
         {ocr.phase === "none" && (
           <Banner
             tone="warning"
-            title="No readable text found"
+            title="No French text found"
             live="polite"
             actions={<Button kind="tertiary" onClick={() => go("study/new")}>Type text instead</Button>}
           >
-            “{photo?.title}” is too blurry to read. Choose a clearer sample photo.
+            We couldn’t find French in this photo. Try a sharper, closer photo.
           </Banner>
         )}
 
-        {ocr.phase !== "processing" && (
+        {!busy && (
           <div className="stack gap-2">
             <div className="btn-row">
-              <Button kind="primary" onClick={start} disabledReason={!pending ? "Choose a sample photo first." : undefined}>
+              <Button kind="primary" onClick={start} disabledReason={!photo ? "Choose a photo first." : undefined}>
                 {ocr.phase === "failed" || ocr.phase === "cancelled" ? "Try again" : "Read text from photo"}
               </Button>
             </div>
-            {!pending && <DisabledReason>Choose a sample photo first.</DisabledReason>}
+            {!photo && <DisabledReason>Choose a photo first.</DisabledReason>}
           </div>
         )}
-        <p className="note"><Mic2 aria-hidden /> No camera, microphone or file access is requested in this prototype.</p>
+        <p className="note"><Mic2 aria-hidden /> The photo is sent to the AI text reader only to find its words. This app doesn’t keep it.</p>
       </div>
     </div>
   );
@@ -370,7 +398,7 @@ function OcrResults({ back, photoTitle }: { back: React.ReactNode; photoTitle: s
 
   return (
     <div className="page">
-      <PageHead back={back} title="Check the text we found" desc={`From “${photoTitle}” (sample photo). Fix any mistakes, choose the sentences to study, and put them in order.`} />
+      <PageHead back={back} title="Check the text we found" desc={`From ${photoTitle}. Fix any mistakes, choose the sentences to study, and put them in order.`} />
       <h2 id="ocr-results-h" tabIndex={-1} className="sr-only">Recognised sentences</h2>
       <div className="stack gap-4">
         {(ocr.partial || forced === "partial") && (
@@ -468,7 +496,7 @@ function OcrResults({ back, photoTitle }: { back: React.ReactNode; photoTitle: s
               kind="primary"
               disabledReason={reason}
               onClick={() => {
-                patchStudy({ mode: "text", drafts: { ...get().study.drafts, text: selected.map((l) => l.text.trim()).join(" ") } });
+                patchStudy({ mode: "text", drafts: { ...get().study.drafts, text: selected.map((l) => l.text.trim()).join("\n") } });
                 go("study/new", { focus: false });
                 runAnalysis("Photo import");
               }}

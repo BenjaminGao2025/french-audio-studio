@@ -24,7 +24,7 @@ import {
   type ExamState,
   type PlayerState,
 } from "../state/store";
-import { ensureSession, submitAnswer } from "./Exercise";
+import { ensureSession, forceExerciseState, submitAnswer } from "./Exercise";
 import { computePlannedSessionCards } from "./Review";
 import { runItems } from "./Launcher";
 
@@ -342,8 +342,8 @@ export const REGISTRY: ScreenEntry[] = [
       ["empty", "Not started · empty", () => demoExercise("Recall")],
       ["typing", "Typing", () => demoExercise("Recall", (k) => draft(k, "J’ai oub"))],
       ["empty-check", "Empty Check (no attempt)", () => demoExercise("Recall", (k) => ui(k, { emptyError: true }))],
-      ["submitting", "Submitting", () => demoExercise("Recall", (k) => { draft(k, "J’ai oublié mon billet."); armSlow("grading"); submitAnswer(k); })],
-      ["techfail", "Technical failure · retry", () => demoExercise("Recall", (k) => { draft(k, T1); armFailure("grading"); submitAnswer(k); })],
+      ["submitting", "Submitting", () => demoExercise("Recall", (k) => { draft(k, "J’ai oublié mon billet."); forceExerciseState(k, "submitting"); })],
+      ["techfail", "Technical failure · retry", () => demoExercise("Recall", (k) => { draft(k, T1); forceExerciseState(k, "techfail"); })],
       ["hint", "Hint shown", () => demoExercise("Recall", (k) => ui(k, { hint: true }))],
       ["reveal", "Answer revealed", () => demoExercise("Recall", (k) => ui(k, { revealed: true }))],
       ["drafts", "Step mode · drafts kept", () => demoExercise("Recall", (k) => { draft(k, "J’ai oublié"); set((s) => ({ exercises: { ...s.exercises, [k]: { ...s.exercises[k], mode: "step", modeNotice: "Now practising step by step. Your whole-sentence answer and progress are kept." } } })); })],
@@ -357,7 +357,7 @@ export const REGISTRY: ScreenEntry[] = [
       ["hint", "English hint", () => demoExercise("Dictation", (k) => ui(k, { hint: true }))],
       ["audio-error", "Audio failure · retry", () => demoExercise("Dictation", () => { armFailure("audio"); startPlayback({ kind: "exercise", label: "Practice audio", route: "study/run" }, 4.5); })],
       ["slow", "Slow playback", () => demoExercise("Dictation", () => startPlayback({ kind: "exercise", label: "Practice audio", route: "study/run" }, 6, { speed: 0.75 }))],
-      ["techfail", "Technical failure · retry", () => demoExercise("Dictation", (k) => { draft(k, T1); armFailure("grading"); submitAnswer(k); })],
+      ["techfail", "Technical failure · retry", () => demoExercise("Dictation", (k) => { draft(k, T1); forceExerciseState(k, "techfail"); })],
       ["step", "Step by step", () => demoExercise("Dictation", (k) => set((s) => ({ exercises: { ...s.exercises, [k]: { ...s.exercises[k], mode: "step" } } })))],
     ),
   },
@@ -381,8 +381,8 @@ export const REGISTRY: ScreenEntry[] = [
     states: states(
       ["hinted", "Hint used outcome", () => answered("Recall", T1, (k) => ui(k, { hint: true }))],
       ["known", "Answer-known outcome", () => answered("Recall", T1, (k) => ui(k, { revealed: true }))],
-      ["saving", "History saving", () => answered("Recall", T1, () => armSlow("history"))],
-      ["save-failed", "History save failed · retry", () => answered("Recall", T1, () => armFailure("history"))],
+      ["saving", "History saving", () => demoExercise("Recall", (k) => { draft(k, T1); forceExerciseState(k, "saving"); })],
+      ["save-failed", "History save failed · retry", () => demoExercise("Recall", (k) => { draft(k, T1); forceExerciseState(k, "save-failed"); })],
     ),
   },
   {

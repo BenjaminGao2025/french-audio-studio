@@ -5,19 +5,18 @@ import { grade, type DisplayWord } from "../lib/grading";
 import { plural } from "../lib/format";
 import {
   announce,
-  attemptToRecord,
   get,
   go,
   retryPlayback,
   set,
-  simulate,
   startPlayback,
   useApp,
   type Attempt,
   type ExerciseSession,
   type QuestionUI,
 } from "../state/store";
-import { Banner, Button, Pill, Segmented, Spinner } from "../components/ui";
+import { gradeAttempt } from "../api/dictation";
+import { Banner, Button, Segmented, Spinner } from "../components/ui";
 
 /* ---------------- session helpers ---------------- */
 
@@ -71,61 +70,49 @@ function hintFor(kind: "Recall" | "Dictation", t: { fr: string; en: string }) {
 
 let attemptSeq = 0;
 
-/** Resolves true once the attempt is saved to History, false if saving failed or the attempt no longer exists. */
+/** Server step: 0 is the whole sentence, 1..N the build-up steps. */
+function serverStep(sess: ExerciseSession) {
+  return sess.mode === "step" ? (sess.steps[sess.index] ?? 0) + 1 : 0;
+}
+
+/**
+ * The server saves an attempt while grading it. When that save failed, Retry saving sends the same
+ * answer again: the failed attempt was never stored, so nothing is duplicated.
+ */
 export function saveHistory(attemptId: string, manualRetry = false): Promise<boolean> {
+  const a = get().attempts.find((x) => x.id === attemptId);
+  if (!a?.grading) return Promise.resolve(false);
   if (manualRetry) patchAttempt(attemptId, { cleared: false });
   patchAttempt(attemptId, { history: "saving" });
-  return simulate("history", 700, true)
-    .then(() => {
-      const a = get().attempts.find((x) => x.id === attemptId);
-      if (!a) return false;
-      patchAttempt(attemptId, { history: "saved" });
-      if (a.cleared && !manualRetry) return true;
-      const rec = attemptToRecord({ ...a, history: "saved" });
-      set((s) => ({
-        history: {
-          ...s.history,
-          attempts: s.history.attempts.some((r) => r.id === attemptId)
-            ? s.history.attempts.map((r) => (r.id === attemptId ? rec : r))
-            : [rec, ...s.history.attempts],
-        },
-      }));
-      announce("Saved to practice history.");
-      return true;
+  return gradeAttempt(a.grading.src, a.kind, a.grading.step, a.response)
+    .then((r) => {
+      patchAttempt(attemptId, { history: r.saved ? "saved" : "failed" });
+      announce(r.saved ? "Saved to practice history." : "Couldn’t save to practice history. Your result is kept.", !r.saved);
+      return r.saved;
     })
     .catch(() => {
-      const a = get().attempts.find((x) => x.id === attemptId);
-      if (!a) return false;
       patchAttempt(attemptId, { history: "failed" });
-      if (a.cleared && !manualRetry) return false;
-      const rec = attemptToRecord({ ...a, history: "failed" });
-      set((s) => ({
-        history: {
-          ...s.history,
-          attempts: s.history.attempts.some((r) => r.id === attemptId)
-            ? s.history.attempts.map((r) => (r.id === attemptId ? rec : r))
-            : [rec, ...s.history.attempts],
-        },
-      }));
       announce("Couldn’t save to practice history. Your result is kept.", true);
       return false;
     });
 }
 
-export function submitAnswer(key: string) {
+/** Records (or reuses, after a technical failure) the pending attempt for the current question. */
+function beginAttempt(key: string) {
   const sess = get().exercises[key];
-  if (!sess) return;
+  if (!sess) return null;
   const qk = questionKey(sess);
   const ui = sess.ui[qk] ?? { phase: "answering", hint: false, revealed: false };
-  if (ui.phase === "submitting" || ui.phase === "graded") return; // duplicate submission prevented
+  if (ui.phase === "submitting" || ui.phase === "graded") return null; // duplicate submission prevented
   const draft = sess.drafts[qk] ?? "";
   if (!draft.trim()) {
     patchUI(key, qk, { emptyError: true });
     announce("Type an answer before checking. No attempt was recorded.", true);
-    return;
+    return null;
   }
   const target = currentTarget(sess);
   const item = sess.items[sess.index];
+  const grading = { src: { fr: item.fr, en: item.en, steps: item.steps }, step: serverStep(sess) };
   let attemptId = ui.phase === "techfail" ? ui.attemptId : undefined;
   if (!attemptId) {
     attemptId = `att-${Date.now()}-${++attemptSeq}`;
@@ -142,6 +129,7 @@ export function submitAnswer(key: string) {
       answerKnown: ui.revealed,
       status: "pending",
       history: "saving",
+      grading,
     };
     set((s) => ({ attempts: [...s.attempts, a] }));
   } else {
@@ -153,26 +141,48 @@ export function submitAnswer(key: string) {
       answerKnown: Boolean(prev?.answerKnown || ui.revealed),
     });
   }
+  return { qk, draft, target, grading, attemptId, kind: sess.kind };
+}
+
+/**
+ * Design reference only: shows a question as if checking were in progress, had failed, or had been
+ * graded (locally) with the given history state, without asking the server.
+ */
+export function forceExerciseState(key: string, state: "submitting" | "techfail" | "saving" | "save-failed") {
+  const b = beginAttempt(key);
+  if (!b) return;
+  if (state === "submitting" || state === "techfail") return patchUI(key, b.qk, { phase: state, attemptId: b.attemptId, emptyError: false });
+  const res = grade(b.target.fr, b.draft);
+  patchAttempt(b.attemptId, { status: "completed", outcome: res.correct ? "correct" : "incorrect", result: res, history: state === "saving" ? "saving" : "failed" });
+  patchUI(key, b.qk, { phase: "graded", attemptId: b.attemptId });
+}
+
+export function submitAnswer(key: string) {
+  const b = beginAttempt(key);
+  if (!b) return;
+  const { qk, draft, target, grading, kind } = b;
+  const attemptId = b.attemptId;
   patchUI(key, qk, { phase: "submitting", attemptId, emptyError: false });
   announce("Checking your answer…");
-  simulate("grading", 700, true, { needsNetwork: false })
-    .then(() => {
+  gradeAttempt(grading.src, kind, grading.step, draft)
+    .then((r) => {
       if (!get().attempts.some((x) => x.id === attemptId)) return;
-      const res = grade(target.fr, draft);
+      // The server decides right or wrong; the word marks come from the same rules on this side.
+      const res = { ...grade(target.fr, draft), correct: r.correct };
       const curUi = get().exercises[key]?.ui[qk];
       const prev = get().attempts.find((x) => x.id === attemptId);
-      patchAttempt(attemptId!, {
+      patchAttempt(attemptId, {
         status: "completed",
-        outcome: res.correct ? "correct" : "incorrect",
+        outcome: r.correct ? "correct" : "incorrect",
         result: res,
         hinted: Boolean(prev?.hinted || curUi?.hint),
         answerKnown: Boolean(prev?.answerKnown || curUi?.revealed),
+        history: r.saved ? "saved" : "failed",
       });
       patchUI(key, qk, { phase: "graded" });
       const a = get().attempts.find((x) => x.id === attemptId)!;
-      announce(a.answerKnown ? "Checked. Recorded as answer known." : res.correct ? "Correct." : `Not quite. ${plural(res.issues.length, "difference")}.`);
+      announce(a.answerKnown ? "Checked. Recorded as answer known." : r.correct ? "Correct." : `Not quite. ${plural(res.issues.length, "difference")}.`);
       requestAnimationFrame(() => document.getElementById(`ex-result-${key}`)?.focus());
-      saveHistory(attemptId!);
     })
     .catch(() => {
       patchUI(key, qk, { phase: "techfail" });
@@ -341,7 +351,7 @@ export function Exercise({
     requestAnimationFrame(() => inputRef.current?.focus());
   };
   const play = (slow: boolean) =>
-    startPlayback({ kind: "exercise", label: "Practice audio", route }, slow ? 6 : 4.5, { speed: slow ? 0.75 : 1 });
+    startPlayback({ kind: "exercise", label: "Practice audio", route }, Math.max(1, t.fr.length / 13), { speed: slow ? 0.75 : 1, texts: [t.fr] });
 
   const qLabel = `${kind} · Question ${sess.index + 1} of ${sess.items.length}${sess.mode === "step" ? ` · Step ${step + 1} of ${stepCount}` : ""}`;
 
@@ -395,7 +405,6 @@ export function Exercise({
                   {myAudio.status === "playing" ? `Playing practice audio · ${myAudio.speed}×` : myAudio.status === "loading" ? "Loading…" : myAudio.status === "ended" ? "Played" : "Paused"}
                 </span>
               )}
-              <Pill tone="demo">Simulated audio</Pill>
             </div>
             {myAudio?.status === "error" && (
               <Banner tone="error" title="Practice audio couldn’t play" live="assertive" actions={<Button kind="secondary" icon={<RotateCcw aria-hidden />} onClick={retryPlayback}>Retry audio</Button>}>
@@ -547,7 +556,7 @@ function Result({
             <span className="def-label">Answer</span>
             <p lang="fr" className="t-fr-lg">{target}</p>
             <div className="btn-row">
-              <Button kind="tertiary" icon={<Play aria-hidden />} onClick={() => startPlayback({ kind: "exercise", label: "Practice audio", route }, 4.5)} style={{ marginLeft: -12 }}>
+              <Button kind="tertiary" icon={<Play aria-hidden />} onClick={() => startPlayback({ kind: "exercise", label: "Practice audio", route }, Math.max(1, target.length / 13), { texts: [target] })} style={{ marginLeft: -12 }}>
                 Play answer
               </Button>
             </div>

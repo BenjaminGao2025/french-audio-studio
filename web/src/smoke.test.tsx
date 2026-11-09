@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import App from "./App";
 import { WidthContext } from "./components/ui";
 import { lookupKey } from "./lib/lookup";
@@ -11,6 +11,7 @@ import { computePlannedSessionCards } from "./screens/Review";
 import { StudyLearn } from "./screens/StudyLearn";
 import { IDEA_SENTENCE, buildSentencesForAnalysis } from "./state/study";
 import { REGISTRY } from "./screens/registry";
+import { fake, installFakeBackend } from "./test/fakeBackend";
 import {
   armFailure,
   clearAttemptHistory,
@@ -46,7 +47,10 @@ function wholeDocumentSnapshot(): string {
   return `${bodyText} ${ariaLabels} ${titles} ${document.title} ${location.href} ${location.hash}`;
 }
 
+beforeEach(() => fake.reset());
+
 beforeAll(async () => {
+  installFakeBackend();
   (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = class {
     observe() {}
     disconnect() {}
@@ -233,52 +237,26 @@ describe("2. Review queue spacing and Speak card speaking flow", () => {
   });
 });
 
-describe("3. one source of truth for Favorite and importance", () => {
-  it("5th counted lookup of failli shows Importance 4/5 in both popup and library; favoriting in popup appears under Favorites only", async () => {
+describe("3. lookup importance comes from the server count", () => {
+  it("opening failli counts one lookup on the server and the popup shows the returned importance", async () => {
     await act(async () => resetDemo());
-    // Initially "failli" has 4 lookups (Importance 3/5)
-    expect(get().lookups[lookupKey("failli")].count).toBe(4);
-
-    // Open Study and click "failli" to trigger the 5th counted lookup
+    fake.lookups[lookupKey("failli")] = 4;
     await act(async () => REGISTRY.find((r) => r.id === "SCR-STU-02")!.states.find((s) => s.key === "single")!.apply());
     await wait(50);
     const wordBtn = document.querySelector<HTMLElement>('[data-word="failli"]')!;
     await act(async () => wordBtn.click());
-    await wait(650);
+    await wait(200);
 
-    expect(get().lookups[lookupKey("failli")].count).toBe(5);
+    expect(fake.lookups[lookupKey("failli")]).toBe(5);
+    expect(fake.calls.filter((c) => c.path === "/api/srs/lookups")).toHaveLength(1);
     expect(document.body.textContent).toContain("Importance, 4 out of 5, based on 5 lookups.");
-
-    // Favorite "failli" inside the word popup
-    const favBtn = Array.from(document.querySelectorAll("button")).find((b) => b.textContent === "Favorite")!;
-    await act(async () => favBtn.click());
-    expect(get().favorites[lookupKey("failli")]).toBe(true);
-    // Favoriting never changes lookup count or importance
-    expect(get().lookups[lookupKey("failli")].count).toBe(5);
-
-    // Navigate to Word library and filter by Favorites only
-    await act(async () => {
-      set((s) => ({ libFilters: { ...s.libFilters, q: "failli", favoritesOnly: true } }));
-      go("review/library");
-    });
-    await wait(50);
-    const failliRow = document.querySelector<HTMLElement>('[data-word="failli"]')!;
-    expect(failliRow).toBeTruthy();
-    expect(failliRow.textContent).toContain("Importance, 4 out of 5, based on 5 lookups.");
-    expect(failliRow.textContent).toContain("Favorited");
-
-    // Whole-sentence cards do not show lookup-based importance
-    await act(async () => set((s) => ({ libFilters: { ...s.libFilters, favoritesOnly: false } })));
-    await wait(30);
-    expect(document.getElementById("main")!.textContent).toContain("Importance: not applicable to whole-sentence cards");
-    expect(document.getElementById("main")!.textContent).toContain("Applies to Fill-in word cards only");
+    expect(document.body.textContent).toContain("dictionary: ");
   });
 });
 
 describe("4. clearing practice history resets derived counts", () => {
-  it("complete 2 attempts, clear, start a new session, complete 1 → summary says 1 attempt; History says 1", { timeout: 15000 }, async () => {
+  it("complete 2 attempts, clear, start a new session, complete 1 → summary says 1 attempt", { timeout: 15000 }, async () => {
     await act(async () => resetDemo());
-    // Clear initial fixture attempts first so we start clean, then complete 2 attempts
     await act(async () => clearAttemptHistory());
     await act(async () => REGISTRY.find((r) => r.id === "SCR-REC-01")!.states.find((s) => s.key === "empty")!.apply());
     const k1 = get().activeRun!;
@@ -286,31 +264,23 @@ describe("4. clearing practice history resets derived counts", () => {
       set((s) => ({ exercises: { ...s.exercises, [k1]: { ...s.exercises[k1], drafts: { "0:whole:w": TARGET } } } }));
       submitAnswer(k1);
     });
-    await wait(1500);
+    await wait(300);
     const tryAgainBtn = Array.from(document.querySelectorAll("button")).find((b) => b.textContent === "Try again")!;
     await act(async () => tryAgainBtn.click());
     await act(async () => {
       set((s) => ({ exercises: { ...s.exercises, [k1]: { ...s.exercises[k1], drafts: { "0:whole:w": TARGET } } } }));
       submitAnswer(k1);
     });
-    await wait(1500);
-    expect(get().history.attempts).toHaveLength(2);
+    await wait(300);
+    expect(get().attempts.filter((a) => a.sessionKey === k1 && a.status === "completed")).toHaveLength(2);
+    expect(fake.calls.filter((c) => c.path === "/api/dictation/attempts")).toHaveLength(2);
 
-    // Clear practice attempt history
     await act(async () => clearAttemptHistory());
-    expect(get().history.attempts).toHaveLength(0);
-
-    // Start a new session and complete 1 attempt on the last item so SessionSummary renders
     await act(async () => REGISTRY.find((r) => r.id === "SCR-ANS-01")!.states.find((s) => s.key === "final")!.apply());
-    await wait(1500);
+    await wait(300);
 
     const summary = document.querySelector('[aria-label="Session summary"]')!;
     expect(summary.textContent).toContain("1 attempt");
-    expect(get().history.attempts).toHaveLength(1);
-
-    await act(async () => go("progress/history?tab=attempts"));
-    await wait(600);
-    expect(document.getElementById("main")!.textContent).toContain("1 practice attempt · All demo dates · Showing all 1");
   });
 });
 
@@ -484,23 +454,26 @@ describe("8. feedback and copy cleanups", () => {
     expect(get().study.sentences).toHaveLength(5);
   });
 
-  it("failed history saves appear in History with Not saved · Retry and retry without duplicating", async () => {
+  it("a failed history save offers Retry saving, which resends the same attempt", async () => {
     await act(async () => resetDemo());
-    await act(async () => clearAttemptHistory());
     await act(async () => REGISTRY.find((r) => r.id === "SCR-ANS-03")!.states.find((s) => s.key === "save-failed")!.apply());
-    await wait(1600);
-    expect(get().history.attempts).toHaveLength(1);
-    expect(get().history.attempts[0].saved).toBe("failed");
-
-    await act(async () => go("progress/history?tab=attempts"));
-    await wait(600);
+    await wait(50);
     const main = document.getElementById("main")!;
-    expect(main.textContent).toContain("Not saved · Retry");
-    const retryBtn = Array.from(main.querySelectorAll("button")).find((b) => b.textContent === "Retry")!;
-    await act(async () => retryBtn.click());
-    await wait(800);
-    expect(get().history.attempts).toHaveLength(1);
-    expect(get().history.attempts[0].saved).toBe("saved");
+    expect(main.textContent).toContain("Couldn’t save to practice history");
+    const attempts = get().attempts.length;
+
+    fake.saveFails = 1;
+    const retry = () => Array.from(main.querySelectorAll("button")).find((b) => b.textContent === "Retry saving")!;
+    await act(async () => retry().click());
+    expect(main.textContent).toContain("Saving to practice history…");
+    await wait(200);
+    expect(main.textContent).toContain("Couldn’t save to practice history");
+
+    await act(async () => retry().click());
+    await wait(200);
+    expect(main.textContent).toContain("Saved to practice history.");
+    expect(get().attempts).toHaveLength(attempts);
+    expect(fake.calls.filter((c) => c.path === "/api/dictation/attempts")).toHaveLength(2);
   });
 
   it("responsive widths (320, 390, 768, desktop): word popup is a sheet on narrow widths and a popover on desktop", async () => {
@@ -763,36 +736,6 @@ describe("13. word library order", () => {
 });
 
 describe("14. History retry and detail", () => {
-  it("a live attempt's Retry stays busy until its save finishes; a failed retry is announced and stays Not saved", async () => {
-    await act(async () => resetDemo());
-    await act(async () => clearAttemptHistory());
-    await act(async () => REGISTRY.find((r) => r.id === "SCR-ANS-03")!.states.find((s) => s.key === "save-failed")!.apply());
-    await wait(1600);
-    await act(async () => go("progress/history?tab=attempts"));
-    await wait(600);
-    const retry = () => Array.from(document.querySelectorAll("#main button")).find((b) => b.textContent === "Retry") as HTMLButtonElement;
-
-    // Failing retry
-    await act(async () => {
-      armFailure("history");
-      retry().click();
-    });
-    await wait(300);
-    expect(retry().getAttribute("aria-busy")).toBe("true"); // still saving: not done after 300 ms
-    await wait(700);
-    expect(retry().getAttribute("aria-busy")).toBeNull();
-    expect(get().history.attempts[0].saved).toBe("failed");
-    expect(document.body.textContent).toContain("Couldn’t save to practice history");
-
-    // Succeeding retry
-    await act(async () => retry().click());
-    await wait(300);
-    expect(retry().getAttribute("aria-busy")).toBe("true");
-    await wait(700);
-    expect(get().history.attempts[0].saved).toBe("saved");
-    expect(get().history.attempts).toHaveLength(1);
-  });
-
   it("a stored (not live) failed entry also stays busy until saved, and announces when saving fails", async () => {
     await act(async () => resetDemo());
     const rec = { ...get().history.attempts[0], id: "old-failed", saved: "failed" as const };

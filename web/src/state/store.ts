@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { playTexts, type AudioHandle } from "./audio";
 import {
   AI_FALLBACK,
   CACHED_KEYS,
@@ -70,6 +71,8 @@ export interface PlayerState {
   countedSeconds: number;
   /** Content time advanced in this session (position delta incl. speed). */
   contentSeconds: number;
+  /** Real audio: the French texts being read aloud. Position and status then come from the audio element. */
+  texts?: string[];
 }
 
 export interface Attempt {
@@ -88,6 +91,8 @@ export interface Attempt {
   outcome?: "correct" | "incorrect";
   result?: GradeResult;
   history: "saving" | "saved" | "failed";
+  /** What the server graded (live attempts only): used to resend the answer when saving failed. */
+  grading?: { src: { fr: string; en: string; steps: { fr: string; en: string }[] }; step: number };
 }
 
 export interface QuestionUI {
@@ -166,12 +171,16 @@ export interface AppState {
       input: string;
       stage: number;
       source: AnalysisRec["source"];
+      /** Server message when the analysis failed (e.g. trial ended, too many requests). */
+      error?: string;
     };
     sentences: StudySentence[];
     index: number;
     tab: "steps" | "grammar" | "recall" | "dictation";
     step: number;
     sourceOpen: boolean;
+    /** Words the learner looked up, per sentence id (word indexes): they can be saved as Fill-in cards. */
+    picked: Record<string, number[]>;
     ocr: {
       phase: "select" | "processing" | "failed" | "cancelled" | "none" | "results";
       photoId?: string;
@@ -296,6 +305,7 @@ function initialState(): AppState {
       tab: "steps",
       step: 0,
       sourceOpen: false,
+      picked: {},
       ocr: { phase: "select", lines: [], partial: false },
     },
     player: null,
@@ -582,9 +592,21 @@ export function saveSnapshot(entry: DictEntry, sentenceId: string) {
 
 let playerSeq = 0;
 
-export function startPlayback(owner: PlayerOwner, duration: number, opts: { scope?: PlayerState["scope"]; position?: number; speed?: number } = {}) {
+let audioHandle: AudioHandle | null = null;
+
+function stopAudio() {
+  audioHandle?.stop();
+  audioHandle = null;
+}
+
+export function startPlayback(
+  owner: PlayerOwner,
+  duration: number,
+  opts: { scope?: PlayerState["scope"]; position?: number; speed?: number; texts?: string[] } = {},
+) {
   const prev = get().player;
   if (prev) commitAudio(prev);
+  stopAudio();
   const id = ++playerSeq;
   lastTick = performance.now();
   set((s) => ({
@@ -599,10 +621,34 @@ export function startPlayback(owner: PlayerOwner, duration: number, opts: { scop
       repeat: s.settings.repeat,
       countedSeconds: 0,
       contentSeconds: 0,
+      texts: opts.texts,
     },
     lastPlaybackNotice: prev ? "Previous playback stopped." : undefined,
   }));
   if (prev) announce("Previous playback stopped.");
+  if (opts.texts?.length) {
+    const mine = () => get().player?.id === id;
+    audioHandle = playTexts(opts.texts, get().player!.speed, {
+      onPlaying: () => {
+        if (!mine() || get().player!.status === "playing") return;
+        lastTick = performance.now();
+        set((s) => ({ player: { ...s.player!, status: "playing" } }));
+      },
+      onProgress: (position, duration) => mine() && set((s) => ({ player: { ...s.player!, position, duration } })),
+      onEnded: () => {
+        if (!mine()) return;
+        if (get().player!.repeat) return audioHandle?.restart();
+        set((s) => ({ player: { ...s.player!, status: "ended" } }));
+        announce("Playback ended.");
+      },
+      onError: () => {
+        if (!mine()) return;
+        set((s) => ({ player: { ...s.player!, status: "error" } }));
+        announce("Audio couldn’t play.", true);
+      },
+    });
+    return;
+  }
   simulate("audio", 700, true)
     .then(() => {
       if (get().player?.id !== id) return;
@@ -618,6 +664,17 @@ export function startPlayback(owner: PlayerOwner, duration: number, opts: { scop
 }
 
 export function updatePlayer(p: Partial<PlayerState>) {
+  const cur = get().player;
+  if (cur?.texts && audioHandle) {
+    if (p.speed !== undefined) audioHandle.setSpeed(p.speed);
+    if (p.status === "paused") audioHandle.pause();
+    if (p.status === "playing") {
+      if (cur.status === "ended" || p.position === 0) audioHandle.restart();
+      else audioHandle.resume();
+      // The audio element reports "playing" itself; until then the button shows loading.
+      p = { ...p, status: "loading" };
+    }
+  }
   lastTick = performance.now();
   set((s) => (s.player ? { player: { ...s.player, ...p } } : {}));
 }
@@ -625,13 +682,14 @@ export function updatePlayer(p: Partial<PlayerState>) {
 export function retryPlayback() {
   const p = get().player;
   if (!p) return;
-  startPlayback(p.owner, p.duration, { scope: p.scope, position: p.position, speed: p.speed });
+  startPlayback(p.owner, p.duration, { scope: p.scope, position: p.position, speed: p.speed, texts: p.texts });
 }
 
 export function stopPlayback() {
   const p = get().player;
   if (!p) return;
   commitAudio(p);
+  stopAudio();
   set(() => ({ player: null }));
   announce("Playback stopped.");
 }
@@ -678,9 +736,10 @@ export function tick(dtOverride?: number) {
   const p = get().player;
   if (!p || p.status !== "playing" || rawDt <= 0) return;
   const dt = rawDt;
-  let position = p.position + dt * p.speed;
+  // Real audio moves its own position; the tick only counts foreground listening time.
+  let position = p.texts ? p.position : p.position + dt * p.speed;
   let status: PlayerState["status"] = "playing";
-  if (position >= p.duration) {
+  if (!p.texts && position >= p.duration) {
     if (p.repeat) position = 0;
     else {
       position = p.duration;

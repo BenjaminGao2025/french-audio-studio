@@ -1,236 +1,133 @@
-import { useEffect, useRef, useState } from "react";
-import { Bookmark, BookmarkCheck, Sparkles, WifiOff, Database } from "lucide-react";
-import type { DictEntry } from "../data/fixtures";
-import { lookupKey } from "../lib/lookup";
-import { aiFor, announce, dictionaryFor, recordLookup, saveSnapshot, set, simulate, useApp } from "../state/store";
-import { Banner, Button, Disclosure, Importance, Pill, Skeleton, Spinner } from "../components/ui";
+import { useEffect, useState } from "react";
+import { ApiError } from "../api/client";
+import { lookupWord, recordLookup, useLookupCount, type DictionaryEntry } from "../api/lookup";
+import type { StudySentence } from "../data/fixtures";
+import { announce, get, patchStudy } from "../state/store";
+import { Banner, Button, Disclosure, Importance, Skeleton, Spinner } from "../components/ui";
 
-type WState =
-  | "loading"
-  | "success"
-  | "nomatch"
-  | "error"
-  | "ai-loading"
-  | "ai-success"
-  | "ai-error"
-  | "offline-cached"
-  | "offline-uncached";
+/** Remembers that a word of this sentence was looked up, so Add to review can offer it as a Fill-in card. */
+function pick(sentenceId: string, wordIndex: number) {
+  const picked = get().study.picked;
+  const list = picked[sentenceId] ?? [];
+  if (!list.includes(wordIndex)) patchStudy({ picked: { ...picked, [sentenceId]: [...list, wordIndex] } });
+}
 
+/*
+ * A word's meaning: "In this sentence" comes from the analysis itself (no request); the dictionary
+ * entry is an AI lookup of the base form. Opening the panel counts one lookup on the server.
+ */
 export function WordPanel({
+  sentence,
+  wordIndex,
   entry,
-  sentenceId,
   onGrammar,
   onClose,
   inSheet,
 }: {
+  sentence: StudySentence;
+  wordIndex?: number;
   entry: string;
-  sentenceId: string;
   onGrammar: () => void;
   onClose: () => void;
   inSheet?: boolean;
 }) {
-  const key = lookupKey(entry);
-  const offline = useApp((s) => s.offline);
-  const snapshot = useApp((s) => s.snapshots[key]);
-  const ctxSnap = useApp((s) => s.ctxSnapshots[`${key}|${sentenceId}`]);
-  const count = useApp((s) => s.lookups[key]?.count ?? 0);
-  const fav = useApp((s) => !!s.favorites[key]);
-  const forced = useApp((s) => s.ss["SCR-WRD-01"] ?? s.ss["SCR-WRD-03"]);
-  const [st, setSt] = useState<WState>("loading");
+  const w = wordIndex !== undefined ? sentence.raw?.words?.[wordIndex] : undefined;
+  const headword = w?.lemma || entry;
+  const count = useLookupCount(entry);
+  const [dict, setDict] = useState<DictionaryEntry | null>(null);
+  const [st, setSt] = useState<"loading" | "ready" | "error">("loading");
+  const [error, setError] = useState("");
   const [counted, setCounted] = useState<boolean | null>(null);
-  const [full, setFull] = useState(false);
-  const counter = useRef<string | null>(null);
-  const dict = dictionaryFor(entry);
 
   const load = () => {
-    if (offline) {
-      setSt(snapshot ? "offline-cached" : "offline-uncached");
-      return;
-    }
     setSt("loading");
-    simulate("dictionary", 600, dict)
+    lookupWord(headword)
       .then((d) => {
-        if (d) {
-          saveSnapshot(d, sentenceId);
-          setSt("success");
-        } else setSt("nomatch");
+        setDict(d);
+        setSt("ready");
       })
-      .catch(() => {
-        // A failed request never overwrites a valid saved snapshot.
+      .catch((e) => {
+        setError(e instanceof ApiError ? e.message : "");
         setSt("error");
         announce("Dictionary request failed.", true);
       });
   };
-  const tryAI = () => {
-    setSt("ai-loading");
-    announce("Loading AI explanation.");
-    simulate("ai", 900, true)
-      .then(() => {
-        setSt("ai-success");
-        announce("AI explanation ready.");
-      })
-      .catch(() => {
-        setSt("ai-error");
-        announce("AI explanation failed.", true);
-      });
-  };
 
   useEffect(() => {
-    if (counter.current !== entry) {
-      counter.current = entry;
-      setCounted(recordLookup(entry).counted);
-    }
-    setFull(false);
-    if (forced && forced !== "auto") {
-      setSt(forced as WState);
-      return;
-    }
+    setDict(null);
+    setCounted(null);
     load();
-  }, [entry, forced, offline]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (wordIndex !== undefined) pick(sentence.id, wordIndex);
+    recordLookup(entry)
+      .then((r) => setCounted(r.incremented))
+      .catch(() => setCounted(null));
+  }, [entry, sentence.id, wordIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const shown: DictEntry | undefined =
-    st === "success" ? dict ?? snapshot : st === "offline-cached" || st === "error" ? snapshot : undefined;
-  const contextText = shown ? shown.context[sentenceId] ?? ctxSnap : undefined;
-
-  const favoriteBtn = (
-    <Button
-      kind="tertiary"
-      className="btn--sm-text"
-      aria-pressed={fav}
-      icon={fav ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />}
-      onClick={() => {
-        set((s) => ({ favorites: { ...s.favorites, [key]: !fav } }));
-        announce(fav ? "Removed from favorites. Lookup count and importance are unchanged." : "Added to favorites. Lookup count and importance are unchanged.");
-      }}
-    >
-      {fav ? "Favorited" : "Favorite"}
-    </Button>
-  );
+  const main = w?.meaning || dict?.explanation_en || "";
+  const ipa = w?.ipa || dict?.phonetic || "";
+  const pos = w?.type || dict?.pos || "";
+  const baseForm = w?.lemma && w.lemma.toLowerCase() !== entry.toLowerCase() ? w.lemma : "";
 
   return (
-    <div className="stack gap-3" aria-busy={st === "loading" || st === "ai-loading"}>
+    <div className="stack gap-3" aria-busy={st === "loading"}>
       <div className="word-head" style={{ position: "sticky", top: inSheet ? 0 : -16, background: "var(--surface)", paddingTop: 2, zIndex: 1 }}>
         <div className="grow stack gap-1">
           <span className="t-support">
-            French <span lang="fr" className="t-strong" style={{ color: "var(--text)" }}>{shown?.entry ?? entry}</span>
+            French <span lang="fr" className="t-strong" style={{ color: "var(--text)" }}>{entry}</span>
+            {ipa && <span> · /{ipa}/</span>}
           </span>
-          {shown && <span className="word-main" data-autofocus tabIndex={-1}>{shown.main}</span>}
-          {!shown && !inSheet && <span className="t-strong" data-autofocus tabIndex={-1}>Meaning</span>}
+          {main ? (
+            <span className="word-main" data-autofocus tabIndex={-1}>{main}</span>
+          ) : (
+            !inSheet && <span className="t-strong" data-autofocus tabIndex={-1}>Meaning</span>
+          )}
         </div>
-        {favoriteBtn}
       </div>
 
-      <Importance count={count} />
-      {counted !== null && (
-        <p className="t-meta">{counted ? "This lookup was counted." : "Not counted: you looked this up less than 5 seconds after the last counted lookup."}</p>
+      {count !== undefined && <Importance count={count} />}
+      {counted === false && <p className="t-meta">Not counted again: you looked this up less than 5 seconds ago.</p>}
+
+      {w && (
+        <div className="stack gap-1">
+          <span className="def-label">In this sentence</span>
+          {w.meaning !== main && <p>{w.meaning}</p>}
+          {w.meaning_zh && <p className="t-support" lang="zh">{w.meaning_zh}</p>}
+          {(baseForm || pos) && (
+            <p className="t-meta">
+              {baseForm && <>Base form <span lang="fr">{baseForm}</span>{pos ? " · " : ""}</>}
+              {pos}
+            </p>
+          )}
+          {w.false_friend && <p className="t-meta">False friend: it doesn’t mean what the English look-alike means.</p>}
+          {w.english_link && !w.false_friend && <p className="t-meta">Like English “{w.english_link}”.</p>}
+        </div>
       )}
 
       {st === "loading" && (
         <>
-          <Spinner label="Looking up…" />
-          <Skeleton lines={3} />
+          <Spinner label="Looking up the dictionary entry…" />
+          <Skeleton lines={2} />
         </>
       )}
-
-      {(st === "offline-cached" || st === "offline-uncached") && (
-        <Banner tone={st === "offline-cached" ? "info" : "warning"} title={st === "offline-cached" ? "Saved definition available offline" : "This definition is not available offline"}>
-          {st === "offline-cached"
-            ? "You’re offline (simulated). This is the definition saved on this device. Audio and AI explanations need a connection."
-            : "You’re offline (simulated) and this word hasn’t been saved on this device yet."}
-        </Banner>
-      )}
-
       {st === "error" && (
-        <Banner
-          tone="error"
-          title="Dictionary request failed"
-          live="assertive"
-          actions={
-            <>
-              <Button kind="secondary" onClick={load}>Retry</Button>
-              {!snapshot && <Button kind="tertiary" icon={<Sparkles aria-hidden />} onClick={tryAI}>Try AI explanation</Button>}
-            </>
-          }
-        >
-          {snapshot ? "Showing your saved definition below. It was not changed by this failure." : "No definition was saved, so nothing is lost."}
+        <Banner tone="error" title="Dictionary request failed" live="assertive" actions={<Button kind="secondary" onClick={load}>Retry</Button>}>
+          {error || "The dictionary didn’t respond."} {w ? "The meaning in this sentence is unaffected." : ""}
         </Banner>
       )}
-
-      {shown && (
-        <div className="stack gap-3">
-          <div className="stack gap-1">
-            <span className="def-label">Dictionary meaning</span>
-            <p>{shown.dictionary}</p>
-          </div>
-          {contextText && (
-            <div className="stack gap-1">
-              <span className="def-label">In this sentence</span>
-              <p>{contextText}</p>
-            </div>
-          )}
-          {shown.meta && <p className="t-meta">{shown.meta}</p>}
-          {shown.more && (
-            <div className="stack gap-2">
-              {full && (
-                <ul className="stack gap-2" style={{ paddingLeft: 20 }}>
-                  {shown.more.map((m) => (
-                    <li key={m} className="t-support" style={{ color: "var(--text)" }}>{m}</li>
-                  ))}
-                </ul>
-              )}
-              <Button kind="tertiary" className="btn--sm-text" style={{ alignSelf: "flex-start", marginLeft: -12 }} aria-expanded={full} onClick={() => setFull(!full)}>
-                {full ? "Show less" : `Show full entry (${shown.more.length} more notes)`}
-              </Button>
-            </div>
-          )}
-          <div>
-            {shown.why && (
-              <Disclosure summary="Why this meaning">
-                <p className="t-support" style={{ color: "var(--text)" }}>{shown.why}</p>
-              </Disclosure>
-            )}
-            {shown.etymology && (
-              <Disclosure summary="Etymology">
-                <p className="t-support" style={{ color: "var(--text)" }}>{shown.etymology}</p>
-              </Disclosure>
-            )}
-          </div>
-          <p className="t-meta">Source: {shown.source}</p>
+      {st === "ready" && dict && (dict.explanation_en || dict.explanation_cn) && (
+        <div className="stack gap-1">
+          <span className="def-label">Dictionary meaning{dict.lemma && dict.lemma.toLowerCase() !== entry.toLowerCase() ? ` · ${dict.lemma}` : ""}</span>
+          {dict.explanation_en && <p>{dict.explanation_en}</p>}
+          {dict.explanation_cn && <p className="t-support" lang="zh">{dict.explanation_cn}</p>}
         </div>
       )}
 
-      {st === "nomatch" && (
-        <Banner tone="neutral" title={`No dictionary match for “${entry}”`} actions={<Button kind="secondary" icon={<Sparkles aria-hidden />} onClick={tryAI}>Try AI explanation</Button>}>
-          This phrase isn’t in the demo dictionary. Nothing was saved as a definition.
-        </Banner>
+      {w?.why && (
+        <Disclosure summary="Why this form">
+          <p className="t-support" style={{ color: "var(--text)" }}>{w.why}</p>
+        </Disclosure>
       )}
-      {st === "ai-loading" && <Spinner label="Getting an AI explanation…" />}
-      {st === "ai-success" && (
-        <div className="stack gap-2">
-          <span className="ai-label"><Sparkles aria-hidden width={12} height={12} /> AI explanation · Demo</span>
-          <p>{aiFor(entry)}</p>
-        </div>
-      )}
-      {st === "ai-error" && (
-        <Banner tone="error" title="AI explanation failed" live="assertive" actions={<Button kind="secondary" onClick={tryAI}>Retry</Button>}>
-          The demo AI service didn’t respond. Nothing was saved as a definition.
-        </Banner>
-      )}
-
-      {(st === "offline-uncached" || st === "offline-cached") && (
-        <div className="stack gap-2">
-          {st === "offline-uncached" && (
-            <Button kind="secondary" onClick={load} disabledReason={offline ? "Retry when you’re back online." : undefined}>
-              Retry
-            </Button>
-          )}
-          {offline && st === "offline-uncached" && <p className="t-meta">Retry when you’re back online.</p>}
-        </div>
-      )}
-      {offline && (
-        <p className="note"><Database aria-hidden /> Full offline dictionary package: Not available in this prototype.</p>
-      )}
-      {offline && <p className="note"><WifiOff aria-hidden /> Saved definitions don’t include offline audio, AI explanations or exams.</p>}
+      <p className="t-meta">Meanings are written by AI and can be wrong. Each lookup raises the word’s importance.</p>
 
       <div className="btn-row" style={{ justifyContent: "space-between" }}>
         <Button kind="tertiary" className="btn--sm-text" style={{ marginLeft: -12 }} onClick={onGrammar}>
@@ -238,7 +135,6 @@ export function WordPanel({
         </Button>
         {!inSheet && <Button kind="tertiary" className="btn--sm-text" onClick={onClose}>Close</Button>}
       </div>
-      {fav && <Pill tone="info">Favorite is a bookmark only — it doesn’t change importance</Pill>}
     </div>
   );
 }

@@ -1,47 +1,64 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronLeft } from "lucide-react";
-import { CHOOSABLE, LAST_STUDIED, QUEUE_PRACTICE, type PracticeItem } from "../data/fixtures";
+import { queueSentences, savedSentences, type SavedSentence } from "../api/srs";
+import { stepText } from "../api/study";
+import type { PracticeItem } from "../data/fixtures";
 import { plural } from "../lib/format";
-import { announce, go, set, simulate, useApp } from "../state/store";
+import { announce, go, set, useApp } from "../state/store";
 import { Banner, Button, DisabledReason, PageHead, Spinner } from "../components/ui";
 import { Exercise } from "./Exercise";
 
 type Source = "last" | "queue" | "choose";
 
+const words = (fr: string) => fr.split(/\s+/).filter(Boolean).length;
+const savedOn = (iso: string) => new Date(iso).toLocaleDateString("en", { month: "short", day: "numeric" });
+
+/** A saved sentence has no build-up steps, so step-by-step practice is the whole sentence. */
+const toItem = (s: SavedSentence, label: string): PracticeItem => ({ id: s.noteId, fr: s.fr, en: s.en, label, steps: [{ fr: s.fr, en: s.en }] });
+
+function useSentences(load: () => Promise<SavedSentence[]>) {
+  const [state, setState] = useState<{ phase: "loading" | "ready" | "error"; list: SavedSentence[] }>({ phase: "loading", list: [] });
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    let live = true;
+    setState((s) => ({ ...s, phase: "loading" }));
+    load()
+      .then((list) => live && setState({ phase: "ready", list }))
+      .catch(() => live && setState({ phase: "error", list: [] }));
+    return () => {
+      live = false;
+    };
+  }, [n]); // eslint-disable-line react-hooks/exhaustive-deps
+  return { ...state, retry: () => setN(n + 1) };
+}
+
 export function Launcher({ kind }: { kind: "Recall" | "Dictation" }) {
   const forced = useApp((s) => s.ss["SCR-PRL-01"]);
   const studied = useApp((s) => s.study.sentences);
-  const [src, setSrc] = useState<Source>("queue");
+  const [src, setSrc] = useState<Source>(studied.length ? "last" : "queue");
   const [picked, setPicked] = useState<Record<string, boolean>>({});
-  const [phase, setPhase] = useState<"idle" | "loading" | "error">("idle");
-  const effectivePhase = forced === "loading" || forced === "error" ? forced : phase;
+  const queue = useSentences(queueSentences);
+  const saved = useSentences(savedSentences);
+  const loadingSrc = src === "queue" ? queue : src === "choose" ? saved : null;
+  const effectivePhase = forced === "loading" || forced === "error" ? forced : loadingSrc?.phase === "ready" || !loadingSrc ? "idle" : loadingSrc.phase;
 
   const lastItems: PracticeItem[] =
     forced === "empty"
       ? []
-      : studied.length
-        ? studied.map((s, i) => ({ id: s.id, fr: s.fr, en: s.en, label: `Last studied · sentence ${i + 1}`, steps: s.steps.map((st) => ({ fr: st.parts.map((p) => p.t).join(""), en: st.en })) }))
-        : LAST_STUDIED;
-  const queueItems = forced === "empty" ? [] : QUEUE_PRACTICE;
-  const chosen = CHOOSABLE.filter((c) => picked[c.id]);
+      : studied.map((s, i) => ({ id: s.id, fr: s.fr, en: s.en, label: `Last studied · sentence ${i + 1}`, steps: s.steps.map((st) => ({ fr: stepText(st), en: st.en })) }));
+  const queueItems = forced === "empty" ? [] : queue.list.map((s, i) => toItem(s, `Due today · sentence ${i + 1} · ${plural(words(s.fr), "word")}`));
+  const choosable = saved.list.map((s) => toItem(s, `Saved ${savedOn(s.createdAt)} · ${plural(words(s.fr), "word")}`));
+  const chosen = choosable.filter((c) => picked[c.id]);
   const items = src === "last" ? lastItems : src === "queue" ? queueItems : chosen;
   const srcName = src === "last" ? "Last studied sentence" : src === "queue" ? "Today’s review queue" : "Chosen sentences";
 
   const start = () => {
-    setPhase("loading");
-    announce(`Preparing ${kind}.`);
-    simulate("queue", 700, true)
-      .then(() => {
-        const key = `run:${kind}:${src}:${Date.now()}`;
-        set(() => ({ activeRun: key }));
-        runItems.set(key, { kind, source: srcName, items });
-        setPhase("idle");
-        go("study/run");
-      })
-      .catch(() => {
-        setPhase("error");
-        announce(`${kind} couldn’t start.`, true);
-      });
+    if (effectivePhase === "error") return loadingSrc?.retry();
+    const key = `run:${kind}:${src}:${Date.now()}`;
+    runItems.set(key, { kind, source: srcName, items });
+    set(() => ({ activeRun: key }));
+    announce(`Starting ${kind}.`);
+    go("study/run");
   };
   const emptyReason = !items.length
     ? src === "choose"
@@ -85,13 +102,14 @@ export function Launcher({ kind }: { kind: "Recall" | "Dictation" }) {
         {src === "choose" && (
           <fieldset className="list" style={{ border: 0, padding: "4px 16px", margin: 0 }}>
             <legend className="sr-only">Saved sentences</legend>
-            {CHOOSABLE.map((c) => (
+            {saved.phase === "ready" && !choosable.length && <p className="t-support" style={{ padding: "12px 0" }}>No saved sentences yet. Add a sentence to review from Study first.</p>}
+            {choosable.map((c) => (
               <label key={c.id} className="check">
                 <input type="checkbox" checked={!!picked[c.id]} onChange={(e) => setPicked({ ...picked, [c.id]: e.target.checked })} />
                 <span>{c.label}</span>
               </label>
             ))}
-            <p className="t-meta" style={{ paddingBottom: 12 }}>Sentences are listed by topic and length so the French isn’t shown before you practise.</p>
+            <p className="t-meta" style={{ paddingBottom: 12 }}>Sentences are listed by date and length so the French isn’t shown before you practise.</p>
           </fieldset>
         )}
 
@@ -102,13 +120,13 @@ export function Launcher({ kind }: { kind: "Recall" | "Dictation" }) {
           </p>
         </div>
 
-        {src !== "choose" && !items.length && (
+        {src !== "choose" && !items.length && effectivePhase === "idle" && (
           <Banner tone="neutral" title={src === "last" ? "Nothing studied yet" : "No review sentences today"} actions={<Button kind="secondary" onClick={() => go("study/new")}>Study a text</Button>}>
             {src === "last" ? "Analyse a French text in Study and it will appear here." : "Choose sentences instead, or come back when cards are due."}
           </Banner>
         )}
         {effectivePhase === "error" && (
-          <Banner tone="error" title={`${kind} couldn’t start`} live="assertive">The demo couldn’t load these sentences. Your choice is kept.</Banner>
+          <Banner tone="error" title="Sentences didn’t load" live="assertive">Your choice is kept. Retry to load them again.</Banner>
         )}
         {effectivePhase === "loading" && <Spinner label="Preparing sentences…" />}
         <div className="stack gap-2">

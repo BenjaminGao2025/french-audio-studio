@@ -93,6 +93,9 @@ export function AppRoot({ children }: { children: ReactNode }) {
   );
 }
 
+/** Screens that already read and write the learner's real data (the rest still run on sample data). */
+const isConnected = (route: string) => route === "study" || route.startsWith("study/") || route === "login";
+
 export function Shell({ children }: { children: ReactNode }) {
   const route = useApp((s) => s.route);
   const top = route.split("/")[0];
@@ -129,16 +132,18 @@ export function Shell({ children }: { children: ReactNode }) {
           })}
         </ul>
         <div className="nav-foot">
-          <p className="t-meta">Only sign-in is connected so far</p>
+          <p className="t-meta">Study, Recall and Dictation are connected. Other screens show sample data.</p>
         </div>
       </nav>
       <Header />
       <main className="main" id="main" tabIndex={-1}>
-        <div className="demo-banner">
-          <Banner tone="warning" title="Demo data — not connected yet">
-            You are signed in for real, but the screens below still show sample data. Nothing you do here is saved to your account yet.
-          </Banner>
-        </div>
+        {!isConnected(route) && (
+          <div className="demo-banner">
+            <Banner tone="warning" title="Demo data — not connected yet">
+              You are signed in for real, but this screen still shows sample data. Nothing you do here is saved to your account yet.
+            </Banner>
+          </div>
+        )}
         {children}
       </main>
       <div className="player-slot">
@@ -153,6 +158,7 @@ function Header() {
   const offline = useApp((s) => s.offline);
   const sync = useApp((s) => s.sync);
   const menuOpen = useApp((s) => s.menuOpen);
+  const route = useApp((s) => s.route);
   const menuBtn = useRef<HTMLButtonElement>(null);
   const user = useSession().user;
   const email = user?.email ?? "";
@@ -163,7 +169,7 @@ function Header() {
         <span className="hide-narrow">1000H French</span>
       </span>
       {offline && <Pill tone="warning" icon={<CloudOff aria-hidden />}>Offline · simulated</Pill>}
-      {auth === "in" && <SyncIndicator sync={sync} offline={offline} />}
+      {auth === "in" && !isConnected(route) && <SyncIndicator sync={sync} offline={offline} />}
       {auth === "in" ? (
         <button
           ref={menuBtn}
@@ -287,7 +293,7 @@ function GlobalPlayer() {
       <div className="gplayer-meta">
         <span className="gplayer-title">{p.owner.label}</span>
         <span className="t-meta num">
-          {statusText[p.status]} · {fmtClock(p.position)} / {fmtClock(p.duration)} · {p.speed}× · Simulated audio
+          {statusText[p.status]} · {fmtClock(p.position)} / {fmtClock(p.duration)} · {p.speed}×{p.texts ? "" : " · Simulated audio"}
         </span>
         <div className="progress-track" aria-hidden>
           <div className="progress-fill" style={{ width: `${Math.min(100, (p.position / p.duration) * 100)}%` }} />

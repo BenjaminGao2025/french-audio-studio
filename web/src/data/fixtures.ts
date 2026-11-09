@@ -8,6 +8,8 @@ export interface Segment {
   t: string;
   /** Present when the segment is a clickable word or phrase. */
   w?: boolean;
+  /** Index of the word in the analysis word list (real analyses only). */
+  wi?: number;
 }
 export interface StepPart {
   t: string;
@@ -38,7 +40,8 @@ export interface StudySentence {
   steps: Step[];
   grammar: GrammarNote[] | null;
   cards: DerivedCard[];
-  /** English meanings for each step, used as Recall prompts. */
+  /** The analysis this sentence came from (real analyses only; demo fixtures have none). */
+  raw?: import("../api/study").ApiSentence;
 }
 
 const seg = (...parts: (string | [string])[]): Segment[] =>

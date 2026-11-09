@@ -1,5 +1,8 @@
 import { STUDY_FIXTURES, type AnalysisRec, type StudySentence } from "../data/fixtures";
-import { announce, get, go, patchStudy, set, simulate } from "./store";
+import { ApiError } from "../api/client";
+import { loadSavedCards } from "../api/srs";
+import { analyzeText, cleanInput, ideaToFrench, saveStudyHistory, toStudySentence } from "../api/study";
+import { announce, get, go, patchStudy } from "./store";
 
 export const LIMITS = { text: 2000, ideas: 300 } as const;
 export const STAGES = ["Finding sentences", "Looking up words and phrases", "Preparing steps"];
@@ -88,8 +91,15 @@ export function validate(text: string, mode: "text" | "ideas"): "empty" | "inval
 }
 
 let timers: ReturnType<typeof setTimeout>[] = [];
+let controller: AbortController | null = null;
 
-export function runAnalysis(source: "Pasted text" | "Photo import" | "My own idea" = "Pasted text") {
+/** After this long the status says it is slower than usual (a long text is analysed part by part). */
+export const LONG_AFTER_MS = 25_000;
+
+const SOURCE_KEY = { "Pasted text": "text", "Photo import": "photo", "My own idea": "idea" } as const;
+
+/** Analyses the current draft on the server. A cancelled or outdated run never replaces newer content. */
+export async function runAnalysis(source: "Pasted text" | "Photo import" | "My own idea" = "Pasted text") {
   const s = get().study;
   const mode = source === "My own idea" ? "ideas" : "text";
   const input = mode === "ideas" ? s.drafts.ideas : s.drafts.text;
@@ -102,65 +112,63 @@ export function runAnalysis(source: "Pasted text" | "Photo import" | "My own ide
   if (v) return;
   const runId = s.analysis.runId + 1;
   timers.forEach(clearTimeout);
+  controller?.abort();
+  const ctl = new AbortController();
+  controller = ctl;
   patchStudy({ analysis: { status: "running", runId, input, stage: 0, source } });
   announce(`Analysing. ${STAGES[0]}.`);
   const still = () => get().study.analysis.runId === runId && ["running", "long"].includes(get().study.analysis.status);
+  const stage = (n: number) => still() && patchStudy({ analysis: { ...get().study.analysis, stage: n } });
   timers = [
-    setTimeout(() => still() && patchStudy({ analysis: { ...get().study.analysis, stage: 1 } }), 900),
-    setTimeout(() => still() && patchStudy({ analysis: { ...get().study.analysis, stage: 2 } }), 1800),
     setTimeout(() => {
       if (!still()) return;
       patchStudy({ analysis: { ...get().study.analysis, status: "long" } });
       announce("This is taking longer than usual. Your text is kept.");
-    }, 6000),
+    }, LONG_AFTER_MS),
   ];
-  simulate("analysis", 2600, true)
-    .then(() => {
-      // A cancelled or outdated run never replaces newer content.
-      if (!still()) return;
-      timers.forEach(clearTimeout);
-      let sentences: StudySentence[];
-      if (mode === "ideas") sentences = [IDEA_SENTENCE];
-      else {
-        sentences = frenchSentences(input);
-        if (!sentences.length) {
-          patchStudy({ analysis: { ...get().study.analysis, status: "nofrench" } });
-          announce("No usable French sentences found. Your text is kept.");
-          return;
-        }
-      }
-      patchStudy({
-        analysis: { ...get().study.analysis, status: "done" },
-        sentences,
-        index: 0,
-        step: 0,
-        tab: "steps",
-        sourceOpen: false,
-        restored: false,
-      });
-      set((st) => ({
-        history: {
-          ...st.history,
-          analyses: [
-            { id: `a-live-${runId}`, date: "Mar 4", source, sentences: sentences.length, preview: sentences[0].fr.slice(0, 32) + "…", text: input },
-            ...st.history.analyses,
-          ],
-        },
-      }));
-      if (get().route.startsWith("study")) go("study", { focus: false });
-      announce(`Analysis complete. ${sentences.length} ${sentences.length === 1 ? "sentence" : "sentences"} ready.`);
-      requestAnimationFrame(() => document.getElementById("current-sentence-heading")?.focus());
-    })
-    .catch(() => {
-      if (!still()) return;
-      timers.forEach(clearTimeout);
-      patchStudy({ analysis: { ...get().study.analysis, status: "failed" } });
-      announce("Analysis did not finish. Your text is kept.", true);
+  try {
+    const french = mode === "ideas" ? await ideaToFrench(input, ctl.signal) : ((await cleanInput(input, ctl.signal)) ?? input);
+    if (!still()) return;
+    stage(1);
+    const { sentences: raw } = await analyzeText(french, {
+      signal: ctl.signal,
+      onProgress: (p) => p.done === p.total && stage(2),
     });
+    if (!still()) return;
+    timers.forEach(clearTimeout);
+    if (!raw.length) {
+      patchStudy({ analysis: { ...get().study.analysis, status: "nofrench" } });
+      announce("No usable French sentences found. Your text is kept.");
+      return;
+    }
+    const sentences = raw.map(toStudySentence);
+    patchStudy({
+      analysis: { ...get().study.analysis, status: "done", input: french },
+      sentences,
+      index: 0,
+      step: 0,
+      tab: "steps",
+      sourceOpen: false,
+      restored: false,
+    });
+    // Background: History keeps the analysis; Add to review learns which cards already exist.
+    saveStudyHistory(french, raw, SOURCE_KEY[source]).catch(() => announce("This analysis couldn’t be saved to History.", true));
+    loadSavedCards(sentences.map((x) => x.fr)).catch(() => undefined);
+    if (get().route.startsWith("study")) go("study", { focus: false });
+    announce(`Analysis complete. ${sentences.length} ${sentences.length === 1 ? "sentence" : "sentences"} ready.`);
+    requestAnimationFrame(() => document.getElementById("current-sentence-heading")?.focus());
+  } catch (err) {
+    if (!still()) return;
+    timers.forEach(clearTimeout);
+    patchStudy({ analysis: { ...get().study.analysis, status: "failed", error: err instanceof ApiError ? err.message : undefined } });
+    announce("Analysis did not finish. Your text is kept.", true);
+  }
 }
 
 export function cancelAnalysis() {
   timers.forEach(clearTimeout);
+  controller?.abort();
+  controller = null;
   const a = get().study.analysis;
   patchStudy({ analysis: { ...a, status: "cancelled" } });
   announce("Analysis cancelled. Your text is kept.");
