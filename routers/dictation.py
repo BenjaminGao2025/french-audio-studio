@@ -143,6 +143,23 @@ async def list_attempts(
     return {"attempts": attempts, "summary": summary}
 
 
+
+@router.get("/api/dictation/history")
+async def attempt_history(
+    limit: int = Query(default=200, ge=1, le=500),
+    authorization: str | None = Header(default=None),
+):
+    """Every Recall (write) and Dictation (listen) attempt, newest first, for History."""
+    user_id = _require_user_id(authorization)
+    attempts, total = await run_in_threadpool(dictation.recent_attempts, user_id, limit)
+    return {"attempts": attempts, "total": total}
+
+
+@router.delete("/api/dictation/history")
+async def clear_attempt_history(authorization: str | None = Header(default=None)):
+    user_id = _require_user_id(authorization)
+    return {"deleted": await run_in_threadpool(dictation.clear_attempts, user_id)}
+
 # One AI review per attempt at a time: a double click must not pay twice
 _ai_in_flight: set[tuple[int, str]] = set()
 

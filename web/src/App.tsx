@@ -10,6 +10,7 @@ import { HistoryScreen } from "./screens/History";
 import { SettingsScreen } from "./screens/Settings";
 import { DesignReference } from "./screens/Design";
 import { Gate, Legacy, NotFound } from "./screens/Auth";
+import { startStudyTime } from "./api/time";
 import { go, parseLocation, resetPlaybackClock, set, tick, useApp } from "./state/store";
 
 function Routes() {
@@ -55,7 +56,10 @@ export default function App() {
     window.addEventListener("popstate", onPop);
     document.addEventListener("visibilitychange", resetPlaybackClock);
     const t = setInterval(() => tick(), 250);
+    // Study time toward 1,000 hours (page use + playing audio), sent to the server as heartbeats.
+    const stopTime = startStudyTime();
     return () => {
+      stopTime();
       window.removeEventListener("popstate", onPop);
       document.removeEventListener("visibilitychange", resetPlaybackClock);
       clearInterval(t);

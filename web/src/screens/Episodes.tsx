@@ -1,73 +1,123 @@
-import { useEffect, useState } from "react";
-import { Pause, Play, RotateCcw, ChevronRight, CloudOff } from "lucide-react";
-import { EPISODES } from "../data/fixtures";
+import { useEffect, useRef, useState } from "react";
+import { ChevronRight, Download, Pause, Play, RotateCcw, Trash2 } from "lucide-react";
+import { ApiError } from "../api/client";
+import {
+  createEpisode,
+  deleteEpisode,
+  episodeAudioUrl,
+  episodeFileUrl,
+  episodeTitle,
+  listEpisodes,
+  loadTranscript,
+  savePosition,
+  savedPositions,
+  type Cue,
+  type EpisodeLevel,
+  type EpisodeList as EpisodeListData,
+  type ServerEpisode,
+} from "../api/episodes";
+import { audioJumped } from "../api/time";
 import { fmtClock } from "../lib/format";
-import { announce, go, recordSimulatedAudio, retryPlayback, simulate, startPlayback, stopPlayback, updatePlayer, useApp } from "../state/store";
-import { Banner, Button, DemoNote, PageHead, Pill, Skeleton, Spinner } from "../components/ui";
+import { announce, go, retryPlayback, startPlayback, stopPlayback, updatePlayer, useApp } from "../state/store";
+import { Banner, Button, Dialog, PageHead, Pill, Skeleton, Spinner } from "../components/ui";
 import { BackTo } from "./Practice";
 
-/* SCR-EPI-01 */
-export function EpisodeList() {
-  const forced = useApp((s) => s.ss["SCR-EPI-01"]);
-  const offline = useApp((s) => s.offline);
-  const positions = useApp((s) => s.episodePositions);
-  const [load, setLoad] = useState<"loading" | "ok" | "error">("loading");
+const errText = (e: unknown) => (e instanceof ApiError ? e.message : "");
+
+/* The list is shared by the list and the player, so opening an episode doesn't fetch it again. */
+let cached: EpisodeListData | null = null;
+
+function useEpisodes() {
+  const [data, setData] = useState<EpisodeListData | null>(cached);
+  const [state, setState] = useState<"loading" | "ok" | "error">(cached ? "ok" : "loading");
+  const [error, setError] = useState("");
   const [n, setN] = useState(0);
   useEffect(() => {
-    setLoad("loading");
     let live = true;
-    simulate("episodes", 600, true, { needsNetwork: false }).then(() => live && setLoad("ok")).catch(() => live && setLoad("error"));
+    if (!cached) setState("loading");
+    listEpisodes()
+      .then((d) => {
+        cached = d;
+        if (!live) return;
+        setData(d);
+        setState("ok");
+      })
+      .catch((e) => {
+        if (!live) return;
+        setError(errText(e));
+        setState(cached ? "ok" : "error");
+      });
     return () => {
       live = false;
     };
   }, [n]);
-  const state = forced || (load !== "ok" ? load : offline ? "offline" : "ok");
-  const list = state === "empty" ? [] : EPISODES;
-  const pos = (id: string) => positions[id] ?? EPISODES.find((e) => e.id === id)!.position;
-  const cont = list.find((e) => e.available && pos(e.id) > 0 && pos(e.id) < e.durationSeconds);
+  return { data, state, error, reload: () => setN((x) => x + 1) };
+}
+
+/** Test helper. */
+export function resetEpisodeCache() {
+  cached = null;
+}
+
+const levelOf = (e: ServerEpisode) => e.settings?.level ?? "";
+const minutesOf = (e: ServerEpisode) => Math.round((e.duration ?? (e.settings?.minutes ?? 0) * 60) / 60);
+
+/* SCR-EPI-01 */
+export function EpisodeList() {
+  const { data, state, error, reload } = useEpisodes();
+  const positions = savedPositions();
+  const list = data?.episodes ?? [];
+  const generating = list.some((e) => e.status === "generating");
+  // While an episode is being made, look again every 15 seconds.
+  useEffect(() => {
+    if (!generating) return;
+    const t = setInterval(reload, 15_000);
+    return () => clearInterval(t);
+  }, [generating]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const pos = (e: ServerEpisode) => positions[e.id] ?? 0;
+  const cont = list.find((e) => e.status === "ready" && pos(e) > 5 && pos(e) < (e.duration ?? 0) - 5);
   return (
     <div className="page">
-      <PageHead back={<BackTo label="Practice" to="practice" />} title="Episodes" desc="Continuous listening: longer audio you can pause and come back to. Time counts toward 1,000 hours only while audio plays." />
+      <PageHead
+        back={<BackTo label="Practice" to="practice" />}
+        title="Episodes"
+        desc="Longer listening made from the sentences you studied, with new stories at your level. Pause and come back any time."
+      />
       <div className="stack gap-5">
-        <p className="row"><DemoNote>Background and lock-screen playback: capability not verified.</DemoNote></p>
         {state === "loading" && <><Spinner label="Loading episodes…" /><Skeleton lines={4} /></>}
-        {state === "error" && <Banner tone="error" title="Episodes didn’t load" live="assertive" actions={<Button kind="secondary" onClick={() => setN(n + 1)}>Retry</Button>}>Your listening positions are safe.</Banner>}
-        {state === "empty" && <Banner tone="neutral" title="No episodes in your list yet">New episodes will appear here. Meanwhile, try Listen for guided clips.</Banner>}
-        {state === "offline" && (
-          <Banner tone="warning" title="Showing episode details saved on this device">
-            <span className="row"><CloudOff aria-hidden width={16} height={16} /> You’re offline (simulated). Titles and positions are cached; audio needs a connection.</span>
+        {state === "error" && (
+          <Banner tone="error" title="Episodes didn’t load" live="assertive" actions={<Button kind="secondary" onClick={reload}>Retry</Button>}>
+            {error || "The server didn’t respond."} Your episodes and listening positions are safe.
           </Banner>
         )}
-        {(state === "ok" || state === "offline") && (
+        {state === "ok" && data && (
           <>
             {cont && (
               <section className="panel stack gap-3" aria-labelledby="cont-h">
                 <h2 id="cont-h" className="t-label">Continue listening</h2>
-                <p lang="fr" className="t-section">{cont.title}</p>
-                <p className="t-support num">Stopped at {fmtClock(pos(cont.id))} of {fmtClock(cont.durationSeconds)}</p>
+                <p lang="fr" className="t-section">{episodeTitle(cont)}</p>
+                <p className="t-support num">Stopped at {fmtClock(pos(cont))} of {fmtClock(cont.duration ?? 0)}</p>
                 <div className="btn-row">
-                  <Button kind="primary" icon={<Play aria-hidden />} onClick={() => go(`practice/episodes/${cont.id}`)} disabledReason={state === "offline" ? "Audio needs a connection." : undefined}>Continue</Button>
+                  <Button kind="primary" icon={<Play aria-hidden />} onClick={() => go(`practice/episodes/${cont.id}`)}>Continue</Button>
                 </div>
               </section>
             )}
-            <ul className="list">
-              {list.map((e) => {
-                const p = pos(e.id);
-                const status = !e.available ? "Unavailable" : p >= e.durationSeconds ? "Finished" : p > 0 ? `Continue at ${fmtClock(p)}` : "Not started";
-                return (
+            <NewEpisode data={data} busy={generating} onCreated={reload} />
+            {list.length === 0 ? (
+              <Banner tone="neutral" title="No episodes yet">
+                Make your first one above. It uses the sentences you saved and analysed, so study a few texts first for a better episode.
+              </Banner>
+            ) : (
+              <ul className="list">
+                {list.map((e) => (
                   <li key={e.id}>
-                    <button className="list-btn" onClick={() => go(`practice/episodes/${e.id}`)}>
-                      <span className="grow stack gap-1">
-                        <span className="row"><span lang="fr" className="t-strong">{e.title}</span><Pill>{e.level}</Pill></span>
-                        <span className="t-support">{e.desc}</span>
-                        <span className="t-meta num">{Math.round(e.durationSeconds / 60)} min · {status}</span>
-                      </span>
-                      <ChevronRight aria-hidden className="chev" />
-                    </button>
+                    <EpisodeRow e={e} position={pos(e)} onChanged={reload} />
                   </li>
-                );
-              })}
-            </ul>
+                ))}
+              </ul>
+            )}
+            <p className="t-meta">Episode time counts toward 1,000 hours while the audio plays, also with the screen locked. Listening on the go counts at half weight for your level.</p>
           </>
         )}
       </div>
@@ -75,60 +125,234 @@ export function EpisodeList() {
   );
 }
 
+function EpisodeRow({ e, position, onChanged }: { e: ServerEpisode; position: number; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const meta = [levelOf(e), e.status === "ready" ? `${minutesOf(e)} min` : e.settings?.minutes ? `${e.settings.minutes} min requested` : ""].filter(Boolean).join(" · ");
+  if (e.status === "ready") {
+    const d = e.duration ?? 0;
+    const status = position >= d - 5 && d > 0 ? "Finished" : position > 5 ? `Continue at ${fmtClock(position)}` : "Not started";
+    return (
+      <button className="list-btn" onClick={() => go(`practice/episodes/${e.id}`)}>
+        <span className="grow stack gap-1">
+          <span className="row"><span lang="fr" className="t-strong">{episodeTitle(e)}</span>{levelOf(e) && <Pill>{levelOf(e)}</Pill>}</span>
+          {e.settings?.request && <span className="t-support">{e.settings.request}</span>}
+          <span className="t-meta num">{meta} · {status}</span>
+        </span>
+        <ChevronRight aria-hidden className="chev" />
+      </button>
+    );
+  }
+  return (
+    <div className="list-row" style={{ alignItems: "flex-start" }}>
+      <span className="grow stack gap-1">
+        <span className="row">
+          <span className="t-strong">{episodeTitle(e)}</span>
+          {e.status === "generating" ? <Pill tone="info">Being made…</Pill> : <Pill tone="error">Failed</Pill>}
+        </span>
+        {e.status === "generating" ? (
+          <span className="t-support">This takes a few minutes. You can leave this page; it keeps going.</span>
+        ) : (
+          <span className="t-support">{e.error || "The episode couldn’t be made."}</span>
+        )}
+        {meta && <span className="t-meta num">{meta}</span>}
+      </span>
+      {e.status === "failed" && (
+        <Button
+          kind="tertiary"
+          className="btn--sm-text"
+          icon={<Trash2 aria-hidden />}
+          busy={busy}
+          onClick={() => {
+            setBusy(true);
+            deleteEpisode(e.id)
+              .then(() => {
+                announce("Failed episode removed.");
+                onChanged();
+              })
+              .catch(() => announce("Couldn’t remove the episode.", true))
+              .finally(() => setBusy(false));
+          }}
+        >
+          Remove
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function NewEpisode({ data, busy, onCreated }: { data: EpisodeListData; busy: boolean; onCreated: () => void }) {
+  const [level, setLevel] = useState<EpisodeLevel>(data.recommended_level);
+  const [minutes, setMinutes] = useState(data.lengths[0] ?? 20);
+  const [request, setRequest] = useState("");
+  const [phase, setPhase] = useState<"idle" | "sending" | "failed">("idle");
+  const [error, setError] = useState("");
+  const submit = () => {
+    setPhase("sending");
+    createEpisode({ level, minutes, request: request.trim() })
+      .then(() => {
+        setPhase("idle");
+        setRequest("");
+        announce("Your episode is being made. It appears in the list when it’s ready.");
+        onCreated();
+      })
+      .catch((e) => {
+        setError(errText(e));
+        setPhase("failed");
+      });
+  };
+  return (
+    <section className="panel stack gap-3" aria-labelledby="new-ep-h">
+      <h2 id="new-ep-h" className="t-label">Make a new episode</h2>
+      <div className="filter-bar">
+        <label className="field" style={{ width: 160 }}>
+          <span className="field-label">Level</span>
+          <select className="select" value={level} onChange={(e) => setLevel(e.target.value as EpisodeLevel)}>
+            {data.levels.map((l) => (
+              <option key={l} value={l}>{l}{l === data.recommended_level ? " (suggested)" : ""}</option>
+            ))}
+          </select>
+        </label>
+        <label className="field" style={{ width: 140 }}>
+          <span className="field-label">Length</span>
+          <select className="select" value={minutes} onChange={(e) => setMinutes(Number(e.target.value))}>
+            {data.lengths.map((m) => <option key={m} value={m}>{m} min</option>)}
+          </select>
+        </label>
+      </div>
+      <label className="field">
+        <span className="field-label">Topic or request (optional)</span>
+        <input className="input" maxLength={500} value={request} placeholder="e.g. a job interview, the weather, a story set in Montréal" onChange={(e) => setRequest(e.target.value)} />
+      </label>
+      {phase === "failed" && (
+        <Banner tone="error" title="The episode wasn’t started" live="assertive">{error || "The server didn’t respond."}</Banner>
+      )}
+      <div className="btn-row">
+        <Button kind="primary" busy={phase === "sending"} onClick={submit} disabledReason={busy ? "An episode is already being made. Wait for it to finish." : undefined}>
+          Make episode
+        </Button>
+      </div>
+    </section>
+  );
+}
+
 /* SCR-EPI-02 */
 export function EpisodePlayer({ id }: { id: string }) {
-  const e = EPISODES.find((x) => x.id === id) ?? EPISODES[0];
-  const forced = useApp((s) => s.ss["SCR-EPI-02"]);
-  const offline = useApp((s) => s.offline);
-  const p = useApp((s) => s.player);
-  const saved = useApp((s) => s.episodePositions[e.id]);
-  const start0 = saved ?? e.position;
-  const mine = p?.owner.episodeId === e.id ? p : null;
-  const [restore, setRestore] = useState<"ask" | "failed" | "done">(start0 > 0 && start0 < e.durationSeconds ? "ask" : "done");
-  const [sync, setSync] = useState<"ok" | "failed" | "retrying">("ok");
-  const [demoCount, setDemoCount] = useState<string | null>(null);
-  useEffect(() => {
-    if (forced === "restore-failed") setRestore("failed");
-    if (forced === "sync-failed") setSync("failed");
-    if (forced === "buffering" && mine) updatePlayer({ status: "buffering" });
-  }, [forced]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const play = (from: number) => startPlayback({ kind: "episode", label: `Episode: ${e.title}`, route: `practice/episodes/${e.id}`, episodeId: e.id }, e.durationSeconds, { position: from });
-  const statusText = mine ? { loading: "Loading…", playing: "Playing", paused: "Paused", ended: "Ended", error: "Couldn’t play", buffering: "Buffering… (not counted)" }[mine.status] : "Not playing";
-
-  if (!e.available)
+  const { data, state, error, reload } = useEpisodes();
+  const e = data?.episodes.find((x) => x.id === id);
+  if (state === "loading")
     return (
       <div className="page">
-        <PageHead back={<BackTo label="Episodes" to="practice/episodes" />} title={e.title} />
-        <Banner tone="warning" title="This episode isn’t available">Its audio isn’t included in this demo. Your other episodes and positions are unaffected.</Banner>
+        <PageHead back={<BackTo label="Episodes" to="practice/episodes" />} title="Episode" />
+        <Spinner label="Loading the episode…" />
+        <Skeleton lines={4} />
       </div>
     );
+  if (state === "error" || !e || e.status !== "ready")
+    return (
+      <div className="page">
+        <PageHead back={<BackTo label="Episodes" to="practice/episodes" />} title={e ? episodeTitle(e) : "Episode"} />
+        {state === "error" ? (
+          <Banner tone="error" title="The episode didn’t load" live="assertive" actions={<Button kind="secondary" onClick={reload}>Retry</Button>}>{error || "The server didn’t respond."}</Banner>
+        ) : (
+          <Banner tone="warning" title={e ? "This episode isn’t ready" : "This episode isn’t in your list"} actions={<Button kind="secondary" onClick={() => go("practice/episodes")}>All episodes</Button>}>
+            {e?.status === "generating" ? "It’s still being made." : e?.status === "failed" ? e.error || "It couldn’t be made." : "It may have been replaced or removed."}
+          </Banner>
+        )}
+      </div>
+    );
+  return <Player e={e} />;
+}
+
+function Player({ e }: { e: ServerEpisode }) {
+  const title = episodeTitle(e);
+  const duration = e.duration ?? 0;
+  const p = useApp((s) => s.player);
+  const mine = p?.owner.episodeId === e.id ? p : null;
+  const [start0] = useState(() => savedPositions()[e.id] ?? 0);
+  const resumable = start0 > 5 && start0 < duration - 5;
+  const [restore, setRestore] = useState<"ask" | "done">(resumable ? "ask" : "done");
+  const [cues, setCues] = useState<Cue[] | null>(null);
+  const [cueState, setCueState] = useState<"loading" | "ok" | "error">("loading");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const lastSaved = useRef(start0);
+
+  useEffect(() => {
+    let live = true;
+    setCueState("loading");
+    loadTranscript(e.id)
+      .then((c) => {
+        if (!live) return;
+        setCues(c);
+        setCueState("ok");
+      })
+      .catch(() => live && setCueState("error"));
+    return () => {
+      live = false;
+    };
+  }, [e.id]);
+
+  // Keep the position on this device after every 5 seconds of movement, and on pause or end.
+  const position = mine?.position ?? start0;
+  useEffect(() => {
+    if (!mine) return;
+    if (Math.abs(mine.position - lastSaved.current) >= 5 || mine.status === "ended" || mine.status === "paused") {
+      savePosition(e.id, mine.status === "ended" ? duration : mine.position);
+      lastSaved.current = mine.position;
+    }
+  }, [mine?.position, mine?.status]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const play = (from: number) =>
+    startPlayback({ kind: "episode", label: `Episode: ${title}`, route: `practice/episodes/${e.id}`, episodeId: e.id }, duration, { position: from, src: episodeAudioUrl(e.id) });
+  const seek = (to: number) => {
+    const t = Math.max(0, Math.min(duration, to));
+    setRestore("done");
+    if (!mine) return play(t);
+    updatePlayer({ position: t });
+    audioJumped();
+    savePosition(e.id, t);
+    lastSaved.current = t;
+  };
+  const statusText = mine ? { loading: "Loading…", playing: "Playing", paused: "Paused", ended: "Ended", error: "Couldn’t play", buffering: "Buffering…" }[mine.status] : "Not playing";
+  const current = cues ? cues.reduce((acc, c, i) => (c.at <= position ? i : acc), -1) : -1;
+
   return (
     <div className="page">
-      <PageHead back={<BackTo label="Episodes" to="practice/episodes" />} eyebrow={`Episode · ${e.level} · ${Math.round(e.durationSeconds / 60)} min`} title={e.title} desc={e.desc} />
+      <PageHead
+        back={<BackTo label="Episodes" to="practice/episodes" />}
+        eyebrow={`Episode${levelOf(e) ? ` · ${levelOf(e)}` : ""} · ${minutesOf(e)} min`}
+        title={title}
+        desc={e.settings?.request || undefined}
+      />
       <div className="stack gap-5">
         {restore === "ask" && !mine && (
-          <Banner tone="info" title={`Continue from ${fmtClock(start0)}?`} actions={<><Button kind="primary" onClick={() => { setRestore("done"); play(start0); }}>Continue from {fmtClock(start0)}</Button><Button kind="secondary" onClick={() => { setRestore("done"); play(0); }}>Start from the beginning</Button></>}>
-            Your listening position was restored.
+          <Banner
+            tone="info"
+            title={`Continue from ${fmtClock(start0)}?`}
+            actions={
+              <>
+                <Button kind="primary" onClick={() => { setRestore("done"); play(start0); }}>Continue from {fmtClock(start0)}</Button>
+                <Button kind="secondary" onClick={() => { setRestore("done"); play(0); }}>Start from the beginning</Button>
+              </>
+            }
+          >
+            Your listening position on this device was restored.
           </Banner>
         )}
-        {restore === "failed" && (
-          <Banner tone="error" title="Couldn’t restore your position" live="assertive" actions={<><Button kind="secondary" onClick={() => setRestore("ask")}>Retry</Button><Button kind="tertiary" onClick={() => { setRestore("done"); play(0); }}>Start from 0:00</Button></>}>
-            Your listening time so far is safe.
-          </Banner>
-        )}
-        <section className="player" aria-label={`Episode player: ${e.title}`}>
+        <section className="player" aria-label={`Episode player: ${title}`}>
           <div className="player-main">
             <Button
               kind={restore === "ask" && !mine ? "secondary" : "primary"}
               className="play-btn"
               iconOnly
-              aria-label={`${mine?.status === "playing" ? "Pause" : mine?.status === "error" ? "Retry" : "Play"} episode ${e.title}`}
+              aria-label={`${mine?.status === "playing" ? "Pause" : mine?.status === "error" ? "Retry" : "Play"} episode ${title}`}
               busy={mine?.status === "loading"}
-              disabledReason={offline ? "Audio needs a connection." : undefined}
               icon={mine?.status === "playing" || mine?.status === "buffering" ? <Pause aria-hidden /> : mine?.status === "error" ? <RotateCcw aria-hidden /> : <Play aria-hidden />}
               onClick={() => {
-                if (!mine) { setRestore("done"); return play(start0 >= e.durationSeconds ? 0 : start0); }
+                if (!mine) {
+                  setRestore("done");
+                  return play(start0 >= duration - 5 ? 0 : start0);
+                }
                 if (mine.status === "playing" || mine.status === "buffering") return updatePlayer({ status: "paused" });
                 if (mine.status === "error") return retryPlayback();
                 updatePlayer({ status: "playing", position: mine.status === "ended" ? 0 : mine.position });
@@ -136,8 +360,22 @@ export function EpisodePlayer({ id }: { id: string }) {
             />
             <div className="grow stack gap-1" style={{ minWidth: 180 }}>
               <span className="t-strong">{statusText}</span>
-              <span className="t-support num">{fmtClock(mine?.position ?? start0)} / {fmtClock(e.durationSeconds)}</span>
-              <div className="progress-track" aria-hidden><div className="progress-fill" style={{ width: `${((mine?.position ?? start0) / e.durationSeconds) * 100}%` }} /></div>
+              <span className="t-support num">{fmtClock(position)} / {fmtClock(duration)}</span>
+              <input
+                type="range"
+                min={0}
+                max={Math.max(1, Math.round(duration))}
+                step={1}
+                value={Math.round(position)}
+                aria-label="Position in the episode"
+                aria-valuetext={`${fmtClock(position)} of ${fmtClock(duration)}`}
+                onChange={(ev) => seek(Number(ev.target.value))}
+                style={{ width: "100%", accentColor: "var(--primary)" }}
+              />
+            </div>
+            <div className="row gap-2">
+              <Button kind="tertiary" className="btn--sm-text" onClick={() => seek(position - 15)} aria-label="Back 15 seconds">−15 s</Button>
+              <Button kind="tertiary" className="btn--sm-text" onClick={() => seek(position + 15)} aria-label="Forward 15 seconds">+15 s</Button>
             </div>
             <label className="row gap-2">
               <span className="t-support">Speed</span>
@@ -147,53 +385,82 @@ export function EpisodePlayer({ id }: { id: string }) {
             </label>
             {mine && <Button kind="tertiary" onClick={stopPlayback}>Stop</Button>}
           </div>
-          {mine?.status === "error" && <Banner tone="error" title="The episode couldn’t play" live="assertive" actions={<Button kind="secondary" onClick={retryPlayback}>Retry</Button>}>Your position is kept.</Banner>}
+          {mine?.status === "error" && (
+            <Banner tone="error" title="The episode couldn’t play" live="assertive" actions={<Button kind="secondary" onClick={retryPlayback}>Retry</Button>}>
+              Check your connection. Your position is kept.
+            </Banner>
+          )}
           <p className="t-support num">
-            Counted toward 1,000 h this session: {fmtClock(mine?.countedSeconds ?? 0)} (wall-clock foreground playing time; while this tab is hidden, position is kept and 0 s are counted) · Audio advanced: {fmtClock(mine?.contentSeconds ?? 0)}
+            Played this time: {fmtClock(mine?.countedSeconds ?? 0)}. Episodes count as listening on the go: the time the audio really plays (at 2×, 10 minutes of audio is 5 minutes).
           </p>
-          <p className="row t-meta">Canadian French · Demo voice <DemoNote>Simulated audio</DemoNote></p>
-        </section>
-
-        {sync !== "ok" && (
-          <Banner tone="error" title="Your listening position didn’t sync" live="assertive" actions={<Button kind="secondary" busy={sync === "retrying"} onClick={() => { setSync("retrying"); simulate("sync", 900, true).then(() => { setSync("ok"); announce("Position synced."); }).catch(() => setSync("failed")); }}>Retry sync</Button>}>
-            It’s saved on this device. Counted time isn’t lost.
-          </Banner>
-        )}
-
-        <section className="panel stack gap-3" aria-labelledby="count-demo-h">
-          <h2 id="count-demo-h" className="t-label">How speed affects counted time</h2>
-          <p>10 minutes of audio played at 2× takes 5 minutes of your time, so it counts as 5 minutes.</p>
-          <div className="btn-row">
-            <Button
-              kind="secondary"
-              onClick={() => {
-                recordSimulatedAudio(600, 2, `Episode · ${e.title}`);
-                setDemoCount("Added: 10:00 of audio at 2× → 5:00 counted. See Progress or History.");
-                announce("Simulated 10 minutes at 2 times speed. 5 minutes counted.");
-              }}
-            >
-              Simulate 10 min at 2×
-            </Button>
-            <Button kind="tertiary" onClick={() => go("progress")}>View Progress</Button>
-          </div>
-          {demoCount && <p className="t-support" role="status">{demoCount}</p>}
-          <p className="t-meta">Demo shortcut — it adds a fictional session instead of waiting 5 minutes.</p>
         </section>
 
         <section className="stack gap-3" aria-labelledby="tr-h">
           <h2 id="tr-h" className="t-section">Transcript</h2>
-          <ol className="list">
-            {e.transcript.map((t) => (
-              <li key={t.at} className="list-row" style={{ alignItems: "flex-start" }}>
-                <span className="t-meta num" style={{ width: 44 }}>{fmtClock(t.at)}</span>
-                <span className="grow stack">
-                  <span lang="fr">{t.fr}</span>
-                  <span className="t-support">{t.en}</span>
-                </span>
-              </li>
-            ))}
-          </ol>
+          {cueState === "loading" && <Skeleton lines={3} />}
+          {cueState === "error" && <Banner tone="warning" title="The transcript didn’t load">The audio still works.</Banner>}
+          {cueState === "ok" && cues && (
+            <ol className="list">
+              {cues.map((c, i) => (
+                <li key={`${c.at}-${i}`}>
+                  <button
+                    className="list-btn"
+                    onClick={() => seek(c.at)}
+                    aria-current={i === current ? "true" : undefined}
+                    style={i === current ? { background: "var(--primary-weak)" } : undefined}
+                  >
+                    <span className="t-meta num" style={{ width: 52, flexShrink: 0 }}>{fmtClock(c.at)}</span>
+                    <span className="grow stack">
+                      <span lang="fr">{c.text}</span>
+                      {c.sub && <span className="t-support">{c.sub}</span>}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ol>
+          )}
         </section>
+
+        <section className="btn-row" aria-label="Episode files">
+          <a className="btn btn--secondary" href={episodeFileUrl(e.id, "mp3")} download><Download aria-hidden /> MP3</a>
+          <a className="btn btn--tertiary" href={episodeFileUrl(e.id, "lrc")} download>Lyrics (LRC)</a>
+          <a className="btn btn--tertiary" href={episodeFileUrl(e.id, "srt")} download>Subtitles (SRT)</a>
+          <Button kind="tertiary" icon={<Trash2 aria-hidden />} style={{ color: "var(--error)" }} onClick={() => setConfirmDelete(true)}>Delete episode</Button>
+        </section>
+        {confirmDelete && (
+          <Dialog
+            title="Delete this episode?"
+            onClose={() => !deleting && setConfirmDelete(false)}
+            dismissible={!deleting}
+            footer={
+              <>
+                <Button kind="secondary" onClick={() => setConfirmDelete(false)} disabled={deleting} data-autofocus>Cancel</Button>
+                <Button
+                  kind="destructive"
+                  busy={deleting}
+                  onClick={() => {
+                    setDeleting(true);
+                    if (mine) stopPlayback();
+                    deleteEpisode(e.id)
+                      .then(() => {
+                        cached = null;
+                        announce("Episode deleted.");
+                        go("practice/episodes");
+                      })
+                      .catch(() => {
+                        setDeleting(false);
+                        announce("Couldn’t delete the episode. It’s still in your list.", true);
+                      });
+                  }}
+                >
+                  Delete episode
+                </Button>
+              </>
+            }
+          >
+            <p>The audio and its transcript are removed. Listening time you already earned stays in your 1,000 hours.</p>
+          </Dialog>
+        )}
       </div>
     </div>
   );

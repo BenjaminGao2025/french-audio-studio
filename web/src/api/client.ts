@@ -68,6 +68,8 @@ export interface ApiOptions {
   signal?: AbortSignal;
   /** Skip the 401 → login redirect (the login form itself, or a background check). */
   noAuthRedirect?: boolean;
+  /** Let the request finish while the page is being hidden or closed (study-time beats). */
+  keepalive?: boolean;
 }
 
 export async function apiFetch<T = unknown>(path: string, opts: ApiOptions = {}): Promise<T> {
@@ -84,6 +86,7 @@ export async function apiFetch<T = unknown>(path: string, opts: ApiOptions = {})
     headers,
     body,
     signal: opts.signal,
+    keepalive: opts.keepalive,
     credentials: "same-origin",
   });
   const text = await res.text();

@@ -44,6 +44,7 @@ export interface AudioHandle {
   resume: () => void;
   restart: () => void;
   setSpeed: (speed: number) => void;
+  seek: (seconds: number) => void;
   stop: () => void;
 }
 
@@ -87,6 +88,61 @@ export function playTexts(texts: string[], speed: number, ev: ClipEvents): Audio
     setSpeed: (s) => {
       speed = s;
       audio.playbackRate = s;
+    },
+    seek: () => undefined, // sentence clips restart instead
+    stop: () => {
+      stopped = true;
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+    },
+  };
+}
+
+/** Plays one audio file (an episode) from `startAt` seconds. Its real duration comes from the file. */
+export function playUrl(url: string, speed: number, startAt: number, ev: ClipEvents): AudioHandle {
+  const audio = new Audio();
+  audio.preload = "auto";
+  let stopped = false;
+  let pendingSeek = startAt;
+  const report = () => ev.onProgress(audio.currentTime || 0, Number.isFinite(audio.duration) ? audio.duration : 0);
+  audio.addEventListener("loadedmetadata", () => {
+    if (pendingSeek > 0 && Number.isFinite(audio.duration)) audio.currentTime = Math.min(pendingSeek, Math.max(0, audio.duration - 1));
+    pendingSeek = 0;
+    report();
+  });
+  audio.addEventListener("playing", () => !stopped && ev.onPlaying());
+  audio.addEventListener("timeupdate", () => !stopped && report());
+  audio.addEventListener("error", () => !stopped && ev.onError());
+  audio.addEventListener("ended", () => {
+    if (stopped) return;
+    report();
+    ev.onEnded();
+  });
+  const start = () => {
+    if (stopped) return;
+    audio.src = url;
+    audio.playbackRate = speed;
+    audio.play().catch(() => !stopped && ev.onError());
+  };
+  ensureAudioSession().then(start);
+  return {
+    pause: () => audio.pause(),
+    resume: () => {
+      audio.play().catch(() => !stopped && ev.onError());
+    },
+    restart: () => {
+      audio.currentTime = 0;
+      audio.play().catch(() => !stopped && ev.onError());
+    },
+    setSpeed: (s) => {
+      speed = s;
+      audio.playbackRate = s;
+    },
+    seek: (t) => {
+      if (Number.isFinite(audio.duration) && audio.duration > 0) audio.currentTime = Math.max(0, Math.min(t, audio.duration));
+      else pendingSeek = t;
+      report();
     },
     stop: () => {
       stopped = true;

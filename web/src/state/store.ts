@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { playTexts, type AudioHandle } from "./audio";
+import { playTexts, playUrl, type AudioHandle, type ClipEvents } from "./audio";
 import {
   AI_FALLBACK,
   CACHED_KEYS,
@@ -70,8 +70,12 @@ export interface PlayerState {
   countedSeconds: number;
   /** Content time advanced in this session (position delta incl. speed). */
   contentSeconds: number;
+  /** Where this playback started, so study time also counts the seconds before the first heartbeat beat. */
+  startPosition?: number;
   /** Real audio: the French texts being read aloud. Position and status then come from the audio element. */
   texts?: string[];
+  /** Real audio: one file (an episode). */
+  src?: string;
 }
 
 export interface Attempt {
@@ -603,7 +607,7 @@ function stopAudio() {
 export function startPlayback(
   owner: PlayerOwner,
   duration: number,
-  opts: { scope?: PlayerState["scope"]; position?: number; speed?: number; texts?: string[] } = {},
+  opts: { scope?: PlayerState["scope"]; position?: number; speed?: number; texts?: string[]; src?: string } = {},
 ) {
   const prev = get().player;
   if (prev) commitAudio(prev);
@@ -617,19 +621,21 @@ export function startPlayback(
       scope: opts.scope,
       status: "loading",
       position: opts.position ?? 0,
+      startPosition: opts.position ?? 0,
       duration,
       speed: opts.speed ?? s.settings.speed,
       repeat: s.settings.repeat,
       countedSeconds: 0,
       contentSeconds: 0,
       texts: opts.texts,
+      src: opts.src,
     },
     lastPlaybackNotice: prev ? "Previous playback stopped." : undefined,
   }));
   if (prev) announce("Previous playback stopped.");
-  if (opts.texts?.length) {
+  if (opts.texts?.length || opts.src) {
     const mine = () => get().player?.id === id;
-    audioHandle = playTexts(opts.texts, get().player!.speed, {
+    const events: ClipEvents = {
       onPlaying: () => {
         if (!mine() || get().player!.status === "playing") return;
         lastTick = performance.now();
@@ -647,7 +653,8 @@ export function startPlayback(
         set((s) => ({ player: { ...s.player!, status: "error" } }));
         announce("Audio couldn’t play.", true);
       },
-    });
+    };
+    audioHandle = opts.src ? playUrl(opts.src, get().player!.speed, opts.position ?? 0, events) : playTexts(opts.texts!, get().player!.speed, events);
     return;
   }
   simulate("audio", 700, true)
@@ -666,8 +673,9 @@ export function startPlayback(
 
 export function updatePlayer(p: Partial<PlayerState>) {
   const cur = get().player;
-  if (cur?.texts && audioHandle) {
+  if ((cur?.texts || cur?.src) && audioHandle) {
     if (p.speed !== undefined) audioHandle.setSpeed(p.speed);
+    if (p.position !== undefined && p.status === undefined) audioHandle.seek(p.position);
     if (p.status === "paused") audioHandle.pause();
     if (p.status === "playing") {
       if (cur.status === "ended" || p.position === 0) audioHandle.restart();
@@ -683,7 +691,7 @@ export function updatePlayer(p: Partial<PlayerState>) {
 export function retryPlayback() {
   const p = get().player;
   if (!p) return;
-  startPlayback(p.owner, p.duration, { scope: p.scope, position: p.position, speed: p.speed, texts: p.texts });
+  startPlayback(p.owner, p.duration, { scope: p.scope, position: p.position, speed: p.speed, texts: p.texts, src: p.src });
 }
 
 export function stopPlayback() {
@@ -738,9 +746,10 @@ export function tick(dtOverride?: number) {
   if (!p || p.status !== "playing" || rawDt <= 0) return;
   const dt = rawDt;
   // Real audio moves its own position; the tick only counts foreground listening time.
-  let position = p.texts ? p.position : p.position + dt * p.speed;
+  const real = Boolean(p.texts || p.src);
+  let position = real ? p.position : p.position + dt * p.speed;
   let status: PlayerState["status"] = "playing";
-  if (!p.texts && position >= p.duration) {
+  if (!real && position >= p.duration) {
     if (p.repeat) position = 0;
     else {
       position = p.duration;

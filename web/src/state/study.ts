@@ -1,16 +1,13 @@
-import { STUDY_FIXTURES, type AnalysisRec, type StudySentence } from "../data/fixtures";
+import { STUDY_FIXTURES, type StudySentence } from "../data/fixtures";
 import { ApiError } from "../api/client";
 import { loadSavedCards } from "../api/srs";
+import { fmtWhen, sourceLabel, type StudyRecord } from "../api/history";
 import { analyzeText, cleanInput, ideaToFrench, saveStudyHistory, toStudySentence } from "../api/study";
 import { announce, get, go, patchStudy } from "./store";
 
 export const LIMITS = { text: 2000, ideas: 300 } as const;
 export const STAGES = ["Finding sentences", "Looking up words and phrases", "Preparing steps"];
 
-const FRENCH_HINT =
-  /[àâçéèêëîïôûùüÿœ’]|\b(le|la|les|un|une|des|je|j'|tu|il|elle|nous|vous|ils|elles|est|et|de|du|au|aux|avec|pour|pas|mon|ma|mes|ce|cette|qui|que|dans|sur|très|bonjour|merci)\b/i;
-
-const norm = (s: string) => s.normalize("NFC").replace(/[’']/g, "'").replace(/\s+/g, " ").trim().toLowerCase();
 
 export const IDEA_SENTENCE: StudySentence = {
   id: "idea1",
@@ -30,49 +27,6 @@ export const IDEA_SENTENCE: StudySentence = {
     { id: "idea1-speak", kind: "Speak", label: "Speak card · whole sentence" },
   ],
 };
-
-function genericSentence(fr: string, i: number): StudySentence {
-  const words = fr.split(/\s+/).filter(Boolean);
-  const segments = words.flatMap((w, k) => {
-    const m = w.match(/^(.*?)([.,;:!?…]*)$/)!;
-    const parts = [{ t: m[1], w: true }];
-    if (m[2]) parts.push({ t: m[2], w: false });
-    if (k < words.length - 1) parts.push({ t: " ", w: false });
-    return parts;
-  });
-  const third = Math.max(1, Math.ceil(words.length / 3));
-  const cuts = [third, third * 2, words.length].filter((v, k, a) => v <= words.length && a.indexOf(v) === k);
-  const steps = cuts.map((c, k) => {
-    const prev = k === 0 ? 0 : cuts[k - 1];
-    const before = words.slice(0, prev).join(" ");
-    const added = words.slice(prev, c).join(" ");
-    return {
-      parts: [{ t: before ? before + " " : "" }, { t: added, added: true }],
-      en: "Simulated English meaning for this part (demo).",
-      addedLabel: `Added: ${added.replace(/[.,;:!?…]+$/, "")}`,
-      how: "Listen, then repeat the whole part aloud.",
-    };
-  });
-  return {
-    id: `c${i}-${norm(fr).length}`,
-    fr,
-    en: "Simulated English meaning for this custom sentence (demo).",
-    segments,
-    steps,
-    grammar: null,
-    cards: [
-      { id: `c${i}-${norm(fr).length}-listen`, kind: "Listen", label: "Listen card · whole sentence" },
-      { id: `c${i}-${norm(fr).length}-speak`, kind: "Speak", label: "Speak card · whole sentence" },
-    ],
-  };
-}
-
-/** Splits pasted text into sentences and keeps only the ones that look French (shared by analysis and re-opening from History). */
-function frenchSentences(text: string): StudySentence[] {
-  return splitSentences(text)
-    .filter((p) => FRENCH_HINT.test(p))
-    .map((p, i) => STUDY_FIXTURES.find((f) => norm(f.fr) === norm(p)) ?? genericSentence(p, i));
-}
 
 export function splitSentences(text: string): string[] {
   return text
@@ -174,28 +128,28 @@ export function cancelAnalysis() {
   announce("Analysis cancelled. Your text is kept.");
 }
 
-export function buildSentencesForAnalysis(text: string, source: AnalysisRec["source"]): StudySentence[] {
-  // Same rules as runAnalysis: an idea becomes the idea sentence, pasted text keeps only French sentences.
-  return source === "My own idea" ? [IDEA_SENTENCE] : frenchSentences(text);
-}
-
-export function openAnalysisInStudy(a: AnalysisRec) {
-  const sentences = buildSentencesForAnalysis(a.text, a.source);
+/** Re-opens an analysis saved in History (its analysed sentences come back as they were). */
+export function openAnalysisInStudy(r: StudyRecord) {
+  const raw = (r.sentences ?? []).filter((x) => x && typeof x.sentence === "string");
+  const sentences = raw.map(toStudySentence);
+  const source = sourceLabel(r);
   const runId = get().study.analysis.runId + 1;
   patchStudy({
-    analysis: { status: sentences.length ? "done" : "nofrench", runId, input: a.text, stage: 2, source: a.source },
+    analysis: { status: sentences.length ? "done" : "nofrench", runId, input: r.text, stage: 2, source },
     sentences,
     index: 0,
     step: 0,
     tab: "steps",
     sourceOpen: false,
     restored: false,
-    drafts: { ...get().study.drafts, [a.source === "My own idea" ? "ideas" : "text"]: a.text },
+    drafts: { ...get().study.drafts, [source === "My own idea" ? "ideas" : "text"]: r.text },
   });
+  loadSavedCards(sentences.map((x) => x.fr)).catch(() => undefined);
   go("study");
+  const when = fmtWhen(r.created_at);
   announce(
     sentences.length
-      ? `Opened analysis from ${a.date}: ${sentences.length} ${sentences.length === 1 ? "sentence" : "sentences"}.`
-      : `Opened analysis from ${a.date}. No usable French sentences found. The text is kept.`,
+      ? `Opened the analysis from ${when}: ${sentences.length} ${sentences.length === 1 ? "sentence" : "sentences"}.`
+      : `Opened the analysis from ${when}. It has no saved sentences. The text is kept.`,
   );
 }

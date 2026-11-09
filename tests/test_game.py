@@ -268,6 +268,17 @@ class StudySummaryTests(unittest.TestCase):
         self.assertEqual(got["total_seconds"], 60)
 
 
+    def test_daily_time_per_lane_newest_first(self):
+        game.record_time(self.user_id, "car", 90, PDT, _at("2026-10-07", 10))
+        game.record_time(self.user_id, "review", 60, PDT, _at("2026-10-07", 11))
+        game.log_time(self.user_id, "speaking", 30, "Teacher", PDT, _at("2026-10-05", 10))
+        days = self.client.get("/api/game/days?days=7", headers=self.headers).json()["days"]
+        self.assertEqual([d["day"] for d in days], ["2026-10-07", "2026-10-05"])
+        self.assertEqual(days[0], {"day": "2026-10-07", "seconds": 150, "manual_seconds": 0, "lanes": {"car": 90, "review": 60}})
+        self.assertEqual((days[1]["seconds"], days[1]["manual_seconds"]), (1800, 1800))
+        self.assertEqual(len(game.daily_time(self.user_id, 1)), 1)
+        self.assertEqual(self.client.get("/api/game/days").status_code, 401)
+
 class RetiredCourseLaneTests(unittest.TestCase):
     """Time logged under the old course lane stays in history but belongs to no lane or target."""
 

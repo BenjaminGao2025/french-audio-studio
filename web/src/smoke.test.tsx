@@ -6,10 +6,10 @@ import App from "./App";
 import { WidthContext } from "./components/ui";
 import { lookupKey } from "./lib/lookup";
 import { submitAnswer } from "./screens/Exercise";
-import { Detail } from "./screens/History";
+import { resetEpisodeCache } from "./screens/Episodes";
+import { resetLastAnalysisOffer } from "./screens/StudyInput";
 import { computePlannedSessionCards } from "./screens/Review";
 import { StudyLearn } from "./screens/StudyLearn";
-import { IDEA_SENTENCE, buildSentencesForAnalysis } from "./state/study";
 import { REGISTRY } from "./screens/registry";
 import { fake, installFakeBackend } from "./test/fakeBackend";
 import { resetReviewCache } from "./api/review";
@@ -51,6 +51,8 @@ function wholeDocumentSnapshot(): string {
 beforeEach(() => {
   fake.reset();
   resetReviewCache();
+  resetEpisodeCache();
+  resetLastAnalysisOffer();
 });
 
 beforeAll(async () => {
@@ -443,20 +445,20 @@ describe("8. feedback and copy cleanups", () => {
 
   it("History analysis Open in Study loads that analysis's sentences, and Find card in Word library filters by full sentence", async () => {
     await act(async () => resetDemo());
-    await act(async () => REGISTRY.find((r) => r.id === "SCR-HIS-02")!.states.find((s) => s.key === "attempt")!.apply());
-    await wait(600);
-    const findBtn = Array.from(document.querySelectorAll("button")).find((b) => b.textContent === "Find card in Word library")!;
-    await act(async () => findBtn.click());
+    fake.attempts = [attemptRow("t1", "Nous avons pris un café près de la gare.")];
+    fake.studyRecords = [studyRecord("r1", ["Le plat du jour est excellent.", "Nous avons pris un café."])];
+    await act(async () => go("progress/history?tab=attempts"));
+    await wait(200);
+    await act(async () => buttonWith("Nous avons pris un café près de la gare.").click());
+    await act(async () => buttonWith("Find card in Word library").click());
     expect(get().libFilters.q).toBe("Nous avons pris un café près de la gare.");
 
-    // Open analysis a2 (5 sentences) in Study
     await act(async () => go("progress/history?tab=analyses"));
-    await wait(600);
-    const a2Btn = Array.from(document.querySelectorAll("button")).find((b) => b.textContent?.includes("Le plat du jour"))!;
-    await act(async () => a2Btn.click());
-    const openBtn = Array.from(document.querySelectorAll("button")).find((b) => b.textContent?.includes("Open this analysis in Study"))!;
-    await act(async () => openBtn.click());
-    expect(get().study.sentences).toHaveLength(5);
+    await wait(200);
+    await act(async () => buttonWith("Le plat du jour").click());
+    await act(async () => buttonWith("Open this analysis in Study").click());
+    expect(get().study.sentences.map((x) => x.fr)).toEqual(["Le plat du jour est excellent.", "Nous avons pris un café."]);
+    expect(get().route).toBe("study");
   });
 
   it("a failed history save offers Retry saving, which resends the same attempt", async () => {
@@ -746,55 +748,93 @@ describe("13. word library order", () => {
   });
 });
 
-describe("14. History retry and detail", () => {
-  it("a stored (not live) failed entry also stays busy until saved, and announces when saving fails", async () => {
+describe("14. History, Progress and Episodes on the server", () => {
+  it("clearing attempts deletes them on the server and leaves study records alone", async () => {
     await act(async () => resetDemo());
-    const rec = { ...get().history.attempts[0], id: "old-failed", saved: "failed" as const };
-    expect(get().attempts.some((a) => a.id === rec.id)).toBe(false);
-    await act(async () => set((s) => ({ history: { ...s.history, attempts: [rec, ...s.history.attempts] } })));
+    fake.attempts = [attemptRow("t1", "Bonjour."), attemptRow("t2", "Merci.", false)];
+    fake.studyRecords = [studyRecord("r1", ["Bonjour."])];
     await act(async () => go("progress/history?tab=attempts"));
-    await wait(600);
-    const retry = () => Array.from(document.querySelectorAll("#main button")).find((b) => b.textContent === "Retry") as HTMLButtonElement;
-    await act(async () => {
-      armFailure("history");
-      retry().click();
-    });
+    await wait(200);
+    const main = document.getElementById("main")!;
+    expect(main.textContent).toContain("2 practice attempts");
+    await act(async () => buttonWith("Clear practice attempt history").click());
+    await act(async () => buttonWith("Clear attempt history").click());
     await wait(300);
-    expect(retry().getAttribute("aria-busy")).toBe("true");
-    await wait(700);
-    expect(get().history.attempts[0].saved).toBe("failed");
-    expect(document.body.textContent).toContain("Couldn’t save the History entry");
-    await act(async () => retry().click());
-    await wait(1000);
-    expect(get().history.attempts[0].saved).toBe("saved");
+    expect(fake.calls.some((c) => c.method === "DELETE" && c.path === "/api/dictation/history")).toBe(true);
+    expect(fake.attempts).toHaveLength(0);
+    expect(fake.studyRecords).toHaveLength(1);
+    expect(main.textContent).toContain("No practice attempts");
   });
 
-  it("an unknown id says not found instead of showing the first record", async () => {
+  it("an analysis saved without sentences can't be reopened, only put back as text", async () => {
     await act(async () => resetDemo());
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-    try {
-      for (const [tab, text] of [["analyses", "Analysis not found."], ["audio", "Audio session not found."], ["attempts", "Attempt not found."]] as const) {
-        await act(async () => root.render(<Detail tab={tab} id="does-not-exist" onBack={() => {}} />));
-        expect(host.textContent).toContain(text);
-      }
-    } finally {
-      await act(async () => root.unmount());
-      host.remove();
-    }
+    fake.studyRecords = [{ ...studyRecord("r1", []), sentences: undefined, sentenceCount: 3, text: "Texte ancien." }];
+    await act(async () => go("progress/history?tab=analyses"));
+    await wait(200);
+    await act(async () => buttonWith("Texte ancien.").click());
+    expect(document.getElementById("main")!.textContent).toContain("can’t be opened");
+    await act(async () => buttonWith("Put the text in Study").click());
+    expect(get().study.drafts.text).toBe("Texte ancien.");
+    expect(get().route).toBe("study/new");
+  });
+
+  it("study time lists each day with its lanes and hand-logged time", async () => {
+    await act(async () => resetDemo());
+    await act(async () => go("progress/history?tab=time"));
+    await wait(200);
+    const t = document.getElementById("main")!.textContent!;
+    expect(t).toContain("25 min");
+    expect(t).toContain("Reading 15 min");
+    expect(t).toContain("Review 10 min");
+    expect(t).toContain("10 min logged by hand");
+  });
+
+  it("after a reload Study offers the last saved analysis", async () => {
+    await act(async () => resetDemo());
+    fake.studyRecords = [studyRecord("r1", ["Il fait beau.", "On sort ?"])];
+    await act(async () => go("study/new"));
+    await wait(200);
+    expect(document.getElementById("main")!.textContent).toContain("Pick up where you left off?");
+    await act(async () => buttonWith("Open last analysis").click());
+    expect(get().study.sentences).toHaveLength(2);
+    expect(get().route).toBe("study");
+  });
+
+  it("Progress shows the server's totals and the episode player shows the transcript", async () => {
+    await act(async () => resetDemo());
+    await act(async () => go("progress"));
+    await wait(200);
+    const main = document.getElementById("main")!;
+    expect(main.textContent).toContain("40 XP to level 4");
+    expect(main.textContent).not.toContain("Demo data");
+    await act(async () => go("practice/episodes/e1"));
+    await wait(200); // the list arrives, then the player asks for the transcript
+    await wait(200);
+    expect(main.textContent).toContain("Un samedi au marché");
+    expect(main.textContent).toContain("On va au marché.");
   });
 });
 
-describe("15. History re-open applies the same text filtering as a new analysis", () => {
-  it("keeps only French sentences from pasted text and treats an idea as the idea sentence", () => {
-    const mixed = "Yesterday I went to the shop. Il y a deux jours, j’ai failli oublier mon rendez-vous.";
-    const out = buildSentencesForAnalysis(mixed, "Pasted text");
-    expect(out).toHaveLength(1);
-    expect(out[0].fr).toContain("failli oublier");
-    expect(buildSentencesForAnalysis("Yesterday I went to the shop and bought bread.", "Pasted text")).toHaveLength(0);
-    expect(buildSentencesForAnalysis("I want to say I almost forgot", "My own idea")).toEqual([IDEA_SENTENCE]);
-  });
-});
+function buttonWith(text: string): HTMLButtonElement {
+  const b = Array.from(document.querySelectorAll<HTMLButtonElement>("#main button, [role=dialog] button")).find((x) => x.textContent?.includes(text));
+  if (!b) throw new Error(`No button with "${text}"`);
+  return b;
+}
+
+function studyRecord(id: string, frs: string[]) {
+  return {
+    id,
+    type: "study",
+    text: frs.join(" ") || "x",
+    created_at: "2026-01-01T10:00:00Z",
+    source: "text",
+    sentences: frs.map((fr) => ({ sentence: fr, translation_en: "", translation_zh: "", build_up: [], words: [], grammar_points: [] })),
+    sentenceCount: frs.length,
+  } as Record<string, unknown>;
+}
+
+function attemptRow(id: string, sentence: string, correct = true) {
+  return { id, item_id: "i", mode: "write", step: 0, answer: sentence, expected: sentence, accuracy: correct ? 100 : 50, correct, created_at: "2026-01-01T10:00:00Z", sentence };
+}
 
 export { armFailure };

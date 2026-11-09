@@ -2,11 +2,39 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Camera, ChevronLeft, Image as ImageIcon, Mic2, PenLine, Trash2, X, Headphones } from "lucide-react";
 import { ApiError } from "../api/client";
 import { photoExtract, photoToDataUrl } from "../api/study";
+import { canReopen, fmtWhen, listStudyRecords, sentenceCount, type StudyRecord } from "../api/history";
 import { EXAMPLE_TEXT, IDEAS_EXAMPLE, OCR_LIMIT } from "../data/fixtures";
 import { nf, plural } from "../lib/format";
-import { LIMITS, STAGES, cancelAnalysis, runAnalysis, validate } from "../state/study";
+import { LIMITS, STAGES, cancelAnalysis, openAnalysisInStudy, runAnalysis, validate } from "../state/study";
 import { announce, get, go, patchStudy, useApp } from "../state/store";
 import { Banner, Button, Dialog, DisabledReason, PageHead, Segmented, Spinner } from "../components/ui";
+
+/* After a reload nothing is open in Study: offer the newest saved analysis once per visit. */
+let lastOffer: { status: "idle" | "loading" | "done"; record?: StudyRecord; dismissed?: boolean } = { status: "idle" };
+
+export function resetLastAnalysisOffer() {
+  lastOffer = { status: "idle" };
+}
+
+function useLastAnalysis(wanted: boolean) {
+  const [, force] = useState(0);
+  useEffect(() => {
+    if (!wanted || lastOffer.status !== "idle") return;
+    lastOffer = { status: "loading" };
+    listStudyRecords(1)
+      .then((r) => (lastOffer = { status: "done", record: r.find(canReopen) }))
+      .catch(() => (lastOffer = { status: "done" }))
+      .finally(() => force((n) => n + 1));
+  }, [wanted]);
+  const r = lastOffer.record;
+  return {
+    record: wanted && !lastOffer.dismissed ? r : undefined,
+    dismiss: () => {
+      lastOffer = { ...lastOffer, dismissed: true };
+      force((n) => n + 1);
+    },
+  };
+}
 
 /* ---------------- SCR-STU-01 + SCR-ANA-01 ---------------- */
 export function StudyInput() {
@@ -24,6 +52,7 @@ export function StudyInput() {
   const v = validate(draft, mode);
   const limit = LIMITS[mode];
   const source = mode === "ideas" ? "My own idea" : "Pasted text";
+  const last = useLastAnalysis(study.sentences.length === 0 && a.status === "idle");
 
   const setDraft = (val: string) => {
     patchStudy({ drafts: { ...study.drafts, [mode]: val }, analysis: a.status === "invalid" ? { ...a, status: "idle" } : a });
@@ -54,6 +83,20 @@ export function StudyInput() {
             { value: "ideas", label: "Practise my own ideas" },
           ]}
         />
+        {last.record && !busy && (
+          <Banner
+            tone="info"
+            title="Pick up where you left off?"
+            actions={
+              <>
+                <Button kind="secondary" onClick={() => last.record && openAnalysisInStudy(last.record)}>Open last analysis</Button>
+                <Button kind="tertiary" onClick={last.dismiss}>Dismiss</Button>
+              </>
+            }
+          >
+            Your last analysis ({fmtWhen(last.record.created_at)}, {plural(sentenceCount(last.record), "sentence")}) is saved. Open it to keep studying without analysing again.
+          </Banner>
+        )}
         {(study.restored || forced === "restored") && draft.trim() && (
           <Banner
             tone="info"

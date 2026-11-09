@@ -403,6 +403,30 @@ class ApiTests(unittest.TestCase):
         post_chat.assert_not_called()
 
 
+    def test_history_lists_every_attempt_with_its_sentence_and_clears_only_attempts(self):
+        item_id = self._register().json()["item_id"]
+        self._attempt(item_id, "Les autorités autorisent", step=1)
+        self._attempt(item_id, "wrong", mode="listen")
+        other_id, other_headers = _session()
+        other_item = self._register(headers=other_headers).json()["item_id"]
+        self._attempt(other_item, "x", headers=other_headers)
+
+        res = self.client.get("/api/dictation/history", headers=self.headers)
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["total"], 2)
+        self.assertEqual([a["mode"] for a in data["attempts"]], ["listen", "write"])
+        self.assertEqual({a["sentence"] for a in data["attempts"]}, {SENTENCE})
+        self.assertNotIn("ops", data["attempts"][0])
+
+        self.assertEqual(self.client.delete("/api/dictation/history", headers=self.headers).json(), {"deleted": 2})
+        self.assertEqual(self.client.get("/api/dictation/history", headers=self.headers).json()["total"], 0)
+        # The item stays (Recall can still use it) and the other learner keeps their attempt.
+        self.assertEqual(self.client.get(f"/api/dictation/items/{item_id}", headers=self.headers).status_code, 200)
+        self.assertEqual(self.client.get("/api/dictation/history", headers=other_headers).json()["total"], 1)
+        for method in ("get", "delete"):
+            self.assertEqual(getattr(self.client, method)("/api/dictation/history").status_code, 401)
+
 class AiReviewTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(tts_service.app)

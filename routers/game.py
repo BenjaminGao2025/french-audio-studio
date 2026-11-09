@@ -62,6 +62,15 @@ def game_study_time(authorization: str | None = Header(default=None)):
     return game.study_summary(_require_user_id(authorization))
 
 
+
+@router.get("/api/game/days")
+def game_days(
+    days: int = Query(default=60, ge=1, le=400),
+    authorization: str | None = Header(default=None),
+):
+    """Study time per day (newest first), for History."""
+    return {"days": game.daily_time(_require_user_id(authorization), days)}
+
 @router.post("/api/game/log")
 def game_log(req: GameLog, authorization: str | None = Header(default=None)):
     user_id = _require_user_id(authorization)

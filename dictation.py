@@ -488,6 +488,33 @@ def list_attempts(user_id: int, item: dict[str, Any], mode: str, step: int, limi
     return [_attempt_from_row(r) for r in rows]
 
 
+
+def recent_attempts(user_id: int, limit: int) -> tuple[list[dict[str, Any]], int]:
+    """The learner's latest attempts across every sentence, with the sentence they belong to (History)."""
+    with _db() as conn:
+        rows = conn.execute(
+            """
+            SELECT a.*, i.sentence AS sentence FROM dictation_attempts a
+            LEFT JOIN dictation_items i ON i.id = a.item_id AND i.user_id = a.user_id
+            WHERE a.user_id = ? ORDER BY a.created_at DESC, a.rowid DESC LIMIT ?
+            """,
+            (user_id, max(1, min(limit, 500))),
+        ).fetchall()
+        total = conn.execute("SELECT COUNT(*) FROM dictation_attempts WHERE user_id = ?", (user_id,)).fetchone()[0]
+    out = []
+    for row in rows:
+        attempt = _attempt_from_row(row)
+        attempt.pop("ops", None)
+        attempt["sentence"] = row["sentence"] or attempt["expected"]
+        out.append(attempt)
+    return out, total
+
+
+def clear_attempts(user_id: int) -> int:
+    """Clears the learner's attempt history (items, cards and study time are untouched)."""
+    with _db() as conn:
+        return conn.execute("DELETE FROM dictation_attempts WHERE user_id = ?", (user_id,)).rowcount
+
 # ---------------------------------------------------------------------------
 # Optional AI review (only on request), cached per user
 # ---------------------------------------------------------------------------

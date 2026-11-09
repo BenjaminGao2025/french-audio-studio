@@ -561,6 +561,28 @@ def study_summary(user_id: int, now=None) -> dict[str, Any]:
     }
 
 
+
+def daily_time(user_id: int, days: int = 60) -> list[dict[str, Any]]:
+    """Study time per study day, newest first: real seconds per lane, and how much was logged by hand."""
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT day, lane, source, SUM(seconds) AS seconds FROM study_time WHERE user_id = ?
+            AND day IN (SELECT DISTINCT day FROM study_time WHERE user_id = ? ORDER BY day DESC LIMIT ?)
+            GROUP BY day, lane, source
+            """,
+            (user_id, user_id, max(1, min(days, 400))),
+        ).fetchall()
+    by_day: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        seconds = int(row["seconds"] or 0)
+        entry = by_day.setdefault(row["day"], {"day": row["day"], "seconds": 0, "manual_seconds": 0, "lanes": {}})
+        entry["seconds"] += seconds
+        entry["lanes"][row["lane"]] = entry["lanes"].get(row["lane"], 0) + seconds
+        if row["source"] == "manual":
+            entry["manual_seconds"] += seconds
+    return sorted(by_day.values(), key=lambda d: d["day"], reverse=True)
+
 def review_feedback(user_id: int, tz_offset: int, now=None) -> dict[str, Any]:
     """What the learner just earned with their latest review, plus the new totals."""
     now = now or _now()

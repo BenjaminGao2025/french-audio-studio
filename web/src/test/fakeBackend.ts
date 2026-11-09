@@ -39,6 +39,45 @@ function demoSrs() {
   };
 }
 
+function demoEpisodes() {
+  return [
+    {
+      id: "e1",
+      title: "Un samedi au marché",
+      status: "ready",
+      duration: 1200,
+      error: null,
+      created_at: new Date(BASE).toISOString(),
+      settings: { level: "A2", minutes: 20, request: "" },
+    },
+  ] as Record<string, unknown>[];
+}
+
+const gameState = () => ({
+  level: 3,
+  level_xp: 20,
+  next_level_xp: 180,
+  progress: 0.33,
+  xp: 140,
+  max_level: 1000,
+  hours_total: 2.3,
+  today: { day: "2026-01-01", minutes: 25, target: 60, family_day: false, weekend: false, by_lane: { reading: 15, review: 10 }, logs: [], kills: 4, deaths: 1, best_combo: 3 },
+  week: {
+    number: 1,
+    start: "2026-01-01",
+    end: "2026-01-07",
+    minutes: 25,
+    target: 1440,
+    maintenance: false,
+    by_lane: { reading: 15, review: 10 },
+    lane_targets: { listening: 480, reading: 240, speaking: 240, writing: 240, review: 240 },
+    lane_weights: { car: 0.5 },
+    focus_skill: { skill: "speaking", minutes: 0, target: 240 },
+  },
+  streak_days: 2,
+  days_studied_7d: 2,
+});
+
 interface Item {
   sentence: string;
   build_up: { fr: string }[];
@@ -56,8 +95,19 @@ export const fake = {
   calls: [] as { method: string; path: string; body: unknown }[],
   items: new Map<string, Item>(),
   srs: demoSrs(),
+  /** Saved Study analyses (/api/history?type=study), newest first. */
+  studyRecords: [] as Record<string, unknown>[],
+  /** Recall/Dictation attempts as /api/dictation/history returns them, newest first. */
+  attempts: [] as Record<string, unknown>[],
+  episodes: demoEpisodes(),
+  /** Seconds received by /api/game/heartbeat, by lane. */
+  heartbeats: {} as Record<string, number>,
   reset() {
     this.srs = demoSrs();
+    this.studyRecords = [];
+    this.attempts = [];
+    this.episodes = demoEpisodes();
+    this.heartbeats = {};
     this.lookups = {};
     this.failNext.clear();
     this.saveFails = 0;
@@ -87,7 +137,7 @@ function route(method: string, url: URL, body: Record<string, unknown>): Respons
     if (!expected) return json(422, { detail: "Bad step" });
     const g = grade(expected, String(body.answer));
     const saved = fake.saveFails > 0 ? (fake.saveFails--, false) : true;
-    return json(200, { attempt_id: `a-${++seq}`, correct: g.correct, accent_only: false, accuracy: g.correct ? 1 : 0.5, saved, expected });
+    return json(200, { attempt_id: `a-${++seq}`, correct: g.correct, accent_only: false, accuracy: g.correct ? 100 : 50, saved, expected });
   }
   if (p === "/api/lookup") {
     const word = url.searchParams.get("word") ?? "";
@@ -108,7 +158,42 @@ function route(method: string, url: URL, body: Record<string, unknown>): Respons
     ];
     return json(200, { id, sentence: body.sentence, translation_en: body.translation_en, translation_zh: body.translation_zh, cards });
   }
-  if (p === "/api/history") return json(200, { ok: true });
+  if (p === "/api/history" && method === "POST") {
+    fake.studyRecords.unshift({ id: `h-${++seq}`, type: "study", created_at: new Date().toISOString(), ...(body.payload as object), text: String((body.payload as { text?: string })?.text ?? "") });
+    return json(200, { ok: true });
+  }
+  if (p === "/api/history" && method === "GET") return json(200, { records: fake.studyRecords.slice(0, Number(url.searchParams.get("limit") ?? 50)), count: fake.studyRecords.length });
+  if (p === "/api/history" && method === "DELETE") {
+    const deleted = fake.studyRecords.length;
+    fake.studyRecords = [];
+    return json(200, { deleted });
+  }
+  if (p === "/api/dictation/history" && method === "GET") return json(200, { attempts: fake.attempts, total: fake.attempts.length });
+  if (p === "/api/dictation/history" && method === "DELETE") {
+    const deleted = fake.attempts.length;
+    fake.attempts = [];
+    return json(200, { deleted });
+  }
+  if (p === "/api/episodes" && method === "GET")
+    return json(200, { episodes: fake.episodes, hours: 0.3, recommended_level: "A2", levels: ["A1", "A2", "B1", "B2"], lengths: [20, 30, 45, 60] });
+  if (p.startsWith("/api/episodes/") && method === "DELETE") {
+    const id = p.split("/").pop();
+    fake.episodes = fake.episodes.filter((e) => e.id !== id);
+    return json(200, { success: true });
+  }
+  if (/^\/episodes\/[^/]+\.lrc$/.test(p)) return new Response("[00:00.00]Bonjour à tous.\n[00:04.50]On va au marché. / We go to the market.\n", { status: 200 });
+  if (p === "/api/game/heartbeat") {
+    fake.heartbeats[String(body.lane)] = (fake.heartbeats[String(body.lane)] ?? 0) + Number(body.seconds);
+    return json(200, { ok: true });
+  }
+  if (p === "/api/game/state" || p === "/api/game/log" || p === "/api/game/family-day" || p.startsWith("/api/game/log/")) return json(200, gameState());
+  if (p === "/api/game/study-time")
+    return json(200, {
+      today_seconds: 1500, week_seconds: 1500, total_seconds: 8280, day: "2026-01-01", week_start: "2026-01-01", timezone: "America/Vancouver",
+      goal_hours: 1000, progress: 0.0023, remaining_seconds: 3_591_720, average_week_seconds: 1500, projected_finish: null,
+    });
+  if (p === "/api/game/days")
+    return json(200, { days: [{ day: "2026-01-01", seconds: 1500, manual_seconds: 600, lanes: { reading: 900, review: 600 } }] });
   return srsRoute(method, url, body);
 }
 
