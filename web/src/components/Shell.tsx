@@ -94,7 +94,7 @@ export function AppRoot({ children }: { children: ReactNode }) {
 }
 
 /** Screens that already read and write the learner's real data (the rest still run on sample data). */
-const isConnected = (route: string) => ["study", "review", "login", "progress", "practice", "settings"].some((r) => route === r || route.startsWith(`${r}/`) || route.startsWith(`${r}?`));
+const isConnected = (route: string) => ["study", "review", "login", "progress", "practice", "settings", "moved"].some((r) => route === r || route.startsWith(`${r}/`) || route.startsWith(`${r}?`));
 
 export function Shell({ children }: { children: ReactNode }) {
   const route = useApp((s) => s.route);

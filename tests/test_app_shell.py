@@ -14,7 +14,7 @@ import testenv  # noqa: F401  (sets AUTH_SECRET / OUTPUT_DIR before the app is i
 from fastapi.testclient import TestClient
 
 import tts_service
-from routers import app_shell
+from routers import app_shell, pages
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / "web"
@@ -137,9 +137,13 @@ class AppShellTests(unittest.TestCase):
         self.assertEqual(res.status_code, 503)
         self.assertIn("npm run build", res.text)
 
-    def test_old_pages_still_serve(self):
-        self.assertEqual(self.client.get("/study").status_code, 200)
-        self.assertEqual(self.client.get("/static/study.html").status_code, 200)
+    def test_old_pages_redirect_into_the_app(self):
+        for old, new in pages.OLD_PAGES.items():
+            res = self.client.get(old, follow_redirects=False)
+            self.assertEqual(res.status_code, 302, old)
+            self.assertEqual(res.headers["location"], new, old)
+        self.assertEqual(self.client.get("/", follow_redirects=False).headers["location"], "/app/study")
+        self.assertEqual(self.client.get("/static/study.html").status_code, 404)
 
 
 class WebSourceTests(unittest.TestCase):

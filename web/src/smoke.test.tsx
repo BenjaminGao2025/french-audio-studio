@@ -983,6 +983,14 @@ describe("15. Practice, Settings and the exam placeholder on the server", () => 
     expect(main().textContent).toContain("not yet verified");
     expect(document.querySelector(".demo-banner")).toBeNull();
   });
+
+  it("Removed pages (old /coach, /grammar, /homework links) say they moved, without a demo banner", async () => {
+    await act(async () => resetDemo());
+    await act(async () => go("moved"));
+    await wait(50);
+    expect(main().textContent).toContain("This page has moved");
+    expect(document.querySelector(".demo-banner")).toBeNull();
+  });
 });
 
 function buttonWith(text: string): HTMLButtonElement {

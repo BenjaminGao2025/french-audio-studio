@@ -9,7 +9,7 @@
 
 [English](#english) | [中文说明](#中文说明)
 
-界面开发规范：[设计原则与设计系统](DESIGN_SYSTEM.md)。共享设计变量位于 `static/tokens.css`，组件视觉规则位于 `static/ui.css`。
+界面开发规范：[设计原则与设计系统](DESIGN_SYSTEM.md)。学习界面是 `web/` 中的 React SPA（`/app/`），设计变量位于 `web/src/styles.css`。
 
 ---
 
@@ -35,14 +35,14 @@
   - **表达风格**：口语化 (Spoken)、标准 (Neutral)、书面化 (Formal)、写作润色 (Polished)。
   - **CEFR 难度分级**：A1-A2（基础）、B1-B2（中级）、C1-C2（高级）。
   - **地区方言**：法国法语 (`fr-FR`)、加拿大法语 (`fr-CA`)。
-- 📚 **句子深度拆解与三列精析 (`/study`)**：
+- 📚 **句子深度拆解与三列精析 (Study)**：
   - **初学高频词过滤与意群绑定（Chunking）**：基于约 200 基础词过滤规则，不再机械切分 `elle`, `de`, `la`, `et`, `40` 等孤立初级词；将 `de la vie quotidienne`（loc. adj.）、`portant sur`（loc. verb.）等天然固定搭配整块解析，更符合语言习得直觉。
   - **第 1 列（原形/词组）**：规范标注词性（POS）、动词原形（Lemma）与国际音标（IPA）。
   - **单词秒级发音**：每个单词/短语旁均配备独立 🔊 按钮，点击即刻试听纯正发音。
   - **第 2 列（简明英语）**：精准提炼语境中的英文含义与时态/人称细节。
   - **第 3 列（中文释义）**：详尽中文释义与实用语法/搭配提示。
-- 🧠 **费曼自测 (`/study`)**：先用自己的话（打字或说中文）讲这句话和关键语法，可选自己造一个新句子；AI 只指出讲对了什么、漏了什么、新句子哪里要改，并追问一个问题。
-- 🗂️ **每日复习 (`/review`，FSRS 间隔重复，数据存服务器、多设备同步)**：
+- 🧠 **费曼自测 (Study)**：先用自己的话（打字或说中文）讲这句话和关键语法，可选自己造一个新句子；AI 只指出讲对了什么、漏了什么、新句子哪里要改，并追问一个问题。
+- 🗂️ **每日复习 (Review，FSRS 间隔重复，数据存服务器、多设备同步)**：
   - **以句子为单位**：拆解页点「加入复习」生成「听」「说」两张卡；点单词旁 ⭐ 生成该词在句中的「填空」卡。
   - **听**：只放音频（可慢速），回想意思；**说**：看中文开口说法语，语音识别自动打分并可回听自己的录音；**填**：输入被挖空的词块，自动判断对错与重音。
   - **FSRS 调度**：学习步长 1 分钟 / 10 分钟，按钮上显示真实的下次间隔；每天新卡上限可调，同一句子的不同卡片分天出现。
@@ -158,19 +158,20 @@ Compose 单独覆盖 `AGY_BASE_URL` 为 `http://127.0.0.1:3425/v1`、`AGY_MODEL`
 
 ## 🧭 前端与架构
 
-当前界面由 `static/` 中的 HTML、CSS 和原生 JavaScript 提供，无需构建步骤。按 1000H French 新设计重做的前端在 `web/`（React SPA，挂在 `/app/`），由 Docker 构建阶段编译，产物不进 git；开发时在 `web/` 中运行 `npm ci && npm run dev`（`/api` 代理到本机 8000 端口），测试用 `npm test` 和 `npm run typecheck`。更多实现细节见 [ARCHITECTURE.md](ARCHITECTURE.md)，界面规范见 [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)。
+学习界面是 `web/` 中按 1000H French 设计实现的 React SPA，挂在 `/app/`；旧路径（`/study`、`/review`、`/listen`、`/write`、`/speak`、`/account` 等）302 跳到 `/app/…`。`static/` 只剩公开页（`/home`、`/privacy`、`/for-institutions`）和 PWA 文件。SPA 由 Docker 构建阶段编译，产物不进 git；开发时在 `web/` 中运行 `npm ci && npm run dev`（`/api` 代理到本机 8000 端口），测试用 `npm test` 和 `npm run typecheck`。更多实现细节见 [ARCHITECTURE.md](ARCHITECTURE.md)，界面规范见 [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md)。
 
 ## 🧪 运行测试
 
 ```bash
 python -m pip install -r requirements.txt ruff==0.17.4
-npm ci                       # Node.js 22；仅用于测试
+npm ci --prefix web          # Node.js 22
 ruff check .
 python -m unittest discover -s tests
-npm test
+npm --prefix web run typecheck
+npm --prefix web test
 ```
 
-CI 在 GitHub 托管的 runner 上运行 lint、Python 和 JavaScript 测试；生产部署在自托管 runner 上构建候选镜像，并用该镜像运行 Python 测试，备份数据库后才重启。推送到 `main` 会触发生产部署，请通过分支和 PR 审核。
+CI 在 GitHub 托管的 runner 上运行 lint、Python 测试，以及 `web/` 的类型检查和测试；生产部署在自托管 runner 上构建候选镜像，并用该镜像运行 Python 测试，备份数据库后才重启。推送到 `main` 会触发生产部署，请通过分支和 PR 审核。
 
 ## 💾 备份与清理
 
@@ -198,7 +199,7 @@ docker exec tts-service python scripts/backup_db.py --label manual  # 手动备�
 - **Expressive Nuance Controls**: 4 styles (spoken, neutral, formal, polished), 3 CEFR levels (A1-C2), and 2 dialects (France / Canada).
 - **High-Fidelity Neural Speech**: Multiple edge-tts neural voices with subtitle sync and one-click download.
 - **Privacy First**: Zero hardcoded secrets, server-held upstream key, and full request-level security isolation.
-- **Production-Ready**: FastAPI async backend, minimal native web interface, containerized with Docker.
+- **Production-Ready**: FastAPI async backend, React SPA under `/app/`, containerized with Docker.
 
 ---
 
@@ -206,34 +207,6 @@ docker exec tts-service python scripts/backup_db.py --label manual  # 手动备�
 
 旧版 README 曾声明 MIT，但仓库缺少许可证文件；在版权人确认并补充许可证之前，请勿假定已获得授权。
 
-## 学习教练与个人表达训练
+## 已移除的界面
 
-`/coach` 从目标、截止日期、四项自评水平、学习日、时段和限制生成个人安排。
-每天的任务总分钟数受可用时间限制；AI 补充追问、任务侧重和每周复盘建议。
-AI 不可用时保留已有计划；用户用“更新安排”或修改时间采纳调整。
-站内提醒需主动开启，仅在页面打开且可见时工作。
-
-`/study?mode=personal`（Study 内的“练我想说的话”，旧 `/homework` 自动跳转）将 [1000H 启动任务](https://1000h.org/training-tasks/kick-off.html) 的个人表达、反复练习和每日存档用于法语：
-自己的中文内容 → 简单法语和范读 → 第一遍录音 → 跟读、朗读、脱稿换细节 → 最后一遍录音 → 心得。
-保留完整原意，按水平分段生成简单法语，首尾录音私有保存，可下载包含文本、范读、录音和心得的 ZIP。
-录音每段 1–180 秒、最多 8 MB。第一遍保留；最后一遍可有多个版本。
-开口练习计时根据麦克风活动估算，在后台或播放音频时暂停，环境声音可能影响估计。
-录音文件按实际时长记录（可能包含停顿）；重复上传同一段不重复累计。
-练习结果不代表 CEFR/NCLC 认证；脱稿完成为用户自评。
-
-写作提供 P0（A1 起步）、P1（A1 巩固）、P2（A2）与独立的 TCF T1/T2/T3 模式。
-听力提供短句精听、提示和每周小挑战；A1 的历史材料按短句和基础词汇保守筛选。
-教练按练习完成证据复盘，区分系统记录和线下手动确认。
-
-验证不调用真实模型或语音，也不修改真实账号：
-
-```bash
-# 容器中的依赖可用于隔离测试，仓库以只读方式挂载
- docker run --rm --network none -v "$PWD:/app:ro" deploygrow-tts:latest python -m unittest discover -s tests -q
-# 先生成临时数据库里的界面样本，再运行模拟浏览器流程
- docker run --rm --network none -v "$PWD:/app:ro" deploygrow-tts:latest python tools/coach-fixture.py > /tmp/tts-coach-fixture.json
- node tools/coach-ui-check.cjs
-```
-
-
-2026-10-15：个人表达练习已整合进 Study。完整保留原文信息，分成小段法语并保存每段对应的原文；可选择整篇或一段范读，在当前页逐句拆解并返回录音练习。旧简略稿尚未录音时可主动补全；已有录音的版本保持原文。范读/录音通过 Bearer 验证加载为本地 blob，显示加载、就绪和失败重试；音频生成失败时保留已生成的法语，重试无需再次调用文本模型。个人练习显示时暂停 Study 的阅读自动计时，开口活动与录音仍分别按原机制记录。
+2026-11 切换到新 SPA 时，学习教练（`/coach`）、语法地图（`/grammar`）、个人表达练习（`/homework`，原 Study 中的“练我想说的话”）和会员页（`/account`）的前端已删除。旧链接跳到 `/app/…`：前三个显示“已移除”说明，`/account` 跳到 Settings。这些功能的后端接口和用户数据保留，没有删除。

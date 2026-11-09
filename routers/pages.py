@@ -1,4 +1,5 @@
-"""HTML pages (PWA head + asset version), the landing waitlist, favicon, service worker and manifest."""
+"""Public pages (PWA head + asset version), redirects from the old pages to /app, the landing waitlist,
+favicon, service worker and manifest."""
 
 from __future__ import annotations
 
@@ -56,10 +57,6 @@ def _with_pwa(html: str) -> str:
 
 def _html_page(name: str) -> HTMLResponse:
     html = _with_pwa((STATIC_DIR / name).read_text(encoding="utf-8"))
-    if "__PERSONAL_PRACTICE__" in html:
-        html = html.replace(
-            "__PERSONAL_PRACTICE__", (STATIC_DIR / "personal-practice.html").read_text(encoding="utf-8")
-        )
     return HTMLResponse(
         html.replace("__ASSET_VERSION__", ASSET_VERSION),
         headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
@@ -77,11 +74,11 @@ LANDING_HOSTS = {host.strip().lower() for host in os.getenv("LANDING_HOSTS", "")
 
 
 def _invite_redirect(request: Request) -> RedirectResponse | None:
-    """Invite links (?invite=CODE) open the sign-up form on /study with the code filled in."""
+    """Invite links (?invite=CODE) open the app's sign-up form with the code filled in."""
     invite = request.query_params.get("invite", "").strip()
     if not invite:
         return None
-    return RedirectResponse("/study?" + urlencode({"invite": invite[:64]}), status_code=302)
+    return RedirectResponse("/app/login?" + urlencode({"invite": invite[:64]}), status_code=302)
 
 
 @router.get("/")
@@ -89,17 +86,14 @@ async def root(request: Request):
     if redirect := _invite_redirect(request):
         return redirect
     host = request.headers.get("host", "").split(":")[0].lower()
-    return _html_page("landing.html" if host in LANDING_HOSTS else "index.html")
+    if host in LANDING_HOSTS:
+        return _html_page("landing.html")
+    return RedirectResponse("/app/study", status_code=302)
 
 
 @router.get("/home")
 async def landing_page(request: Request):
     return _invite_redirect(request) or _html_page("landing.html")
-
-
-@router.get("/account")
-async def account_page():
-    return _html_page("account.html")
 
 
 @router.get("/for-institutions")
@@ -164,41 +158,27 @@ async def web_manifest():
     )
 
 
-@router.get("/study")
-async def study():
-    return _html_page("study.html")
+# The old pages now live in the app (/app). Removed features (coach, grammar map, homework) land on
+# the app's "page moved" screen; their data stays in the database.
+OLD_PAGES = {
+    "/study": "/app/study",
+    "/review": "/app/review",
+    "/listen": "/app/practice/episodes",
+    "/write": "/app/practice/write",
+    "/speak": "/app/practice/speak",
+    "/account": "/app/settings/account",
+    "/coach": "/app/coach",
+    "/grammar": "/app/grammar",
+    "/homework": "/app/homework",
+}
 
 
-@router.get("/review")
-async def review_page():
-    return _html_page("review.html")
+def _old_page(target: str):
+    async def redirect(request: Request):
+        return _invite_redirect(request) or RedirectResponse(target, status_code=302)
+
+    return redirect
 
 
-@router.get("/grammar")
-async def grammar_page():
-    return _html_page("grammar.html")
-
-
-@router.get("/listen")
-async def listen_page():
-    return _html_page("listen.html")
-
-
-@router.get("/write")
-async def write_page():
-    return _html_page("write.html")
-
-
-@router.get("/speak")
-async def speak_page():
-    return _html_page("speak.html")
-
-
-@router.get("/coach")
-async def coach_page():
-    return _html_page("coach.html")
-
-
-@router.get("/homework")
-async def homework_page():
-    return RedirectResponse("/study?mode=personal", status_code=302)
+for _path, _target in OLD_PAGES.items():
+    router.add_api_route(_path, _old_page(_target), methods=["GET"], include_in_schema=False)

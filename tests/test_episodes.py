@@ -175,11 +175,6 @@ class JobAndApiTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(tts_service.app)
 
-    def test_listen_page_is_served(self):
-        res = self.client.get("/listen")
-        self.assertEqual(res.status_code, 200)
-        self.assertIn(f"/static/listen.js?v={routers.pages.ASSET_VERSION}", res.text)
-
     def test_endpoints_require_login(self):
         self.assertEqual(self.client.get("/api/episodes").status_code, 401)
         self.assertEqual(self.client.post("/api/episodes").status_code, 401)

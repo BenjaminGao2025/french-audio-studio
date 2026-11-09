@@ -97,15 +97,4 @@ def test_requires_login():
     assert r.status_code == 401
 
 
-def test_study_js_cleans_input_and_retries_parts():
-    js = open("static/study.js", encoding="utf-8").read()
-    assert "fetch('/api/clean-input'" in js
-    assert "cleanInputForAnalysis(text, token, signal)" in js
-    assert "await analyzePart(parts[index], token, model, signal)" in js  # the retrying one
-    assert "const ANALYZE_RETRY_DELAYS = [1500, 4000];" in js
-    # Progress is reported after every part, failed or skipped
-    assert "done += 1;" in js and "showProgress();" in js
-    assert js.count("cleanedInput:") == 2  # English and Chinese
-
-
 load_tests = testenv.function_tests(globals())

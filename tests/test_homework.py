@@ -146,14 +146,10 @@ class HomeworkTests(unittest.TestCase):
         )
         self.assertEqual(chat.call_count, 1)
 
-    def test_old_page_redirects_into_study(self):
+    def test_old_page_redirects_into_the_app(self):
         r = self.client.get("/homework", follow_redirects=False)
         self.assertEqual(r.status_code, 302)
-        self.assertEqual(r.headers["location"], "/study?mode=personal")
-        html = self.client.get("/study").text
-        self.assertIn('id="study-personal"', html)
-        self.assertNotIn("__PERSONAL_PRACTICE__", html)
-        self.assertEqual(html.count("<h1"), 1)
+        self.assertEqual(r.headers["location"], "/app/homework")
 
     @patch("services.speech.create_speech_files", new_callable=AsyncMock)
     @patch("services.ai.post_chat", new_callable=AsyncMock)

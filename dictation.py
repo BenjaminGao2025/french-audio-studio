@@ -1,10 +1,9 @@
-"""Dictation practice on /study: 默写 (write from the English prompt) and 听写 (write what you hear).
+"""Dictation practice in Study: Recall (write from the English prompt) and Dictation (write what you hear).
 
 Grading is local and word-level: case, sentence punctuation (quotes and guillemets too) and spacing are
 ignored, typographic apostrophes count as plain ones, French elision (l', j', qu', ...) splits into its own
 word, and a word that only misses an accent or an apostrophe is marked apart from a wrong word and earns
-partial credit. ``static/dictation.js`` mirrors
-``tokenize`` / ``grade`` for offline feedback; tests/fixtures/dictation_cases.json keeps the two in step.
+partial credit. tests/fixtures/dictation_cases.json pins ``tokenize`` / ``grade``.
 
 The server never takes the expected answer from an attempt. A learner registers an exercise item once (the
 sentence and build-up steps of their own analysis); each attempt names the item and a step, and the target is

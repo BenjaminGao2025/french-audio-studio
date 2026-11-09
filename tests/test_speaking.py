@@ -105,11 +105,6 @@ class SpeakingEndpointTests(unittest.TestCase):
         self.user_id = self.user["user"]["id"]
         self.auth = {"Authorization": f"Bearer {self.token}"}
 
-    def test_get_speak_page(self):
-        res = self.client.get("/speak")
-        self.assertEqual(res.status_code, 200)
-        self.assertIn("text/html", res.headers["content-type"])
-
     def test_get_tasks(self):
         res = self.client.get("/api/speak/tasks", headers=self.auth)
         self.assertEqual(res.status_code, 200)

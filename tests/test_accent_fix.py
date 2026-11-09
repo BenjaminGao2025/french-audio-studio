@@ -1,8 +1,5 @@
 import base64
 import json
-import pathlib
-import shutil
-import subprocess
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -14,7 +11,6 @@ import intake
 import services.ai
 import tts_service
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
 PHOTO = "data:image/jpeg;base64," + base64.b64encode(b"\xff\xd8\xff\xe0" + b"\x00" * 64).decode()
 
 
@@ -200,28 +196,6 @@ class ExtractionFieldTests(unittest.TestCase):
                 "/api/clean-input", json={"text": "## 例句\nJe parle."}, headers=testenv.session_headers()
             )
         self.assertEqual(r.json(), {"cleaned": "Je parle.", "count": 1, "changed": True})
-
-
-class AccentPageTests(unittest.TestCase):
-    def test_note_is_wired_through_the_study_page(self):
-        js = (ROOT / "static/study.js").read_text(encoding="utf-8")
-        css = (ROOT / "static/study.css").read_text(encoding="utf-8")
-        self.assertEqual(js.count("accentFixedNote:"), 2)  # English and Chinese
-        self.assertIn("accentFixedFrom: s.accent_fixed_from", js)
-        self.assertIn("${accentNoteHtml(accentFixedFrom, sentenceText)}", js)
-        self.assertIn("withAccentNotes(results.flat(), accentFixes)", js)
-        self.assertIn("accentFixes: data.accent_fixes || []", js)
-        self.assertIn(".filter(item => item.accent_fixed_from)", js)
-        self.assertIn(".sentence-accent-note {", css)
-
-    def test_note_rendering_in_node(self):
-        node = shutil.which("node")
-        if not node:
-            self.skipTest("node is needed")
-        result = subprocess.run(
-            [node, "tests/test_accent_fix.cjs"], cwd=ROOT, capture_output=True, text=True, timeout=30
-        )
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

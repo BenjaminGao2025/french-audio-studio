@@ -451,12 +451,6 @@ class SrsApiTests(unittest.TestCase):
         ).json()["notes"]
         self.assertEqual(len(lookup), 1)
 
-    def test_review_page_is_served(self):
-        res = self.client.get("/review")
-        self.assertEqual(res.status_code, 200)
-        self.assertNotIn("__ASSET_VERSION__", res.text)
-
-
 class ChooseCardsTests(unittest.TestCase):
     def setUp(self):
         self.user_id, _ = _new_user()

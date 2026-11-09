@@ -13,10 +13,11 @@ export function safeNext(search: string): string {
 
 /* Real sign-in and invite sign-up (routers/auth.py). Rendered outside the shell. */
 export function LoginScreen({ onSignedIn }: { onSignedIn: (next: string) => void }) {
-  const [mode, setMode] = useState<"login" | "register">("login");
+  // Invite links (/?invite=CODE, redirected here by the server) open sign-up with the code filled in.
+  const [invite, setInvite] = useState(() => (new URLSearchParams(location.search).get("invite") ?? "").slice(0, 64));
+  const [mode, setMode] = useState<"login" | "register">(() => (invite ? "register" : "login"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [invite, setInvite] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [missing, setMissing] = useState(false);

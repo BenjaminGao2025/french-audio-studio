@@ -97,32 +97,18 @@ class MembershipPageTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(tts_service.app)
 
-    def test_account_page_renders_for_anonymous_and_signed_in(self):
+    def test_account_page_moved_into_the_app(self):
         for headers in ({}, testenv.session_headers()):
-            response = self.client.get("/account", headers=headers)
-            self.assertEqual(response.status_code, 200)
-            self.assertIn("text/html", response.headers["content-type"])
-            text = response.text
-            self.assertIn("价格待定", text)
-            self.assertIn("Price coming soon", text)
-            self.assertIn("收款通道稍后开放", text)
-            self.assertNotIn("__ASSET_VERSION__", text)
-            self.assertNotIn("<form", text)  # no checkout of any kind yet
-            self.assertNotRegex(text, r"¥\s*\d|\d+\s*元")
+            response = self.client.get("/account", headers=headers, follow_redirects=False)
+            self.assertEqual(response.status_code, 302)
+            self.assertEqual(response.headers["location"], "/app/settings/account")
 
     def test_invite_links_open_study_signup(self):
-        for path in ("/?invite=ABC123", "/home?invite=ABC123"):
+        for path in ("/?invite=ABC123", "/home?invite=ABC123", "/study?invite=ABC123"):
             response = self.client.get(path, follow_redirects=False)
             self.assertEqual(response.status_code, 302, path)
-            self.assertEqual(response.headers["location"], "/study?invite=ABC123")
+            self.assertEqual(response.headers["location"], "/app/login?invite=ABC123")
         self.assertEqual(self.client.get("/home", follow_redirects=False).status_code, 200)
-
-    def test_study_has_invite_field_and_membership_link(self):
-        text = self.client.get("/study").text
-        self.assertIn('id="auth-invite"', text)
-        self.assertIn('id="auth-switch-btn"', text)
-        self.assertIn('href="/account"', text)
-
 
 if __name__ == "__main__":
     unittest.main()

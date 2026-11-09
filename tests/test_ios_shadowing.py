@@ -40,21 +40,3 @@ class IosShadowingTests(unittest.TestCase):
         self.assertEqual(args[0], audio)
         self.assertEqual(kwargs.get("language"), "fr")
 
-
-def _study_js():
-    with open("static/study.js", encoding="utf-8") as fh:
-        return fh.read()
-
-
-def test_shadowing_falls_back_to_server_and_never_shows_a_fake_zero():
-    js = _study_js()
-    # the recorded blob keeps Safari's real type (audio/mp4)
-    assert "new Blob(audioChunks, { type: 'audio/webm' })" not in js
-    assert "recorderForStop.mimeType || 'audio/webm'" in js
-    # empty browser transcript -> the recording is transcribed on the server
-    score = js.split("async function finishAndScore(stopped)")[1].split("function showScoreError")[0]
-    assert "fetch('/api/transcribe?language=fr'" in score
-    assert "showScoreError(T.scoreNoAudio)" in score
-    assert "showScoreError(`${T.scoreFailed}${err.message}`)" in score
-    assert "evaluateAndDisplay(transcript)" in score
-    assert js.count("scoreNoAudio:") == 2 and js.count("scoreNotScored:") == 2

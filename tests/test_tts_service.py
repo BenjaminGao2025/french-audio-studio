@@ -635,15 +635,8 @@ class FrenchAudioStudioTests(unittest.TestCase):
     def test_version_endpoint_matches_pages(self):
         version = self.client.get("/api/version").json()["version"]
         self.assertEqual(version, routers.pages.ASSET_VERSION)
-        for path in ("/", "/study", "/review", "/listen"):
+        for path in ("/home", "/privacy", "/for-institutions"):
             self.assertIn(f'<meta name="asset-version" content="{version}">', self.client.get(path).text)
-
-    def test_study_endpoint_serves_html(self):
-        response = self.client.get("/study")
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("法语拆解与跟读复述", response.text)
-        self.assertNotIn("__ASSET_VERSION__", response.text)
-        self.assertIn(f"/static/study.js?v={routers.pages.ASSET_VERSION}", response.text)
 
     def test_analyze_requires_api_key(self):
         response = self.client.post(
@@ -736,11 +729,6 @@ class FrenchAudioStudioTests(unittest.TestCase):
         ts2 = services.speech.safe_timestamp(None, text="bonjour", voice="fr-FR-DeniseNeural")
         self.assertEqual(ts1, ts2)
         self.assertTrue(ts1.startswith("snip_"))
-
-    def test_speech_eval_js_served(self):
-        response = self.client.get("/static/speech-eval.js")
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("evaluateFrenchPronunciation", response.text)
 
     def test_parse_analysis_json_handles_direct_list_and_filters_punct_and_trivial(self):
         raw = json.dumps(

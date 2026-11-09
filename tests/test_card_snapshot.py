@@ -93,13 +93,5 @@ class BackfillTests(unittest.TestCase):
         self.assertEqual(_meta(self.user_id)["dict_zh"], SNAPSHOT["dict_zh"])
 
 
-class ClientSourceTests(unittest.TestCase):
-    def test_review_page_uses_the_snapshot_without_a_lookup(self):
-        source = (ROOT / "static/review.js").read_text(encoding="utf-8")
-        self.assertIn("snapshotContext(target) ||", source)
-        self.assertIn("meta.dict_zh", source)
-        self.assertIn("meaningSnapshot", (ROOT / "static/word-popover.js").read_text(encoding="utf-8"))
-
-
 if __name__ == "__main__":
     unittest.main()

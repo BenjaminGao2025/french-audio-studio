@@ -28,7 +28,7 @@ class PwaTests(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertIn("application/manifest+json", res.headers["content-type"])
         m = json.loads(res.text)
-        self.assertEqual((m["start_url"], m["scope"], m["display"]), ("/study", "/", "standalone"))
+        self.assertEqual((m["start_url"], m["scope"], m["display"]), ("/app/study", "/", "standalone"))
         sizes = {(i["sizes"], i["purpose"]) for i in m["icons"]}
         self.assertIn(("192x192", "any"), sizes)
         self.assertIn(("512x512", "any"), sizes)
@@ -40,7 +40,7 @@ class PwaTests(unittest.TestCase):
         self.assertEqual(_png_size(STATIC / "pwa" / "apple-touch-icon.png"), (180, 180))
 
     def test_every_page_has_ios_app_tags(self):
-        for path in ("/", "/study", "/review", "/listen"):
+        for path in ("/home", "/privacy", "/for-institutions"):
             html = self.client.get(path).text
             for tag in (
                 'rel="manifest"',
@@ -69,25 +69,12 @@ class PwaTests(unittest.TestCase):
         self.assertIn("url.pathname.startsWith('/static/') && url.searchParams.get('v') === VERSION", src)
 
     def test_csp_allows_worker_and_manifest(self):
-        csp = self.client.get("/study").headers["content-security-policy"]
+        csp = self.client.get("/home").headers["content-security-policy"]
         self.assertIn("worker-src 'self'", csp)
         self.assertIn("manifest-src 'self'", csp)
 
     def test_lucide_is_local_versioned_and_served_on_every_page(self):
-        paths = (
-            "/",
-            "/study",
-            "/review",
-            "/listen",
-            "/speak",
-            "/write",
-            "/coach",
-            "/grammar",
-            "/home",
-            "/account",
-            "/privacy",
-            "/for-institutions",
-        )
+        paths = ("/home", "/privacy", "/for-institutions")
         script = "/static/vendor/lucide.min.js?v=" + routers.pages.ASSET_VERSION
         for path in paths:
             response = self.client.get(path)

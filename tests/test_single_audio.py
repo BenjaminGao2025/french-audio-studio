@@ -1,4 +1,3 @@
-import pathlib
 import unittest
 
 import testenv  # noqa: F401
@@ -11,7 +10,7 @@ import tts_service
 class SingleAudioTests(unittest.TestCase):
     def test_pages_load_controller_before_players(self):
         client = TestClient(tts_service.app)
-        for route in ("/", "/study", "/review", "/speak", "/listen", "/write", "/coach", "/home"):
+        for route in ("/home", "/privacy", "/for-institutions"):
             with self.subTest(route=route):
                 response = client.get(route)
                 self.assertEqual(response.status_code, 200)
@@ -27,6 +26,3 @@ class SingleAudioTests(unittest.TestCase):
         # Asset hashes include every top-level JS asset, including the controller.
         self.assertEqual(routers.pages._asset_version(), routers.pages.ASSET_VERSION)
         self.assertIn(f"const VERSION = '{routers.pages.ASSET_VERSION}'", client.get("/sw.js").text)
-        study = pathlib.Path("static/study.html").read_text()
-        self.assertIn("/static/homework.js", study)
-        self.assertIn("/static/mini-listen.js", pathlib.Path("static/listen.html").read_text())

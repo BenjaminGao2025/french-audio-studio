@@ -523,32 +523,5 @@ class AiReviewTests(unittest.TestCase):
             routes._ai_in_flight.discard((self.user_id, attempt["attempt_id"]))
 
 
-class StudyPageWiringTests(unittest.TestCase):
-    STUDY_JS = (ROOT / "static" / "study.js").read_text(encoding="utf-8")
-    STUDY_HTML = (ROOT / "static" / "study.html").read_text(encoding="utf-8")
-
-    def test_dictation_script_loads_before_study(self):
-        self.assertLess(self.STUDY_HTML.index("/static/dictation.js"), self.STUDY_HTML.index("/static/study.js"))
-
-    def test_recall_and_dictation_are_top_level_tabs(self):
-        self.assertIn("{ id: 'recall', label: T.modeWrite", self.STUDY_JS)
-        self.assertIn("{ id: 'dictation', label: T.modeListen", self.STUDY_JS)
-        self.assertIn("card.querySelectorAll('[data-dictation-mode]')", self.STUDY_JS)
-        # The obsolete Write it row is gone; the existing four-mode Steps switch remains.
-        self.assertNotIn("dictation-entry", self.STUDY_JS)
-        self.assertNotIn("dictationEntry", self.STUDY_JS)
-        self.assertIn('class="btn-feynman-toggle" data-dictation-mode="write"', self.STUDY_JS)
-        self.assertIn('class="btn-feynman-toggle" data-dictation-mode="listen"', self.STUDY_JS)
-        self.assertIn('data-mode="normal"', self.STUDY_JS)
-        self.assertIn('data-mode="blind"', self.STUDY_JS)
-
-    def test_audio_uses_the_sentence_voice(self):
-        self.assertIn("voice: frenchVoiceFor(sentenceText)", self.STUDY_JS)
-        self.assertIn("const voice = options.voice || frenchVoiceFor(cleanText);", self.STUDY_JS)
-
-    def test_dictation_module_ships_in_the_image(self):
-        self.assertIn("dictation.py", (ROOT / "Dockerfile").read_text(encoding="utf-8"))
-
-
 if __name__ == "__main__":
     unittest.main()

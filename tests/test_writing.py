@@ -121,11 +121,6 @@ class WritingEndpointTests(unittest.TestCase):
         self.user_id = self.user["user"]["id"]
         self.auth = {"Authorization": f"Bearer {self.token}"}
 
-    def test_get_write_page(self):
-        res = self.client.get("/write")
-        self.assertEqual(res.status_code, 200)
-        self.assertIn("text/html", res.headers["content-type"])
-
     def test_get_tasks(self):
         res = self.client.get("/api/write/tasks", headers=self.auth)
         self.assertEqual(res.status_code, 200)

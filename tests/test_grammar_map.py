@@ -3,8 +3,6 @@ import io
 import json
 import pathlib
 import re
-import shutil
-import subprocess
 import unittest
 import uuid
 
@@ -14,7 +12,6 @@ from fastapi.testclient import TestClient
 import analysis
 import auth_db
 import grammar
-import routers.pages
 import tts_service
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -236,29 +233,6 @@ class GrammarPageTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(tts_service.app)
 
-    def test_page_is_served_like_the_other_pages(self):
-        res = self.client.get("/grammar")
-        self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.headers["Content-Security-Policy"], tts_service.CONTENT_SECURITY_POLICY)
-        self.assertIn("no-store", res.headers["Cache-Control"])
-        html = res.text
-        v = routers.pages.ASSET_VERSION
-        for asset in ("grammar.js", "grammar.css", "i18n.js", "tokens.css", "header-ui.js"):
-            self.assertIn(f"/static/{asset}?v={v}", html)
-        self.assertNotIn("__ASSET_VERSION__", html)
-        self.assertNotIn("<script>", html, "no inline scripts (CSP)")
-        self.assertIn('href="/coach" class="nav-tab', html)
-        self.assertIn('href="/grammar" class="nav-tab active" aria-current="page"', html)
-        self.assertIn('id="grammar-login"', html)
-        self.assertIn("'/grammar'", _read("static/sw.js"))
-
-    def test_study_links_to_the_grammar_map(self):
-        self.assertIn('href="/grammar" class="nav-tab"', _read("static/study.html"))
-        self.assertIn("'/listen', '/grammar', '/'", _read("static/header-ui.js"))
-        js = _read("static/study.js")
-        self.assertIn("navGrammar: 'Grammar map'", js)
-        self.assertIn("navGrammar: '语法地图'", js)
-
     def test_api_requires_login(self):
         self.assertEqual(self.client.get("/api/grammar/map").status_code, 401)
         self.assertEqual(self.client.get("/api/grammar/V.present.er/sentences").status_code, 401)
@@ -296,58 +270,6 @@ class GrammarPageTests(unittest.TestCase):
         self.assertEqual({s["sentence"] for s in res["sentences"]}, {"Tu peux m'aider ?", "<b>Je peux.</b>"})
         self.assertEqual(self.client.get("/api/grammar/S.neg.ne_pas/sentences", headers=auth).json()["sentences"], [])
         self.assertEqual(self.client.get("/api/grammar/V.nope/sentences", headers=auth).status_code, 404)
-
-    def test_grammar_page_escapes_what_it_renders(self):
-        js = _read("static/grammar.js")
-        self.assertIn("escapeHtml(s.sentence)", js)
-        self.assertIn("escapeHtml(point.explain_zh)", js)
-        self.assertIn("escapeHtml(pick(p.zh, p.en))", js)
-        self.assertIn("encodeURIComponent(btn.dataset.gid)", js)
-
-
-class StudyMarkupTests(unittest.TestCase):
-    def test_sentence_header_has_a_repeat_switch(self):
-        # Short sentences (<= 5 words) have no build-up steps, so the header carries Repeat itself
-        js = _read("static/study.js")
-        head = js.split("function sentenceHeadHtml(")[1].split("\n    }\n")[0]
-        self.assertIn("window.FrenchPlayback.toggleHtml('btn-step-repeat btn-head-repeat')", head)
-        self.assertLess(head.index("btn-speak-round"), head.index("btn-head-repeat"), "right after Listen")
-        handler = js.split("// 1b. Sentence Repeat")[1].split("// 2. Token Pronunciation Buttons")[0]
-        self.assertIn("card.querySelector('.btn-head-repeat')", handler)
-        self.assertIn("window.FrenchPlayback.repeat()) playFrenchSpeech(targetSentence)", handler)
-        self.assertIn("setTimeout(", handler, "reads the setting after playback.js has flipped it")
-        css = _read("static/study.css")
-        self.assertIn(".sentence-head-actions .btn-repeat-toggle.btn-head-repeat", css)
-        self.assertIn(".sentence-card:not(.is-open) .btn-head-repeat { display: none; }", css)
-
-    def test_structure_bar_is_at_top_of_grammar_panel(self):
-        js = _read("static/study.js")
-        body = js.split("const bodyHtml = `")[1].split("`;")[0]
-        self.assertNotIn("${structureBarHtml(s.structure)}", body)
-        self.assertIn("html: structureBarHtml(s.structure) + (grammarHtml || emptyPanel(T.noGrammar))", js)
-        self.assertIn("bindStructureBar(card, s.structure);", js)
-        for text in (
-            "structureBlock: { N: 'Noun group', V: 'Verb', S: 'Sentence building' }",
-            "structureBlock: { N: '名词组', V: '动词', S: '句子怎么组织' }",
-        ):
-            self.assertIn(text, js)
-        bar = js.split("function structureBarHtml(structure) {")[1].split("\n    }\n")[0]
-        self.assertIn("escapeHtml(span.text)", bar)
-        self.assertIn('<button class="structure-span" type="button"', bar)
-        css = _read("static/study.css")
-        for token in ("--grammar-n", "--grammar-v", "--grammar-s"):
-            self.assertIn(f"var({token})", css)
-            self.assertEqual(_read("static/tokens.css").count(f"{token}:"), 2, "light and dark")
-
-    def test_structure_and_grammar_map_in_jsdom(self):
-        node = shutil.which("node")
-        if not node or not (ROOT / "node_modules/jsdom").exists():
-            self.skipTest("node and jsdom (npm ci at the repo root) are needed")
-        result = subprocess.run(
-            [node, "tests/test_grammar_structure.cjs"], cwd=ROOT, capture_output=True, text=True, timeout=90
-        )
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-
 
 class BackfillScriptTests(unittest.TestCase):
     def test_backfill_is_a_dry_run_by_default(self):
