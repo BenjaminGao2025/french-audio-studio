@@ -4,6 +4,8 @@ WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY web/ ./
+# The app and public site share the same logo source files.
+COPY static/brand.css static/brand-symbol.svg /static/
 RUN npm run build
 
 FROM python:3.11-slim

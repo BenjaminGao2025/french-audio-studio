@@ -3,6 +3,7 @@ import { LogIn, UserPlus } from "lucide-react";
 import { ApiError } from "../api/client";
 import { login, register } from "../api/auth";
 import { Banner, Button, FieldText } from "../components/ui";
+import { Brand } from "../components/Brand";
 
 /** Where to go after signing in: only an in-app path, never another site. */
 export function safeNext(search: string): string {
@@ -47,10 +48,7 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: (next: string) => void
   return (
     <main className="login-page" id="main">
       <form className="panel stack gap-4 login-card" onSubmit={submit} noValidate>
-        <div className="row gap-3">
-          <span className="brand-mark" aria-hidden>1000</span>
-          <span className="t-strong">1000H French</span>
-        </div>
+        <Brand />
         <h1 className="t-page" tabIndex={-1} data-page-title>{isLogin ? "Sign in" : "Create an account"}</h1>
         {!isLogin && <p className="t-support">Sign-up needs an invite code from the person who shared this site with you.</p>}
         <FieldText

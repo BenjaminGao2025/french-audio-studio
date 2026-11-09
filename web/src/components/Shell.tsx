@@ -35,6 +35,7 @@ import {
   useApp,
 } from "../state/store";
 import { Banner, Button, Pill, WidthContext } from "./ui";
+import { Brand } from "./Brand";
 
 export const NAV = [
   { key: "study", label: "Study", icon: BookOpen },
@@ -105,10 +106,7 @@ export function Shell({ children }: { children: ReactNode }) {
         Skip to main content
       </a>
       <nav className="nav" aria-label="Primary">
-        <div className="nav-brand" aria-hidden>
-          <span className="brand-mark">1000</span>
-          <span>1000H French</span>
-        </div>
+        <div className="nav-brand"><Brand /></div>
         <ul className="nav-list">
           {NAV.map((n) => {
             const Icon = n.icon;
@@ -164,10 +162,7 @@ function Header() {
   const email = user?.email ?? "";
   return (
     <header className="header">
-      <span className="header-brand" aria-hidden>
-        <span className="brand-mark">1000</span>
-        <span className="hide-narrow">1000H French</span>
-      </span>
+      <span className="header-brand"><Brand /></span>
       {offline && <Pill tone="warning" icon={<CloudOff aria-hidden />}>Offline · simulated</Pill>}
       {auth === "in" && !isConnected(route) && <SyncIndicator sync={sync} offline={offline} />}
       {auth === "in" ? (
