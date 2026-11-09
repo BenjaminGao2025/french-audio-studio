@@ -24,6 +24,7 @@ import { cx, fmtClock } from "../lib/format";
 import {
   UNDO_MS,
   expireMastery,
+  nowMs,
   get,
   go,
   retryPlayback,
@@ -308,13 +309,13 @@ export function MasteryToast() {
   const mastery = useApp((s) => s.mastery);
   const cards = useApp((s) => s.cards);
   const offline = useApp((s) => s.offline);
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(nowMs());
   const [dismissed, setDismissed] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!mastery.length) return;
     const tickNow = () => {
-      const t = Date.now();
+      const t = nowMs();
       expireMastery(t);
       setNow(t);
     };
@@ -351,6 +352,7 @@ export function MasteryToast() {
         const left = Math.max(0, Math.ceil((UNDO_MS - (now - m.at)) / 1000));
         const card = cards.find((c) => c.id === m.cardId);
         const kindLabel = card ? `${card.kind} card` : "Card";
+        const cardName = card ? `${card.kind} card${card.word ? ` · ${card.word}` : ""}` : "card";
         let body: ReactNode;
         if (m.state === "active")
           body = (
@@ -361,7 +363,7 @@ export function MasteryToast() {
               </span>
               <Button
                 kind="tertiary"
-                aria-label={`Undo mastery for ${m.cardId}`}
+                aria-label={`Undo mastered: ${cardName}`}
                 onClick={() => undoMastery(m.id)}
                 data-autofocus={idx === 0 || undefined}
               >

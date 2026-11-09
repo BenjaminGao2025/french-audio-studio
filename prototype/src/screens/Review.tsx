@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Bookmark, BookmarkCheck, Eye, Lightbulb, Play, Search, CloudOff, Archive, RotateCcw } from "lucide-react";
 import {
-  SESSION_CARD_LIMIT,
+  DEFAULT_SESSION_SIZE,
+  planSession,
   sortNewCardsForIntroduction,
-  spaceSessionCards,
   type LibCard,
   type ReviewCard,
+  type SessionPlan,
 } from "../data/fixtures";
 import { grade } from "../lib/grading";
 import { importanceFor } from "../lib/lookup";
@@ -15,6 +16,7 @@ import {
   get,
   getCardLookups,
   go,
+  introduceNewCard,
   isCardFavorite,
   markMastered,
   restoreCard,
@@ -60,25 +62,55 @@ export function computePlannedSessionCards(
   queue: ReviewCard[],
   dailyNew: number,
   newUsed: number,
+  sessionSize = DEFAULT_SESSION_SIZE,
+  done: Record<string, boolean> = {},
 ): ReviewCard[] {
-  const learning = queue.filter((c) => c.group === "learning");
-  const due = queue.filter((c) => c.group === "due");
-  const newCards = queue.filter((c) => c.group === "new");
-  const remaining = Math.max(0, dailyNew - newUsed);
-  const maxNewInSession = Math.max(0, SESSION_CARD_LIMIT - (learning.length + due.length));
-  const assignedNew = Math.min(newCards.length, remaining, maxNewInSession);
-  return spaceSessionCards([...learning, ...due, ...newCards.slice(0, assignedNew)]);
+  return planSession(queue, { sessionSize, dailyNew, newUsed, done }).cards;
+}
+
+/** The plan for the next session from today's pool, ignoring any session that is already locked. */
+function usePlan(): SessionPlan {
+  const queue = useApp((s) => s.queue);
+  const sessionSize = useApp((s) => s.sessionSize);
+  const dailyNew = useApp((s) => s.dailyNew);
+  const newUsed = useApp((s) => s.newUsed);
+  const done = useApp((s) => s.review.done);
+  return useMemo(() => planSession(queue, { sessionSize, dailyNew, newUsed, done }), [queue, sessionSize, dailyNew, newUsed, done]);
 }
 
 function useSessionCards(): ReviewCard[] {
-  const queue = useApp((s) => s.queue);
   const sessionCards = useApp((s) => s.review.sessionCards);
-  const dailyNew = useApp((s) => s.dailyNew);
-  const newUsed = useApp((s) => s.newUsed);
-  return useMemo(
-    () => sessionCards ?? computePlannedSessionCards(queue, dailyNew, newUsed),
-    [sessionCards, queue, dailyNew, newUsed],
-  );
+  const plan = usePlan();
+  return sessionCards ?? plan.cards;
+}
+
+function startNextSession() {
+  set((s) => {
+    const next = planSession(s.queue, { sessionSize: s.sessionSize, dailyNew: s.dailyNew, newUsed: s.newUsed, done: s.review.done });
+    return {
+      review: { ...s.review, phase: "active", index: 0, completed: 0, removedNew: 0, allowance: next.newCount, sessionCards: next.cards },
+    };
+  });
+  go("review/session");
+}
+
+/** Plain-words explanation of which limit decided how many new cards a session gets. */
+export function quotaCopy(p: SessionPlan, sessionSize: number, dailyNew: number, newUsed: number): string {
+  const fixed = p.learning + p.due;
+  if (p.waiting > 0)
+    return `Your ${nf.format(fixed + p.waiting)} learning and due review cards are more than a session of ${sessionSize}, so no new cards are added. ${plural(p.waiting, "card")} wait for the next session.`;
+  if (p.binding === "session") {
+    const unused = p.remainingAllowances - p.newCount;
+    const scope = newUsed === 0 ? `today’s ${dailyNew} allowances` : `your ${p.remainingAllowances} remaining allowances`;
+    return `${plural(p.newCount, "new card")} this session. ${unused} of ${scope} ${unused === 1 ? "isn’t" : "aren’t"} used because your session holds ${sessionSize} cards and ${fixed} go to learning and due reviews. Raise Cards per review session in Settings to fit more.`;
+  }
+  if (p.binding === "daily") {
+    if (p.remainingAllowances === 0) return `No new cards this session — all ${dailyNew} of today’s allowances are used.`;
+    return newUsed === 0
+      ? `${plural(p.newCount, "new card")} — all of today’s allowance.`
+      : `${plural(p.newCount, "new card")} — all of the ${p.remainingAllowances} allowances left today.`;
+  }
+  return `Only ${p.newAvailable} new ${p.newAvailable === 1 ? "card is" : "cards are"} waiting in your library.`;
 }
 
 function DueToday() {
@@ -88,6 +120,7 @@ function DueToday() {
   const queue = useApp((s) => s.queue);
   const dailyNew = useApp((s) => s.dailyNew);
   const newUsed = useApp((s) => s.newUsed);
+  const sessionSize = useApp((s) => s.sessionSize);
   const savedCards = useApp((s) => s.cards.filter((c) => c.saved).length);
   const sentences = useApp((s) => s.sentences.length);
   const [load, setLoad] = useState<"loading" | "ok" | "error">("loading");
@@ -111,12 +144,18 @@ function DueToday() {
   const due = activeCards.filter((c) => c.group === "due").length;
   const newAssigned = activeCards.filter((c) => c.group === "new").length;
   const total = activeCards.length;
-  const remainingAllowances = Math.max(0, dailyNew - newUsed);
-  const unassignedAllowances = Math.max(0, remainingAllowances - newAssigned);
+  const plan = usePlan();
+  const locked = review.phase === "active" && review.sessionCards !== null;
+  // A locked session keeps its cards; the quota line then describes the lock instead of re-planning it.
+  const quotaLine = locked
+    ? `This session is locked at ${total} cards. Changing Cards per review session or the daily limit applies from your next session; lowering the daily limit only stops new cards that haven’t been shown yet.`
+    : plan.cards.length
+      ? `${review.phase === "complete" ? "Next session: " : ""}${quotaCopy(plan, sessionSize, dailyNew, newUsed)}`
+      : null;
 
   const start = () => {
     set((s) => {
-      const frozen = s.review.sessionCards ?? computePlannedSessionCards(s.queue, s.dailyNew, s.newUsed);
+      const frozen = s.review.sessionCards ?? planSession(s.queue, { sessionSize: s.sessionSize, dailyNew: s.dailyNew, newUsed: s.newUsed, done: s.review.done }).cards;
       return {
         review: {
           ...s.review,
@@ -154,8 +193,18 @@ function DueToday() {
         </Banner>
       )}
       {state === "complete" && (
-        <Banner tone="success" title="Today’s review is complete" actions={<Button kind="secondary" onClick={() => go("review/library")}>Open Word library</Button>}>
-          {nf.format(total)} of {nf.format(total)} cards in today’s session completed. Tomorrow’s cards will appear here.
+        <Banner
+          tone="success"
+          title={plan.cards.length ? "This session is complete" : "Today’s review is complete"}
+          actions={
+            <>
+              {plan.cards.length > 0 && <Button kind="primary" onClick={startNextSession}>Start another session ({plan.cards.length} cards)</Button>}
+              <Button kind="secondary" onClick={() => go("review/library")}>Open Word library</Button>
+            </>
+          }
+        >
+          {nf.format(review.completed)} of {nf.format(total)} cards in this session completed.{" "}
+          {plan.cards.length ? "Due cards or new-card allowances remain today." : "Tomorrow’s cards will appear here."}
         </Banner>
       )}
       {state === "offline" && (
@@ -172,15 +221,19 @@ function DueToday() {
             <p className="t-support">
               {state === "offline" ? "Assigned to this device: 8 learning · 1 due review · 3 new" : `${learning} learning cards · ${due} due review card · ${newAssigned} new cards`}
             </p>
-            {state !== "offline" && (
+            {state !== "offline" && quotaLine && (
               <p className="t-support" data-quota-explanation>
-                <span className="t-strong">New-card assignment:</span> {newAssigned} new cards are assigned to today’s session · {unassignedAllowances} of today’s {dailyNew} allowances not assigned (a session holds up to {SESSION_CARD_LIMIT} cards, and {learning} learning + {due} due review use {learning + due} slots).
+                <span className="t-strong">New cards:</span> {quotaLine}
               </p>
             )}
-            {review.sessionCards && (
-              <p className="t-meta">
-                Session card list is locked at {total} cards while in progress. Changing the daily limit applies to new introductions only.
-              </p>
+            {state !== "offline" && (
+              <div className="row gap-2">
+                <span className="t-support">Cards per review session: <span className="num">{sessionSize}</span></span>
+                <Button kind="tertiary" className="btn--sm-text" aria-label="Change cards per review session in Settings" onClick={() => go("settings")}>Change</Button>
+              </div>
+            )}
+            {locked && review.removedNew > 0 && (
+              <p className="t-support" role="status">{plural(review.removedNew, "new card")} removed because you lowered today’s limit.</p>
             )}
           </div>
           <div className="stack gap-2">
@@ -205,12 +258,12 @@ function DueToday() {
         </section>
       )}
 
-      {state !== "loading" && state !== "error" && <QuotaExplainer newAssigned={newAssigned} />}
+      {state !== "loading" && state !== "error" && <QuotaExplainer quotaLine={state === "active" || state === "offline" ? null : quotaLine} />}
     </div>
   );
 }
 
-function QuotaExplainer({ newAssigned }: { newAssigned: number }) {
+function QuotaExplainer({ quotaLine }: { quotaLine: string | null }) {
   const dailyNew = useApp((s) => s.dailyNew);
   const newUsed = useApp((s) => s.newUsed);
   const offline = useApp((s) => s.offline);
@@ -220,7 +273,6 @@ function QuotaExplainer({ newAssigned }: { newAssigned: number }) {
   const introduced = useApp((s) => s.review.introduced);
 
   const remaining = Math.max(0, dailyNew - newUsed);
-  const unassigned = Math.max(0, remaining - Math.min(remaining, newAssigned));
 
   // Derive the next sentence with un-introduced new cards directly from the library fixtures.
   const nextSentenceInfo = useMemo(() => {
@@ -255,9 +307,7 @@ function QuotaExplainer({ newAssigned }: { newAssigned: number }) {
       </ul>
       <div className="panel stack gap-2" aria-live="polite">
         <p className="t-strong">Today: {remaining} of {dailyNew} new-card allowances remain</p>
-        <p className="t-support">
-          {newAssigned} new cards are assigned to today’s session · {unassigned} of today’s {dailyNew} allowances not assigned.
-        </p>
+        {quotaLine && <p className="t-support">{quotaLine}</p>}
         {dailyNew < newUsed ? (
           <p>
             You’ve already introduced {newUsed} new cards today. Your limit is now {dailyNew}, which is lower, so those {newUsed} cards stay in your reviews and no more new cards are introduced today.
@@ -293,6 +343,8 @@ function ReviewSession() {
   const forced = useApp((s) => s.ss["SCR-REV-02"]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const card: ReviewCard | undefined = cards[review.index];
+  const plan = usePlan();
+  const noAllowance = useApp((s) => s.newUsed >= s.dailyNew);
 
   // Freeze sessionCards on mount if not already frozen.
   useEffect(() => {
@@ -301,23 +353,25 @@ function ReviewSession() {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // First introduction of a new card uses exactly one allowance (only while below the daily limit).
+  // First introduction of a new card uses exactly one allowance; with none left the card is removed instead of shown.
   useEffect(() => {
     if (!card || card.group !== "new" || get().review.introduced[card.id]) return;
-    set((s) => ({
-      review: { ...s.review, introduced: { ...s.review.introduced, [card.id]: true } },
-      newUsed: s.newUsed < s.dailyNew ? s.newUsed + 1 : s.newUsed,
-    }));
+    introduceNewCard(card.id);
   }, [card?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A new card without an allowance is never shown; the effect above removes it from the locked session.
+  if (card && card.group === "new" && !review.introduced[card.id] && noAllowance && review.phase === "active") return null;
 
   if (review.phase === "complete" || forced === "complete" || !card) {
     return (
       <div className="stack gap-4">
         <Banner tone="success" title="Review complete" live="polite">
-          {review.completed} of {cards.length} cards in today’s session completed. Review results updated each card’s schedule (simulated).
+          {review.completed} of {cards.length} cards in this session completed. Review results updated each card’s schedule (simulated).
         </Banner>
+        {review.removedNew > 0 && <p className="t-support">{plural(review.removedNew, "new card")} removed because you lowered today’s limit.</p>}
         <div className="btn-row">
-          <Button kind="primary" onClick={() => go("review")}>Done — back to Due today</Button>
+          {plan.cards.length > 0 && <Button kind="primary" onClick={startNextSession}>Start another session ({plan.cards.length} cards)</Button>}
+          <Button kind={plan.cards.length ? "secondary" : "primary"} onClick={() => go("review")}>Done — back to Due today</Button>
           <Button kind="secondary" onClick={() => go("review/library")}>Open Word library</Button>
         </div>
       </div>
@@ -377,9 +431,14 @@ function ReviewSession() {
   };
 
   const next = () => {
-    set((s) => ({
-      review: isLast ? { ...s.review, phase: "complete", completed: s.review.completed + 1 } : { ...s.review, index: s.review.index + 1, completed: s.review.completed + 1 },
-    }));
+    set((s) => {
+      const done = { ...s.review.done, [card.id]: true };
+      return {
+        review: isLast
+          ? { ...s.review, done, phase: "complete", completed: s.review.completed + 1 }
+          : { ...s.review, done, index: s.review.index + 1, completed: s.review.completed + 1 },
+      };
+    });
     requestAnimationFrame(() => document.getElementById("rev-q")?.focus());
   };
 
@@ -392,6 +451,7 @@ function ReviewSession() {
         <h2 id="rev-q" tabIndex={-1} className="t-section">Card {review.index + 1} of {cards.length}</h2>
         <span className="t-support num">{review.completed} completed</span>
       </div>
+      {review.removedNew > 0 && <p className="t-support" role="status">{plural(review.removedNew, "new card")} removed because you lowered today’s limit.</p>}
       <div className="row">
         <Pill tone={card.group === "new" ? "info" : undefined}>{groupLabel}</Pill>
         <Pill>{card.kind}</Pill>
@@ -625,13 +685,10 @@ function Library({ mode }: { mode: "library" | "saved" }) {
       .filter((s) => bySentence.has(s.id))
       .filter((s) => !q || s.fr.toLowerCase().includes(q) || s.en.toLowerCase().includes(q) || bySentence.get(s.id)!.some((c) => c.word?.toLowerCase().includes(q)))
       .map((s) => ({ s, cards: bySentence.get(s.id)! }));
-    // Put sentences with matching word cards for "failli" or favorited words first so live updates are immediately visible.
-    list = list.sort((a, b) => {
-      const aPri = a.cards.some((c) => c.word === "failli") ? 2 : a.cards.some((c) => isCardFavorite({ favorites }, c)) ? 1 : 0;
-      const bPri = b.cards.some((c) => c.word === "failli") ? 2 : b.cards.some((c) => isCardFavorite({ favorites }, c)) ? 1 : 0;
-      if (mode === "saved") return Math.max(...b.cards.map((c) => c.savedAt)) - Math.max(...a.cards.map((c) => c.savedAt));
-      return bPri - aPri || a.s.number - b.s.number;
-    });
+    // Word library: sentence number. Saved: newest saved first.
+    list = list.sort((a, b) =>
+      mode === "saved" ? Math.max(...b.cards.map((c) => c.savedAt)) - Math.max(...a.cards.map((c) => c.savedAt)) : a.s.number - b.s.number,
+    );
     return list;
   }, [cards, sentences, lookups, favorites, f, mode]); // eslint-disable-line react-hooks/exhaustive-deps
   const matchingCards = groups.reduce((n, g) => n + g.cards.length, 0);

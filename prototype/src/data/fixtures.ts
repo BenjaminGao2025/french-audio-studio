@@ -329,7 +329,9 @@ export interface LibSentence {
 
 const TOPICS = ["Daily life", "Transport", "Housing", "Family", "Food", "Weekend plans", "Work", "Weather"];
 
-export const SESSION_CARD_LIMIT = 40;
+export const DEFAULT_SESSION_SIZE = 40;
+export const MIN_SESSION_SIZE = 10;
+export const MAX_SESSION_SIZE = 300;
 
 export function buildLibrary(): { sentences: LibSentence[]; cards: LibCard[] } {
   const sentences: LibSentence[] = [];
@@ -462,7 +464,7 @@ export const CHOOSABLE: PracticeItem[] = [
   },
 ];
 
-/* ---------- Review queue: 40 cards = 8 learning + 1 due review + 31 new ---------- */
+/* ---------- Review queue pool; default session = 40 cards = 8 learning + 1 due review + 31 new ---------- */
 
 export interface ReviewCard {
   id: string;
@@ -535,11 +537,14 @@ export function spaceSessionCards(cards: ReviewCard[]): ReviewCard[] {
   return out;
 }
 
+/**
+ * The pool of cards that can appear in Review today: all learning cards, the due review cards, and every
+ * new card in introduction order. It is NOT the session: planSession() decides how much of it fits.
+ */
 export function buildQueue(
   sentences: LibSentence[],
   cards: LibCard[],
   lookups: Record<string, { count: number }> = {},
-  newAllowance = SESSION_CARD_LIMIT - 9,
 ): ReviewCard[] {
   const nonMastered = cards.filter((c) => c.saved && !c.mastered);
   const learning = nonMastered.filter((c) => c.status === "learning").slice(0, 8);
@@ -548,13 +553,58 @@ export function buildQueue(
     nonMastered.filter((c) => c.status === "new"),
     lookups,
   );
-  const newLimit = Math.max(0, Math.min(newAllowance, SESSION_CARD_LIMIT - (learning.length + due.length)));
-  const chosen = [
+  return [
     ...learning.map((c) => toReviewCard(c, "learning", sentences)),
     ...due.map((c) => toReviewCard(c, "due", sentences)),
-    ...newPool.slice(0, newLimit).map((c) => toReviewCard(c, "new", sentences)),
+    ...newPool.map((c) => toReviewCard(c, "new", sentences)),
   ];
-  return spaceSessionCards(chosen);
+}
+
+export type BindingLimit = "daily" | "session" | "library";
+
+export interface SessionPlan {
+  cards: ReviewCard[];
+  learning: number;
+  due: number;
+  newCount: number;
+  /** Learning + due cards that did not fit and wait for the next session. */
+  waiting: number;
+  /** New-card allowances left today (daily limit minus introduced). */
+  remainingAllowances: number;
+  /** New cards still waiting in the library for today (not yet completed). */
+  newAvailable: number;
+  /** Which limit stopped more new cards from being added. */
+  binding: BindingLimit;
+}
+
+/**
+ * Fill order: learning, then due reviews (queue order is earliest-due first), then new cards.
+ * New cards = min(remaining daily allowances, session size − learning − due, new cards available).
+ * Learning and due reviews never use allowances. `done` holds cards already completed in earlier sessions today.
+ */
+export function planSession(
+  queue: ReviewCard[],
+  opts: { sessionSize: number; dailyNew: number; newUsed: number; done?: Record<string, boolean> },
+): SessionPlan {
+  const open = queue.filter((c) => !opts.done?.[c.id]);
+  const fixed = [...open.filter((c) => c.group === "learning"), ...open.filter((c) => c.group === "due")];
+  const taken = fixed.slice(0, opts.sessionSize);
+  const newPool = open.filter((c) => c.group === "new");
+  const remainingAllowances = Math.max(0, opts.dailyNew - opts.newUsed);
+  const room = Math.max(0, opts.sessionSize - taken.length);
+  const newCount = Math.min(remainingAllowances, room, newPool.length);
+  const binding: BindingLimit =
+    newCount === remainingAllowances && remainingAllowances <= room ? "daily" : newCount === room && room < remainingAllowances ? "session" : "library";
+  return {
+    cards: spaceSessionCards([...taken, ...newPool.slice(0, newCount)]),
+    learning: taken.filter((c) => c.group === "learning").length,
+    due: taken.filter((c) => c.group === "due").length,
+    newCount,
+    waiting: fixed.length - taken.length,
+    remainingAllowances,
+    newAvailable: newPool.length,
+    binding,
+  };
 }
 
 /* ---------- OCR sample photos ---------- */

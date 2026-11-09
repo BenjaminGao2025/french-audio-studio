@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { planSession, type ReviewCard } from "../data/fixtures";
 import { grade } from "./grading";
 import { countLookup, importanceFor, lookupKey, type LookupCounter } from "./lookup";
 import { countedMinutesFor, mergeIntervals, pace, splitAtMidnight } from "./progress";
@@ -64,5 +65,56 @@ describe("audio time", () => {
     expect(p.etaDays).toBe(1750);
     expect(pace(125, 0, new Date()).etaDate).toBeNull();
     expect(pace(1003, 14, new Date()).etaDays).toBeNull();
+  });
+});
+
+describe("planSession (cards per review session)", () => {
+  const card = (id: string, group: ReviewCard["group"]): ReviewCard => ({ id, sentenceId: `s-${id}`, group, kind: "Listen", prompt: "", target: "", sentenceFr: "" });
+  const make = (learning: number, due: number, fresh: number) => [
+    ...Array.from({ length: learning }, (_, i) => card(`l${i}`, "learning")),
+    ...Array.from({ length: due }, (_, i) => card(`d${i}`, "due")),
+    ...Array.from({ length: fresh }, (_, i) => card(`n${i}`, "new")),
+  ];
+
+  it("defaults give 8 learning + 1 due + 31 new, bound by the session size", () => {
+    const p = planSession(make(8, 1, 200), { sessionSize: 40, dailyNew: 40, newUsed: 0 });
+    expect([p.learning, p.due, p.newCount, p.cards.length]).toEqual([8, 1, 31, 40]);
+    expect(p.binding).toBe("session");
+    expect(p.waiting).toBe(0);
+  });
+
+  it("is bound by the daily allowance when it is the smallest of the three", () => {
+    const p = planSession(make(8, 1, 200), { sessionSize: 100, dailyNew: 40, newUsed: 15 });
+    expect(p.newCount).toBe(25);
+    expect(p.binding).toBe("daily");
+    expect(p.remainingAllowances).toBe(25);
+  });
+
+  it("is bound by the library when fewer new cards are waiting than either limit", () => {
+    const p = planSession(make(8, 1, 5), { sessionSize: 40, dailyNew: 40, newUsed: 0 });
+    expect(p.newCount).toBe(5);
+    expect(p.newAvailable).toBe(5);
+    expect(p.binding).toBe("library");
+  });
+
+  it("takes learning and due first without using allowances, adds no new cards and counts the cards that wait", () => {
+    const p = planSession(make(12, 3, 50), { sessionSize: 10, dailyNew: 40, newUsed: 0 });
+    expect(p.cards).toHaveLength(10);
+    expect(p.cards.every((c) => c.group === "learning")).toBe(true);
+    expect(p.newCount).toBe(0);
+    expect(p.waiting).toBe(5);
+    // Learning and due cards ignore the allowance: with 0 allowances they are still planned.
+    const none = planSession(make(8, 1, 50), { sessionSize: 40, dailyNew: 0, newUsed: 0 });
+    expect([none.learning, none.due, none.newCount]).toEqual([8, 1, 0]);
+    expect(none.binding).toBe("daily");
+  });
+
+  it("leaves out cards finished earlier today, so another session only holds what remains", () => {
+    const queue = make(8, 1, 50);
+    const done = Object.fromEntries(queue.slice(0, 20).map((c) => [c.id, true]));
+    const p = planSession(queue, { sessionSize: 10, dailyNew: 40, newUsed: 11, done });
+    expect(p.learning + p.due).toBe(0);
+    expect(p.cards.every((c) => !done[c.id])).toBe(true);
+    expect(p.newCount).toBe(10);
   });
 });

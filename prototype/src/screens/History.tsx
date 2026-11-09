@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, Trash2, CloudOff, RotateCcw } from "lucide-r
 import type { AnalysisRec, AttemptRec, AudioRec } from "../data/fixtures";
 import { fmtClock, fmtDuration, plural } from "../lib/format";
 import { openAnalysisInStudy } from "../state/study";
-import { announce, clearAttemptHistory, go, patchStudy, set, simulate, useApp } from "../state/store";
+import { announce, clearAttemptHistory, get, go, patchStudy, set, simulate, useApp } from "../state/store";
 import { Banner, Button, Dialog, DisabledReason, PageHead, Pill, Skeleton, Spinner, Tabs } from "../components/ui";
 import { saveHistory } from "./Exercise";
 
@@ -194,14 +194,11 @@ function summarize(list: AttemptRec[]) {
   };
 }
 
-function retryHistorySaveInPlace(id: string, onDone?: (ok: boolean) => void) {
-  const liveAttempt = useAppStateAttempt(id);
-  if (liveAttempt) {
-    saveHistory(id, true);
-    onDone?.(true);
-    return;
-  }
-  simulate("history", 700, true)
+/** Retries saving one History attempt. Resolves true only once the save finished; announces a failed retry. */
+function retryHistorySave(id: string): Promise<boolean> {
+  // Attempts from this session are live in `attempts` and saved through their own flow; older records are only in History.
+  if (get().attempts.some((a) => a.id === id)) return saveHistory(id, true);
+  return simulate("history", 700, true)
     .then(() => {
       set((s) => ({
         history: {
@@ -210,19 +207,12 @@ function retryHistorySaveInPlace(id: string, onDone?: (ok: boolean) => void) {
         },
       }));
       announce("History entry saved.");
-      onDone?.(true);
+      return true;
     })
-    .catch(() => onDone?.(false));
-}
-
-function useAppStateAttempt(id: string) {
-  // Check if this attempt was created during the current session in s.attempts
-  let found = false;
-  set((s) => {
-    found = s.attempts.some((a) => a.id === id);
-    return {};
-  });
-  return found;
+    .catch(() => {
+      announce("Couldn’t save the History entry. It’s still marked Not saved.", true);
+      return false;
+    });
 }
 
 function Attempts({ forced, onOpen }: { forced: string; onOpen: (id: string) => void }) {
@@ -309,7 +299,7 @@ function Attempts({ forced, onOpen }: { forced: string; onOpen: (id: string) => 
                     busy={retrying[a.id]}
                     onClick={() => {
                       setRetrying((r) => ({ ...r, [a.id]: true }));
-                      retryHistorySaveInPlace(a.id, () => setRetrying((r) => ({ ...r, [a.id]: false })));
+                      retryHistorySave(a.id).then(() => setRetrying((r) => ({ ...r, [a.id]: false })));
                     }}
                   >
                     Retry
@@ -326,13 +316,13 @@ function Attempts({ forced, onOpen }: { forced: string; onOpen: (id: string) => 
   );
 }
 
-function Detail({ tab, id, onBack }: { tab: Tab; id: string; onBack: () => void }) {
+export function Detail({ tab, id, onBack }: { tab: Tab; id: string; onBack: () => void }) {
   const h = useApp((s) => s.history);
   const study = useApp((s) => s.study);
   const [save, setSave] = useState<"idle" | "saving" | "failed">("idle");
   const back = <Button kind="tertiary" className="btn--sm-text" icon={<ChevronLeft aria-hidden />} onClick={onBack} style={{ alignSelf: "flex-start", marginLeft: -12 }}>Back to list</Button>;
   if (tab === "analyses") {
-    const a = (h.analyses.find((x) => x.id === id) ?? h.analyses[0]) as AnalysisRec | undefined;
+    const a = h.analyses.find((x) => x.id === id) as AnalysisRec | undefined;
     if (!a) return <div className="stack gap-3">{back}<p>Analysis not found.</p></div>;
     const isCurrentlyOpen = study.analysis.status === "done" && study.analysis.input === a.text;
     return (
@@ -357,7 +347,7 @@ function Detail({ tab, id, onBack }: { tab: Tab; id: string; onBack: () => void 
     );
   }
   if (tab === "audio") {
-    const a = (h.audio.find((x) => x.id === id) ?? h.audio[0]) as AudioRec | undefined;
+    const a = h.audio.find((x) => x.id === id) as AudioRec | undefined;
     if (!a) return <div className="stack gap-3">{back}<p>Audio session not found.</p></div>;
     return (
       <div className="stack gap-4">
@@ -373,11 +363,11 @@ function Detail({ tab, id, onBack }: { tab: Tab; id: string; onBack: () => void 
       </div>
     );
   }
-  const a = (h.attempts.find((x) => x.id === id) ?? h.attempts[0]) as AttemptRec | undefined;
+  const a = h.attempts.find((x) => x.id === id) as AttemptRec | undefined;
   if (!a) return <div className="stack gap-3">{back}<p>Attempt not found.</p></div>;
   const retry = () => {
     setSave("saving");
-    retryHistorySaveInPlace(a.id, (ok) => setSave(ok ? "idle" : "failed"));
+    retryHistorySave(a.id).then((ok) => setSave(ok ? "idle" : "failed"));
   };
   return (
     <div className="stack gap-4">

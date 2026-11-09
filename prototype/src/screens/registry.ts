@@ -1,6 +1,6 @@
 /* Screen/state registry for the Demo states navigator and the design-reference coverage table.
    Labels are neutral and never contain target answers. */
-import { EXAMPLE_TEXT, QUEUE_PRACTICE, S1, S2, S3, SAMPLE_PHOTOS, SAMPLE_TEXT } from "../data/fixtures";
+import { EXAMPLE_TEXT, QUEUE_PRACTICE, S1, S2, S3, SAMPLE_PHOTOS, SAMPLE_TEXT, buildQueue, planSession, toReviewCard } from "../data/fixtures";
 import { grade } from "../lib/grading";
 import { lookupKey } from "../lib/lookup";
 import { runAnalysis } from "../state/study";
@@ -11,6 +11,7 @@ import {
   go,
   initialExam,
   markMastered,
+  nowMs,
   patchStudy,
   set,
   setOffline,
@@ -18,6 +19,7 @@ import {
   stopPlayback,
   undoMastery,
   updatePlayer,
+  type AppState,
   type ExamSection,
   type ExamState,
   type PlayerState,
@@ -44,6 +46,21 @@ const at = (route: string, id?: string, value?: string, extra: Record<string, st
   set(() => ({ ss: id && value !== undefined ? { [id]: value, ...extra } : { ...extra } }));
 };
 const online = () => get().offline && setOffline(false);
+
+/** Resets Review quota state to the default sample (40 cards = 8 learning + 1 due + 31 new), then applies overrides. */
+function quotaDemo(p: Partial<Pick<AppState, "sessionSize" | "dailyNew" | "newUsed" | "queue">> & { review?: Partial<AppState["review"]> } = {}) {
+  online();
+  const { review: reviewOverride, ...rest } = p;
+  set((s) => ({
+    sessionSize: 40,
+    dailyNew: 40,
+    newUsed: 0,
+    queue: buildQueue(s.sentences, s.cards, s.lookups),
+    ...rest,
+    review: { ...s.review, phase: "summary", index: 0, completed: 0, introduced: {}, done: {}, removedNew: 0, sessionCards: null, ...reviewOverride },
+  }));
+  at("review");
+}
 
 function withAnalysis(multi = true) {
   const sentences = multi ? [S1, S2, S3] : [S1];
@@ -127,7 +144,7 @@ function mastery(state?: "undone" | "expired" | "queued" | "syncing" | "conflict
   markMastered(card.id);
   const last = get().mastery[get().mastery.length - 1];
   if (state === "undone" || state === "queued") undoMastery(last.id);
-  if (state === "expired") set((s) => ({ mastery: s.mastery.map((m) => (m.id === last.id ? { ...m, at: Date.now() - 6500 } : m)) }));
+  if (state === "expired") set((s) => ({ mastery: s.mastery.map((m) => (m.id === last.id ? { ...m, at: nowMs() - 6500 } : m)) }));
   if (state === "syncing" || state === "conflict") set((s) => ({ mastery: s.mastery.map((m) => (m.id === last.id ? { ...m, state, undoAt: m.at + 3200 } : m)) }));
   at("review/library");
 }
@@ -445,6 +462,42 @@ export const REGISTRY: ScreenEntry[] = [
       ["two-of-five", "2 of 5 allocation", () => { online(); set((s) => ({ dailyNew: 40, newUsed: 38, review: { ...s.review, phase: "summary", sessionCards: null, introduced: {} } })); at("review"); }],
       ["below-used", "Cap below used", () => { online(); set((s) => ({ dailyNew: 20, newUsed: 31, review: { ...s.review, phase: "summary", sessionCards: null } })); at("review"); }],
       ["offline", "Offline · no new allocation", () => { setOffline(true); set((s) => ({ dailyNew: 40, newUsed: 0, review: { ...s.review, phase: "summary", sessionCards: null } })); at("review"); }],
+    ),
+  },
+  {
+    id: "SCR-QUO-02", title: "Cards per review session", area: "Review",
+    states: states(
+      ["min", "Size 10 · session-size limit", () => quotaDemo({ sessionSize: 10 })],
+      ["max", "Size 300 · daily limit binds", () => quotaDemo({ sessionSize: 300 })],
+      ["invalid", "Invalid value", () => at("settings", "SCR-QUO-02", "invalid")],
+      ["saving", "Saving", () => at("settings", "SCR-QUO-02", "saving")],
+      ["saved", "Saved", () => at("settings", "SCR-QUO-02", "saved")],
+      ["failed", "Save failed", () => at("settings", "SCR-QUO-02", "failed")],
+      ["daily-binds", "Daily allowance binds", () => quotaDemo({ dailyNew: 20 })],
+      ["library-binds", "Library binds", () => quotaDemo({ queue: get().queue.filter((c) => c.group !== "new").concat(get().queue.filter((c) => c.group === "new").slice(0, 5)) })],
+      ["overflow", "Learning + due exceed session", () => {
+        const extraDue = get().cards.filter((c) => c.saved && !c.mastered && c.status === "review").slice(1, 5).map((c) => toReviewCard(c, "due", get().sentences));
+        quotaDemo({ sessionSize: 10, queue: [...buildQueue(get().sentences, get().cards, get().lookups).filter((c) => c.group !== "new"), ...extraDue] });
+      }],
+      ["another", "Complete · start another session", () => {
+        quotaDemo({ sessionSize: 10 });
+        set((s) => {
+          const first = planSession(s.queue, { sessionSize: s.sessionSize, dailyNew: s.dailyNew, newUsed: s.newUsed });
+          const newIds = first.cards.filter((c) => c.group === "new").map((c) => c.id);
+          return {
+            newUsed: newIds.length,
+            review: {
+              ...s.review,
+              phase: "complete",
+              completed: first.cards.length,
+              introduced: Object.fromEntries(newIds.map((id) => [id, true])),
+              done: Object.fromEntries(first.cards.map((c) => [c.id, true])),
+              sessionCards: first.cards,
+            },
+          };
+        });
+        at("review");
+      }],
     ),
   },
   {

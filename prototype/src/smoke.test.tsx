@@ -6,8 +6,10 @@ import App from "./App";
 import { WidthContext } from "./components/ui";
 import { lookupKey } from "./lib/lookup";
 import { submitAnswer } from "./screens/Exercise";
+import { Detail } from "./screens/History";
 import { computePlannedSessionCards } from "./screens/Review";
 import { StudyLearn } from "./screens/StudyLearn";
+import { IDEA_SENTENCE, buildSentencesForAnalysis } from "./state/study";
 import { REGISTRY } from "./screens/registry";
 import {
   armFailure,
@@ -19,7 +21,11 @@ import {
   recordSimulatedAudio,
   resetDemo,
   set,
+  setClock,
+  setDailyNew,
+  setSessionSize,
   startPlayback,
+  stopPlayback,
   tick,
   undoMastery,
 } from "./state/store";
@@ -252,7 +258,7 @@ describe("3. one source of truth for Favorite and importance", () => {
 
     // Navigate to Word library and filter by Favorites only
     await act(async () => {
-      set((s) => ({ libFilters: { ...s.libFilters, q: "", favoritesOnly: true } }));
+      set((s) => ({ libFilters: { ...s.libFilters, q: "failli", favoritesOnly: true } }));
       go("review/library");
     });
     await wait(50);
@@ -311,31 +317,35 @@ describe("4. clearing practice history resets derived counts", () => {
 describe("5. foreground-only counting and consistent 4-total updates", () => {
   it("hidden tab for 10 s while playing adds 0 counted seconds; 10 content minutes at 2× adds 5 counted minutes to all four totals", async () => {
     await act(async () => resetDemo());
-    const before = { ...get().audioStats };
     await act(async () => startPlayback({ kind: "episode", label: "Episode: Un samedi au marché", route: "practice/episodes/e1", episodeId: "e1" }, 1080));
     await wait(800);
     expect(get().player?.status).toBe("playing");
+    // Measure from the moment the tab is hidden: the app's own clock tick may have counted a few ms before that.
+    const before = { ...get().audioStats };
+    const countedBefore = get().player!.countedSeconds;
 
     Object.defineProperty(document, "hidden", { value: true, configurable: true });
     try {
       await act(async () => {
         for (let i = 0; i < 10; i++) tick(1);
       });
-      expect(get().player?.countedSeconds).toBe(0);
+      expect(get().player?.countedSeconds).toBe(countedBefore);
       expect(get().audioStats).toEqual(before);
     } finally {
       Object.defineProperty(document, "hidden", { value: false, configurable: true });
     }
 
     // 10 content minutes (600 s) at 2× adds 5 counted minutes (300 s = 5/60 h) to all four totals
+    await act(async () => stopPlayback()); // so no live tick lands between the baseline and the recorded block
+    const base = { ...get().audioStats };
     await act(async () => {
       recordSimulatedAudio(600, 2);
     });
     const after = get().audioStats;
-    expect(after.todaySeconds - before.todaySeconds).toBe(300);
-    expect(after.weekSeconds - before.weekSeconds).toBe(300);
-    expect(after.lifetimeHours - before.lifetimeHours).toBeCloseTo(300 / 3600, 6);
-    expect(after.last28Hours - before.last28Hours).toBeCloseTo(300 / 3600, 6);
+    expect(after.todaySeconds - base.todaySeconds).toBe(300);
+    expect(after.weekSeconds - base.weekSeconds).toBe(300);
+    expect(after.lifetimeHours - base.lifetimeHours).toBeCloseTo(300 / 3600, 6);
+    expect(after.last28Hours - base.last28Hours).toBeCloseTo(300 / 3600, 6);
   });
 });
 
@@ -346,11 +356,15 @@ describe("6. independent 6-second Undo window per mastery action", () => {
     const cardA = saved[0];
     const cardB = saved[1];
 
+    // Injected clock: the Shell's Undo countdown and the store read the same fake time.
+    let t = 0;
+    setClock(() => t);
     let idA = "";
     let idB = "";
     await act(async () => {
-      idA = markMastered(cardA.id, 0);
-      idB = markMastered(cardB.id, 2000);
+      idA = markMastered(cardA.id);
+      t = 2000;
+      idB = markMastered(cardB.id);
     });
     expect(get().cards.find((c) => c.id === cardA.id)!.mastered).toBe(true);
     expect(get().cards.find((c) => c.id === cardB.id)!.mastered).toBe(true);
@@ -358,7 +372,8 @@ describe("6. independent 6-second Undo window per mastery action", () => {
     // At 5 s (5000 ms): Undo A succeeds; B is still active (5000 - 2000 = 3000 < 6000)
     let undidA = false;
     await act(async () => {
-      undidA = undoMastery(idA, 5000);
+      t = 5000;
+      undidA = undoMastery(idA);
     });
     expect(undidA).toBe(true);
     expect(get().cards.find((c) => c.id === cardA.id)!.mastered).toBe(false);
@@ -367,10 +382,26 @@ describe("6. independent 6-second Undo window per mastery action", () => {
 
     // At 8 s (8000 ms): B has elapsed 6000 ms (8000 - 2000 = 6000) and expires
     await act(async () => {
-      expireMastery(8000);
+      t = 8000;
+      expireMastery();
     });
+    setClock(null);
     expect(get().mastery.find((m) => m.id === idB)!.state).toBe("expired");
     expect(get().cards.find((c) => c.id === cardB.id)!.mastered).toBe(true);
+  });
+
+  it("Undo button names the card by kind and word, never its internal id", async () => {
+    await act(async () => resetDemo());
+    const card = get().cards.find((c) => c.saved && !c.mastered && c.kind === "Fill-in" && c.word)!;
+    await act(async () => {
+      markMastered(card.id);
+    });
+    await wait(250);
+    const undo = Array.from(document.querySelectorAll("button")).find((b) => b.getAttribute("aria-label")?.startsWith("Undo mastered"))!;
+    expect(undo.getAttribute("aria-label")).toBe(`Undo mastered: Fill-in card · ${card.word}`);
+    expect(undo.getAttribute("aria-label")).not.toContain(card.id);
+    await act(async () => undo.click());
+    expect(get().cards.find((c) => c.id === card.id)!.mastered).toBe(false);
   });
 });
 
@@ -380,7 +411,9 @@ describe("7. self-explaining Review quota numbers and frozen session cards", () 
     await act(async () => go("review"));
     await wait(700);
     const main = document.getElementById("main")!;
-    expect(main.textContent).toContain("31 new cards are assigned to today’s session · 9 of today’s 40 allowances not assigned");
+    expect(main.textContent).toContain(
+      "31 new cards this session. 9 of today’s 40 allowances aren’t used because your session holds 40 cards and 9 go to learning and due reviews. Raise Cards per review session in Settings to fit more.",
+    );
     expect(main.textContent).toContain("has 5 new cards");
 
     // Demo state: 2 allowances remain -> 2 introduced today, 3 left for later from the 5-new-card fixture sentence
@@ -389,7 +422,7 @@ describe("7. self-explaining Review quota numbers and frozen session cards", () 
     expect(main.textContent).toContain("has 5 new cards. 2 will be introduced today");
     expect(main.textContent).toContain("and 3 left for later");
 
-    // Start a session from default state, then change dailyNew mid-session: session card count stays frozen at 40
+    // Start a session from default state, then lower the daily limit mid-session: only not-yet-shown new cards go
     await act(async () => resetDemo());
     await act(async () => go("review"));
     await wait(700);
@@ -398,13 +431,17 @@ describe("7. self-explaining Review quota numbers and frozen session cards", () 
     await wait(50);
     expect(get().review.sessionCards).toHaveLength(40);
 
+    const used = get().newUsed;
     await act(async () => {
-      set(() => ({ dailyNew: 10 }));
+      setDailyNew(10);
       go("review");
     });
     await wait(700);
-    expect(main.textContent).toContain("40 cards");
-    expect(get().review.sessionCards).toHaveLength(40);
+    // 8 learning + 1 due + the 10 new cards the limit still allows (shown ones plus what is left)
+    expect(get().review.sessionCards).toHaveLength(19);
+    expect(main.textContent).toContain("19 cards");
+    expect(main.textContent).toContain(`${31 - 10} new cards removed because you lowered today’s limit.`);
+    expect(used).toBeLessThanOrEqual(10);
   });
 });
 
@@ -504,6 +541,305 @@ describe("8. feedback and copy cleanups", () => {
       await act(async () => root.unmount());
       host.remove();
     }
+  });
+});
+
+/* ---------------- round 3: session size, quota, mid-session changes ---------------- */
+
+const mainText = () => document.getElementById("main")!.textContent!;
+const findButton = (text: string) => Array.from(document.querySelectorAll("button")).find((b) => b.textContent === text);
+function fieldByLabel(label: string): HTMLInputElement {
+  const l = Array.from(document.querySelectorAll("label")).find((x) => x.textContent === label)!;
+  return document.getElementById(l.getAttribute("for")!) as HTMLInputElement;
+}
+function typeInto(el: HTMLInputElement, value: string) {
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(el, value);
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+}
+const quotaState = (key: string) => REGISTRY.find((r) => r.id === "SCR-QUO-02")!.states.find((s) => s.key === key)!.apply();
+
+describe("10. Cards per review session setting and its states", () => {
+  it("accepts 10–300, keeps the previous value on invalid or failed saves, and shows saving and saved", async () => {
+    await act(async () => resetDemo());
+    await act(async () => go("settings"));
+    await wait(50);
+    const label = "Cards per review session";
+    expect(fieldByLabel(label).value).toBe("40");
+
+    for (const bad of ["5", "301", "abc", ""]) {
+      await act(async () => typeInto(fieldByLabel(label), bad));
+      await act(async () => findButton("Save size")!.click());
+      expect(mainText()).toContain("Enter a whole number from 10 to 300.");
+      expect(get().sessionSize).toBe(40);
+    }
+
+    await act(async () => typeInto(fieldByLabel(label), "10"));
+    await act(async () => findButton("Save size")!.click());
+    expect(mainText()).toContain("Saving…");
+    expect(get().sessionSize).toBe(40); // not applied until the save finishes
+    await wait(1000);
+    expect(get().sessionSize).toBe(10);
+    expect(mainText()).toContain("Saved. Cards per review session: 10.");
+    expect(mainText()).toContain("10 is the smallest session.");
+
+    await act(async () => typeInto(fieldByLabel(label), "300"));
+    await act(async () => findButton("Save size")!.click());
+    await wait(1000);
+    expect(get().sessionSize).toBe(300);
+    expect(mainText()).toContain("300 is the largest session.");
+
+    await act(async () => {
+      armFailure("settings");
+      typeInto(fieldByLabel(label), "50");
+    });
+    await act(async () => findButton("Save size")!.click());
+    await wait(1000);
+    expect(get().sessionSize).toBe(300);
+    expect(mainText()).toContain("Couldn’t save the session size");
+    expect(mainText()).toContain("Your previous size (300) is still in use.");
+  });
+
+  it("registered states render: invalid, saving, saved, failed", async () => {
+    for (const key of ["invalid", "saving", "saved", "failed"]) {
+      await act(async () => resetDemo());
+      await act(async () => quotaState(key));
+      await wait(30);
+      const text = mainText();
+      if (key === "invalid") expect(text).toContain("Enter a whole number from 10 to 300.");
+      if (key === "saving") expect(text).toContain("Saving…");
+      if (key === "saved") expect(text).toContain("Saved. Cards per review session: 40.");
+      if (key === "failed") expect(text).toContain("Your previous size (40) is still in use.");
+    }
+  });
+});
+
+describe("11. quota copy names the limit that decided the new-card count", () => {
+  it("session size, daily allowance and library each get their own plain-words explanation", async () => {
+    await act(async () => resetDemo());
+    await act(async () => go("review"));
+    await wait(700);
+    expect(mainText()).toContain("Cards per review session: 40");
+    expect(mainText()).toContain(
+      "31 new cards this session. 9 of today’s 40 allowances aren’t used because your session holds 40 cards and 9 go to learning and due reviews. Raise Cards per review session in Settings to fit more.",
+    );
+    // "Change" leads to the setting
+    await act(async () => Array.from(document.querySelectorAll("#main button")).find((b) => b.textContent === "Change")!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    expect(get().route).toBe("settings");
+
+    await act(async () => quotaState("daily-binds"));
+    await wait(700);
+    expect(mainText()).toContain("20 new cards — all of today’s allowance.");
+
+    await act(async () => quotaState("library-binds"));
+    await wait(700);
+    expect(mainText()).toContain("Only 5 new cards are waiting in your library.");
+    expect(get().review.sessionCards).toBeNull();
+
+    await act(async () => quotaState("overflow"));
+    await wait(700);
+    expect(mainText()).toContain("so no new cards are added. 3 cards wait for the next session.");
+    expect(mainText()).toContain("10 cards");
+
+    await act(async () => quotaState("min"));
+    await wait(700);
+    expect(mainText()).toContain("1 new card this session. 39 of today’s 40 allowances aren’t used because your session holds 10 cards and 9 go to learning and due reviews.");
+  });
+
+  it("offers Start another session when allowances remain, planned from what is left", async () => {
+    await act(async () => resetDemo());
+    await act(async () => quotaState("another"));
+    await wait(700);
+    const another = Array.from(document.querySelectorAll("#main button")).find((b) => b.textContent?.startsWith("Start another session"))!;
+    expect(another.textContent).toBe("Start another session (10 cards)");
+    await act(async () => another.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    await wait(50);
+    const r = get().review;
+    expect(r.phase).toBe("active");
+    expect(r.completed).toBe(0);
+    expect(r.sessionCards).toHaveLength(10);
+    // Cards finished in the first session are not repeated; allowances already used are not reused.
+    expect(r.sessionCards!.every((c) => !r.done[c.id])).toBe(true);
+    expect(r.sessionCards!.every((c) => c.group === "new")).toBe(true);
+  });
+});
+
+describe("12. changing limits mid-session", () => {
+  async function startSession() {
+    await act(async () => resetDemo());
+    await act(async () => go("review"));
+    await wait(700);
+    await act(async () => findButton("Start review")!.click());
+    await wait(50);
+    expect(get().review.sessionCards).toHaveLength(40);
+  }
+  const unshownNew = () => get().review.sessionCards!.filter((c) => c.group === "new" && !get().review.introduced[c.id]);
+
+  it("lowering the daily limit to the used count removes only not-yet-shown new cards and says how many", async () => {
+    await startSession();
+    const used = get().newUsed;
+    expect(Object.keys(get().review.introduced)).toHaveLength(used);
+    await act(async () => setDailyNew(used));
+    const r = get();
+    expect(unshownNew()).toHaveLength(0);
+    expect(r.review.sessionCards).toHaveLength(9 + used); // shown cards stay
+    expect(r.review.removedNew).toBe(31 - used);
+    expect(r.newUsed).toBe(used); // no allowance moved
+    expect(mainText()).toContain(`Card 1 of ${9 + used}`);
+    expect(mainText()).toContain(`${31 - used} new cards removed because you lowered today’s limit.`);
+  });
+
+  it("lowering it above the used count keeps exactly the allowances that remain", async () => {
+    await startSession();
+    const used = get().newUsed;
+    await act(async () => setDailyNew(used + 5));
+    expect(unshownNew()).toHaveLength(5);
+    expect(get().review.sessionCards).toHaveLength(9 + used + 5);
+  });
+
+  it("a new card never appears without using an allowance", async () => {
+    await startSession();
+    // Force the worst case: no allowance left while the current card is a not-yet-shown new card.
+    await act(async () => {
+      const cards = get().review.sessionCards!;
+      const idx = cards.findIndex((c) => c.group === "new" && !get().review.introduced[c.id]);
+      set((s) => ({ dailyNew: s.newUsed, review: { ...s.review, index: idx } }));
+    });
+    await wait(50);
+    expect(unshownNew()).toHaveLength(0);
+    expect(get().newUsed).toBe(get().dailyNew);
+    expect(Object.keys(get().review.introduced)).toHaveLength(get().newUsed);
+  });
+
+  it("changing the session size mid-session leaves the locked session alone and applies to the next one", async () => {
+    await startSession();
+    await act(async () => setSessionSize(10));
+    expect(get().review.sessionCards).toHaveLength(40);
+    await act(async () => go("review"));
+    await wait(700);
+    expect(mainText()).toContain("This session is locked at 40 cards.");
+    expect(mainText()).toContain("Cards per review session: 10");
+    await act(async () => go("settings"));
+    await wait(50);
+    expect(mainText()).toContain("Your session in progress stays at 40 cards. A new size applies from your next session.");
+
+    // Finish the locked session: the next one is planned with size 10 from what is left.
+    await act(async () => {
+      const cards = get().review.sessionCards!;
+      const newIds = cards.filter((c) => c.group === "new").map((c) => c.id);
+      set((s) => ({
+        newUsed: newIds.length,
+        review: { ...s.review, phase: "complete", completed: cards.length, introduced: Object.fromEntries(newIds.map((id) => [id, true])), done: Object.fromEntries(cards.map((c) => [c.id, true])) },
+      }));
+      go("review");
+    });
+    await wait(700);
+    // 9 allowances left (40 − 31), room for 10 → 9 cards
+    expect(mainText()).toContain("Start another session (9 cards)");
+  });
+});
+
+describe("13. word library order", () => {
+  it("Word library lists sentences by number; Saved lists the newest saved first", async () => {
+    await act(async () => resetDemo());
+    set((s) => ({ libFilters: { ...s.libFilters, q: "" } }));
+    await act(async () => go("review/library"));
+    await wait(50);
+    const numbers = () => Array.from(document.querySelectorAll("#main .lib-group .t-meta"))
+        .map((e) => e.textContent!.match(/^Sentence (\d+) ·/))
+        .filter((m): m is RegExpMatchArray => m !== null)
+        .map((m) => Number(m[1]));
+    const lib = numbers();
+    expect(lib.length).toBeGreaterThan(3);
+    expect(lib).toEqual([...lib].sort((a, b) => a - b));
+
+    await act(async () => go("review/saved"));
+    await wait(50);
+    const s = get();
+    const newest = new Map<string, number>();
+    for (const c of s.cards) if (c.saved && !c.mastered) newest.set(c.sentenceId, Math.max(newest.get(c.sentenceId) ?? 0, c.savedAt));
+    const expected = s.sentences.filter((x) => newest.has(x.id)).sort((a, b) => newest.get(b.id)! - newest.get(a.id)!).map((x) => x.number);
+    expect(numbers().slice(0, 5)).toEqual(expected.slice(0, 5));
+  });
+});
+
+describe("14. History retry and detail", () => {
+  it("a live attempt's Retry stays busy until its save finishes; a failed retry is announced and stays Not saved", async () => {
+    await act(async () => resetDemo());
+    await act(async () => clearAttemptHistory());
+    await act(async () => REGISTRY.find((r) => r.id === "SCR-ANS-03")!.states.find((s) => s.key === "save-failed")!.apply());
+    await wait(1600);
+    await act(async () => go("progress/history?tab=attempts"));
+    await wait(600);
+    const retry = () => Array.from(document.querySelectorAll("#main button")).find((b) => b.textContent === "Retry") as HTMLButtonElement;
+
+    // Failing retry
+    await act(async () => {
+      armFailure("history");
+      retry().click();
+    });
+    await wait(300);
+    expect(retry().getAttribute("aria-busy")).toBe("true"); // still saving: not done after 300 ms
+    await wait(700);
+    expect(retry().getAttribute("aria-busy")).toBeNull();
+    expect(get().history.attempts[0].saved).toBe("failed");
+    expect(document.body.textContent).toContain("Couldn’t save to practice history");
+
+    // Succeeding retry
+    await act(async () => retry().click());
+    await wait(300);
+    expect(retry().getAttribute("aria-busy")).toBe("true");
+    await wait(700);
+    expect(get().history.attempts[0].saved).toBe("saved");
+    expect(get().history.attempts).toHaveLength(1);
+  });
+
+  it("a stored (not live) failed entry also stays busy until saved, and announces when saving fails", async () => {
+    await act(async () => resetDemo());
+    const rec = { ...get().history.attempts[0], id: "old-failed", saved: "failed" as const };
+    expect(get().attempts.some((a) => a.id === rec.id)).toBe(false);
+    await act(async () => set((s) => ({ history: { ...s.history, attempts: [rec, ...s.history.attempts] } })));
+    await act(async () => go("progress/history?tab=attempts"));
+    await wait(600);
+    const retry = () => Array.from(document.querySelectorAll("#main button")).find((b) => b.textContent === "Retry") as HTMLButtonElement;
+    await act(async () => {
+      armFailure("history");
+      retry().click();
+    });
+    await wait(300);
+    expect(retry().getAttribute("aria-busy")).toBe("true");
+    await wait(700);
+    expect(get().history.attempts[0].saved).toBe("failed");
+    expect(document.body.textContent).toContain("Couldn’t save the History entry");
+    await act(async () => retry().click());
+    await wait(1000);
+    expect(get().history.attempts[0].saved).toBe("saved");
+  });
+
+  it("an unknown id says not found instead of showing the first record", async () => {
+    await act(async () => resetDemo());
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    try {
+      for (const [tab, text] of [["analyses", "Analysis not found."], ["audio", "Audio session not found."], ["attempts", "Attempt not found."]] as const) {
+        await act(async () => root.render(<Detail tab={tab} id="does-not-exist" onBack={() => {}} />));
+        expect(host.textContent).toContain(text);
+      }
+    } finally {
+      await act(async () => root.unmount());
+      host.remove();
+    }
+  });
+});
+
+describe("15. History re-open applies the same text filtering as a new analysis", () => {
+  it("keeps only French sentences from pasted text and treats an idea as the idea sentence", () => {
+    const mixed = "Yesterday I went to the shop. Il y a deux jours, j’ai failli oublier mon rendez-vous.";
+    const out = buildSentencesForAnalysis(mixed, "Pasted text");
+    expect(out).toHaveLength(1);
+    expect(out[0].fr).toContain("failli oublier");
+    expect(buildSentencesForAnalysis("Yesterday I went to the shop and bought bread.", "Pasted text")).toHaveLength(0);
+    expect(buildSentencesForAnalysis("I want to say I almost forgot", "My own idea")).toEqual([IDEA_SENTENCE]);
   });
 });
 

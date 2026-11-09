@@ -64,6 +64,13 @@ function genericSentence(fr: string, i: number): StudySentence {
   };
 }
 
+/** Splits pasted text into sentences and keeps only the ones that look French (shared by analysis and re-opening from History). */
+function frenchSentences(text: string): StudySentence[] {
+  return splitSentences(text)
+    .filter((p) => FRENCH_HINT.test(p))
+    .map((p, i) => STUDY_FIXTURES.find((f) => norm(f.fr) === norm(p)) ?? genericSentence(p, i));
+}
+
 export function splitSentences(text: string): string[] {
   return text
     .replace(/\s+/g, " ")
@@ -115,14 +122,12 @@ export function runAnalysis(source: "Pasted text" | "Photo import" | "My own ide
       let sentences: StudySentence[];
       if (mode === "ideas") sentences = [IDEA_SENTENCE];
       else {
-        const parts = splitSentences(input);
-        const french = parts.filter((p) => FRENCH_HINT.test(p));
-        if (!french.length) {
+        sentences = frenchSentences(input);
+        if (!sentences.length) {
           patchStudy({ analysis: { ...get().study.analysis, status: "nofrench" } });
           announce("No usable French sentences found. Your text is kept.");
           return;
         }
-        sentences = french.map((p, i) => STUDY_FIXTURES.find((f) => norm(f.fr) === norm(p)) ?? genericSentence(p, i));
       }
       patchStudy({
         analysis: { ...get().study.analysis, status: "done" },
@@ -162,16 +167,15 @@ export function cancelAnalysis() {
 }
 
 export function buildSentencesForAnalysis(text: string, source: AnalysisRec["source"]): StudySentence[] {
-  if (source === "My own idea" && !FRENCH_HINT.test(text)) return [IDEA_SENTENCE];
-  const parts = splitSentences(text);
-  return parts.map((p, i) => STUDY_FIXTURES.find((f) => norm(f.fr) === norm(p)) ?? genericSentence(p, i));
+  // Same rules as runAnalysis: an idea becomes the idea sentence, pasted text keeps only French sentences.
+  return source === "My own idea" ? [IDEA_SENTENCE] : frenchSentences(text);
 }
 
 export function openAnalysisInStudy(a: AnalysisRec) {
   const sentences = buildSentencesForAnalysis(a.text, a.source);
   const runId = get().study.analysis.runId + 1;
   patchStudy({
-    analysis: { status: "done", runId, input: a.text, stage: 2, source: a.source },
+    analysis: { status: sentences.length ? "done" : "nofrench", runId, input: a.text, stage: 2, source: a.source },
     sentences,
     index: 0,
     step: 0,
@@ -181,5 +185,9 @@ export function openAnalysisInStudy(a: AnalysisRec) {
     drafts: { ...get().study.drafts, [a.source === "My own idea" ? "ideas" : "text"]: a.text },
   });
   go("study");
-  announce(`Opened analysis from ${a.date}: ${sentences.length} ${sentences.length === 1 ? "sentence" : "sentences"}.`);
+  announce(
+    sentences.length
+      ? `Opened analysis from ${a.date}: ${sentences.length} ${sentences.length === 1 ? "sentence" : "sentences"}.`
+      : `Opened analysis from ${a.date}. No usable French sentences found. The text is kept.`,
+  );
 }

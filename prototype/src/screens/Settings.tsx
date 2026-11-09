@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { LogOut, ArrowRight } from "lucide-react";
-import { DEMO_USER } from "../data/fixtures";
-import { announce, get, go, set, simulate, stopPlayback, syncChange, useApp } from "../state/store";
+import { DEMO_USER, MAX_SESSION_SIZE, MIN_SESSION_SIZE } from "../data/fixtures";
+import { announce, get, go, set, setDailyNew, setSessionSize, simulate, stopPlayback, syncChange, useApp } from "../state/store";
 import { Banner, Button, Dialog, FieldText, PageHead, Pill, Spinner } from "../components/ui";
 
 type SaveState = "idle" | "saving" | "saved" | "failed" | "offline";
@@ -32,7 +32,8 @@ export function DailyLimitField({ compact }: { compact?: boolean }) {
       return;
     }
     if (get().offline) {
-      set(() => ({ dailyNew: n, sync: "pending" }));
+      setDailyNew(n);
+      set(() => ({ sync: "pending" }));
       setState("offline");
       announce("Saved on this device. It will sync when you’re back online.");
       return;
@@ -40,7 +41,7 @@ export function DailyLimitField({ compact }: { compact?: boolean }) {
     setState("saving");
     simulate("settings", 800, true)
       .then(() => {
-        set(() => ({ dailyNew: n }));
+        setDailyNew(n);
         setState("saved");
         announce(`Daily new cards set to ${n}.`);
         syncChange();
@@ -78,6 +79,86 @@ export function DailyLimitField({ compact }: { compact?: boolean }) {
       {state === "saved" && <p className="t-support" role="status" style={{ color: "var(--success)" }}>Saved. Daily new cards: {dailyNew}.</p>}
       {state === "failed" && <Banner tone="error" title="Couldn’t save the daily limit" live="assertive">Your previous limit ({dailyNew}) is still in use.</Banner>}
       {state === "offline" && <Banner tone="warning" title="Saved on this device" live="polite">It will sync when you’re back online. New-card allowances can’t be assigned until then.</Banner>}
+    </div>
+  );
+}
+
+/* Cards per review session (SCR-QUO-02). Same save states as the daily limit. */
+export function SessionSizeField() {
+  const sessionSize = useApp((s) => s.sessionSize);
+  const lockedSize = useApp((s) => (s.review.phase === "active" ? (s.review.sessionCards?.length ?? null) : null));
+  const forced = useApp((s) => s.ss["SCR-QUO-02"]);
+  const [value, setValue] = useState(String(sessionSize));
+  const [state, setState] = useState<SaveState>("idle");
+  const [touched, setTouched] = useState(false);
+  useEffect(() => setValue(String(sessionSize)), [sessionSize]);
+  useEffect(() => {
+    if (forced === "invalid") {
+      setValue("5");
+      setTouched(true);
+    }
+    if (forced === "saving" || forced === "failed" || forced === "offline" || forced === "saved") setState(forced);
+  }, [forced]);
+  const n = Number(value);
+  const valid = /^\d+$/.test(value.trim()) && n >= MIN_SESSION_SIZE && n <= MAX_SESSION_SIZE;
+  const range = `Enter a whole number from ${MIN_SESSION_SIZE} to ${MAX_SESSION_SIZE}.`;
+  const error = touched && !valid ? range : undefined;
+  const save = () => {
+    setTouched(true);
+    if (!valid) {
+      announce(range, true);
+      return;
+    }
+    if (get().offline) {
+      setSessionSize(n);
+      set(() => ({ sync: "pending" }));
+      setState("offline");
+      announce("Saved on this device. It will sync when you’re back online.");
+      return;
+    }
+    setState("saving");
+    simulate("settings", 800, true)
+      .then(() => {
+        setSessionSize(n);
+        setState("saved");
+        announce(`Cards per review session set to ${n}. It applies from your next session.`);
+        syncChange();
+      })
+      .catch(() => {
+        setState("failed");
+        announce("Couldn’t save the session size. Your previous size is still in use.", true);
+      });
+  };
+  return (
+    <div className="stack gap-3" style={{ maxWidth: 520 }}>
+      <div className="row row--top gap-3" style={{ alignItems: "flex-end" }}>
+        <div style={{ width: 200 }}>
+          <FieldText
+            label="Cards per review session"
+            inputMode="numeric"
+            value={value}
+            onChange={(v) => {
+              setValue(v);
+              setState("idle");
+            }}
+            error={error}
+            help={`${MIN_SESSION_SIZE} to ${MAX_SESSION_SIZE} cards. Learning and due reviews come first.`}
+            onKeyDown={(e) => e.key === "Enter" && save()}
+          />
+        </div>
+        <Button kind="secondary" busy={state === "saving"} onClick={save} style={{ marginBottom: error ? 28 : 0 }}>
+          {state === "failed" ? "Retry" : "Save size"}
+        </Button>
+      </div>
+      {valid && n === MIN_SESSION_SIZE && <p className="t-support">{MIN_SESSION_SIZE} is the smallest session.</p>}
+      {valid && n === MAX_SESSION_SIZE && <p className="t-support">{MAX_SESSION_SIZE} is the largest session.</p>}
+      {lockedSize !== null && (
+        <p className="t-support">Your session in progress stays at {lockedSize} cards. A new size applies from your next session.</p>
+      )}
+      {state === "saving" && <Spinner label="Saving…" />}
+      {state === "saved" && <p className="t-support" role="status" style={{ color: "var(--success)" }}>Saved. Cards per review session: {sessionSize}. Applies from your next session.</p>}
+      {state === "failed" && <Banner tone="error" title="Couldn’t save the session size" live="assertive">Your previous size ({sessionSize}) is still in use.</Banner>}
+      {state === "offline" && <Banner tone="warning" title="Saved on this device" live="polite">It will sync when you’re back online.</Banner>}
     </div>
   );
 }
@@ -150,6 +231,7 @@ function Preferences() {
     <section className="stack gap-5" aria-labelledby="pref-h">
       <h2 id="pref-h" className="t-section">Learning preferences</h2>
       <DailyLimitField />
+      <SessionSizeField />
       <hr className="divider" />
       <div className="stack gap-2">
         <p className="field-label">Voice</p>

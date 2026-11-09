@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 import {
   AI_FALLBACK,
   CACHED_KEYS,
+  DEFAULT_SESSION_SIZE,
   DICTIONARY,
   HISTORY_ANALYSES,
   HISTORY_ATTEMPTS,
@@ -128,7 +129,7 @@ export interface ReviewUI {
 export interface MasteryAction {
   id: string;
   cardId: string;
-  at: number; // Date.now() of the mastery action; the Undo window is measured from here
+  at: number; // clock() time of the mastery action; the Undo window is measured from here
   state: "active" | "undone" | "expired" | "queued" | "syncing" | "conflict";
   undoAt?: number;
 }
@@ -194,10 +195,23 @@ export interface AppState {
   libFilters: { q: string; savedOnly: boolean; mastered: "hide" | "show" | "only"; minImportance: 0 | 3 | 4 | 5; favoritesOnly: boolean };
 
   queue: ReviewCard[];
-  review: { phase: "summary" | "active" | "complete"; index: number; completed: number; introduced: Record<string, boolean>; allowance: number; sessionCards: ReviewCard[] | null };
+  review: {
+    phase: "summary" | "active" | "complete";
+    index: number;
+    completed: number;
+    introduced: Record<string, boolean>;
+    /** Cards finished in any session today; they are not planned into later sessions. */
+    done: Record<string, boolean>;
+    /** New cards removed from the locked session because the daily limit was lowered. */
+    removedNew: number;
+    allowance: number;
+    sessionCards: ReviewCard[] | null;
+  };
   reviewUi: Record<string, ReviewUI>;
   dailyNew: number;
   newUsed: number;
+  /** Cards per review session (10–300). Changing it never alters a session that is already locked. */
+  sessionSize: number;
 
   mastery: MasteryAction[];
 
@@ -296,10 +310,11 @@ function initialState(): AppState {
     cards,
     libFilters: { q: "", savedOnly: false, mastered: "hide", minImportance: 0, favoritesOnly: false },
     queue: buildQueue(sentences, cards, lookups),
-    review: { phase: "summary", index: 0, completed: 0, introduced: {}, allowance: 31, sessionCards: null },
+    review: { phase: "summary", index: 0, completed: 0, introduced: {}, done: {}, removedNew: 0, allowance: 31, sessionCards: null },
     reviewUi: {},
     dailyNew: 40,
     newUsed: 0,
+    sessionSize: DEFAULT_SESSION_SIZE,
     mastery: [],
     exercises: {},
     attempts: [],
@@ -712,18 +727,22 @@ export function recordSimulatedAudio(contentSeconds: number, speed: number, owne
 export const UNDO_MS = 6000;
 let masterySeq = 0;
 
-/** Transitions any active mastery actions whose 6-second window (measured from m.at) has elapsed to "expired". */
-function sameClock(a: number, b: number) {
-  return (a < 1_000_000_000) === (b < 1_000_000_000);
+/** Injectable clock so tests (and the Shell's Undo countdown) share one time source with the mastery actions. */
+let clock: () => number = () => Date.now();
+export function setClock(fn: (() => number) | null) {
+  clock = fn ?? (() => Date.now());
 }
-export function expireMastery(now = Date.now()) {
-  if (!get().mastery.some((m) => m.state === "active" && sameClock(now, m.at) && now - m.at >= UNDO_MS)) return;
+export const nowMs = () => clock();
+
+/** Transitions any active mastery actions whose 6-second window (measured from m.at) has elapsed to "expired". */
+export function expireMastery(now = clock()) {
+  if (!get().mastery.some((m) => m.state === "active" && now - m.at >= UNDO_MS)) return;
   set((s) => ({
-    mastery: s.mastery.map((m) => (m.state === "active" && sameClock(now, m.at) && now - m.at >= UNDO_MS ? { ...m, state: "expired" } : m)),
+    mastery: s.mastery.map((m) => (m.state === "active" && now - m.at >= UNDO_MS ? { ...m, state: "expired" } : m)),
   }));
 }
 
-export function markMastered(cardId: string, now = Date.now()): string {
+export function markMastered(cardId: string, now = clock()): string {
   expireMastery(now);
   const id = `m-${now}-${++masterySeq}`;
   set((s) => ({
@@ -735,7 +754,7 @@ export function markMastered(cardId: string, now = Date.now()): string {
   return id;
 }
 
-export function undoMastery(actionId: string, now = Date.now()): boolean {
+export function undoMastery(actionId: string, now = clock()): boolean {
   expireMastery(now);
   const a = get().mastery.find((m) => m.id === actionId);
   if (!a) return false;
@@ -760,6 +779,54 @@ export function undoMastery(actionId: string, now = Date.now()): boolean {
 
 export function restoreCard(cardId: string) {
   set((s) => ({ cards: s.cards.map((c) => (c.id === cardId ? { ...c, mastered: false } : c)) }));
+}
+
+/* ---------------- review quota ---------------- */
+
+/**
+ * Keeps the locked session honest about allowances: only the next `remaining` not-yet-shown new cards may stay.
+ * Shown cards (introduced) always stay. Returns how many new cards were removed.
+ */
+function trimUnshownNewCards(): number {
+  const s = get();
+  const cards = s.review.sessionCards;
+  if (!cards) return 0;
+  let room = Math.max(0, s.dailyNew - s.newUsed);
+  const kept = cards.filter((c) => {
+    if (c.group !== "new" || s.review.introduced[c.id]) return true;
+    if (room > 0) {
+      room--;
+      return true;
+    }
+    return false;
+  });
+  const removed = cards.length - kept.length;
+  if (removed) {
+    set((st) => ({ review: { ...st.review, sessionCards: kept, removedNew: st.review.removedNew + removed } }));
+    announce(`${removed} new ${removed === 1 ? "card" : "cards"} removed because you lowered today’s limit.`);
+  }
+  return removed;
+}
+
+export function setDailyNew(n: number) {
+  set(() => ({ dailyNew: n }));
+  trimUnshownNewCards();
+}
+
+/** Applies from the next session; a locked session keeps its cards. */
+export function setSessionSize(n: number) {
+  set(() => ({ sessionSize: n }));
+}
+
+/** First introduction of a new card uses exactly one allowance. With none left the card is removed instead of shown. */
+export function introduceNewCard(cardId: string) {
+  const s = get();
+  if (s.review.introduced[cardId]) return;
+  if (s.newUsed >= s.dailyNew) {
+    trimUnshownNewCards();
+    return;
+  }
+  set((st) => ({ review: { ...st.review, introduced: { ...st.review.introduced, [cardId]: true } }, newUsed: st.newUsed + 1 }));
 }
 
 /* ---------------- history ---------------- */

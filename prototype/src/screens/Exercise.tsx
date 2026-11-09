@@ -71,15 +71,16 @@ function hintFor(kind: "Recall" | "Dictation", t: { fr: string; en: string }) {
 
 let attemptSeq = 0;
 
-export function saveHistory(attemptId: string, manualRetry = false) {
+/** Resolves true once the attempt is saved to History, false if saving failed or the attempt no longer exists. */
+export function saveHistory(attemptId: string, manualRetry = false): Promise<boolean> {
   if (manualRetry) patchAttempt(attemptId, { cleared: false });
   patchAttempt(attemptId, { history: "saving" });
-  simulate("history", 700, true)
+  return simulate("history", 700, true)
     .then(() => {
       const a = get().attempts.find((x) => x.id === attemptId);
-      if (!a) return;
+      if (!a) return false;
       patchAttempt(attemptId, { history: "saved" });
-      if (a.cleared && !manualRetry) return;
+      if (a.cleared && !manualRetry) return true;
       const rec = attemptToRecord({ ...a, history: "saved" });
       set((s) => ({
         history: {
@@ -90,12 +91,13 @@ export function saveHistory(attemptId: string, manualRetry = false) {
         },
       }));
       announce("Saved to practice history.");
+      return true;
     })
     .catch(() => {
       const a = get().attempts.find((x) => x.id === attemptId);
-      if (!a) return;
+      if (!a) return false;
       patchAttempt(attemptId, { history: "failed" });
-      if (a.cleared && !manualRetry) return;
+      if (a.cleared && !manualRetry) return false;
       const rec = attemptToRecord({ ...a, history: "failed" });
       set((s) => ({
         history: {
@@ -106,6 +108,7 @@ export function saveHistory(attemptId: string, manualRetry = false) {
         },
       }));
       announce("Couldn’t save to practice history. Your result is kept.", true);
+      return false;
     });
 }
 
