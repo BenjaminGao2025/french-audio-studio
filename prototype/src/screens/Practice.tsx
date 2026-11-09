@@ -189,6 +189,7 @@ export function SimRecorder({ id, onRecorded }: { id: string; onRecorded?: () =>
             <Button kind="tertiary" icon={<RotateCcw aria-hidden />} onClick={() => { setPhase("idle"); setSecs(0); }}>Record again</Button>
           </>
         )}
+        <Pill tone="demo">Simulated recording</Pill>
         <span className="t-support num" aria-live="off">
           {phase === "recording" ? `Recording (simulated) · ${fmtClock(secs)}` : phase === "recorded" ? "Recorded (simulated)" : phase === "playing" ? `Playing simulated recording · ${fmtClock(secs)}` : "Not recorded"}
         </span>

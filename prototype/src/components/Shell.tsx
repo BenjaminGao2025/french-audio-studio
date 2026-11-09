@@ -23,6 +23,7 @@ import { DEMO_USER } from "../data/fixtures";
 import { cx, fmtClock } from "../lib/format";
 import {
   UNDO_MS,
+  expireMastery,
   get,
   go,
   retryPlayback,
@@ -32,7 +33,6 @@ import {
   undoMastery,
   updatePlayer,
   useApp,
-  type MasteryAction,
 } from "../state/store";
 import { Button, Pill, WidthContext } from "./ui";
 
@@ -303,74 +303,106 @@ function GlobalPlayer() {
   );
 }
 
-/* ---------- Mastery Undo toast: 6 s measured from the action ---------- */
+/* ---------- Mastery Undo toast: 6 s measured from each action ---------- */
 export function MasteryToast() {
   const mastery = useApp((s) => s.mastery);
+  const cards = useApp((s) => s.cards);
   const offline = useApp((s) => s.offline);
   const [now, setNow] = useState(Date.now());
-  const last: MasteryAction | undefined = mastery[mastery.length - 1];
-  const [hiddenId, setHiddenId] = useState<string | null>(null);
+  const [dismissed, setDismissed] = useState<Record<string, boolean>>({});
+
   useEffect(() => {
-    if (!last) return;
-    const t = setInterval(() => setNow(Date.now()), 250);
-    return () => clearInterval(t);
-  }, [last]);
+    if (!mastery.length) return;
+    const tickNow = () => {
+      const t = Date.now();
+      expireMastery(t);
+      setNow(t);
+    };
+    tickNow();
+    const timer = setInterval(tickNow, 200);
+    return () => clearInterval(timer);
+  }, [mastery.length]);
+
+  // Auto-hide settled toasts ("undone" / "expired") 6 seconds after they settle.
   useEffect(() => {
-    if (last?.state === "active" && now - last.at >= UNDO_MS) {
-      set((s) => ({ mastery: s.mastery.map((m) => (m.id === last.id && m.state === "active" ? { ...m, state: "expired" } : m)) }));
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    for (const m of mastery) {
+      if (m.state === "undone" || m.state === "expired") {
+        const key = `${m.id}:${m.state}`;
+        if (!dismissed[key]) {
+          timers.push(setTimeout(() => setDismissed((d) => ({ ...d, [key]: true })), 6000));
+        }
+      }
     }
-  }, [now, last]);
-  // Hide finished toasts a few seconds after they settle.
-  useEffect(() => {
-    if (!last || last.state === "active" || last.state === "queued" || last.state === "syncing" || last.state === "conflict") return;
-    const t = setTimeout(() => setHiddenId(last.id + last.state), 6000);
-    return () => clearTimeout(t);
-  }, [last]);
-  if (!last || hiddenId === last.id + last.state) return null;
-  const left = Math.max(0, Math.ceil((UNDO_MS - (now - last.at)) / 1000));
-  let body: ReactNode;
-  if (last.state === "active")
-    body = (
-      <>
-        <span className="toast-text">
-          Marked mastered · hidden from your default review. Nothing was deleted.{" "}
-          <span aria-hidden className="num">({left} s to undo)</span>
-        </span>
-        <Button kind="tertiary" onClick={() => undoMastery(last.id)} data-autofocus>
-          Undo
-        </Button>
-      </>
-    );
-  else if (last.state === "undone") body = <span className="toast-text">Undo applied. The card is back in your default review.</span>;
-  else if (last.state === "expired")
-    body = (
-      <>
-        <span className="toast-text">The 6-second Undo window has ended. You can restore this card from Mastered at any time.</span>
-        <Button kind="tertiary" onClick={() => go("review/mastered")}>Open Mastered</Button>
-      </>
-    );
-  else if (last.state === "queued")
-    body = (
-      <span className="toast-text">
-        Undo saved on this device at {(((last.undoAt ?? last.at) - last.at) / 1000).toFixed(1)} s — on time.{" "}
-        {offline ? "It will sync when you are back online." : "Syncing…"}
-      </span>
-    );
-  else if (last.state === "syncing") body = <span className="toast-text">Syncing your on-time Undo… (simulated delay)</span>;
-  else
-    body = (
-      <>
-        <span className="toast-text">
-          Your Undo was on time, but this card was marked mastered again later on another device (simulated). The later decision is kept.
-        </span>
-        <Button kind="tertiary" onClick={() => go("review/mastered")}>Review card</Button>
-        <Button kind="tertiary" onClick={() => setHiddenId(last.id + last.state)}>Dismiss</Button>
-      </>
-    );
+    return () => timers.forEach(clearTimeout);
+  }, [mastery, dismissed]);
+
+  // Most recent first, at most 3 visible.
+  const visible = [...mastery]
+    .reverse()
+    .filter((m) => !dismissed[`${m.id}:${m.state}`])
+    .slice(0, 3);
+
+  if (!visible.length) return null;
+
   return (
-    <div className="toast" role="group" aria-label="Mastery update">
-      {body}
-    </div>
+    <>
+      {visible.map((m, idx) => {
+        const left = Math.max(0, Math.ceil((UNDO_MS - (now - m.at)) / 1000));
+        const card = cards.find((c) => c.id === m.cardId);
+        const kindLabel = card ? `${card.kind} card` : "Card";
+        let body: ReactNode;
+        if (m.state === "active")
+          body = (
+            <>
+              <span className="toast-text">
+                {kindLabel} marked mastered · hidden from your default review. Nothing was deleted.{" "}
+                <span aria-hidden className="num">({left} s to undo)</span>
+              </span>
+              <Button
+                kind="tertiary"
+                aria-label={`Undo mastery for ${m.cardId}`}
+                onClick={() => undoMastery(m.id)}
+                data-autofocus={idx === 0 || undefined}
+              >
+                Undo
+              </Button>
+            </>
+          );
+        else if (m.state === "undone")
+          body = <span className="toast-text">Undo applied ({kindLabel.toLowerCase()}). The card is back in your default review.</span>;
+        else if (m.state === "expired")
+          body = (
+            <>
+              <span className="toast-text">The 6-second Undo window has ended ({kindLabel.toLowerCase()}). You can restore this card from Mastered at any time.</span>
+              <Button kind="tertiary" onClick={() => go("review/mastered")}>Open Mastered</Button>
+            </>
+          );
+        else if (m.state === "queued")
+          body = (
+            <span className="toast-text">
+              Undo saved on this device at {(((m.undoAt ?? m.at) - m.at) / 1000).toFixed(1)} s — on time.{" "}
+              {offline ? "It will sync when you are back online." : "Syncing…"}
+            </span>
+          );
+        else if (m.state === "syncing") body = <span className="toast-text">Syncing your on-time Undo… (simulated delay)</span>;
+        else
+          body = (
+            <>
+              <span className="toast-text">
+                Your Undo was on time, but this card was marked mastered again later on another device (simulated). The later decision is kept.
+              </span>
+              <Button kind="tertiary" onClick={() => go("review/mastered")}>Review card</Button>
+              <Button kind="tertiary" onClick={() => setDismissed((d) => ({ ...d, [`${m.id}:${m.state}`]: true }))}>Dismiss</Button>
+            </>
+          );
+        return (
+          <div key={m.id} className="toast" role="group" aria-label={`Mastery update ${m.cardId}`}>
+            {body}
+          </div>
+        );
+      })}
+    </>
   );
 }
 

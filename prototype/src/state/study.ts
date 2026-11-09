@@ -1,4 +1,4 @@
-import { STUDY_FIXTURES, type StudySentence } from "../data/fixtures";
+import { STUDY_FIXTURES, type AnalysisRec, type StudySentence } from "../data/fixtures";
 import { announce, get, go, patchStudy, set, simulate } from "./store";
 
 export const LIMITS = { text: 2000, ideas: 300 } as const;
@@ -137,7 +137,7 @@ export function runAnalysis(source: "Pasted text" | "Photo import" | "My own ide
         history: {
           ...st.history,
           analyses: [
-            { id: `a-live-${runId}`, date: "Mar 4", source, sentences: sentences.length, preview: sentences[0].fr.slice(0, 32) + "…" },
+            { id: `a-live-${runId}`, date: "Mar 4", source, sentences: sentences.length, preview: sentences[0].fr.slice(0, 32) + "…", text: input },
             ...st.history.analyses,
           ],
         },
@@ -159,4 +159,27 @@ export function cancelAnalysis() {
   const a = get().study.analysis;
   patchStudy({ analysis: { ...a, status: "cancelled" } });
   announce("Analysis cancelled. Your text is kept.");
+}
+
+export function buildSentencesForAnalysis(text: string, source: AnalysisRec["source"]): StudySentence[] {
+  if (source === "My own idea" && !FRENCH_HINT.test(text)) return [IDEA_SENTENCE];
+  const parts = splitSentences(text);
+  return parts.map((p, i) => STUDY_FIXTURES.find((f) => norm(f.fr) === norm(p)) ?? genericSentence(p, i));
+}
+
+export function openAnalysisInStudy(a: AnalysisRec) {
+  const sentences = buildSentencesForAnalysis(a.text, a.source);
+  const runId = get().study.analysis.runId + 1;
+  patchStudy({
+    analysis: { status: "done", runId, input: a.text, stage: 2, source: a.source },
+    sentences,
+    index: 0,
+    step: 0,
+    tab: "steps",
+    sourceOpen: false,
+    restored: false,
+    drafts: { ...get().study.drafts, [a.source === "My own idea" ? "ideas" : "text"]: a.text },
+  });
+  go("study");
+  announce(`Opened analysis from ${a.date}: ${sentences.length} ${sentences.length === 1 ? "sentence" : "sentences"}.`);
 }

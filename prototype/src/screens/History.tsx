@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Trash2, CloudOff } from "lucide-react";
+import { ChevronLeft, ChevronRight, Trash2, CloudOff, RotateCcw } from "lucide-react";
 import type { AnalysisRec, AttemptRec, AudioRec } from "../data/fixtures";
-import { fmtClock, plural } from "../lib/format";
-import { announce, go, patchStudy, set, simulate, useApp } from "../state/store";
+import { fmtClock, fmtDuration, plural } from "../lib/format";
+import { openAnalysisInStudy } from "../state/study";
+import { announce, clearAttemptHistory, go, patchStudy, set, simulate, useApp } from "../state/store";
 import { Banner, Button, Dialog, DisabledReason, PageHead, Pill, Skeleton, Spinner, Tabs } from "../components/ui";
+import { saveHistory } from "./Exercise";
 
 type Tab = "analyses" | "audio" | "attempts";
 
@@ -192,10 +194,42 @@ function summarize(list: AttemptRec[]) {
   };
 }
 
+function retryHistorySaveInPlace(id: string, onDone?: (ok: boolean) => void) {
+  const liveAttempt = useAppStateAttempt(id);
+  if (liveAttempt) {
+    saveHistory(id, true);
+    onDone?.(true);
+    return;
+  }
+  simulate("history", 700, true)
+    .then(() => {
+      set((s) => ({
+        history: {
+          ...s.history,
+          attempts: s.history.attempts.map((x) => (x.id === id ? { ...x, saved: "saved" } : x)),
+        },
+      }));
+      announce("History entry saved.");
+      onDone?.(true);
+    })
+    .catch(() => onDone?.(false));
+}
+
+function useAppStateAttempt(id: string) {
+  // Check if this attempt was created during the current session in s.attempts
+  let found = false;
+  set((s) => {
+    found = s.attempts.some((a) => a.id === id);
+    return {};
+  });
+  return found;
+}
+
 function Attempts({ forced, onOpen }: { forced: string; onOpen: (id: string) => void }) {
   const list = useApp((s) => s.history.attempts);
   const [kind, setKind] = useState("all");
   const [outcome, setOutcome] = useState("all");
+  const [retrying, setRetrying] = useState<Record<string, boolean>>({});
   const all = forced === "empty" ? [] : list;
   const shown =
     forced === "nomatch"
@@ -235,22 +269,20 @@ function Attempts({ forced, onOpen }: { forced: string; onOpen: (id: string) => 
         </label>
       </div>
       <Scope total={all.length} shown={shown.length} noun="practice attempt" />
-      {shown.length > 0 && (
-        <dl className="stat-grid">
-          {[
-            ["Attempts", sum.attempts],
-            ["Completed", sum.completed],
-            ["Unaided correct", sum.unaided],
-            ["Hint used", sum.hinted],
-            ["Answer known", sum.known],
-          ].map(([k, v]) => (
-            <div key={k} className="stat">
-              <dt className="t-support">{k}</dt>
-              <dd className="t-section num" style={{ margin: 0 }}>{v}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
+      <dl className="stat-grid">
+        {[
+          ["Attempts", sum.attempts],
+          ["Completed", sum.completed],
+          ["Unaided correct", sum.unaided],
+          ["Hint used", sum.hinted],
+          ["Answer known", sum.known],
+        ].map(([k, v]) => (
+          <div key={k} className="stat">
+            <dt className="t-support">{k}</dt>
+            <dd className="t-section num" style={{ margin: 0 }}>{v}</dd>
+          </div>
+        ))}
+      </dl>
       {all.length === 0 ? (
         <Banner tone="neutral" title="No practice attempts" actions={<Button kind="secondary" onClick={() => go("study/recall")}>Start Recall</Button>}>Recall and Dictation attempts appear here.</Banner>
       ) : shown.length === 0 ? (
@@ -258,16 +290,32 @@ function Attempts({ forced, onOpen }: { forced: string; onOpen: (id: string) => 
       ) : (
         <ul className="list">
           {shown.map((a) => (
-            <li key={a.id}>
+            <li key={a.id} className="row" style={{ flexWrap: "nowrap" }}>
               <RowButton onClick={() => onOpen(a.id)}>
                 <span className="row">
                   <span className="t-strong">{a.kind}</span>
                   <Pill>{a.state === "pending" ? "Not completed" : a.answerKnown ? "Answer known" : a.hinted ? "Hint used" : "Unaided"}</Pill>
                   {a.state === "completed" && !a.answerKnown && <Pill tone={a.outcome === "correct" ? "success" : "error"}>{a.outcome === "correct" ? "Correct" : "Incorrect"}</Pill>}
-                  {a.saved === "failed" && <Pill tone="warning">Not saved</Pill>}
+                  {a.saved === "failed" && <Pill tone="warning">Not saved · Retry</Pill>}
                 </span>
                 <span className="t-support">{a.date} · {a.scope}{a.step ? `, step ${a.step}` : ""}</span>
               </RowButton>
+              {a.saved === "failed" && (
+                <div style={{ paddingRight: 16 }}>
+                  <Button
+                    kind="secondary"
+                    className="btn--sm-text"
+                    icon={<RotateCcw aria-hidden />}
+                    busy={retrying[a.id]}
+                    onClick={() => {
+                      setRetrying((r) => ({ ...r, [a.id]: true }));
+                      retryHistorySaveInPlace(a.id, () => setRetrying((r) => ({ ...r, [a.id]: false })));
+                    }}
+                  >
+                    Retry
+                  </Button>
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -280,10 +328,13 @@ function Attempts({ forced, onOpen }: { forced: string; onOpen: (id: string) => 
 
 function Detail({ tab, id, onBack }: { tab: Tab; id: string; onBack: () => void }) {
   const h = useApp((s) => s.history);
+  const study = useApp((s) => s.study);
   const [save, setSave] = useState<"idle" | "saving" | "failed">("idle");
   const back = <Button kind="tertiary" className="btn--sm-text" icon={<ChevronLeft aria-hidden />} onClick={onBack} style={{ alignSelf: "flex-start", marginLeft: -12 }}>Back to list</Button>;
   if (tab === "analyses") {
-    const a = h.analyses.find((x) => x.id === id) as AnalysisRec;
+    const a = (h.analyses.find((x) => x.id === id) ?? h.analyses[0]) as AnalysisRec | undefined;
+    if (!a) return <div className="stack gap-3">{back}<p>Analysis not found.</p></div>;
+    const isCurrentlyOpen = study.analysis.status === "done" && study.analysis.input === a.text;
     return (
       <div className="stack gap-4">
         {back}
@@ -292,16 +343,22 @@ function Detail({ tab, id, onBack }: { tab: Tab; id: string; onBack: () => void 
           <div className="stat"><dt className="t-support">Source</dt><dd style={{ margin: 0 }}>{a.source}</dd></div>
           <div className="stat"><dt className="t-support">Sentences</dt><dd style={{ margin: 0 }}>{a.sentences}</dd></div>
         </dl>
-        <p lang="fr">{a.preview}</p>
+        <p lang="fr">{a.text ?? a.preview}</p>
+        {!isCurrentlyOpen && (
+          <p className="t-support">This analysis is not the one currently open in Study. Opening it loads its {plural(a.sentences, "sentence")} into Study.</p>
+        )}
         <div className="btn-row">
-          <Button kind="primary" onClick={() => go("study")}>Open in Study</Button>
+          <Button kind="primary" onClick={() => openAnalysisInStudy(a)}>
+            {isCurrentlyOpen ? "Open in Study" : "Open this analysis in Study"}
+          </Button>
           <Button kind="secondary" onClick={() => go("review/library")}>Saved cards in Word library</Button>
         </div>
       </div>
     );
   }
   if (tab === "audio") {
-    const a = h.audio.find((x) => x.id === id) as AudioRec;
+    const a = (h.audio.find((x) => x.id === id) ?? h.audio[0]) as AudioRec | undefined;
+    if (!a) return <div className="stack gap-3">{back}<p>Audio session not found.</p></div>;
     return (
       <div className="stack gap-4">
         {back}
@@ -316,16 +373,11 @@ function Detail({ tab, id, onBack }: { tab: Tab; id: string; onBack: () => void 
       </div>
     );
   }
-  const a = h.attempts.find((x) => x.id === id) as AttemptRec;
+  const a = (h.attempts.find((x) => x.id === id) ?? h.attempts[0]) as AttemptRec | undefined;
+  if (!a) return <div className="stack gap-3">{back}<p>Attempt not found.</p></div>;
   const retry = () => {
     setSave("saving");
-    simulate("history", 700, true)
-      .then(() => {
-        set((s) => ({ history: { ...s.history, attempts: s.history.attempts.map((x) => (x.id === id ? { ...x, saved: "saved" } : x)) } }));
-        setSave("idle");
-        announce("History entry saved.");
-      })
-      .catch(() => setSave("failed"));
+    retryHistorySaveInPlace(a.id, (ok) => setSave(ok ? "idle" : "failed"));
   };
   return (
     <div className="stack gap-4">
@@ -348,7 +400,7 @@ function Detail({ tab, id, onBack }: { tab: Tab; id: string; onBack: () => void 
         </Banner>
       )}
       <div className="btn-row">
-        <Button kind="secondary" onClick={() => { set((s) => ({ libFilters: { ...s.libFilters, q: a.sentence.split(" ").slice(-1)[0].replace(/[.]/g, "") } })); go("review/library"); }}>Find card in Word library</Button>
+        <Button kind="secondary" onClick={() => { set((s) => ({ libFilters: { ...s.libFilters, q: a.sentence } })); go("review/library"); }}>Find card in Word library</Button>
         <Button kind="tertiary" onClick={() => { patchStudy({ tab: a.kind === "Recall" ? "recall" : "dictation" }); go(a.kind === "Recall" ? "study/recall" : "study/dictation"); }}>Practise again</Button>
       </div>
     </div>
@@ -360,6 +412,10 @@ function ClearAction({ kind, count }: { kind: "analyses" | "attempts"; count: nu
   const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState<"confirm" | "clearing" | "failed">("confirm");
   const [done, setDone] = useState(false);
+  const savedCardsCount = useApp((s) => s.cards.filter((c) => c.saved).length);
+  const masteredCount = useApp((s) => s.cards.filter((c) => c.saved && c.mastered).length);
+  const snapshotsCount = useApp((s) => Object.keys(s.snapshots).length);
+  const lifetimeHours = useApp((s) => s.audioStats.lifetimeHours);
   const forced = useApp((s) => s.ss["SCR-HIS-03"]);
   useEffect(() => {
     if (forced && forced.startsWith(kind)) {
@@ -373,7 +429,8 @@ function ClearAction({ kind, count }: { kind: "analyses" | "attempts"; count: nu
     setPhase("clearing");
     simulate("clear", 1000, true)
       .then(() => {
-        set((s) => ({ history: { ...s.history, [kind]: [] } }));
+        if (kind === "attempts") clearAttemptHistory();
+        else set((s) => ({ history: { ...s.history, analyses: [] } }));
         setOpen(false);
         setPhase("confirm");
         setDone(true);
@@ -386,7 +443,14 @@ function ClearAction({ kind, count }: { kind: "analyses" | "attempts"; count: nu
   };
   return (
     <div className="stack gap-2" style={{ marginTop: 16 }}>
-      {done && <Banner tone="success" title="Cleared" live="polite">{kind === "analyses" ? "Your Study analysis list is empty." : "Your practice attempt history is empty."} Everything else is unchanged.</Banner>}
+      {done && (
+        <Banner tone="success" title="Cleared" live="polite">
+          {kind === "analyses"
+            ? "Your Study analysis list is empty."
+            : "Your practice attempt history is empty and derived attempt counts start again from 0."}{" "}
+          Unchanged: {savedCardsCount} saved cards · {snapshotsCount} saved definition snapshots · lookup counts and importance · review scheduling and {masteredCount} mastered cards · {fmtDuration(lifetimeHours * 60)} lifetime audio toward 1,000 hours · Friend access: Free · Unlimited access.
+        </Banner>
+      )}
       <Button kind="tertiary" icon={<Trash2 aria-hidden />} onClick={() => { setPhase("confirm"); setOpen(true); }} disabledReason={count === 0 ? "There’s nothing to clear." : undefined} style={{ alignSelf: "flex-start", marginLeft: -12, color: count ? "var(--error)" : undefined }}>
         {label}
       </Button>

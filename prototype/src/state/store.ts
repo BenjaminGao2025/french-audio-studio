@@ -6,6 +6,7 @@ import {
   HISTORY_ANALYSES,
   HISTORY_ATTEMPTS,
   HISTORY_AUDIO,
+  FAVORITE_FIXTURES,
   LOOKUP_FIXTURES,
   PRESAVED_CARD_IDS,
   buildLibrary,
@@ -72,6 +73,8 @@ export interface PlayerState {
 
 export interface Attempt {
   id: string;
+  sessionKey?: string;
+  cleared?: boolean;
   kind: "Recall" | "Dictation";
   itemId: string;
   sentence: string;
@@ -114,6 +117,8 @@ export interface ReviewUI {
   phase: "answering" | "submitting" | "techfail" | "graded";
   hint: boolean;
   revealed: boolean;
+  recorded?: boolean;
+  selfCheck?: boolean;
   emptyError?: boolean;
   result?: GradeResult;
   answerKnown?: boolean;
@@ -189,7 +194,7 @@ export interface AppState {
   libFilters: { q: string; savedOnly: boolean; mastered: "hide" | "show" | "only"; minImportance: 0 | 3 | 4 | 5; favoritesOnly: boolean };
 
   queue: ReviewCard[];
-  review: { phase: "summary" | "active" | "complete"; index: number; completed: number; introduced: Record<string, boolean>; allowance: number };
+  review: { phase: "summary" | "active" | "complete"; index: number; completed: number; introduced: Record<string, boolean>; allowance: number; sessionCards: ReviewCard[] | null };
   reviewUi: Record<string, ReviewUI>;
   dailyNew: number;
   newUsed: number;
@@ -283,15 +288,15 @@ function initialState(): AppState {
     },
     player: null,
     lookups,
-    favorites: { [lookupKey("rendez-vous")]: true },
+    favorites: { ...FAVORITE_FIXTURES },
     snapshots,
     ctxSnapshots: {},
     saved,
     sentences,
     cards,
     libFilters: { q: "", savedOnly: false, mastered: "hide", minImportance: 0, favoritesOnly: false },
-    queue: buildQueue(sentences, cards),
-    review: { phase: "summary", index: 0, completed: 0, introduced: {}, allowance: 40 },
+    queue: buildQueue(sentences, cards, lookups),
+    review: { phase: "summary", index: 0, completed: 0, introduced: {}, allowance: 31, sessionCards: null },
     reviewUi: {},
     dailyNew: 40,
     newUsed: 0,
@@ -422,9 +427,11 @@ export function simulate<T>(domain: Domain, ms: number, value: T, opts: { needsN
   const fail = s.failNext[domain];
   const slow = s.slowNext[domain];
   if (fail || slow) set((st) => ({ failNext: { ...st.failNext, [domain]: false }, slowNext: { ...st.slowNext, [domain]: false } }));
+  const epoch = demoEpoch;
   return new Promise((resolve, reject) => {
     setTimeout(
       () => {
+        if (epoch !== demoEpoch) return;
         if (opts.needsNetwork !== false && get().offline) return reject(new SimError("offline"));
         if (fail) return reject(new SimError("failed"));
         resolve(value);
@@ -482,7 +489,9 @@ export function setOffline(offline: boolean) {
   }
 }
 
+let demoEpoch = 0;
 export function resetDemo() {
+  demoEpoch++;
   const keep = get();
   state = { ...initialState(), frame: keep.frame, macWidth: keep.macWidth, route: "study" };
   listeners.forEach((l) => l());
@@ -490,14 +499,40 @@ export function resetDemo() {
   announce("Demo reset. Fictional session data restored to the starting point.");
 }
 
-/* ---------------- lookups ---------------- */
+/* ---------------- lookups & word-keyed card state ---------------- */
 
-export function recordLookup(entry: string): { counted: boolean; count: number } {
+export function recordLookup(entry: string, nowSec = performance.now() / 1000): { counted: boolean; count: number } {
   const key = lookupKey(entry);
   const prev = get().lookups[key] ?? { count: 0, lastCounted: null };
-  const { next, counted } = countLookup(prev, performance.now() / 1000);
+  const { next, counted } = countLookup(prev, nowSec);
   if (counted) set((s) => ({ lookups: { ...s.lookups, [key]: next } }));
   return { counted, count: next.count };
+}
+
+/** Word cards (Fill-in) share lookup count and favorite state with the word popup via lookupKey(word). */
+export function getCardWordKey(c: Pick<LibCard, "kind" | "word">): string | null {
+  return c.kind === "Fill-in" && c.word ? lookupKey(c.word) : null;
+}
+
+export function getCardLookups(s: Pick<AppState, "lookups">, c: Pick<LibCard, "kind" | "word">): number | null {
+  const k = getCardWordKey(c);
+  return k !== null ? (s.lookups[k]?.count ?? 0) : null;
+}
+
+export function isCardFavorite(s: Pick<AppState, "favorites">, c: Pick<LibCard, "id" | "kind" | "word">): boolean {
+  const k = getCardWordKey(c);
+  return k !== null ? Boolean(s.favorites[k]) : Boolean(s.favorites[`card:${c.id}`]);
+}
+
+export function toggleCardFavorite(c: Pick<LibCard, "id" | "kind" | "word">) {
+  const k = getCardWordKey(c) ?? `card:${c.id}`;
+  const next = !get().favorites[k];
+  set((s) => ({ favorites: { ...s.favorites, [k]: next } }));
+  announce(
+    next
+      ? "Added to favorites. Lookup count and importance are unchanged."
+      : "Removed from favorites. Lookup count and importance are unchanged.",
+  );
 }
 
 export function dictionaryFor(entry: string): DictEntry | undefined {
@@ -528,6 +563,7 @@ export function startPlayback(owner: PlayerOwner, duration: number, opts: { scop
   const prev = get().player;
   if (prev) commitAudio(prev);
   const id = ++playerSeq;
+  lastTick = performance.now();
   set((s) => ({
     player: {
       id,
@@ -547,6 +583,7 @@ export function startPlayback(owner: PlayerOwner, duration: number, opts: { scop
   simulate("audio", 700, true)
     .then(() => {
       if (get().player?.id !== id) return;
+      lastTick = performance.now();
       updatePlayer({ status: "playing" });
       announce(`Playing ${owner.label}. Simulated audio.`);
     })
@@ -558,6 +595,7 @@ export function startPlayback(owner: PlayerOwner, duration: number, opts: { scop
 }
 
 export function updatePlayer(p: Partial<PlayerState>) {
+  lastTick = performance.now();
   set((s) => (s.player ? { player: { ...s.player, ...p } } : {}));
 }
 
@@ -602,14 +640,21 @@ function ownerHistoryLabel(o: PlayerOwner) {
   return map[o.kind];
 }
 
-/** Advances the single simulated playback session. Only playing time counts toward the goal. */
+/** Advances the single simulated playback session. Only foreground playing time counts toward the goal. */
 let lastTick = performance.now();
-export function tick() {
+export function resetPlaybackClock() {
+  lastTick = performance.now();
+}
+
+export function tick(dtOverride?: number) {
   const now = performance.now();
-  const dt = Math.min(1, (now - lastTick) / 1000);
+  const rawDt = dtOverride ?? Math.min(1, Math.max(0, (now - lastTick) / 1000));
   lastTick = now;
+  // Foreground-only counting: while the browser tab is hidden, keep position and add zero counted time.
+  if (typeof document !== "undefined" && document.hidden) return;
   const p = get().player;
-  if (!p || p.status !== "playing") return;
+  if (!p || p.status !== "playing" || rawDt <= 0) return;
+  const dt = rawDt;
   let position = p.position + dt * p.speed;
   let status: PlayerState["status"] = "playing";
   if (position >= p.duration) {
@@ -620,45 +665,97 @@ export function tick() {
       announce("Playback ended.");
     }
   }
+  const dh = dt / 3600;
   set((s) => ({
     player: { ...p, position, status, countedSeconds: p.countedSeconds + dt, contentSeconds: p.contentSeconds + dt * p.speed },
-    audioStats: { ...s.audioStats, todaySeconds: s.audioStats.todaySeconds + dt, weekSeconds: s.audioStats.weekSeconds + dt },
+    audioStats: {
+      todaySeconds: s.audioStats.todaySeconds + dt,
+      weekSeconds: s.audioStats.weekSeconds + dt,
+      lifetimeHours: s.audioStats.lifetimeHours + dh,
+      last28Hours: s.audioStats.last28Hours + dh,
+    },
   }));
+}
+
+/** Records a simulated foreground playback block (e.g. 10 content minutes at 2× = 5 counted minutes) across all four totals. */
+export function recordSimulatedAudio(contentSeconds: number, speed: number, owner = "Episode · Un samedi au marché"): number {
+  if (typeof document !== "undefined" && document.hidden) return 0;
+  const countedSeconds = contentSeconds / speed;
+  const dh = countedSeconds / 3600;
+  set((s) => ({
+    audioStats: {
+      todaySeconds: s.audioStats.todaySeconds + countedSeconds,
+      weekSeconds: s.audioStats.weekSeconds + countedSeconds,
+      lifetimeHours: s.audioStats.lifetimeHours + dh,
+      last28Hours: s.audioStats.last28Hours + dh,
+    },
+    history: {
+      ...s.history,
+      audio: [
+        {
+          id: `u-demo-${Date.now()}`,
+          date: "Mar 4",
+          owner,
+          contentSeconds: Math.round(contentSeconds),
+          speed,
+          countedSeconds: Math.round(countedSeconds),
+        },
+        ...s.history.audio,
+      ],
+    },
+  }));
+  return countedSeconds;
 }
 
 /* ---------------- mastery ---------------- */
 
 export const UNDO_MS = 6000;
+let masterySeq = 0;
 
-export function markMastered(cardId: string) {
-  const id = `m${Date.now()}`;
+/** Transitions any active mastery actions whose 6-second window (measured from m.at) has elapsed to "expired". */
+function sameClock(a: number, b: number) {
+  return (a < 1_000_000_000) === (b < 1_000_000_000);
+}
+export function expireMastery(now = Date.now()) {
+  if (!get().mastery.some((m) => m.state === "active" && sameClock(now, m.at) && now - m.at >= UNDO_MS)) return;
+  set((s) => ({
+    mastery: s.mastery.map((m) => (m.state === "active" && sameClock(now, m.at) && now - m.at >= UNDO_MS ? { ...m, state: "expired" } : m)),
+  }));
+}
+
+export function markMastered(cardId: string, now = Date.now()): string {
+  expireMastery(now);
+  const id = `m-${now}-${++masterySeq}`;
   set((s) => ({
     cards: s.cards.map((c) => (c.id === cardId ? { ...c, mastered: true } : c)),
-    mastery: [...s.mastery, { id, cardId, at: Date.now(), state: "active" }],
+    mastery: [...s.mastery, { id, cardId, at: now, state: "active" }],
   }));
   announce("Card marked mastered and hidden from your default review. Undo is available for 6 seconds.");
   syncChange();
+  return id;
 }
 
-export function undoMastery(actionId: string) {
-  const now = Date.now();
+export function undoMastery(actionId: string, now = Date.now()): boolean {
+  expireMastery(now);
   const a = get().mastery.find((m) => m.id === actionId);
-  if (!a) return;
+  if (!a) return false;
   const timely = now - a.at < UNDO_MS;
-  if (!timely) {
+  if (!timely || a.state === "expired") {
     set((s) => ({ mastery: s.mastery.map((m) => (m.id === actionId ? { ...m, state: "expired" } : m)) }));
-    return;
+    return false;
   }
+  if (a.state !== "active") return false;
   // Undo only reverses its own mastery action.
   set((s) => ({ cards: s.cards.map((c) => (c.id === a.cardId ? { ...c, mastered: false } : c)) }));
   if (get().offline) {
     set((s) => ({ mastery: s.mastery.map((m) => (m.id === actionId ? { ...m, state: "queued", undoAt: now } : m)) }));
     announce("Undo saved on this device. It will sync when you are back online and still counts as on time.");
-    return;
+    return true;
   }
   set((s) => ({ mastery: s.mastery.map((m) => (m.id === actionId ? { ...m, state: "undone", undoAt: now } : m)) }));
   announce("Undo applied. The card is back in your default review.");
   syncChange();
+  return true;
 }
 
 export function restoreCard(cardId: string) {
@@ -666,6 +763,15 @@ export function restoreCard(cardId: string) {
 }
 
 /* ---------------- history ---------------- */
+
+export function clearAttemptHistory() {
+  set((s) => ({
+    history: { ...s.history, attempts: [] },
+    // Existing attempts stay on screen so any open feedback remains visible, but are marked cleared
+    // so new session summaries and History counts start from zero unless a failed save is retried.
+    attempts: s.attempts.map((a) => ({ ...a, cleared: true })),
+  }));
+}
 
 export function attemptToRecord(a: Attempt): AttemptRec {
   return {

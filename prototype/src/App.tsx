@@ -11,7 +11,7 @@ import { HistoryScreen } from "./screens/History";
 import { SettingsScreen } from "./screens/Settings";
 import { DesignReference } from "./screens/Design";
 import { Gate, Legacy } from "./screens/Auth";
-import { go, parseHash, set, tick, useApp } from "./state/store";
+import { go, parseHash, resetPlaybackClock, set, tick, useApp } from "./state/store";
 
 function Routes() {
   const route = useApp((s) => s.route);
@@ -56,10 +56,12 @@ export default function App() {
     const onHash = () => set(() => ({ route: parseHash() }));
     window.addEventListener("popstate", onHash);
     window.addEventListener("hashchange", onHash);
-    const t = setInterval(tick, 250);
+    document.addEventListener("visibilitychange", resetPlaybackClock);
+    const t = setInterval(() => tick(), 250);
     return () => {
       window.removeEventListener("popstate", onHash);
       window.removeEventListener("hashchange", onHash);
+      document.removeEventListener("visibilitychange", resetPlaybackClock);
       clearInterval(t);
     };
   }, []);

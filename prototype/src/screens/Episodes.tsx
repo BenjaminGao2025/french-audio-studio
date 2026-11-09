@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Pause, Play, RotateCcw, ChevronRight, CloudOff } from "lucide-react";
 import { EPISODES } from "../data/fixtures";
 import { fmtClock } from "../lib/format";
-import { announce, go, retryPlayback, set, simulate, startPlayback, stopPlayback, updatePlayer, useApp } from "../state/store";
+import { announce, go, recordSimulatedAudio, retryPlayback, simulate, startPlayback, stopPlayback, updatePlayer, useApp } from "../state/store";
 import { Banner, Button, DemoNote, PageHead, Pill, Skeleton, Spinner } from "../components/ui";
 import { BackTo } from "./Practice";
 
@@ -149,7 +149,7 @@ export function EpisodePlayer({ id }: { id: string }) {
           </div>
           {mine?.status === "error" && <Banner tone="error" title="The episode couldn’t play" live="assertive" actions={<Button kind="secondary" onClick={retryPlayback}>Retry</Button>}>Your position is kept.</Banner>}
           <p className="t-support num">
-            Counted toward 1,000 h this session: {fmtClock(mine?.countedSeconds ?? 0)} (wall-clock playing time) · Audio advanced: {fmtClock(mine?.contentSeconds ?? 0)}
+            Counted toward 1,000 h this session: {fmtClock(mine?.countedSeconds ?? 0)} (wall-clock foreground playing time; while this tab is hidden, position is kept and 0 s are counted) · Audio advanced: {fmtClock(mine?.contentSeconds ?? 0)}
           </p>
           <p className="row t-meta">Canadian French · Demo voice <DemoNote>Simulated audio</DemoNote></p>
         </section>
@@ -167,10 +167,7 @@ export function EpisodePlayer({ id }: { id: string }) {
             <Button
               kind="secondary"
               onClick={() => {
-                set((s) => ({
-                  audioStats: { ...s.audioStats, todaySeconds: s.audioStats.todaySeconds + 300, weekSeconds: s.audioStats.weekSeconds + 300 },
-                  history: { ...s.history, audio: [{ id: `u-demo-${Date.now()}`, date: "Mar 4", owner: `Episode · ${e.title}`, contentSeconds: 600, speed: 2, countedSeconds: 300 }, ...s.history.audio] },
-                }));
+                recordSimulatedAudio(600, 2, `Episode · ${e.title}`);
                 setDemoCount("Added: 10:00 of audio at 2× → 5:00 counted. See Progress or History.");
                 announce("Simulated 10 minutes at 2 times speed. 5 minutes counted.");
               }}

@@ -16,8 +16,7 @@ function Overview() {
   const sync = useApp((s) => s.sync);
   const state = forced || (sync === "error" ? "syncfail" : "active");
 
-  const extraHours = (stats.todaySeconds - 18 * 60) / 3600;
-  let lifetime = 125 + extraHours;
+  let lifetime = stats.lifetimeHours;
   let last28 = stats.last28Hours;
   let todayMin = stats.todaySeconds / 60;
   let weekMin = stats.weekSeconds / 60;
@@ -76,7 +75,7 @@ function Overview() {
                 ["Today", fmtDuration(todayMin), "Since local midnight"],
                 ["This week", fmtDuration(weekMin), "Since Monday"],
                 ["Remaining to 1,000 hours", p.remainingHours === 0 ? "0 h" : fmtDuration(p.remainingHours * 60), "Goal minus lifetime"],
-                ["Four-week daily average", fmtDuration(p.dailyAverageMinutes), `${nf.format(last28)} h in the last 28 calendar days`],
+                ["Four-week daily average", fmtDuration(p.dailyAverageMinutes), `${fmtDuration(last28 * 60)} in the last 28 calendar days`],
               ].map(([k, v, sub]) => (
                 <div key={k} className="stat">
                   <dt className="t-support">{k}</dt>
@@ -116,7 +115,7 @@ function Overview() {
         <section className="stack gap-2" aria-labelledby="fg-h">
           <h2 id="fg-h" className="t-section">Background listening</h2>
           <Banner tone="warning" title="Foreground only">
-            On this device, only foreground playback is counted. Background and lock-screen counting are not yet supported.
+            On this device, only foreground playback is counted (while this tab is hidden, playback keeps its position and 0 seconds are counted). Background and lock-screen counting are not yet supported.
           </Banner>
           <p className="row t-support">
             <DemoNote>Proposed capability states only; device support has not been verified.</DemoNote>
@@ -143,7 +142,7 @@ function Devices() {
         desc="Playback continuing and time being counted are separate questions. Nothing here has been tested on a real device."
       />
       <div className="stack gap-5">
-        <Banner tone="warning" title="Foreground only">On this device, only foreground playback is counted. Background and lock-screen counting are not yet supported.</Banner>
+        <Banner tone="warning" title="Foreground only">On this device, only foreground playback is counted (while this tab is hidden, playback keeps its position and 0 seconds are counted). Background and lock-screen counting are not yet supported.</Banner>
         <div className="table-wrap">
           <table className="matrix">
             <caption className="sr-only">Proposed playback and counting support by platform</caption>

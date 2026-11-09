@@ -1,5 +1,5 @@
 /* All data here is fictional demo content held in memory. */
-import { lookupKey } from "../lib/lookup";
+import { importanceFor, lookupKey } from "../lib/lookup";
 
 export const REFERENCE_DATE = new Date(Date.UTC(2026, 2, 4)); // Wednesday, March 4, 2026 (fictional "today")
 export const DEMO_USER = { name: "Alex Martin", initials: "AM", label: "Fictional demo account" };
@@ -243,6 +243,30 @@ export const LOOKUP_FIXTURES: Record<string, number> = {
   [lookupKey("oublier")]: 6,
   [lookupKey("jours")]: 9,
   [lookupKey("il y a")]: 10,
+  [lookupKey("bus")]: 2,
+  [lookupKey("week-end")]: 5,
+  [lookupKey("pris")]: 0,
+  [lookupKey("musée")]: 5,
+  [lookupKey("travail")]: 6,
+  [lookupKey("visité")]: 0,
+  [lookupKey("sœur")]: 4,
+  [lookupKey("appartement")]: 6,
+  [lookupKey("bibliothèque")]: 10,
+  [lookupKey("parapluie")]: 0,
+  [lookupKey("restaurant")]: 5,
+  [lookupKey("vélo")]: 4,
+  [lookupKey("propriétaire")]: 9,
+  [lookupKey("courses")]: 2,
+  [lookupKey("café")]: 5,
+  [lookupKey("table")]: 4,
+  [lookupKey("nouvelles")]: 6,
+  [lookupKey("fleuve")]: 10,
+};
+
+export const FAVORITE_FIXTURES: Record<string, boolean> = {
+  [lookupKey("rendez-vous")]: true,
+  [lookupKey("musée")]: true,
+  [lookupKey("café")]: true,
 };
 
 /** Saved definition snapshots present before the demo starts (offline-cached). */
@@ -305,10 +329,13 @@ export interface LibSentence {
 
 const TOPICS = ["Daily life", "Transport", "Housing", "Family", "Food", "Weekend plans", "Work", "Weather"];
 
+export const SESSION_CARD_LIMIT = 40;
+
 export function buildLibrary(): { sentences: LibSentence[]; cards: LibCard[] } {
   const sentences: LibSentence[] = [];
   const cards: LibCard[] = [];
   let n = 0;
+  let savedIdx = 0;
   outer: for (let e = 0; e < ENDINGS.length; e++) {
     for (let o = 0; o < OPENERS.length; o++) {
       if (n >= 179) break outer;
@@ -322,35 +349,60 @@ export function buildLibrary(): { sentences: LibSentence[]; cards: LibCard[] } {
           ? { id, fr: S3.fr, en: S3.en, topic: "Daily life", number: n + 1 }
           : { id, fr: `${fo} ${fe}`, en: `${eo} ${ee}`, topic: TOPICS[(o + e) % TOPICS.length], number: n + 1 },
       );
-      // 142 sentences have 3 saved cards, 37 have 2 → 500 saved cards.
-      const kinds: LibCard["kind"][] = n < 142 ? ["Listen", "Speak", "Fill-in"] : ["Listen", "Speak"];
-      kinds.forEach((kind, k) => {
-        const i = cards.length;
+      // 2 sentences (L4 at offset 0 of new cards, and L16 at offset 38 of new cards) have 5 saved cards;
+      // 136 sentences have 3 saved cards; 41 sentences have 2 saved cards → 10 + 408 + 82 = 500 saved cards.
+      const extraWords =
+        n === 3
+          ? ["week-end", "pris"]
+          : n === 15
+            ? ["travail", "visité"]
+            : [];
+      const baseKinds: { idSuffix: string; kind: LibCard["kind"]; w?: string }[] =
+        n < 138
+          ? [
+              { idSuffix: "listen", kind: "Listen" },
+              { idSuffix: "speak", kind: "Speak" },
+              { idSuffix: "fill-in", kind: "Fill-in", w: word },
+              ...extraWords.map((ew, ei) => ({ idSuffix: `fill-extra-${ei + 1}`, kind: "Fill-in" as const, w: ew })),
+            ]
+          : [
+              { idSuffix: "listen", kind: "Listen" },
+              { idSuffix: "speak", kind: "Speak" },
+            ];
+      baseKinds.forEach(({ idSuffix, kind, w }) => {
+        const i = savedIdx++;
+        // First 8 saved cards (L1, L2, first 2 of L3) are learning; 9th (3rd of L3) is due review;
+        // L4..L16 (indices 9..51) are un-mastered new cards; later cards mix review and new.
+        const status: LibCard["status"] = i < 8 ? "learning" : i === 8 ? "review" : i < 220 ? "new" : "review";
+        const mastered = i >= 55 && i % 23 === 7;
+        const wKey = w ? lookupKey(w) : "";
         cards.push({
-          id: isS3 ? `s3-${kind.toLowerCase()}` : `${id}-${kind.toLowerCase()}`,
+          id: isS3 ? `s3-${idSuffix}` : `${id}-${idSuffix}`,
           sentenceId: id,
           kind,
-          word: kind === "Fill-in" ? word : undefined,
+          word: w,
           savedAt: i,
-          status: i < 9 ? "learning" : i < 300 ? "review" : "new",
-          mastered: i % 23 === 7,
-          favorite: i % 17 === 3,
-          lookups: kind === "Fill-in" ? [0, 4, 5, 6, 9, 10, 2][(n + k) % 7] : [0, 4, 5, 10][(n + k) % 4],
+          status,
+          mastered,
+          favorite: w ? Boolean(FAVORITE_FIXTURES[wKey]) : false,
+          lookups: w ? (LOOKUP_FIXTURES[wKey] ?? 0) : 0,
           saved: true,
         });
       });
       // Sentences with two saved cards also offer one derived card that is not saved yet.
-      if (n >= 142 && !isS3) {
+      if (n >= 138 && !isS3) {
+        const uw = fe.replace(/[.,]/g, "").split(" ").slice(-1)[0];
+        const wKey = lookupKey(uw);
         cards.push({
           id: `${id}-fill-in`,
           sentenceId: id,
           kind: "Fill-in",
-          word: fe.replace(/[.,]/g, "").split(" ").slice(-1)[0],
+          word: uw,
           savedAt: 10_000 + n,
           status: "new",
           mastered: false,
-          favorite: false,
-          lookups: 0,
+          favorite: Boolean(FAVORITE_FIXTURES[wKey]),
+          lookups: LOOKUP_FIXTURES[wKey] ?? 0,
           saved: false,
         });
       }
@@ -414,30 +466,95 @@ export const CHOOSABLE: PracticeItem[] = [
 
 export interface ReviewCard {
   id: string;
+  sentenceId: string;
   group: "learning" | "due" | "new";
-  kind: "Recall" | "Fill-in" | "Listen";
+  kind: "Speak" | "Fill-in" | "Listen" | "Recall";
   prompt: string; // English prompt or fill-in sentence with a blank (never the full target)
   target: string;
   sentenceFr: string;
 }
 
-export function buildQueue(sentences: LibSentence[], cards: LibCard[]): ReviewCard[] {
-  const nonMastered = cards.filter((c) => c.saved && !c.mastered);
-  const pick = (status: LibCard["status"], count: number) => nonMastered.filter((c) => c.status === status).slice(0, count);
-  const chosen = [
-    ...pick("learning", 8).map((c) => ({ c, group: "learning" as const })),
-    ...pick("review", 1).map((c) => ({ c, group: "due" as const })),
-    ...pick("new", 31).map((c) => ({ c, group: "new" as const })),
-  ];
-  return chosen.map(({ c, group }) => {
-    const s = sentences.find((x) => x.id === c.sentenceId)!;
-    if (c.kind === "Fill-in" && c.word) {
-      const blanked = s.fr.replace(c.word, "_____");
-      return { id: c.id, group, kind: "Fill-in", prompt: blanked, target: c.word, sentenceFr: s.fr };
+export function wordCardImportance(c: LibCard, lookups: Record<string, { count: number }> = {}): number {
+  if (c.kind !== "Fill-in" || !c.word) return 0;
+  const k = lookupKey(c.word);
+  const count = lookups[k]?.count ?? LOOKUP_FIXTURES[k] ?? c.lookups ?? 0;
+  return importanceFor(count);
+}
+
+/** Documented new-card introduction order: earliest Saved time first, higher importance for ties, then stable card ID. */
+export function sortNewCardsForIntroduction(cards: LibCard[], lookups: Record<string, { count: number }> = {}): LibCard[] {
+  return [...cards].sort(
+    (a, b) =>
+      a.savedAt - b.savedAt ||
+      wordCardImportance(b, lookups) - wordCardImportance(a, lookups) ||
+      a.id.localeCompare(b.id),
+  );
+}
+
+export function toReviewCard(c: LibCard, group: ReviewCard["group"], sentences: LibSentence[]): ReviewCard {
+  const s = sentences.find((x) => x.id === c.sentenceId)!;
+  if (c.kind === "Fill-in" && c.word) {
+    const blanked = s.fr.replace(new RegExp(c.word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), "_____");
+    return { id: c.id, sentenceId: c.sentenceId, group, kind: "Fill-in", prompt: blanked, target: c.word, sentenceFr: s.fr };
+  }
+  if (c.kind === "Listen") return { id: c.id, sentenceId: c.sentenceId, group, kind: "Listen", prompt: "", target: s.fr, sentenceFr: s.fr };
+  return { id: c.id, sentenceId: c.sentenceId, group, kind: "Speak", prompt: s.en, target: s.fr, sentenceFr: s.fr };
+}
+
+/**
+ * Orders session cards for presentation so two cards from the same sentence are never adjacent
+ * (at least 3 other cards between siblings when possible), while preserving the set of chosen cards.
+ */
+export function spaceSessionCards(cards: ReviewCard[]): ReviewCard[] {
+  const pool = [...cards];
+  const out: ReviewCard[] = [];
+  while (pool.length > 0) {
+    const remBySentence = new Map<string, number>();
+    for (const c of pool) remBySentence.set(c.sentenceId, (remBySentence.get(c.sentenceId) ?? 0) + 1);
+    let pickedIdx = -1;
+    for (const gap of [4, 3, 2, 1]) {
+      const recent = new Set(out.slice(-(gap - 1)).map((c) => c.sentenceId));
+      const candidates = pool
+        .map((c, idx) => ({ c, idx, rem: remBySentence.get(c.sentenceId) ?? 1 }))
+        .filter((x) => gap === 1 || !recent.has(x.c.sentenceId));
+      if (!candidates.length) continue;
+      // On the very first slot, keep a typed card (Listen or Fill-in) first if available;
+      // and whenever a sentence has many remaining siblings relative to remaining slots, place it early so siblings stay >= 4 apart.
+      const maxRem = Math.max(...candidates.map((x) => x.rem));
+      const chosen =
+        out.length === 0
+          ? candidates.find((x) => x.rem === maxRem && x.c.kind !== "Speak") ??
+            candidates.find((x) => x.c.kind !== "Speak") ??
+            candidates[0]
+          : candidates.find((x) => x.rem === maxRem) ?? candidates[0];
+      pickedIdx = chosen.idx;
+      break;
     }
-    if (c.kind === "Listen") return { id: c.id, group, kind: "Listen", prompt: "", target: s.fr, sentenceFr: s.fr };
-    return { id: c.id, group, kind: "Recall", prompt: s.en, target: s.fr, sentenceFr: s.fr };
-  });
+    out.push(pool.splice(pickedIdx, 1)[0]);
+  }
+  return out;
+}
+
+export function buildQueue(
+  sentences: LibSentence[],
+  cards: LibCard[],
+  lookups: Record<string, { count: number }> = {},
+  newAllowance = SESSION_CARD_LIMIT - 9,
+): ReviewCard[] {
+  const nonMastered = cards.filter((c) => c.saved && !c.mastered);
+  const learning = nonMastered.filter((c) => c.status === "learning").slice(0, 8);
+  const due = nonMastered.filter((c) => c.status === "review").slice(0, 1);
+  const newPool = sortNewCardsForIntroduction(
+    nonMastered.filter((c) => c.status === "new"),
+    lookups,
+  );
+  const newLimit = Math.max(0, Math.min(newAllowance, SESSION_CARD_LIMIT - (learning.length + due.length)));
+  const chosen = [
+    ...learning.map((c) => toReviewCard(c, "learning", sentences)),
+    ...due.map((c) => toReviewCard(c, "due", sentences)),
+    ...newPool.slice(0, newLimit).map((c) => toReviewCard(c, "new", sentences)),
+  ];
+  return spaceSessionCards(chosen);
 }
 
 /* ---------- OCR sample photos ---------- */
@@ -513,6 +630,7 @@ export interface AnalysisRec {
   source: "Pasted text" | "Photo import" | "My own idea";
   sentences: number;
   preview: string;
+  text: string;
 }
 export interface AudioRec {
   id: string;
@@ -538,11 +656,46 @@ export interface AttemptRec {
 }
 
 export const HISTORY_ANALYSES: AnalysisRec[] = [
-  { id: "a1", date: "Mar 3", source: "Pasted text", sentences: 3, preview: "Il y a deux jours, j’ai failli…" },
-  { id: "a2", date: "Mar 2", source: "Photo import", sentences: 5, preview: "Le plat du jour est une soupe…" },
-  { id: "a3", date: "Feb 28", source: "My own idea", sentences: 1, preview: "Je voudrais changer mon rendez-vous." },
-  { id: "a4", date: "Feb 26", source: "Pasted text", sentences: 4, preview: "Le samedi, je vais au marché…" },
-  { id: "a5", date: "Feb 23", source: "Pasted text", sentences: 2, preview: "Nous avons pris un café…" },
+  {
+    id: "a1",
+    date: "Mar 3",
+    source: "Pasted text",
+    sentences: 3,
+    preview: "Il y a deux jours, j’ai failli…",
+    text: EXAMPLE_TEXT,
+  },
+  {
+    id: "a2",
+    date: "Mar 2",
+    source: "Photo import",
+    sentences: 5,
+    preview: "Le plat du jour est une soupe…",
+    text: "Le plat du jour est une soupe aux légumes. Le café est offert avec le dessert. Nous avons pris une table près de la fenêtre. Le serveur nous a apporté de l’eau. C’était très bon.",
+  },
+  {
+    id: "a3",
+    date: "Feb 28",
+    source: "My own idea",
+    sentences: 1,
+    preview: "Je voudrais changer mon rendez-vous.",
+    text: "Je voudrais changer mon rendez-vous.",
+  },
+  {
+    id: "a4",
+    date: "Feb 26",
+    source: "Pasted text",
+    sentences: 4,
+    preview: "Le samedi, je vais au marché…",
+    text: "Le samedi, je vais au marché. J’achète des fruits et du pain. Ensuite, je prends un café. Je rentre chez moi à midi.",
+  },
+  {
+    id: "a5",
+    date: "Feb 23",
+    source: "Pasted text",
+    sentences: 2,
+    preview: "Nous avons pris un café…",
+    text: "Nous avons pris un café près de la gare. Heureusement, ma sœur m’a appelé ce matin.",
+  },
 ];
 
 export const HISTORY_AUDIO: AudioRec[] = [

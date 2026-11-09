@@ -304,7 +304,7 @@ function StudyPlayer({ practising }: { practising: boolean }) {
       )}
       <p className="row t-meta">
         <span>Canadian French · Demo voice</span>
-        <DemoNote>Simulated audio — not evidence of real voice quality or device support</DemoNote>
+        <DemoNote>Simulated audio — while this tab is hidden, position is kept and 0 s are counted</DemoNote>
       </p>
     </div>
   );

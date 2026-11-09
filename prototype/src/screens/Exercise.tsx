@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef } from "react";
 import { Lightbulb, Eye, Play, Turtle, RotateCcw, History as HistoryIcon } from "lucide-react";
 import type { PracticeItem } from "../data/fixtures";
-import { grade, type DisplayWord, type GradeResult } from "../lib/grading";
+import { grade, type DisplayWord } from "../lib/grading";
 import { plural } from "../lib/format";
 import {
   announce,
@@ -71,22 +71,40 @@ function hintFor(kind: "Recall" | "Dictation", t: { fr: string; en: string }) {
 
 let attemptSeq = 0;
 
-export function saveHistory(attemptId: string) {
+export function saveHistory(attemptId: string, manualRetry = false) {
+  if (manualRetry) patchAttempt(attemptId, { cleared: false });
   patchAttempt(attemptId, { history: "saving" });
   simulate("history", 700, true)
     .then(() => {
       const a = get().attempts.find((x) => x.id === attemptId);
       if (!a) return;
       patchAttempt(attemptId, { history: "saved" });
-      set((s) =>
-        s.history.attempts.some((r) => r.id === attemptId)
-          ? {}
-          : { history: { ...s.history, attempts: [attemptToRecord(a), ...s.history.attempts] } },
-      );
+      if (a.cleared && !manualRetry) return;
+      const rec = attemptToRecord({ ...a, history: "saved" });
+      set((s) => ({
+        history: {
+          ...s.history,
+          attempts: s.history.attempts.some((r) => r.id === attemptId)
+            ? s.history.attempts.map((r) => (r.id === attemptId ? rec : r))
+            : [rec, ...s.history.attempts],
+        },
+      }));
       announce("Saved to practice history.");
     })
     .catch(() => {
+      const a = get().attempts.find((x) => x.id === attemptId);
+      if (!a) return;
       patchAttempt(attemptId, { history: "failed" });
+      if (a.cleared && !manualRetry) return;
+      const rec = attemptToRecord({ ...a, history: "failed" });
+      set((s) => ({
+        history: {
+          ...s.history,
+          attempts: s.history.attempts.some((r) => r.id === attemptId)
+            ? s.history.attempts.map((r) => (r.id === attemptId ? rec : r))
+            : [rec, ...s.history.attempts],
+        },
+      }));
       announce("Couldn’t save to practice history. Your result is kept.", true);
     });
 }
@@ -110,19 +128,27 @@ export function submitAnswer(key: string) {
     attemptId = `att-${Date.now()}-${++attemptSeq}`;
     const a: Attempt = {
       id: attemptId,
+      sessionKey: key,
       kind: sess.kind,
       itemId: item.id,
       sentence: target.fr,
       scope: sess.mode === "step" ? "Step by step" : "Whole sentence",
       step: sess.mode === "step" ? (sess.steps[sess.index] ?? 0) + 1 : undefined,
       response: draft,
-      hinted: ui.hint, // flags are frozen at submission
+      hinted: ui.hint, // flags are frozen at submission (and updated if used before a techfail retry)
       answerKnown: ui.revealed,
       status: "pending",
       history: "saving",
     };
-    set((s) => ({ attempts: [...s.attempts, { ...a, history: "saving" }] }));
-    set((s) => ({ attempts: s.attempts.map((x) => (x.id === attemptId ? { ...x, history: "saving" } : x)) }));
+    set((s) => ({ attempts: [...s.attempts, a] }));
+  } else {
+    // Same-attempt retry after a technical failure: update the pending attempt if Show hint or Show answer was used.
+    const prev = get().attempts.find((x) => x.id === attemptId);
+    patchAttempt(attemptId, {
+      response: draft,
+      hinted: Boolean(prev?.hinted || ui.hint),
+      answerKnown: Boolean(prev?.answerKnown || ui.revealed),
+    });
   }
   patchUI(key, qk, { phase: "submitting", attemptId, emptyError: false });
   announce("Checking your answer…");
@@ -130,7 +156,15 @@ export function submitAnswer(key: string) {
     .then(() => {
       if (!get().attempts.some((x) => x.id === attemptId)) return;
       const res = grade(target.fr, draft);
-      patchAttempt(attemptId!, { status: "completed", outcome: res.correct ? "correct" : "incorrect", result: res });
+      const curUi = get().exercises[key]?.ui[qk];
+      const prev = get().attempts.find((x) => x.id === attemptId);
+      patchAttempt(attemptId!, {
+        status: "completed",
+        outcome: res.correct ? "correct" : "incorrect",
+        result: res,
+        hinted: Boolean(prev?.hinted || curUi?.hint),
+        answerKnown: Boolean(prev?.answerKnown || curUi?.revealed),
+      });
       patchUI(key, qk, { phase: "graded" });
       const a = get().attempts.find((x) => x.id === attemptId)!;
       announce(a.answerKnown ? "Checked. Recorded as answer known." : res.correct ? "Correct." : `Not quite. ${plural(res.issues.length, "difference")}.`);
@@ -145,50 +179,59 @@ export function submitAnswer(key: string) {
 
 /* ---------------- shared feedback pieces ---------------- */
 
-const TAG: Record<string, string> = { missing: "Missing word", different: "Different word", accent: "Accent", extra: "Extra word" };
+function cleanCounterpart(w?: string) {
+  return (w ?? "").replace(/^[^\p{L}\p{N}]+|[.,;:!?…»«"]+$/gu, "");
+}
 
-export function MarkedLine({ words, label }: { words: DisplayWord[]; label: string }) {
+function inlineTagFor(w: DisplayWord, side: "answer" | "target"): string | null {
+  if (w.mark === "ok") return null;
+  if (side === "answer") {
+    return w.mark === "extra" ? "Extra word" : null;
+  }
+  if (w.mark === "missing") return "Missing word";
+  const given = cleanCounterpart(w.counterpart);
+  if (w.mark === "different") return given ? `Different word · you wrote ${given}` : "Different word";
+  if (w.mark === "accent") return given ? `Accent · you wrote ${given}` : "Accent";
+  return null;
+}
+
+export function MarkedLine({
+  words,
+  label,
+  side = label === "Your answer" ? "answer" : "target",
+}: {
+  words: DisplayWord[];
+  label: string;
+  side?: "answer" | "target";
+}) {
   return (
     <div className="stack gap-1">
       <span className="def-label">{label}</span>
       <p className="compare-line" lang="fr">
-        {words.map((w, i) => (
-          <span key={i}>
-            {w.mark === "ok" ? (
-              w.text
-            ) : (
-              <span className={`tok tok--${w.mark}`}>
-                {w.text}
-                <span className="tok-tag">
-                  <span className="sr-only"> (</span>
-                  {TAG[w.mark]}
-                  <span className="sr-only">)</span>
+        {words.map((w, i) => {
+          const tag = inlineTagFor(w, side);
+          return (
+            <span key={i}>
+              {w.mark === "ok" ? (
+                w.text
+              ) : (
+                <span className={`tok tok--${w.mark}`}>
+                  {w.text}
+                  {tag && (
+                    <span className="tok-tag">
+                      <span className="sr-only"> (</span>
+                      {tag}
+                      <span className="sr-only">)</span>
+                    </span>
+                  )}
                 </span>
-              </span>
-            )}
-            {i < words.length - 1 ? " " : ""}
-          </span>
-        ))}
+              )}
+              {i < words.length - 1 ? " " : ""}
+            </span>
+          );
+        })}
       </p>
     </div>
-  );
-}
-
-export function IssueList({ result }: { result: GradeResult }) {
-  return (
-    <ul className="issues">
-      {result.issues.map((x, i) => (
-        <li key={i}>
-          <span className="t-strong">{TAG[x.kind]}:</span>
-          <span>
-            {x.kind === "missing" && <>add <span lang="fr" className="t-strong">{x.expected}</span></>}
-            {x.kind === "different" && <>you wrote <span lang="fr">{x.given}</span>; the answer has <span lang="fr" className="t-strong">{x.expected}</span></>}
-            {x.kind === "accent" && <>write <span lang="fr" className="t-strong">{x.expected}</span> with its accent (you wrote <span lang="fr">{x.given}</span>)</>}
-            {x.kind === "extra" && <>remove <span lang="fr">{x.given}</span></>}
-          </span>
-        </li>
-      ))}
-    </ul>
   );
 }
 
@@ -260,7 +303,7 @@ export function Exercise({
   const attempt = ui.attemptId ? attempts.find((a) => a.id === ui.attemptId) : undefined;
   const isLast = sess.index === sess.items.length - 1 && (sess.mode === "whole" || step === stepCount - 1);
   const busy = ui.phase === "submitting";
-  const sessionAttempts = attempts.filter((a) => sess.items.some((i) => i.id === a.itemId) && a.kind === sess.kind);
+  const sessionAttempts = attempts.filter((a) => a.sessionKey === sessionKey && !a.cleared);
   const myAudio = player && player.owner.kind === "exercise" ? player : null;
 
   const setDraft = (v: string) =>
@@ -419,10 +462,10 @@ export function Exercise({
               <Button kind="primary" busy={busy} onClick={() => submitAnswer(sessionKey)}>
                 {ui.phase === "techfail" ? "Retry check" : busy ? "Checking…" : "Check"}
               </Button>
-              <Button kind="tertiary" icon={<Lightbulb aria-hidden />} onClick={() => { patchUI(sessionKey, qk, { hint: true }); announce("Hint shown."); }} disabledReason={ui.hint ? "Hint already shown." : busy ? "Checking in progress." : undefined}>
+              <Button kind="tertiary" icon={<Lightbulb aria-hidden />} onClick={() => { patchUI(sessionKey, qk, { hint: true }); if (ui.attemptId) patchAttempt(ui.attemptId, { hinted: true }); announce("Hint shown."); }} disabledReason={ui.hint ? "Hint already shown." : busy ? "Checking in progress." : undefined}>
                 {ui.hint ? "Hint shown" : kind === "Dictation" ? "Show English hint" : "Show hint"}
               </Button>
-              <Button kind="tertiary" icon={<Eye aria-hidden />} onClick={() => { patchUI(sessionKey, qk, { revealed: true }); announce("Answer shown."); }} disabledReason={ui.revealed ? "Answer already shown." : busy ? "Checking in progress." : undefined}>
+              <Button kind="tertiary" icon={<Eye aria-hidden />} onClick={() => { patchUI(sessionKey, qk, { revealed: true }); if (ui.attemptId) patchAttempt(ui.attemptId, { answerKnown: true }); announce("Answer shown."); }} disabledReason={ui.revealed ? "Answer already shown." : busy ? "Checking in progress." : undefined}>
                 {ui.revealed ? "Answer shown" : "Show answer"}
               </Button>
             </div>
@@ -508,14 +551,13 @@ function Result({
           </div>
         ) : (
           <div className="compare">
-            <MarkedLine label="Your answer" words={r.answer} />
-            <MarkedLine label="Correct answer" words={r.target} />
-            <IssueList result={r} />
+            <MarkedLine label="Your answer" words={r.answer} side="answer" />
+            <MarkedLine label="Correct answer" words={r.target} side="target" />
           </div>
         )}
         <p className="t-support">
           Recorded as: {outcomeLabel(attempt)} · {attempt.scope}
-          {attempt.step ? `, step ${attempt.step}` : ""}. Showing a hint or the answer now doesn’t change this result.
+          {attempt.step ? `, step ${attempt.step}` : ""}. Hint and answer flags were recorded when you checked.
         </p>
         <HistoryStatus attempt={attempt} />
       </div>
@@ -543,7 +585,7 @@ export function HistoryStatus({ attempt }: { attempt: Attempt }) {
   if (attempt.history === "saving") return <Spinner label="Saving to practice history…" />;
   if (attempt.history === "saved") return <p className="t-support">Saved to practice history.</p>;
   return (
-    <Banner tone="error" title="Couldn’t save to practice history" live="assertive" actions={<Button kind="secondary" onClick={() => saveHistory(attempt.id)}>Retry saving</Button>}>
+    <Banner tone="error" title="Couldn’t save to practice history" live="assertive" actions={<Button kind="secondary" onClick={() => saveHistory(attempt.id, true)}>Retry saving</Button>}>
       Your result above is kept. Retrying won’t create a second attempt.
     </Banner>
   );

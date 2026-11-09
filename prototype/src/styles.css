@@ -152,7 +152,7 @@ a { color: var(--primary); }
 }
 .main { grid-area: main; overflow-y: auto; overflow-x: hidden; scroll-padding: 80px; position: relative; }
 .main:focus { outline: none; }
-.page { max-width: 880px; margin: 0 auto; padding: var(--s5) var(--s4) var(--s7); }
+.page { max-width: 880px; margin: 0 auto; padding: var(--s5) var(--s4) var(--s7); --surface-bg: var(--canvas); }
 .page--wide { max-width: 1120px; }
 .player-slot { grid-area: player; }
 
@@ -218,7 +218,7 @@ a { color: var(--primary); }
 .grow { flex: 1; min-width: 0; }
 .divider { border: 0; border-top: 1px solid var(--divider); margin: 0; }
 .section { display: flex; flex-direction: column; gap: var(--s4); }
-.panel { background: var(--surface); border-radius: var(--r-panel); padding: var(--s5); }
+.panel { background: var(--surface); border-radius: var(--r-panel); padding: var(--s5); --surface-bg: var(--surface); }
 .panel--flush { padding: 0; overflow: hidden; }
 .page-head { display: flex; flex-direction: column; gap: var(--s2); margin-bottom: var(--s5); }
 .page-head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; }
@@ -316,7 +316,7 @@ a { color: var(--primary); }
   display: flex; align-items: center; justify-content: center; padding: var(--s4);
 }
 .dialog {
-  background: var(--surface); border-radius: var(--r-panel); box-shadow: var(--shadow-modal);
+  background: var(--surface); --surface-bg: var(--surface); border-radius: var(--r-panel); box-shadow: var(--shadow-modal);
   width: min(560px, 100%); max-height: calc(100% - 32px); overflow: auto;
   padding: var(--s5); display: flex; flex-direction: column; gap: var(--s4);
 }
@@ -325,7 +325,7 @@ a { color: var(--primary); }
 .dialog-head h2 { flex: 1; }
 .overlay--sheet { align-items: flex-end; padding: 0; }
 .sheet {
-  background: var(--surface); width: 100%; max-height: 85%; overflow: auto;
+  background: var(--surface); --surface-bg: var(--surface); width: 100%; max-height: 85%; overflow: auto;
   border-radius: var(--r-sheet) var(--r-sheet) 0 0; box-shadow: var(--shadow-modal);
   padding: var(--s3) var(--s4) calc(var(--s5) + var(--safe-bottom));
   display: flex; flex-direction: column; gap: var(--s4);
@@ -410,7 +410,7 @@ mark.added { background: var(--mark-bg); color: inherit; padding: 0 3px; border-
 .issues { display: flex; flex-direction: column; gap: var(--s2); padding-left: 0; list-style: none; }
 .issues li { display: flex; gap: var(--s2); align-items: baseline; }
 .sticky-actions {
-  position: sticky; bottom: 0; z-index: 5; background: linear-gradient(to bottom, rgba(247, 248, 250, 0), var(--canvas) 18%);
+  position: sticky; bottom: 0; z-index: 5; background: var(--surface-bg, var(--surface));
   padding: var(--s4) 0 var(--s2); margin-top: calc(var(--s2) * -1);
 }
 .result-compact { display: flex; flex-direction: column; gap: var(--s3); padding: var(--s4) 0; }

@@ -23,6 +23,7 @@ import {
   type PlayerState,
 } from "../state/store";
 import { ensureSession, submitAnswer } from "./Exercise";
+import { computePlannedSessionCards } from "./Review";
 import { runItems } from "./Launcher";
 
 export interface DemoState {
@@ -105,12 +106,13 @@ function player(status: PlayerState["status"], extra: Partial<PlayerState> = {})
   setTimeout(() => updatePlayer({ status, ...extra }), status === "loading" ? 0 : 750);
 }
 
-function review(p: Record<string, unknown> = {}, cardUi?: (target: string) => Record<string, unknown>) {
+function review(p: Record<string, unknown> = {}, cardUi?: (target: string) => Record<string, unknown>, cardIndex = 0) {
   online();
   set((s) => {
-    const card = s.queue[0];
+    const sessionCards = computePlannedSessionCards(s.queue, s.dailyNew, s.newUsed);
+    const card = sessionCards[cardIndex] ?? sessionCards[0];
     return {
-      review: { ...s.review, phase: "active", index: 0, allowance: 31 },
+      review: { ...s.review, phase: "active", index: cardIndex, allowance: 31, sessionCards },
       reviewUi: cardUi ? { ...s.reviewUi, [card.id]: { draft: "", phase: "answering", hint: false, revealed: false, ...cardUi(card.target) } as never } : s.reviewUi,
       ...p,
     };
@@ -379,7 +381,7 @@ export const REGISTRY: ScreenEntry[] = [
       ["loading", "Queue loading", () => { set(() => ({ auth: "in" })); at("review", "SCR-REV-01", "loading"); }],
       ["nocards", "No saved cards", () => at("review", "SCR-REV-01", "nocards")],
       ["nodue", "No due cards", () => at("review", "SCR-REV-01", "nodue")],
-      ["active", "Active queue", () => { online(); set((s) => ({ review: { ...s.review, phase: "summary" } })); at("review"); }],
+      ["active", "Active queue", () => { online(); set((s) => ({ review: { ...s.review, phase: "summary", sessionCards: null } })); at("review"); }],
       ["complete", "Today complete", () => at("review", "SCR-REV-01", "complete")],
       ["error", "Error with retry", () => at("review", "SCR-REV-01", "error")],
       ["offline", "Offline · assigned cards", () => { setOffline(true); at("review"); }],
@@ -389,6 +391,7 @@ export const REGISTRY: ScreenEntry[] = [
     id: "SCR-REV-02", title: "Review answering", area: "Review",
     states: states(
       ["answer", "Answering", () => review({}, () => ({}))],
+      ["speak", "Speak card · recording & self-check", () => { const idx = computePlannedSessionCards(get().queue, get().dailyNew, get().newUsed).findIndex((c) => c.kind === "Speak"); review({}, () => ({}), Math.max(0, idx)); }],
       ["revealed", "Answer shown", () => review({}, () => ({ revealed: true }))],
       ["correct", "Correct result", () => review({}, (t) => ({ draft: t, phase: "graded", result: grade(t, t) }))],
       ["incorrect", "Incorrect result", () => review({}, (t) => ({ draft: "le", phase: "graded", result: grade(t, "le") }))],
@@ -439,9 +442,9 @@ export const REGISTRY: ScreenEntry[] = [
       ["saving", "Saving", () => at("settings", "SCR-QUO-01", "saving")],
       ["saved", "Saved", () => at("settings", "SCR-QUO-01", "saved")],
       ["failed", "Save failed", () => at("settings", "SCR-QUO-01", "failed")],
-      ["two-of-five", "2 of 5 allocation", () => { online(); set(() => ({ dailyNew: 40, newUsed: 38 })); at("review"); }],
-      ["below-used", "Cap below used", () => { online(); set(() => ({ dailyNew: 20, newUsed: 31 })); at("review"); }],
-      ["offline", "Offline · no new allocation", () => { setOffline(true); set(() => ({ dailyNew: 40, newUsed: 0 })); at("review"); }],
+      ["two-of-five", "2 of 5 allocation", () => { online(); set((s) => ({ dailyNew: 40, newUsed: 38, review: { ...s.review, phase: "summary", sessionCards: null, introduced: {} } })); at("review"); }],
+      ["below-used", "Cap below used", () => { online(); set((s) => ({ dailyNew: 20, newUsed: 31, review: { ...s.review, phase: "summary", sessionCards: null } })); at("review"); }],
+      ["offline", "Offline · no new allocation", () => { setOffline(true); set((s) => ({ dailyNew: 40, newUsed: 0, review: { ...s.review, phase: "summary", sessionCards: null } })); at("review"); }],
     ),
   },
   {
