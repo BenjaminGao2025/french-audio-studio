@@ -108,8 +108,8 @@ jobs:
           ok=0
           for i in $(seq 1 30); do
             h=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:8000/healthz || true)
-            a=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:8000 || true)
-            b=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 https://tts.gaoyuze.com || true)
+            a=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:8000/app/study || true)
+            b=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 https://tts.gaoyuze.com/app/study || true)
             echo "attempt $i: healthz=$h local=$a public=$b"
             if [ "$h" = 200 ] && [ "$a" = 200 ] && [ "$b" = 200 ]; then ok=1; break; fi
             sleep 2
