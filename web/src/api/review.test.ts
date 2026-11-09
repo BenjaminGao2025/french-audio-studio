@@ -28,12 +28,18 @@ describe("toReviewCard", () => {
   });
 
   it("old word and grammar cards fall back to questions the screen knows", () => {
-    expect(toReviewCard(card({ id: "r", mode: "recognize", target: "j'ai" }))).toMatchObject({ kind: "Fill-in", prompt: "_____ oublié mon rendez-vous." });
+    expect(toReviewCard(card({ id: "r", mode: "recognize", target: "j'ai" }))).toMatchObject({ kind: "Recall", prompt: "", target: "j'ai" });
     expect(
       toReviewCard(card({ id: "g", mode: "grammar", target: "passé composé", target_meta: { prompt_fr: "Hier, il ____ parti.", answer: "est" } })),
     ).toMatchObject({ kind: "Fill-in", prompt: "Hier, il ____ parti.", target: "est", sentenceFr: "Hier, il est parti." });
     // A word that isn't in the sentence becomes a whole-sentence Recall from the meaning.
     expect(toReviewCard(card({ id: "x", mode: "cloze", target: "chat" }))).toMatchObject({ kind: "Recall", prompt: "I forgot my appointment.", target: "J’ai oublié mon rendez-vous." });
+  });
+
+  it("keeps a recognize target even when its lemma is absent from the sentence", () => {
+    expect(toReviewCard(card({ id: "r-missing", mode: "recognize", target: " oublier " }))).toMatchObject({
+      mode: "recognize", kind: "Recall", prompt: "", target: "oublier", sentenceFr: "J’ai oublié mon rendez-vous.",
+    });
   });
 
   it("blankOut ignores case and apostrophe style and never blanks a missing word", () => {

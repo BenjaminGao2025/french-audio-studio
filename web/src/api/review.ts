@@ -74,6 +74,7 @@ export function toReviewCard(c: ServerCard): ReviewCard {
   };
   if (c.mode === "listen") return { ...shared, kind: "Listen", prompt: "", target: fr };
   if (c.mode === "speak") return { ...shared, kind: "Speak", prompt: meaning, target: fr };
+  if (c.mode === "recognize") return { ...shared, kind: "Recall", prompt: "", target: c.target.trim() };
   if (c.mode === "grammar") {
     const answer = meta.answer || c.target;
     if (meta.prompt_fr && answer) {
@@ -81,7 +82,7 @@ export function toReviewCard(c: ServerCard): ReviewCard {
       return { ...shared, kind: "Fill-in", prompt: meta.prompt_fr, target: answer, sentenceFr: full };
     }
   }
-  // cloze, recognize (old word cards) and grammar without its example: blank the word in the sentence.
+  // Cloze and grammar without its example: blank the word in the sentence.
   const blanked = blankOut(fr, c.target);
   if (blanked) return { ...shared, kind: "Fill-in", prompt: blanked, target: c.target.trim() };
   return { ...shared, kind: "Recall", prompt: meaning, target: fr };

@@ -61,6 +61,19 @@ describe("build() — every word of the sentence stays tappable", () => {
     expect(lecon.added).toBe(true);
     expect(lecon.wi).toBeUndefined();
   });
+
+  it("keeps flags and offsets when every supplied segment is a plain gap", () => {
+    const { segs, full, posOf } = build([
+      { t: "Bonjour ", added: true, mark: true },
+      { t: "madame", mark: true },
+    ]);
+    expect(segs.filter((s) => s.w)).toEqual([
+      { t: "Bonjour", w: true, added: true, mark: true },
+      { t: "madame", w: true, added: undefined, mark: true },
+    ]);
+    expect(full).toBe("Bonjour madame");
+    segs.forEach((s, i) => expect(full.slice(posOf[i], posOf[i] + s.t.length)).toBe(s.t));
+  });
 });
 
 describe("selectionText — keeps the sentence's punctuation", () => {
@@ -125,5 +138,31 @@ describe("FrText — keyboard access and native selection", () => {
     expect(host.querySelector(".fr-word.is-active")?.getAttribute("data-word")).toBe(words[1]);
     await act(async () => key("Enter"));
     expect(spy).toHaveBeenCalledWith(words[1]);
+  });
+
+  it.each([false, true])("keeps all dragged lines on an outside release (reverse=%s)", async (reverse) => {
+    const spy = vi.spyOn(store, "sayFrench").mockImplementation(() => {});
+    await render({ text: FR });
+    const words = Array.from(host.querySelectorAll<HTMLElement>(".fr-word"));
+    words.forEach((word, i) => {
+      vi.spyOn(word, "getBoundingClientRect").mockReturnValue(new DOMRect(0, Math.floor(i / 2) * 40, 80, 30));
+    });
+    const outside = document.createElement("div");
+    outside.textContent = "Outside text";
+    if (reverse) host.prepend(outside); else host.append(outside);
+    const start = reverse ? words.at(-1)! : words[0];
+    const end = reverse ? words[0] : words.at(-1)!;
+    await act(async () => {
+      start.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+      end.dispatchEvent(new Event("pointermove", { bubbles: true }));
+      const range = document.createRange();
+      range.setStart(reverse ? outside.firstChild! : words[0].firstChild!, 0);
+      const last = reverse ? words.at(-1)!.firstChild! : outside.firstChild!;
+      range.setEnd(last, last.textContent!.length);
+      window.getSelection()!.addRange(range);
+      outside.dispatchEvent(new Event("pointerup", { bubbles: true }));
+    });
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith(FR.slice(0, FR.indexOf(" ?")));
   });
 });

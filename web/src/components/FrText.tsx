@@ -66,7 +66,7 @@ interface Built {
  * recomputed from the resulting pieces so word positions stay exact.
  */
 export function build(segments?: FrSegment[], text?: string): Built {
-  const base = segments && segments.some((s) => s.w) ? segments : tokenizeFrench(segments ? segments.map((s) => s.t).join("") : (text ?? ""));
+  const base = segments ?? tokenizeFrench(text ?? "");
   const segs: FrSegment[] = [];
   for (const s of base) {
     if (s.w) {
@@ -168,7 +168,7 @@ export function FrText({
   );
 
   /** A non-collapsed selection snapped to the whole words of THIS FrText it intersects. */
-  const readSelection = useCallback((): SelectionRead | null => {
+  const readSelection = useCallback((drag?: { start: number; end: number }): SelectionRead | null => {
     const root = rootRef.current;
     const sel = typeof window !== "undefined" ? window.getSelection() : null;
     if (!root || !sel || sel.isCollapsed || sel.rangeCount === 0) return null;
@@ -177,25 +177,13 @@ export function FrText({
     const spans = Array.from(root.querySelectorAll<HTMLElement>(".fr-word"));
     let touched = spans.filter((sp) => range.intersectsNode(sp));
     if (!touched.length) return null;
-    // Clamp a range that extends outside the root to the words it actually covers on the text's
-    // first line, up to the horizontal position of the focus. Without this, a release below the
-    // sentence (whose native selection runs on into the following paragraphs) would read every
-    // word of the sentence instead of just the words that were dragged over.
-    if (!root.contains(range.endContainer)) {
-      let focusX = Number.POSITIVE_INFINITY;
-      try {
-        const probe = document.createRange();
-        const fn = sel.focusNode ?? range.endContainer;
-        probe.setStart(fn, sel.focusNode ? sel.focusOffset : range.endOffset);
-        probe.collapse(true);
-        focusX = probe.getBoundingClientRect().left;
-      } catch { /* keep Infinity: no clamp */ }
-      const lineTop = touched[0].getBoundingClientRect().top;
-      const clamped = touched.filter((sp) => {
-        const r = sp.getBoundingClientRect();
-        return Math.abs(r.top - lineTop) < 16 && r.left <= focusX + 16;
-      });
-      if (clamped.length) touched = clamped;
+    // When a mouse drag leaves this paragraph, retain the words it crossed before leaving.
+    // DOM positions work across wrapped lines and in either drag direction.
+    if (drag && (!root.contains(range.startContainer) || !root.contains(range.endContainer))) {
+      const start = Math.min(drag.start, drag.end);
+      const end = Math.max(drag.start, drag.end);
+      touched = touched.filter((sp) => Number(sp.dataset.pos) >= start && Number(sp.dataset.pos) <= end);
+      if (!touched.length) return null;
     }
     const first = touched[0];
     const last = touched[touched.length - 1];
@@ -212,9 +200,14 @@ export function FrText({
     let timer: ReturnType<typeof setTimeout> | undefined;
     let primaryDown = false; // primary mouse button held
     let touchActive = false; // a touch/pen gesture is driving selectionchange
+    let drag: { start: number; end: number } | undefined;
+    const wordAt = (e: PointerEvent) => {
+      const word = e.target instanceof Element ? e.target.closest<HTMLElement>(".fr-word") : null;
+      return word && root.contains(word) ? Number(word.dataset.pos) : undefined;
+    };
 
-    const attempt = () => {
-      const p = readSelection();
+    const attempt = (extent?: { start: number; end: number }) => {
+      const p = readSelection(extent);
       if (p) {
         fireSelection(p);
       } else {
@@ -232,6 +225,8 @@ export function FrText({
       if (isPrimaryMouse(e)) {
         primaryDown = true;
         touchActive = false;
+        const pos = wordAt(e);
+        drag = pos === undefined ? undefined : { start: pos, end: pos };
         // Drop any debounced selectionchange left over from a previous gesture; it must not fire
         // mid-drag (that is the "pause half-way speaks a partial selection" bug).
         if (timer) { clearTimeout(timer); timer = undefined; }
@@ -240,13 +235,20 @@ export function FrText({
         lastSelection.current = null;
       } else if (e.pointerType === "touch" || e.pointerType === "pen") {
         touchActive = true;
+        drag = undefined;
       }
+    };
+    const onMove = (e: PointerEvent) => {
+      if (!primaryDown || !drag) return;
+      const pos = wordAt(e);
+      if (pos !== undefined) drag.end = pos;
     };
     const onUp = (e: PointerEvent) => {
       if (!isPrimaryMouse(e)) return; // touch/pen keep the debounced selectionchange path
       primaryDown = false;
       if (timer) { clearTimeout(timer); timer = undefined; }
-      attempt(); // finish the drag on the document-level release, wherever it lands
+      attempt(drag); // finish the drag on the document-level release, wherever it lands
+      drag = undefined;
     };
     const onSelectionChange = () => {
       if (primaryDown) return; // a native mouse drag is in progress; wait for the release
@@ -256,11 +258,13 @@ export function FrText({
     };
 
     document.addEventListener("pointerdown", onDown, true);
+    document.addEventListener("pointermove", onMove, true);
     document.addEventListener("pointerup", onUp, true);
     document.addEventListener("selectionchange", onSelectionChange);
     return () => {
       if (timer) clearTimeout(timer);
       document.removeEventListener("pointerdown", onDown, true);
+      document.removeEventListener("pointermove", onMove, true);
       document.removeEventListener("pointerup", onUp, true);
       document.removeEventListener("selectionchange", onSelectionChange);
     };

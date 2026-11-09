@@ -484,7 +484,7 @@ function ReviewSession() {
   const grammar = card?.grammar ?? [];
   const sentenceFr = card?.sentenceFr ?? "";
   const revealed = u.revealed || Boolean(u.result) || u.phase === "graded" || u.phase === "techfail";
-  const typed = mode === "cloze" || mode === "grammar" || card?.kind === "Recall";
+  const typed = mode !== "recognize" && (mode === "cloze" || mode === "grammar" || card?.kind === "Recall");
   const isWordCard = mode === "cloze" || mode === "recognize" || mode === "grammar";
   const markTarget = isWordCard ? card?.target ?? "" : "";
   const suggested: number | undefined = u.suggested ?? (u.result ? (u.result.correct ? (u.hinted || u.hint ? 2 : 3) : 1) : undefined);
@@ -677,7 +677,7 @@ function ReviewSession() {
                 <p className="t-meta">Press R to replay · Space to show the answer</p>
               </div>
             )}
-            {(mode === "cloze" || mode === "grammar" || card.kind === "Recall") && (
+            {typed && (
               <div className="stack gap-3">
                 {mode === "grammar" && meta.rule && <Pill>{meta.rule}</Pill>}
                 {card.kind === "Recall" ? (

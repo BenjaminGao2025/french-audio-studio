@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReviewCard } from "../data/fixtures";
 import { ReviewScreen } from "../screens/Review";
-import { loadLibrary, resetReviewCache } from "../api/review";
+import { loadLibrary, resetReviewCache, toReviewCard } from "../api/review";
 import { fake, installFakeBackend } from "../test/fakeBackend";
 import * as store from "../state/store";
 
@@ -183,6 +183,21 @@ describe("Task C — Anki-style review card", () => {
   it("'Blank means' is absent on a Recall card, which has no blank", async () => {
     await mount(card({ id: "recall-1", kind: "Recall", prompt: "We took the bus.", target: FR }));
     expect(host.textContent).not.toContain("Blank means:");
+  });
+
+  it("a recognize lemma missing from the sentence stays a word-only front", async () => {
+    const spy = vi.spyOn(store, "sayFrench").mockImplementation(() => {});
+    await mount(toReviewCard({
+      ...fake.srs.cards[0], id: "rec-lemma", mode: "recognize", target: "aller",
+      note: { id: "rec-note", sentence: "Je vais au café.", translation_en: "I go to the cafe.", translation_zh: "" },
+    }));
+    expect(spy).toHaveBeenCalledWith("aller");
+    expect(host.querySelector('.fr-word[data-word="aller"]')).toBeTruthy();
+    expect(host.querySelector("#rev-input")).toBeNull();
+    expect(host.textContent).not.toContain("Je vais au café.");
+    expect(host.textContent).not.toContain("I go to the cafe.");
+    await act(async () => button("Show answer").click());
+    expect(host.textContent).toContain("Je vais au café.");
   });
 });
 
