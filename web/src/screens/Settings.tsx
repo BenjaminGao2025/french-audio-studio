@@ -3,6 +3,7 @@ import { LogOut, ArrowRight } from "lucide-react";
 import { MAX_SESSION_SIZE, MIN_SESSION_SIZE } from "../data/fixtures";
 import { logout, useSession } from "../api/auth";
 import { loginUrl } from "../api/client";
+import { saveReviewSettings } from "../api/review";
 import { initials } from "../components/Shell";
 import { announce, get, go, routeUrl, set, setDailyNew, setSessionSize, simulate, stopPlayback, syncChange, useApp } from "../state/store";
 import { Banner, Button, Dialog, FieldText, PageHead, Pill, Spinner } from "../components/ui";
@@ -42,12 +43,11 @@ export function DailyLimitField({ compact }: { compact?: boolean }) {
       return;
     }
     setState("saving");
-    simulate("settings", 800, true)
+    saveReviewSettings({ new_limit: n })
       .then(() => {
         setDailyNew(n);
         setState("saved");
         announce(`Daily new cards set to ${n}.`);
-        syncChange();
       })
       .catch(() => {
         setState("failed");
@@ -120,12 +120,11 @@ export function SessionSizeField() {
       return;
     }
     setState("saving");
-    simulate("settings", 800, true)
+    saveReviewSettings({ session_size: n })
       .then(() => {
         setSessionSize(n);
         setState("saved");
         announce(`Cards per review session set to ${n}. It applies from your next session.`);
-        syncChange();
       })
       .catch(() => {
         setState("failed");

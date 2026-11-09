@@ -25,7 +25,7 @@ import {
   type PlayerState,
 } from "../state/store";
 import { ensureSession, forceExerciseState, submitAnswer } from "./Exercise";
-import { computePlannedSessionCards } from "./Review";
+import { SAMPLE_QUEUE, computePlannedSessionCards } from "./Review";
 import { runItems } from "./Launcher";
 
 export interface DemoState {
@@ -59,7 +59,7 @@ function quotaDemo(p: Partial<Pick<AppState, "sessionSize" | "dailyNew" | "newUs
     ...rest,
     review: { ...s.review, phase: "summary", index: 0, completed: 0, introduced: {}, done: {}, removedNew: 0, sessionCards: null, ...reviewOverride },
   }));
-  at("review");
+  at("review", SAMPLE_QUEUE, "1");
 }
 
 function withAnalysis(multi = true) {
@@ -453,7 +453,7 @@ export const REGISTRY: ScreenEntry[] = [
       ["saving", "Saving", () => at("settings", "SCR-QUO-01", "saving")],
       ["saved", "Saved", () => at("settings", "SCR-QUO-01", "saved")],
       ["failed", "Save failed", () => at("settings", "SCR-QUO-01", "failed")],
-      ["two-of-five", "2 of 5 allocation", () => { online(); set((s) => ({ dailyNew: 40, newUsed: 38, review: { ...s.review, phase: "summary", sessionCards: null, introduced: {} } })); at("review"); }],
+      ["two-left", "2 allowances left", () => quotaDemo({ newUsed: 38 })],
       ["below-used", "Cap below used", () => { online(); set((s) => ({ dailyNew: 20, newUsed: 31, review: { ...s.review, phase: "summary", sessionCards: null } })); at("review"); }],
       ["offline", "Offline · no new allocation", () => { setOffline(true); set((s) => ({ dailyNew: 40, newUsed: 0, review: { ...s.review, phase: "summary", sessionCards: null } })); at("review"); }],
     ),
@@ -490,7 +490,7 @@ export const REGISTRY: ScreenEntry[] = [
             },
           };
         });
-        at("review");
+        at("review", SAMPLE_QUEUE, "1");
       }],
     ),
   },

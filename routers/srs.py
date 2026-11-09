@@ -74,18 +74,34 @@ def srs_queue(
 
 
 class SrsSettingsRequest(BaseModel):
-    new_limit: int = Field(ge=0, le=srs.MAX_NEW_LIMIT)
+    new_limit: int | None = Field(default=None, ge=0, le=srs.MAX_NEW_LIMIT)
+    session_size: int | None = Field(default=None, ge=srs.MIN_SESSION_SIZE, le=srs.MAX_SESSION_SIZE)
 
 
 @router.get("/api/srs/settings")
 def srs_get_settings(authorization: str | None = Header(default=None)):
-    """The learner's review settings: new_limit is None until they set one (then clients use their own)."""
-    return {"new_limit": srs.get_new_limit(_require_user_id(authorization)), "default_new_limit": srs.DEFAULT_NEW_LIMIT}
+    """The learner's review settings: each is None until they set it (then clients use the default)."""
+    user_id = _require_user_id(authorization)
+    return {
+        "new_limit": srs.get_new_limit(user_id),
+        "default_new_limit": srs.DEFAULT_NEW_LIMIT,
+        "session_size": srs.get_session_size(user_id),
+        "default_session_size": srs.DEFAULT_SESSION_SIZE,
+    }
 
 
 @router.put("/api/srs/settings")
 def srs_put_settings(req: SrsSettingsRequest, authorization: str | None = Header(default=None)):
-    return {"new_limit": srs.set_new_limit(_require_user_id(authorization), req.new_limit)}
+    """Saves the settings sent (one or both); the reply holds exactly those."""
+    user_id = _require_user_id(authorization)
+    if req.new_limit is None and req.session_size is None:
+        raise HTTPException(status_code=422, detail={"message": "Nothing to save."})
+    out: dict[str, int] = {}
+    if req.new_limit is not None:
+        out["new_limit"] = srs.set_new_limit(user_id, req.new_limit)
+    if req.session_size is not None:
+        out["session_size"] = srs.set_session_size(user_id, req.session_size)
+    return out
 
 
 class SrsPracticeRequest(BaseModel):
@@ -121,6 +137,31 @@ def srs_record_lookup(req: WordLookupRequest, authorization: str | None = Header
     """One card open of a word: increments its per-user lookup count (5s debounced)."""
     try:
         return srs.record_word_lookup(_require_user_id(authorization), req.word)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail={"message": str(exc)})
+
+
+@router.get("/api/srs/lookups")
+def srs_lookup_counts(authorization: str | None = Header(default=None)):
+    """Lookup counts of every word the learner looked up (normalized word → count)."""
+    return {"counts": srs.lookup_counts(_require_user_id(authorization))}
+
+
+class FavoriteRequest(BaseModel):
+    # A word, or a whole sentence for sentence cards
+    word: str = Field(min_length=1, max_length=600)
+    favorite: bool
+
+
+@router.get("/api/srs/favorites")
+def srs_favorites(authorization: str | None = Header(default=None)):
+    return {"words": srs.favorite_words(_require_user_id(authorization))}
+
+
+@router.put("/api/srs/favorites")
+def srs_set_favorite(req: FavoriteRequest, authorization: str | None = Header(default=None)):
+    try:
+        return srs.set_favorite(_require_user_id(authorization), req.word, req.favorite)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail={"message": str(exc)})
 
@@ -162,9 +203,10 @@ def srs_delete_note(note_id: str, authorization: str | None = Header(default=Non
 @router.get("/api/srs/cards")
 def srs_list_cards(
     q: str = Query(default="", max_length=100),
+    limit: int = Query(default=500, ge=1, le=5000),
     authorization: str | None = Header(default=None),
 ):
-    return {"cards": srs.list_cards(_require_user_id(authorization), q)}
+    return {"cards": srs.list_cards(_require_user_id(authorization), q, limit)}
 
 
 @router.delete("/api/srs/cards/{card_id}")

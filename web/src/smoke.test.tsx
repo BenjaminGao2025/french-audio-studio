@@ -12,6 +12,7 @@ import { StudyLearn } from "./screens/StudyLearn";
 import { IDEA_SENTENCE, buildSentencesForAnalysis } from "./state/study";
 import { REGISTRY } from "./screens/registry";
 import { fake, installFakeBackend } from "./test/fakeBackend";
+import { resetReviewCache } from "./api/review";
 import {
   armFailure,
   clearAttemptHistory,
@@ -47,7 +48,10 @@ function wholeDocumentSnapshot(): string {
   return `${bodyText} ${ariaLabels} ${titles} ${document.title} ${location.href} ${location.hash}`;
 }
 
-beforeEach(() => fake.reset());
+beforeEach(() => {
+  fake.reset();
+  resetReviewCache();
+});
 
 beforeAll(async () => {
   installFakeBackend();
@@ -216,13 +220,12 @@ describe("2. Review queue spacing and Speak card speaking flow", () => {
     });
   });
 
-  it("Speak cards use speaking flow: English prompt, simulated recording, Show answer, and self-check", async () => {
+  it("Speak cards use speaking flow: English prompt, say it aloud, Show answer, self-check rated on the server", async () => {
     await act(async () => resetDemo());
     await act(async () => REGISTRY.find((r) => r.id === "SCR-REV-02")!.states.find((s) => s.key === "speak")!.apply());
     await wait(50);
     const main = document.getElementById("main")!;
-    expect(main.textContent).toContain("Simulated recording");
-    expect(main.textContent).toContain("Start simulated recording");
+    expect(main.textContent).toContain("Say this in French out loud");
     expect(document.querySelector("#rev-input")).toBeNull();
 
     const showBtn = Array.from(main.querySelectorAll("button")).find((b) => b.textContent === "Show answer")!;
@@ -232,8 +235,12 @@ describe("2. Review queue spacing and Speak card speaking flow", () => {
 
     const saidOk = Array.from(main.querySelectorAll("button")).find((b) => b.textContent === "I said it correctly")!;
     await act(async () => saidOk.click());
-    await wait(800);
+    await wait(300);
     expect(main.textContent).toContain("Said correctly");
+    expect(main.textContent).toContain("Next review tomorrow");
+    const rated = fake.calls.filter((c) => /\/api\/srs\/cards\/.+\/review$/.test(c.path));
+    expect(rated).toHaveLength(1);
+    expect(rated[0].body).toMatchObject({ rating: 3 });
   });
 });
 
@@ -384,13 +391,11 @@ describe("7. self-explaining Review quota numbers and frozen session cards", () 
     expect(main.textContent).toContain(
       "31 new cards this session. 9 of today’s 40 allowances aren’t used because your session holds 40 cards and 9 go to learning and due reviews. Raise Cards per review session in Settings to fit more.",
     );
-    expect(main.textContent).toContain("has 5 new cards");
+    expect(main.textContent).toContain("Next new card:");
 
-    // Demo state: 2 allowances remain -> 2 introduced today, 3 left for later from the 5-new-card fixture sentence
-    await act(async () => REGISTRY.find((r) => r.id === "SCR-QUO-01")!.states.find((s) => s.key === "two-of-five")!.apply());
-    await wait(700);
-    expect(main.textContent).toContain("has 5 new cards. 2 will be introduced today");
-    expect(main.textContent).toContain("and 3 left for later");
+    await act(async () => REGISTRY.find((r) => r.id === "SCR-QUO-01")!.states.find((s) => s.key === "two-left")!.apply());
+    await wait(100);
+    expect(main.textContent).toContain("Today: 2 of 40 new-card allowances remain");
 
     // Start a session from default state, then lower the daily limit mid-session: only not-yet-shown new cards go
     await act(async () => resetDemo());
@@ -562,7 +567,7 @@ describe("10. Cards per review session setting and its states", () => {
     expect(mainText()).toContain("300 is the largest session.");
 
     await act(async () => {
-      armFailure("settings");
+      fake.failNext.add("/api/srs/settings");
       typeInto(fieldByLabel(label), "50");
     });
     await act(async () => findButton("Save size")!.click());
@@ -685,7 +690,10 @@ describe("12. changing limits mid-session", () => {
 
   it("changing the session size mid-session leaves the locked session alone and applies to the next one", async () => {
     await startSession();
-    await act(async () => setSessionSize(10));
+    await act(async () => {
+      setSessionSize(10); // what Settings does once the server saved it
+      fake.srs.sessionSize = 10;
+    });
     expect(get().review.sessionCards).toHaveLength(40);
     await act(async () => go("review"));
     await wait(700);
@@ -695,14 +703,17 @@ describe("12. changing limits mid-session", () => {
     await wait(50);
     expect(mainText()).toContain("Your session in progress stays at 40 cards. A new size applies from your next session.");
 
-    // Finish the locked session: the next one is planned with size 10 from what is left.
+    // Finish the locked session (the server now holds those reviews): the next one is planned with size 10 from what is left.
     await act(async () => {
       const cards = get().review.sessionCards!;
-      const newIds = cards.filter((c) => c.group === "new").map((c) => c.id);
-      set((s) => ({
-        newUsed: newIds.length,
-        review: { ...s.review, phase: "complete", completed: cards.length, introduced: Object.fromEntries(newIds.map((id) => [id, true])), done: Object.fromEntries(cards.map((c) => [c.id, true])) },
-      }));
+      const ids = new Set(cards.map((c) => c.id));
+      for (const c of fake.srs.cards)
+        if (ids.has(c.id)) {
+          if (c.state === "new") fake.srs.newToday++;
+          c.state = "review";
+          c.due = new Date(Date.now() + 86_400_000).toISOString();
+        }
+      set((s) => ({ review: { ...s.review, phase: "complete", completed: cards.length } }));
       go("review");
     });
     await wait(700);
@@ -716,7 +727,7 @@ describe("13. word library order", () => {
     await act(async () => resetDemo());
     set((s) => ({ libFilters: { ...s.libFilters, q: "" } }));
     await act(async () => go("review/library"));
-    await wait(50);
+    await wait(300);
     const numbers = () => Array.from(document.querySelectorAll("#main .lib-group .t-meta"))
         .map((e) => e.textContent!.match(/^Sentence (\d+) ·/))
         .filter((m): m is RegExpMatchArray => m !== null)

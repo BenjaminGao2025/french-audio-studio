@@ -28,6 +28,8 @@ MODES = ("listen", "cloze", "grammar", "speak", "recognize")
 MODE_ORDER = {mode: index for index, mode in enumerate(MODES)}
 DEFAULT_NEW_LIMIT = 10
 MAX_NEW_LIMIT = 200
+DEFAULT_SESSION_SIZE = 40  # cards per review session (the app's session plan; the queue itself is not capped)
+MIN_SESSION_SIZE, MAX_SESSION_SIZE = 10, 300
 DEFAULT_IMPORTANCE = 3  # 1-5 stars, like Eudic's word book
 DAY_ROLLOVER_HOUR = 4  # like Anki: a study day starts at 04:00 local time
 LEARN_AHEAD = datetime.timedelta(minutes=20)
@@ -93,6 +95,13 @@ def init_db() -> None:
                 new_limit INTEGER,
                 updated_at TEXT NOT NULL
             );
+            -- Additive: favorited words (by normalize_lookup_word), separate from importance.
+            CREATE TABLE IF NOT EXISTS word_favorites (
+                user_id INTEGER NOT NULL,
+                word TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                PRIMARY KEY (user_id, word)
+            );
             CREATE TABLE IF NOT EXISTS word_lookup_counts (
                 user_id INTEGER NOT NULL,
                 word TEXT NOT NULL,
@@ -109,6 +118,9 @@ def init_db() -> None:
         # Additive soft archive ("mastered"): the card stays, with its history, but leaves the review queue.
         if "archived_at" not in columns:
             conn.execute("ALTER TABLE srs_cards ADD COLUMN archived_at TEXT")
+        settings_columns = {row[1] for row in conn.execute("PRAGMA table_info(srs_settings)")}
+        if "session_size" not in settings_columns:
+            conn.execute("ALTER TABLE srs_settings ADD COLUMN session_size INTEGER")
     _initialized_db_paths.add(db_path)
 
 
@@ -145,6 +157,59 @@ def set_new_limit(user_id: int, new_limit: int, now: datetime.datetime | None = 
         )
         conn.commit()
     return new_limit
+
+
+def get_session_size(user_id: int) -> int | None:
+    """Cards per review session, or None when the learner never set one."""
+    with _connect() as conn:
+        row = conn.execute("SELECT session_size FROM srs_settings WHERE user_id = ?", (user_id,)).fetchone()
+    return row["session_size"] if row and row["session_size"] is not None else None
+
+
+def set_session_size(user_id: int, size: int, now: datetime.datetime | None = None) -> int:
+    """Save cards per review session (MIN_SESSION_SIZE to MAX_SESSION_SIZE). ValueError when out of range."""
+    if isinstance(size, bool) or not isinstance(size, int) or not MIN_SESSION_SIZE <= size <= MAX_SESSION_SIZE:
+        raise ValueError(f"session_size must be a whole number from {MIN_SESSION_SIZE} to {MAX_SESSION_SIZE}")
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO srs_settings (user_id, session_size, updated_at) VALUES (?, ?, ?) "
+            "ON CONFLICT(user_id) DO UPDATE SET session_size = excluded.session_size, updated_at = excluded.updated_at",
+            (user_id, size, _iso(now or _now())),
+        )
+        conn.commit()
+    return size
+
+
+def lookup_counts(user_id: int) -> dict[str, int]:
+    """Every looked-up word (normalized) with its lookup count."""
+    with _connect() as conn:
+        rows = conn.execute("SELECT word, count FROM word_lookup_counts WHERE user_id = ?", (user_id,)).fetchall()
+    return {r["word"]: int(r["count"]) for r in rows}
+
+
+def favorite_words(user_id: int) -> list[str]:
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT word FROM word_favorites WHERE user_id = ? ORDER BY created_at DESC", (user_id,)
+        ).fetchall()
+    return [r["word"] for r in rows]
+
+
+def set_favorite(user_id: int, word: str, favorite: bool, now: datetime.datetime | None = None) -> dict[str, Any]:
+    """Favorite or unfavorite a word. Never changes its lookup count or importance."""
+    normalized = normalize_lookup_word(word)
+    if not normalized:
+        raise ValueError("单词不能为空。")
+    with _connect() as conn:
+        if favorite:
+            conn.execute(
+                "INSERT OR IGNORE INTO word_favorites (user_id, word, created_at) VALUES (?, ?, ?)",
+                (user_id, normalized, _iso(now or _now())),
+            )
+        else:
+            conn.execute("DELETE FROM word_favorites WHERE user_id = ? AND word = ?", (user_id, normalized))
+        conn.commit()
+    return {"word": normalized, "favorite": favorite}
 
 
 def sentence_key(sentence: str) -> str:
@@ -215,6 +280,19 @@ def record_word_lookup(
                 "VALUES (?, ?, ?, ?, ?)",
                 (user_id, normalized, count, moment_iso, moment_iso),
             )
+        if incremented:
+            # The word's saved cards follow the lookup tier upward (a higher manual importance is kept),
+            # so the queue's importance order matches what the learner sees.
+            tier = importance_for_lookups(count)
+            rows = conn.execute(
+                "SELECT id, target FROM srs_cards WHERE user_id = ? AND mode IN ('cloze', 'recognize') AND importance < ?",
+                (user_id, tier),
+            ).fetchall()
+            ids = [r["id"] for r in rows if normalize_lookup_word(r["target"]) == normalized]
+            if ids:
+                conn.execute(
+                    f"UPDATE srs_cards SET importance = ? WHERE id IN ({','.join('?' * len(ids))})", (tier, *ids)
+                )
         conn.commit()
 
     return {

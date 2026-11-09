@@ -1,6 +1,43 @@
 /* A small in-memory stand-in for the FastAPI routes the app calls, installed as global fetch in jsdom tests. */
+import { buildLibrary, buildQueue, type LibCard } from "../data/fixtures";
+import type { ServerCard } from "../api/review";
 import { grade } from "../lib/grading";
 import { importanceFor, lookupKey } from "../lib/lookup";
+
+const BASE = Date.UTC(2026, 0, 1);
+const MODE = { Listen: "listen", Speak: "speak", "Fill-in": "cloze" } as const;
+const STATE = { new: "new", learning: "learning", review: "review" } as const;
+
+/** The demo library as the server would hold it (saved cards only). */
+function demoSrs() {
+  const { sentences, cards } = buildLibrary();
+  const byId = new Map(sentences.map((x) => [x.id, x]));
+  const toServer = (c: LibCard): ServerCard => {
+    const s = byId.get(c.sentenceId)!;
+    return {
+      id: c.id,
+      note_id: c.sentenceId,
+      mode: MODE[c.kind],
+      target: c.word ?? "",
+      target_meta: {},
+      due: new Date(BASE).toISOString(),
+      importance: 3,
+      archived: c.mastered,
+      state: STATE[c.status],
+      created_at: new Date(BASE + c.savedAt * 1000).toISOString(),
+      note: { id: s.id, sentence: s.fr, translation_en: s.en, translation_zh: "" },
+    };
+  };
+  return {
+    cards: cards.filter((c) => c.saved).map(toServer),
+    /** Today's pool in the demo's order (learning, due, new). */
+    queueIds: buildQueue(sentences, cards).map((c) => c.id),
+    favorites: new Set<string>(),
+    newLimit: 40,
+    newToday: 0,
+    sessionSize: null as number | null,
+  };
+}
 
 interface Item {
   sentence: string;
@@ -18,7 +55,9 @@ export const fake = {
   delay: 40,
   calls: [] as { method: string; path: string; body: unknown }[],
   items: new Map<string, Item>(),
+  srs: demoSrs(),
   reset() {
+    this.srs = demoSrs();
     this.lookups = {};
     this.failNext.clear();
     this.saveFails = 0;
@@ -54,7 +93,7 @@ function route(method: string, url: URL, body: Record<string, unknown>): Respons
     const word = url.searchParams.get("word") ?? "";
     return json(200, { token: word, lemma: word, pos: "", phonetic: "", explanation_cn: "", explanation_en: `dictionary: ${word}` });
   }
-  if (p === "/api/srs/lookups") {
+  if (p === "/api/srs/lookups" && method === "POST") {
     const k = lookupKey(String(body.word));
     const count = (fake.lookups[k] ?? 0) + 1;
     fake.lookups[k] = count;
@@ -70,6 +109,65 @@ function route(method: string, url: URL, body: Record<string, unknown>): Respons
     return json(200, { id, sentence: body.sentence, translation_en: body.translation_en, translation_zh: body.translation_zh, cards });
   }
   if (p === "/api/history") return json(200, { ok: true });
+  return srsRoute(method, url, body);
+}
+
+function srsRoute(method: string, url: URL, body: Record<string, unknown>): Response {
+  const p = url.pathname;
+  const db = fake.srs;
+  const find = (id: string) => db.cards.find((c) => c.id === id);
+  if (p === "/api/srs/queue") {
+    // Reviewed cards leave today's queue until they are due again (learning steps come back within minutes).
+    const soon = Date.now() + 20 * 60_000;
+    const open = db.queueIds.map(find).filter((c): c is ServerCard => !!c && !c.archived && Date.parse(c.due) <= soon);
+    const fixed = open.filter((c) => c.state !== "new");
+    const fresh = open.filter((c) => c.state === "new").slice(0, Math.max(0, db.newLimit - db.newToday));
+    const cards = [...fixed, ...fresh];
+    return json(200, {
+      cards,
+      counts: {
+        learning: cards.filter((c) => c.state === "learning").length,
+        review: cards.filter((c) => c.state === "review").length,
+        new: fresh.length,
+        total: cards.length,
+        reviewed_today: 0,
+        new_today: db.newToday,
+        new_limit: db.newLimit,
+      },
+      day_start: new Date(BASE).toISOString(),
+    });
+  }
+  if (p === "/api/srs/settings" && method === "GET")
+    return json(200, { new_limit: db.newLimit, default_new_limit: 10, session_size: db.sessionSize, default_session_size: 40 });
+  if (p === "/api/srs/settings" && method === "PUT") {
+    const out: Record<string, number> = {};
+    if (typeof body.new_limit === "number") out.new_limit = db.newLimit = body.new_limit;
+    if (typeof body.session_size === "number") out.session_size = db.sessionSize = body.session_size;
+    return json(200, out);
+  }
+  if (p === "/api/srs/cards") return json(200, { cards: db.cards });
+  if (p === "/api/srs/favorites" && method === "GET") return json(200, { words: [...db.favorites] });
+  if (p === "/api/srs/favorites" && method === "PUT") {
+    const w = lookupKey(String(body.word));
+    if (body.favorite) db.favorites.add(w);
+    else db.favorites.delete(w);
+    return json(200, { word: w, favorite: Boolean(body.favorite) });
+  }
+  if (p === "/api/srs/lookups" && method === "GET") return json(200, { counts: fake.lookups });
+  const m = p.match(/^\/api\/srs\/cards\/([^/]+)\/(review|archive)$/);
+  if (m) {
+    const c = find(decodeURIComponent(m[1]));
+    if (!c) return json(404, { detail: { message: "卡片不存在。" } });
+    if (m[2] === "archive") {
+      c.archived = Boolean(body.archived);
+      return json(200, { id: c.id, archived: c.archived });
+    }
+    if (c.state === "new") db.newToday++;
+    const again = Number(body.rating) === 1;
+    c.state = again ? "learning" : "review";
+    c.due = new Date(Date.now() + (again ? 10 * 60_000 : 86_400_000)).toISOString();
+    return json(200, { ...c, game: {} });
+  }
   return json(404, { detail: `No fake route for ${method} ${p}` });
 }
 

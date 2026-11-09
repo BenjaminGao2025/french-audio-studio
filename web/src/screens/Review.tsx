@@ -3,36 +3,62 @@ import { Bookmark, BookmarkCheck, Eye, Lightbulb, Play, Search, CloudOff, Archiv
 import {
   DEFAULT_SESSION_SIZE,
   planSession,
-  sortNewCardsForIntroduction,
   type LibCard,
   type ReviewCard,
   type SessionPlan,
 } from "../data/fixtures";
-import { grade } from "../lib/grading";
+import { ApiError } from "../api/client";
+import { favoriteKey, libraryReady, loadLibrary, loadQueue, masterCard, rateCard, ratingFor, restoreMastered, setFavorite } from "../api/review";
+import { grade, type GradeResult } from "../lib/grading";
 import { importanceFor } from "../lib/lookup";
 import { nf, plural } from "../lib/format";
-import {
-  announce,
-  get,
-  getCardLookups,
-  go,
-  introduceNewCard,
-  isCardFavorite,
-  markMastered,
-  restoreCard,
-  set,
-  simulate,
-  startPlayback,
-  syncChange,
-  toggleCardFavorite,
-  useApp,
-  type ReviewUI,
-} from "../state/store";
+import { announce, get, getCardLookups, go, introduceNewCard, set, startPlayback, useApp, type ReviewUI } from "../state/store";
 import { Banner, Button, DisabledReason, FieldText, Importance, PageHead, Pill, Skeleton, Spinner, Tabs } from "../components/ui";
 import { AccentBar, MarkedLine } from "./Exercise";
 import { runItems } from "./Launcher";
-import { SimRecorder } from "./Practice";
 import { DailyLimitField } from "./Settings";
+
+/** Design reference states set this so Due today shows their sample queue instead of loading the learner's. */
+export const SAMPLE_QUEUE = "sample-queue";
+
+const errText = (e: unknown) => (e instanceof ApiError ? e.message : "");
+
+/** Loads the library once for a screen; `n` changes retry it. */
+function useLibrary(): { state: "loading" | "ok" | "error"; error: string; retry: () => void } {
+  const [st, setSt] = useState<"loading" | "ok" | "error">(libraryReady() ? "ok" : "loading");
+  const [error, setError] = useState("");
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    let live = true;
+    if (!libraryReady()) setSt("loading");
+    loadLibrary()
+      .then(() => live && setSt("ok"))
+      .catch((e) => {
+        if (!live) return;
+        setError(errText(e));
+        setSt("error");
+      });
+    return () => {
+      live = false;
+    };
+  }, [n]);
+  return { state: st, error, retry: () => setN((x) => x + 1) };
+}
+
+const playCard = (text: string) =>
+  startPlayback({ kind: "review", label: "Card audio", route: "review/session" }, Math.max(1, text.length / 13), { texts: [text] });
+
+/** "in 10 minutes", "tomorrow", "in 4 days" for the next review date the server set. */
+export function dueIn(iso: string, now = Date.now()): string {
+  const ms = Date.parse(iso) - now;
+  if (!Number.isFinite(ms) || ms <= 60_000) return "in a minute";
+  const min = Math.round(ms / 60_000);
+  if (min < 60) return `in ${plural(min, "minute")}`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `in ${plural(h, "hour")}`;
+  const d = Math.round(h / 24);
+  return d === 1 ? "tomorrow" : `in ${d} days`;
+}
 
 const TABS = [
   { value: "due", label: "Due today" },
@@ -110,6 +136,7 @@ export function quotaCopy(p: SessionPlan, sessionSize: number, dailyNew: number,
       ? `${plural(p.newCount, "new card")} — all of today’s allowance.`
       : `${plural(p.newCount, "new card")} — all of the ${p.remainingAllowances} allowances left today.`;
   }
+  if (p.newAvailable === 0) return "No new cards are waiting for today.";
   return `Only ${p.newAvailable} new ${p.newAvailable === 1 ? "card is" : "cards are"} waiting in your library.`;
 }
 
@@ -121,22 +148,35 @@ function DueToday() {
   const dailyNew = useApp((s) => s.dailyNew);
   const newUsed = useApp((s) => s.newUsed);
   const sessionSize = useApp((s) => s.sessionSize);
-  const savedCards = useApp((s) => s.cards.filter((c) => c.saved).length);
+  const savedCards = useApp((s) => s.cards.length);
   const sentences = useApp((s) => s.sentences.length);
   const [load, setLoad] = useState<"loading" | "ok" | "error">("loading");
+  const [loadError, setLoadError] = useState("");
+  const [libOk, setLibOk] = useState(libraryReady());
   const [n, setN] = useState(0);
+  const sample = useApp((s) => Boolean(s.ss[SAMPLE_QUEUE]));
   useEffect(() => {
+    if (sample) return setLoad("ok");
     setLoad("loading");
     let live = true;
-    simulate("queue", 600, true, { needsNetwork: false })
+    loadQueue()
       .then(() => live && setLoad("ok"))
-      .catch(() => live && setLoad("error"));
+      .catch((e) => {
+        if (!live) return;
+        setLoadError(errText(e));
+        setLoad("error");
+      });
+    // The library totals below are secondary; the session works without them.
+    loadLibrary()
+      .then(() => live && setLibOk(true))
+      .catch(() => undefined);
     return () => {
       live = false;
     };
-  }, [n]);
+  }, [n, sample]);
 
-  const state = forced || (load !== "ok" ? load : offline ? "offline" : review.phase === "complete" ? "complete" : "active");
+  const emptyState = queue.length === 0 && review.phase !== "active" && review.phase !== "complete" ? (libOk && savedCards === 0 ? "nocards" : "nodue") : null;
+  const state = forced || (load !== "ok" ? load : offline ? "offline" : review.phase === "complete" ? "complete" : (emptyState ?? "active"));
   // Once a session starts, its card list is frozen so returning to Due today or changing dailyNew mid-session
   // does not alter the session's card count or progress.
   const activeCards = useSessionCards();
@@ -179,7 +219,7 @@ function DueToday() {
       )}
       {state === "error" && (
         <Banner tone="error" title="Today’s cards didn’t load" live="assertive" actions={<Button kind="secondary" onClick={() => setN(n + 1)}>Retry</Button>}>
-          Your cards and progress are safe. This is a simulated loading failure.
+          Your cards and progress are safe. {loadError || "The server didn’t respond."}
         </Banner>
       )}
       {state === "nocards" && (
@@ -189,7 +229,7 @@ function DueToday() {
       )}
       {state === "nodue" && (
         <Banner tone="neutral" title="No cards are due right now">
-          Your library has {plural(savedCards, "saved card")}, but none are due today and no new cards are assigned. Come back tomorrow, or practise with Recall or Dictation.
+          {libOk ? `Your library has ${plural(savedCards, "saved card")}, but none` : "None of your cards"} are due today and no new cards are assigned. Come back tomorrow, or practise with Recall or Dictation.
         </Banner>
       )}
       {state === "complete" && (
@@ -251,7 +291,7 @@ function DueToday() {
           <dl className="stat-grid">
             <div className="stat"><dt className="t-support">Daily new-card limit</dt><dd className="t-section num" style={{ margin: 0 }}>{dailyNew} cards</dd></div>
             <div className="stat"><dt className="t-support">New cards introduced today</dt><dd className="t-section num" style={{ margin: 0 }}>{newUsed}</dd></div>
-            <div className="stat"><dt className="t-support">Your whole library</dt><dd className="t-section num" style={{ margin: 0 }}>{sentences} sentences · {nf.format(savedCards)} cards</dd></div>
+            <div className="stat"><dt className="t-support">Your whole library</dt><dd className="t-section num" style={{ margin: 0 }}>{libOk ? `${nf.format(sentences)} sentences · ${nf.format(savedCards)} cards` : "…"}</dd></div>
           </dl>
           <p className="t-meta">Today’s session, the daily new-card limit and your whole library are separate numbers.</p>
           <span className="sr-only">Queue pool: {queue.length} cards</span>
@@ -267,34 +307,13 @@ function QuotaExplainer({ quotaLine }: { quotaLine: string | null }) {
   const dailyNew = useApp((s) => s.dailyNew);
   const newUsed = useApp((s) => s.newUsed);
   const offline = useApp((s) => s.offline);
-  const cards = useApp((s) => s.cards);
-  const sentences = useApp((s) => s.sentences);
-  const lookups = useApp((s) => s.lookups);
+  const queue = useApp((s) => s.queue);
   const introduced = useApp((s) => s.review.introduced);
+  const done = useApp((s) => s.review.done);
 
   const remaining = Math.max(0, dailyNew - newUsed);
-
-  // Derive the next sentence with un-introduced new cards directly from the library fixtures.
-  const nextSentenceInfo = useMemo(() => {
-    const orderedNew = sortNewCardsForIntroduction(
-      cards.filter((c) => c.saved && !c.mastered && c.status === "new"),
-      lookups,
-    );
-    const introCount = Object.keys(introduced).length;
-    const skip = Math.max(0, newUsed - introCount);
-    const waiting = orderedNew.filter((c) => !introduced[c.id]).slice(skip);
-    const first = waiting[0];
-    if (!first) return null;
-    const sentence = sentences.find((s) => s.id === first.sentenceId)!;
-    const sentenceCards = waiting.filter((c) => c.sentenceId === first.sentenceId);
-    const todayCards = sentenceCards.slice(0, remaining);
-    const laterCards = sentenceCards.slice(remaining);
-    return { sentence, sentenceCards, todayCards, laterCards };
-  }, [cards, sentences, lookups, introduced, newUsed, remaining]);
-
-  const nextSentenceNew = nextSentenceInfo?.sentenceCards.length ?? 0;
-  const today = nextSentenceInfo?.todayCards.length ?? 0;
-  const later = nextSentenceInfo?.laterCards.length ?? 0;
+  // The server already put today's new cards in introduction order.
+  const nextNew = queue.find((c) => c.group === "new" && !introduced[c.id] && !done[c.id]);
 
   return (
     <section className="stack gap-4" aria-labelledby="quota-h">
@@ -303,7 +322,8 @@ function QuotaExplainer({ quotaLine }: { quotaLine: string | null }) {
       <ul className="stack gap-2" style={{ paddingLeft: 20 }}>
         <li>Only a new card’s first appearance in Review uses one of today’s allowances.</li>
         <li>Saving cards, due reviews, Recall, Dictation, marking mastered and Undo don’t use or refund an allowance.</li>
-        <li>New cards are introduced in the order you saved them; ties go to higher importance, then card ID.</li>
+        <li>New cards are introduced by importance first, then in the order you saved them.</li>
+        <li>A sentence brings at most one card a day; its other cards follow on later days.</li>
       </ul>
       <div className="panel stack gap-2" aria-live="polite">
         <p className="t-strong">Today: {remaining} of {dailyNew} new-card allowances remain</p>
@@ -314,12 +334,9 @@ function QuotaExplainer({ quotaLine }: { quotaLine: string | null }) {
           </p>
         ) : remaining === 0 ? (
           <p>No more new cards today. Due reviews continue as usual.</p>
-        ) : nextSentenceInfo ? (
+        ) : nextNew ? (
           <p>
-            The next sentence in your library (Sentence {nextSentenceInfo.sentence.number}) has {nextSentenceNew} new cards.{" "}
-            {today === nextSentenceNew
-              ? `All ${nextSentenceNew} can be introduced today.`
-              : `${today} will be introduced today (${nextSentenceInfo.todayCards.map((c) => (c.word ? `${c.kind} · ${c.word}` : c.kind)).join(", ")}) and ${later} left for later (${nextSentenceInfo.laterCards.map((c) => (c.word ? `${c.kind} · ${c.word}` : c.kind)).join(", ")}).`}
+            Next new card: {nextNew.kind} · <span lang="fr">{nextNew.kind === "Fill-in" ? nextNew.target : nextNew.sentenceFr}</span>
           </p>
         ) : null}
         {offline && (
@@ -327,7 +344,6 @@ function QuotaExplainer({ quotaLine }: { quotaLine: string | null }) {
             <CloudOff aria-hidden width={16} height={16} /> New allowances need a connection to be assigned. Cards already on this device can continue.
           </p>
         )}
-        <p className="t-meta">Cross-device allocation is a simulated state in this prototype.</p>
       </div>
       <DailyLimitField compact />
     </section>
@@ -359,6 +375,17 @@ function ReviewSession() {
     introduceNewCard(card.id);
   }, [card?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Time on the card, sent with the review.
+  const shownAt = useRef(Date.now());
+  useEffect(() => {
+    shownAt.current = Date.now();
+  }, [card?.id]);
+
+  // A finished session asks the server for what is left today (learning cards come back when they are due).
+  useEffect(() => {
+    if (review.phase === "complete") loadQueue().catch(() => undefined);
+  }, [review.phase]);
+
   // A new card without an allowance is never shown; the effect above removes it from the locked session.
   if (card && card.group === "new" && !review.introduced[card.id] && noAllowance && review.phase === "active") return null;
 
@@ -366,7 +393,7 @@ function ReviewSession() {
     return (
       <div className="stack gap-4">
         <Banner tone="success" title="Review complete" live="polite">
-          {review.completed} of {cards.length} cards in this session completed. Review results updated each card’s schedule (simulated).
+          {review.completed} of {cards.length} cards in this session completed. Each review updated that card’s schedule.
         </Banner>
         {review.removedNew > 0 && <p className="t-support">{plural(review.removedNew, "new card")} removed because you lowered today’s limit.</p>}
         <div className="btn-row">
@@ -382,6 +409,20 @@ function ReviewSession() {
   const patch = (p: Partial<ReviewUI>) => set((s) => ({ reviewUi: { ...s.reviewUi, [card.id]: { ...(s.reviewUi[card.id] ?? u), ...p } } }));
   const isLast = review.index === cards.length - 1;
 
+  /** Records the review on the server; a failure leaves the card unanswered so it can be retried. */
+  const record = (result: GradeResult, flags: { hinted: boolean; answerKnown: boolean }, answer: string | undefined, said: string) => {
+    rateCard(card.id, ratingFor({ correct: result.correct, ...flags }), { answer, durationMs: Date.now() - shownAt.current })
+      .then((saved) => {
+        patch({ phase: "graded", result, ...flags, nextDue: saved.due });
+        announce(said);
+        requestAnimationFrame(() => document.getElementById("rev-result")?.focus());
+      })
+      .catch(() => {
+        patch({ phase: "techfail" });
+        announce("Checking didn’t finish. This is not a wrong answer.", true);
+      });
+  };
+
   const submitTyped = () => {
     if (u.phase === "submitting" || u.phase === "graded") return;
     if (!u.draft.trim()) {
@@ -390,44 +431,18 @@ function ReviewSession() {
       return;
     }
     // Same-attempt retry after techfail updates hinted / answerKnown if Show hint or Show answer was used.
-    const frozen = { hinted: Boolean(u.hinted || u.hint), answerKnown: Boolean(u.answerKnown || u.revealed) };
-    patch({ phase: "submitting", emptyError: false, ...frozen });
-    simulate("grading", 700, true, { needsNetwork: false })
-      .then(() => {
-        const cur = get().reviewUi[card.id] ?? u;
-        const result = grade(card.target, u.draft);
-        patch({
-          phase: "graded",
-          result,
-          hinted: Boolean(cur.hinted || cur.hint),
-          answerKnown: Boolean(cur.answerKnown || cur.revealed),
-        });
-        announce(cur.answerKnown || cur.revealed ? "Checked. Recorded as answer known." : result.correct ? "Correct. Review recorded." : "Not quite. Review recorded.");
-        requestAnimationFrame(() => document.getElementById("rev-result")?.focus());
-        syncChange();
-      })
-      .catch(() => {
-        patch({ phase: "techfail" });
-        announce("Checking didn’t finish. This is not a wrong answer.", true);
-      });
+    const flags = { hinted: Boolean(u.hinted || u.hint), answerKnown: Boolean(u.answerKnown || u.revealed) };
+    patch({ phase: "submitting", emptyError: false, ...flags });
+    const result = grade(card.target, u.draft);
+    record(result, flags, u.draft, flags.answerKnown ? "Checked. Recorded as answer known." : result.correct ? "Correct. Review recorded." : "Not quite. Review recorded.");
   };
 
   const submitSelfCheck = (saidCorrectly: boolean) => {
     if (u.phase === "submitting" || u.phase === "graded") return;
-    const frozen = { hinted: Boolean(u.hinted || u.hint), selfCheck: saidCorrectly };
-    patch({ phase: "submitting", ...frozen });
-    simulate("grading", 700, true, { needsNetwork: false })
-      .then(() => {
-        const result = saidCorrectly ? grade(card.target, card.target) : grade(card.target, "");
-        patch({ phase: "graded", result, selfCheck: saidCorrectly, answerKnown: false });
-        announce(saidCorrectly ? "Marked as said correctly. Review recorded." : "Marked for more practice. Review recorded.");
-        requestAnimationFrame(() => document.getElementById("rev-result")?.focus());
-        syncChange();
-      })
-      .catch(() => {
-        patch({ phase: "techfail" });
-        announce("Checking didn’t finish. This is not a wrong answer.", true);
-      });
+    const flags = { hinted: Boolean(u.hinted || u.hint), answerKnown: false };
+    patch({ phase: "submitting", selfCheck: saidCorrectly, hinted: flags.hinted });
+    const result = saidCorrectly ? grade(card.target, card.target) : grade(card.target, "");
+    record(result, flags, undefined, saidCorrectly ? "Marked as said correctly. Review recorded." : "Marked for more practice. Review recorded.");
   };
 
   const next = () => {
@@ -461,7 +476,7 @@ function ReviewSession() {
       <div className="stack gap-3">
         {(card.kind === "Speak" || card.kind === "Recall") && (
           <>
-            <p className="t-support">{isSpeak ? "Say this in French, then show the answer to check yourself." : "Write this in French."}</p>
+            <p className="t-support">{isSpeak ? "Say this in French out loud, then show the answer to check yourself." : "Write this in French."}</p>
             <p className="prompt-en">{card.prompt}</p>
           </>
         )}
@@ -475,8 +490,7 @@ function ReviewSession() {
           <>
             <p className="t-support">Listen and type what you hear.</p>
             <div className="btn-row">
-              <Button kind="secondary" icon={<Play aria-hidden />} aria-label="Play card audio" onClick={() => startPlayback({ kind: "review", label: "Practice audio", route: "review/session" }, 4.5)}>Play</Button>
-              <Pill tone="demo">Simulated audio</Pill>
+              <Button kind="secondary" icon={<Play aria-hidden />} aria-label="Play card audio" onClick={() => playCard(card.target)}>Play</Button>
             </div>
           </>
         )}
@@ -498,7 +512,6 @@ function ReviewSession() {
       {u.phase !== "graded" ? (
         isSpeak ? (
           <div className="stack gap-4">
-            <SimRecorder id={`rev-${card.id}`} onRecorded={() => patch({ recorded: true })} />
             {u.revealed && (
               <div className="panel stack gap-2" role="status">
                 <span className="def-label">French answer</span>
@@ -508,7 +521,7 @@ function ReviewSession() {
                     kind="tertiary"
                     icon={<Play aria-hidden />}
                     style={{ marginLeft: -12 }}
-                    onClick={() => startPlayback({ kind: "review", label: "Practice audio", route: "review/session" }, 4.5)}
+                    onClick={() => playCard(card.target)}
                   >
                     Play answer
                   </Button>
@@ -624,7 +637,7 @@ function ReviewSession() {
                 </div>
               )}
               <p className="t-support">
-                Review recorded. The review scheduler sets this card’s next date (simulated; no interval is shown in this prototype). Hint and answer flags were recorded when you checked.
+                Review recorded{u.nextDue ? <>. Next review {dueIn(u.nextDue)}</> : ""}.{u.hinted || u.answerKnown ? " Using the hint or the answer makes it come back sooner." : ""}
               </p>
             </div>
             <div className="btn-row">
@@ -633,7 +646,7 @@ function ReviewSession() {
                 kind="tertiary"
                 icon={<Archive aria-hidden />}
                 onClick={() => {
-                  markMastered(card.id);
+                  masterCard(card.id);
                   next();
                 }}
               >
@@ -661,18 +674,18 @@ function Library({ mode }: { mode: "library" | "saved" }) {
   const favorites = useApp((s) => s.favorites);
   const f = useApp((s) => s.libFilters);
   const forced = useApp((s) => s.ss["SCR-LIB-01"]);
+  const lib = useLibrary();
   const [limit, setLimit] = useState(12);
   const [selecting, setSelecting] = useState(false);
   const [sel, setSel] = useState<Record<string, boolean>>({});
   const setF = (p: Partial<typeof f>) => set((s) => ({ libFilters: { ...s.libFilters, ...p } }));
 
   const q = f.q.trim().toLowerCase();
-  const savedTotal = cards.filter((c) => c.saved).length;
+  const savedTotal = cards.length;
   const matchCard = (c: LibCard) => {
     const wordLookups = getCardLookups({ lookups }, c);
-    const fav = isCardFavorite({ favorites }, c);
+    const fav = Boolean(favorites[favoriteKey(c)]);
     return (
-      (mode === "saved" ? c.saved : !f.savedOnly || c.saved) &&
       (f.mastered === "hide" ? !c.mastered : f.mastered === "only" ? c.mastered : true) &&
       (!f.minImportance || (wordLookups !== null && importanceFor(wordLookups) >= f.minImportance)) &&
       (!f.favoritesOnly || fav)
@@ -701,23 +714,29 @@ function Library({ mode }: { mode: "library" | "saved" }) {
   const selectedIds = Object.keys(sel).filter((k) => sel[k]);
   const selSentences = new Set(cards.filter((c) => sel[c.id]).map((c) => c.sentenceId)).size;
 
-  if (forced === "loading")
+  if (forced === "loading" || lib.state === "loading")
     return (
       <div className="stack gap-3">
         <Spinner label="Loading your library…" />
         <Skeleton lines={5} />
       </div>
     );
+  if (lib.state === "error")
+    return (
+      <Banner tone="error" title="Your library didn’t load" live="assertive" actions={<Button kind="secondary" onClick={lib.retry}>Retry</Button>}>
+        Your cards are safe. {lib.error || "The server didn’t respond."}
+      </Banner>
+    );
 
   const startBulk = () => {
     const chosen = cards.filter((c) => sel[c.id]);
-    const sids = Array.from(new Set(chosen.map((c) => c.sentenceId))).slice(0, 3);
+    const sids = Array.from(new Set(chosen.map((c) => c.sentenceId)));
     const items = sids.map((id, i) => {
       const s = sentences.find((x) => x.id === id)!;
       return { id: s.id, fr: s.fr, en: s.en, label: `Selected sentence ${i + 1}`, steps: [{ fr: s.fr, en: s.en }] };
     });
     const key = `run:Recall:bulk:${Date.now()}`;
-    runItems.set(key, { kind: "Recall", source: `Selected cards · ${plural(chosen.length, "card")} (demo plays ${items.length} sample questions)`, items });
+    runItems.set(key, { kind: "Recall", source: `Selected cards · ${plural(items.length, "sentence")}`, items });
     set(() => ({ activeRun: key }));
     go("study/run");
   };
@@ -735,9 +754,6 @@ function Library({ mode }: { mode: "library" | "saved" }) {
         <div style={{ flex: "1 1 220px" }}>
           <FieldText label="Search" type="search" inputMode="search" value={f.q} onChange={(v) => setF({ q: v })} placeholder="French or English" lang="fr" />
         </div>
-        {mode === "library" && (
-          <label className="check check--box"><input type="checkbox" checked={f.savedOnly} onChange={(e) => setF({ savedOnly: e.target.checked })} /> Saved only</label>
-        )}
         <label className="field" style={{ minWidth: 170 }}>
           <span className="field-label">Mastered cards</span>
           <select className="select" value={f.mastered} onChange={(e) => setF({ mastered: e.target.value as typeof f.mastered })}>
@@ -788,12 +804,12 @@ function Library({ mode }: { mode: "library" | "saved" }) {
                   <p lang="fr" className="t-strong">{s.fr}</p>
                   <p className="t-support">{s.en}</p>
                 </div>
-                <span className="t-meta">Sentence {s.number} · {s.topic}</span>
+                <span className="t-meta">Sentence {s.number}{s.topic ? ` · ${s.topic}` : ""}</span>
               </div>
               <ul className="stack" aria-label={`Cards from sentence ${s.number}`}>
                 {cs.map((c) => {
                   const wordLookups = getCardLookups({ lookups }, c);
-                  const fav = isCardFavorite({ favorites }, c);
+                  const fav = Boolean(favorites[favoriteKey(c)]);
                   return (
                     <li key={c.id} className="lib-card" data-card-id={c.id} data-word={c.word}>
                       {selecting && c.saved && (
@@ -802,7 +818,7 @@ function Library({ mode }: { mode: "library" | "saved" }) {
                       <span className="grow" style={{ minWidth: 160 }}>
                         {c.kind} card{c.word ? <> · <span lang="fr">{c.word}</span></> : ""}
                       </span>
-                      {c.saved ? <Pill>{c.mastered ? "Mastered" : STATUS_LABEL[c.status]}</Pill> : <Pill tone="warning">Not saved</Pill>}
+                      <Pill>{c.mastered ? "Mastered" : STATUS_LABEL[c.status]}</Pill>
                       {wordLookups !== null ? (
                         <Importance count={wordLookups} />
                       ) : (
@@ -813,16 +829,17 @@ function Library({ mode }: { mode: "library" | "saved" }) {
                         className="btn--sm-text"
                         aria-pressed={fav}
                         icon={fav ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />}
-                        onClick={() => toggleCardFavorite(c)}
+                        onClick={() => {
+                          const s0 = sentences.find((x) => x.id === c.sentenceId);
+                          void setFavorite(c.word || s0?.fr || "", !fav);
+                        }}
                       >
                         {fav ? "Favorited" : "Favorite"}
                       </Button>
-                      {!c.saved ? (
-                        <Button kind="tertiary" className="btn--sm-text" onClick={() => { set((st) => ({ cards: st.cards.map((x) => (x.id === c.id ? { ...x, saved: true } : x)) })); announce("Card saved. It didn’t use today’s new-card limit."); syncChange(); }}>Save card</Button>
-                      ) : c.mastered ? (
+                      {c.mastered ? (
                         <Button kind="tertiary" className="btn--sm-text" onClick={() => go("review/mastered")}>In Mastered</Button>
                       ) : (
-                        <Button kind="tertiary" className="btn--sm-text" icon={<Archive aria-hidden />} onClick={() => markMastered(c.id)}>Mark mastered</Button>
+                        <Button kind="tertiary" className="btn--sm-text" icon={<Archive aria-hidden />} onClick={() => masterCard(c.id)}>Mark mastered</Button>
                       )}
                     </li>
                   );
@@ -858,6 +875,7 @@ function MasteredList() {
   const cards = useApp((s) => s.cards);
   const sentences = useApp((s) => s.sentences);
   const forced = useApp((s) => s.ss["SCR-MAS-02"]);
+  const lib = useLibrary();
   const [q, setQ] = useState("");
   const [pending, setPending] = useState<Record<string, "pending" | "error" | "done">>({});
   const mastered = forced === "empty" ? [] : cards.filter((c) => c.mastered || pending[c.id] === "done");
@@ -868,18 +886,29 @@ function MasteredList() {
   });
   const restore = (id: string) => {
     setPending((p) => ({ ...p, [id]: "pending" }));
-    simulate("restore", 800, true)
+    restoreMastered(id)
       .then(() => {
-        restoreCard(id);
         setPending((p) => ({ ...p, [id]: "done" }));
         announce("Card restored to your default review.");
-        syncChange();
       })
       .catch(() => {
         setPending((p) => ({ ...p, [id]: "error" }));
         announce("Couldn’t restore the card. It’s still in Mastered.", true);
       });
   };
+  if (lib.state === "loading" && forced !== "empty")
+    return (
+      <div className="stack gap-3">
+        <Spinner label="Loading mastered cards…" />
+        <Skeleton lines={4} />
+      </div>
+    );
+  if (lib.state === "error" && forced !== "empty")
+    return (
+      <Banner tone="error" title="Mastered cards didn’t load" live="assertive" actions={<Button kind="secondary" onClick={lib.retry}>Retry</Button>}>
+        {lib.error || "The server didn’t respond."}
+      </Banner>
+    );
   if (!mastered.length)
     return (
       <Banner tone="neutral" title="No mastered cards">
@@ -921,7 +950,7 @@ function MasteredList() {
           })}
         </ul>
       )}
-      <p className="note"><Search aria-hidden /> Batch mastery and permanent deletion aren’t part of this prototype.</p>
+      {shown.length > 30 && <p className="note"><Search aria-hidden /> Showing the first 30. Search to find others.</p>}
     </div>
   );
 }

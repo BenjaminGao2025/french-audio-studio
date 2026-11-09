@@ -638,3 +638,51 @@ class PlaceholderMeaningTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SessionSizeAndFavoriteTests(unittest.TestCase):
+    def setUp(self):
+        self.client = TestClient(tts_service.app)
+        self.user_id, self.headers = _new_user()
+
+    def test_session_size_is_saved_per_user_and_validated(self):
+        first = self.client.get("/api/srs/settings", headers=self.headers).json()
+        self.assertEqual((first["session_size"], first["default_session_size"]), (None, 40))
+        res = self.client.put("/api/srs/settings", headers=self.headers, json={"session_size": 120})
+        self.assertEqual(res.json(), {"session_size": 120})
+        # Saving one setting keeps the other
+        self.client.put("/api/srs/settings", headers=self.headers, json={"new_limit": 15})
+        now = self.client.get("/api/srs/settings", headers=self.headers).json()
+        self.assertEqual((now["new_limit"], now["session_size"]), (15, 120))
+        for bad in (9, 301, "x"):
+            self.assertEqual(
+                self.client.put("/api/srs/settings", headers=self.headers, json={"session_size": bad}).status_code, 422
+            )
+        self.assertEqual(self.client.put("/api/srs/settings", headers=self.headers, json={}).status_code, 422)
+        with self.assertRaises(ValueError):
+            srs.set_session_size(self.user_id, True)
+        other_id, _ = _new_user()
+        self.assertIsNone(srs.get_session_size(other_id))
+
+    def test_favorites_are_normalized_and_leave_lookup_counts_alone(self):
+        srs.record_word_lookup(self.user_id, "Oublié")
+        res = self.client.put("/api/srs/favorites", headers=self.headers, json={"word": " OUBLIÉ ", "favorite": True})
+        self.assertEqual(res.json(), {"word": "oublié", "favorite": True})
+        self.client.put("/api/srs/favorites", headers=self.headers, json={"word": "oublié", "favorite": True})
+        self.assertEqual(self.client.get("/api/srs/favorites", headers=self.headers).json(), {"words": ["oublié"]})
+        self.assertEqual(self.client.get("/api/srs/lookups", headers=self.headers).json(), {"counts": {"oublié": 1}})
+        self.client.put("/api/srs/favorites", headers=self.headers, json={"word": "oublié", "favorite": False})
+        self.assertEqual(srs.favorite_words(self.user_id), [])
+        self.assertEqual(self.client.get("/api/srs/favorites").status_code, 401)
+
+    def test_lookups_raise_the_word_cards_importance_but_never_lower_it(self):
+        note = srs.add_note(self.user_id, "J’ai oublié mon billet.", targets=[{"text": "oublié", "mode": "cloze"}])
+        other = srs.add_note(self.user_id, "Le billet est cher.", targets=[{"text": "billet", "mode": "cloze", "importance": 5}])
+        start = datetime.datetime(2026, 11, 1, tzinfo=UTC)
+        for i in range(5):
+            srs.record_word_lookup(self.user_id, "Oublié", now=start + datetime.timedelta(minutes=i))
+        srs.record_word_lookup(self.user_id, "billet", now=start)
+        cards = {c["target"]: c for c in srs.list_cards(self.user_id)}
+        self.assertEqual(cards["oublié"]["importance"], 4)
+        self.assertEqual(cards["billet"]["importance"], 5)
+        self.assertTrue(note["id"] and other["id"])

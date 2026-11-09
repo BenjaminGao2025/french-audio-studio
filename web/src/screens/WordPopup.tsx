@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
+import { Bookmark, BookmarkCheck } from "lucide-react";
 import { ApiError } from "../api/client";
 import { lookupWord, recordLookup, useLookupCount, type DictionaryEntry } from "../api/lookup";
+import { loadFavorites, setFavorite } from "../api/review";
 import type { StudySentence } from "../data/fixtures";
-import { announce, get, patchStudy } from "../state/store";
+import { lookupKey } from "../lib/lookup";
+import { announce, get, patchStudy, useApp } from "../state/store";
 import { Banner, Button, Disclosure, Importance, Skeleton, Spinner } from "../components/ui";
 
 /** Remembers that a word of this sentence was looked up, so Add to review can offer it as a Fill-in card. */
@@ -38,6 +41,10 @@ export function WordPanel({
   const [st, setSt] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState("");
   const [counted, setCounted] = useState<boolean | null>(null);
+  const fav = useApp((s) => Boolean(s.favorites[lookupKey(entry)]));
+  useEffect(() => {
+    loadFavorites().catch(() => undefined);
+  }, []);
 
   const load = () => {
     setSt("loading");
@@ -130,9 +137,20 @@ export function WordPanel({
       <p className="t-meta">Meanings are written by AI and can be wrong. Each lookup raises the word’s importance.</p>
 
       <div className="btn-row" style={{ justifyContent: "space-between" }}>
-        <Button kind="tertiary" className="btn--sm-text" style={{ marginLeft: -12 }} onClick={onGrammar}>
-          Grammar for this sentence
-        </Button>
+        <div className="row gap-2">
+          <Button kind="tertiary" className="btn--sm-text" style={{ marginLeft: -12 }} onClick={onGrammar}>
+            Grammar for this sentence
+          </Button>
+          <Button
+            kind="tertiary"
+            className="btn--sm-text"
+            aria-pressed={fav}
+            icon={fav ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />}
+            onClick={() => void setFavorite(entry, !fav)}
+          >
+            {fav ? "Favorited" : "Favorite"}
+          </Button>
+        </div>
         {!inSheet && <Button kind="tertiary" className="btn--sm-text" onClick={onClose}>Close</Button>}
       </div>
     </div>

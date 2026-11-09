@@ -18,6 +18,7 @@ import {
   User,
 } from "lucide-react";
 import { useSession } from "../api/auth";
+import { undoMastered } from "../api/review";
 import { cx, fmtClock } from "../lib/format";
 import {
   UNDO_MS,
@@ -30,7 +31,6 @@ import {
   set,
   stopPlayback,
   syncChange,
-  undoMastery,
   updatePlayer,
   useApp,
 } from "../state/store";
@@ -94,7 +94,7 @@ export function AppRoot({ children }: { children: ReactNode }) {
 }
 
 /** Screens that already read and write the learner's real data (the rest still run on sample data). */
-const isConnected = (route: string) => route === "study" || route.startsWith("study/") || route === "login";
+const isConnected = (route: string) => ["study", "review", "login"].some((r) => route === r || route.startsWith(`${r}/`));
 
 export function Shell({ children }: { children: ReactNode }) {
   const route = useApp((s) => s.route);
@@ -132,7 +132,7 @@ export function Shell({ children }: { children: ReactNode }) {
           })}
         </ul>
         <div className="nav-foot">
-          <p className="t-meta">Study, Recall and Dictation are connected. Other screens show sample data.</p>
+          <p className="t-meta">Study, Recall, Dictation and Review are connected. Other screens show sample data.</p>
         </div>
       </nav>
       <Header />
@@ -367,7 +367,7 @@ export function MasteryToast() {
               <Button
                 kind="tertiary"
                 aria-label={`Undo mastered: ${cardName}`}
-                onClick={() => undoMastery(m.id)}
+                onClick={() => undoMastered(m.id)}
                 data-autofocus={idx === 0 || undefined}
               >
                 Undo

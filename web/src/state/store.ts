@@ -8,7 +8,6 @@ import {
   HISTORY_ANALYSES,
   HISTORY_ATTEMPTS,
   HISTORY_AUDIO,
-  FAVORITE_FIXTURES,
   LOOKUP_FIXTURES,
   PRESAVED_CARD_IDS,
   buildLibrary,
@@ -129,6 +128,8 @@ export interface ReviewUI {
   result?: GradeResult;
   answerKnown?: boolean;
   hinted?: boolean;
+  /** When the server scheduled the card next (ISO), after the review was recorded. */
+  nextDue?: string;
 }
 
 export interface MasteryAction {
@@ -310,7 +311,7 @@ function initialState(): AppState {
     },
     player: null,
     lookups,
-    favorites: { ...FAVORITE_FIXTURES },
+    favorites: {},
     snapshots,
     ctxSnapshots: {},
     saved,
