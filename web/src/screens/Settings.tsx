@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { LogOut, ArrowRight } from "lucide-react";
+import { LogOut, ArrowRight, Monitor } from "lucide-react";
 import { MAX_SESSION_SIZE, MIN_SESSION_SIZE } from "../data/fixtures";
-import { logout, useSession } from "../api/auth";
+import { type Device, listDevices, logout, signOutDevice, useSession } from "../api/auth";
 import { loginUrl } from "../api/client";
 import { saveReviewSettings } from "../api/review";
 import { initials } from "../components/Shell";
-import { announce, get, go, routeUrl, set, setDailyNew, setSessionSize, simulate, stopPlayback, syncChange, useApp } from "../state/store";
+import { SPEEDS, announce, get, go, routeUrl, set, setDailyNew, setPlaybackPrefs, setSessionSize, stopPlayback, useApp } from "../state/store";
+import { fmtWhen } from "../api/history";
 import { Banner, Button, Dialog, FieldText, PageHead, Pill, Spinner } from "../components/ui";
 
 type SaveState = "idle" | "saving" | "saved" | "failed" | "offline";
@@ -175,20 +176,24 @@ export function SettingsScreen({ sub }: { sub?: string }) {
   }, [sub, route]);
   return (
     <div className="page">
-      <PageHead title="Settings" desc="Learning preferences, your account and how this prototype handles syncing and devices." />
+      <PageHead title="Settings" desc="Review limits, playback on this device, your account and signed-in devices." />
       <div className="stack gap-7">
-        <Preferences />
-        <TimeSettings />
-        <DictionaryCache />
+        <section className="stack gap-5" aria-labelledby="pref-h">
+          <h2 id="pref-h" className="t-section">Review</h2>
+          <DailyLimitField />
+          <SessionSizeField />
+        </section>
+        <Playback />
         <section ref={accountRef} className="stack gap-5" aria-labelledby="acct-h" style={{ scrollMarginTop: 16 }}>
-          <SyncSection />
+          <h2 id="acct-h" className="t-section">Account</h2>
           <Account onSignOut={() => setSignOut(true)} />
         </section>
+        <Devices />
         <section className="stack gap-3" aria-labelledby="dev-h">
-          <h2 id="dev-h" className="t-section">Proposed device support</h2>
-          <p className="t-support">Background playback, lock-screen controls and counting on iPhone and Mac are proposals. Nothing here has been tested on a device.</p>
+          <h2 id="dev-h" className="t-section">Background listening</h2>
+          <p className="t-support">How listening time is counted on phones and computers, and what still needs testing.</p>
           <Button kind="secondary" iconAfter={<ArrowRight aria-hidden />} onClick={() => go("progress/devices")} style={{ alignSelf: "flex-start" }}>
-            View device support
+            Devices and background listening
           </Button>
         </section>
       </div>
@@ -197,145 +202,35 @@ export function SettingsScreen({ sub }: { sub?: string }) {
   );
 }
 
-function Preferences() {
+/** Saved on this device as soon as it changes. */
+function Playback() {
   const settings = useApp((s) => s.settings);
-  const forced = useApp((s) => s.ss["SCR-SET-01"]);
-  const [speed, setSpeed] = useState(settings.speed);
-  const [repeat, setRepeat] = useState(settings.repeat);
-  const [state, setState] = useState<SaveState | "conflict">("idle");
-  useEffect(() => {
-    if (forced) setState(forced as SaveState | "conflict");
-  }, [forced]);
-  const save = () => {
-    if (get().offline) {
-      set((s) => ({ settings: { ...s.settings, speed, repeat }, sync: "pending" }));
-      setState("offline");
-      return;
-    }
-    setState("saving");
-    simulate("settings", 800, true)
-      .then(() => {
-        set((s) => ({ settings: { ...s.settings, speed, repeat } }));
-        setState("saved");
-        announce("Preferences saved.");
-        syncChange();
-      })
-      .catch(() => {
-        setState("failed");
-        announce("Couldn’t save preferences.", true);
-      });
-  };
   return (
-    <section className="stack gap-5" aria-labelledby="pref-h">
-      <h2 id="pref-h" className="t-section">Learning preferences</h2>
-      <DailyLimitField />
-      <SessionSizeField />
-      <hr className="divider" />
-      <div className="stack gap-2">
-        <p className="field-label">Voice</p>
-        <p>Canadian French · Demo voice <Pill tone="demo">Simulated</Pill></p>
-        <p className="t-support">The same demo voice is used every time, including when you repeat audio. It doesn’t represent the quality of a real voice.</p>
-      </div>
-      <div className="row gap-4" style={{ alignItems: "flex-end" }}>
+    <section className="stack gap-4" aria-labelledby="play-h">
+      <h2 id="play-h" className="t-section">Playback on this device</h2>
+      <div className="row gap-4" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
         <label className="field" style={{ width: 200 }}>
           <span className="field-label">Default playback speed</span>
-          <select className="select" value={speed} onChange={(e) => { setSpeed(Number(e.target.value)); setState("idle"); }}>
-            {[0.75, 1, 1.25, 1.5, 2].map((v) => <option key={v} value={v}>{v}×</option>)}
+          <select className="select" value={settings.speed} onChange={(e) => { setPlaybackPrefs({ speed: Number(e.target.value) }); announce("Speed saved on this device."); }}>
+            {SPEEDS.map((v) => <option key={v} value={v}>{v}×</option>)}
           </select>
         </label>
-        <label className="check"><input type="checkbox" checked={repeat} onChange={(e) => { setRepeat(e.target.checked); setState("idle"); }} /> Repeat audio by default</label>
+        <label className="check">
+          <input type="checkbox" checked={settings.repeat} onChange={(e) => { setPlaybackPrefs({ repeat: e.target.checked }); announce("Saved on this device."); }} /> Repeat audio by default
+        </label>
       </div>
-      <div className="stack gap-3" style={{ maxWidth: 560 }}>
-        <div className="btn-row">
-          <Button kind="secondary" busy={state === "saving"} onClick={save}>{state === "failed" ? "Retry" : "Save preferences"}</Button>
-        </div>
-        {state === "saving" && <Spinner label="Saving preferences…" />}
-        {state === "saved" && <p role="status" className="t-support" style={{ color: "var(--success)" }}>Preferences saved.</p>}
-        {state === "failed" && <Banner tone="error" title="Couldn’t save preferences" live="assertive">Your previous preferences are still in use.</Banner>}
-        {state === "offline" && <Banner tone="warning" title="Saved on this device">Your preferences will sync when you’re back online (simulated).</Banner>}
-        {state === "conflict" && (
-          <Banner
-            tone="warning"
-            title="This setting changed on another device"
-            actions={
-              <>
-                <Button kind="secondary" onClick={() => { setState("saved"); announce("Kept this device’s setting."); }}>Keep {speed}× (this device)</Button>
-                <Button kind="tertiary" onClick={() => { setSpeed(1.25); set((s) => ({ settings: { ...s.settings, speed: 1.25 } })); setState("saved"); }}>Use 1.25× (other device)</Button>
-              </>
-            }
-          >
-            Default speed was set to 1.25× on another device (simulated) while you changed it here. Choose which to keep.
-          </Banner>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function TimeSettings() {
-  const tz = useApp((s) => s.settings.timezone);
-  return (
-    <section className="stack gap-3" aria-labelledby="time-h">
-      <h2 id="time-h" className="t-section">Time zone and week</h2>
-      <label className="field" style={{ maxWidth: 320 }}>
-        <span className="field-label">Account time zone</span>
-        <select className="select" value={tz} onChange={(e) => { set((s) => ({ settings: { ...s.settings, timezone: e.target.value } })); announce("Time zone changed. Totals already counted stay the same."); syncChange(); }}>
-          {["America/Toronto", "America/Vancouver", "America/Halifax", "Europe/Paris", "Asia/Shanghai"].map((z) => <option key={z}>{z}</option>)}
-        </select>
-      </label>
-      <p className="t-support" style={{ maxWidth: 640 }}>
-        Days start at local midnight in this time zone. Weeks start on Monday in this prototype. Changing the time zone affects future day boundaries only — audio time you already have stays the same.
+      <p className="t-support">
+        Saved on this device only. Practice listening clips always play once at their own speed. Days are counted in this device’s time zone ({settings.timezone}).
       </p>
     </section>
-  );
-}
-
-function DictionaryCache() {
-  const count = useApp((s) => Object.keys(s.snapshots).length);
-  return (
-    <section className="stack gap-3" aria-labelledby="dict-h">
-      <h2 id="dict-h" className="t-section">Dictionary on this device</h2>
-      <ul className="list">
-        <li className="list-row"><span className="grow">Saved definitions</span><span className="num">{count} (simulated)</span></li>
-        <li className="list-row"><span className="grow">Full offline dictionary package</span><span className="t-support">Not available in this prototype</span></li>
-      </ul>
-      <p className="t-support">Saved definitions can be shown offline. They don’t include audio, AI explanations or exams.</p>
-    </section>
-  );
-}
-
-function SyncSection() {
-  const sync = useApp((s) => s.sync);
-  const offline = useApp((s) => s.offline);
-  const forced = useApp((s) => s.ss["SCR-SET-02"]);
-  const state = forced || sync;
-  return (
-    <div className="stack gap-3">
-      <h2 id="acct-h" className="t-section">Account and sync</h2>
-      {state === "synced" && <Banner tone="success" title="Everything is synced (simulated)">Your demo changes are up to date.</Banner>}
-      {state === "pending" && (
-        <Banner tone="info" title={offline ? "Waiting for a connection" : "Syncing your changes…"} live="polite">
-          {offline ? "Some changes are saved on this device and will sync automatically when you’re back online." : "This usually takes a moment."}
-        </Banner>
-      )}
-      {state === "error" && (
-        <Banner tone="error" title="Sync didn’t finish" live="assertive" actions={<Button kind="secondary" onClick={syncChange}>Retry sync</Button>}>
-          Your changes are kept on this device. Nothing was lost.
-        </Banner>
-      )}
-      {state === "conflict" && (
-        <Banner tone="warning" title="A change conflicts with another device" actions={<Button kind="secondary" onClick={() => go("settings")}>Review the setting</Button>}>
-          Your default playback speed was changed on another device at the same time (simulated). Open Learning preferences to choose which to keep.
-        </Banner>
-      )}
-      <p className="t-meta">Cross-device sync is simulated in this prototype. There is no real server.</p>
-    </div>
   );
 }
 
 function Account({ onSignOut }: { onSignOut: () => void }) {
   const user = useSession().user;
   const email = user?.email ?? "";
+  const plan = user?.plan ?? "";
+  const access = !user ? "" : !user.is_valid ? "Access ended" : user.trial_expires_at ? `${plan || "Trial"} · ${user.days_left} ${user.days_left === 1 ? "day" : "days"} left` : plan || "Active";
   return (
     <div className="stack gap-3">
       <ul className="list">
@@ -349,13 +244,62 @@ function Account({ onSignOut }: { onSignOut: () => void }) {
         <li className="list-row">
           <span className="grow stack">
             <span className="t-strong">Access</span>
-            <span className="t-support">Shared with you by a friend. Your existing data and access stay as they are.</span>
+            <span className="t-support">Your cards, history and hours stay in your account.</span>
           </span>
-          <Pill tone="success">Free · Unlimited access</Pill>
+          {access && <Pill tone={user?.is_valid ? "success" : "warning"}>{access}</Pill>}
         </li>
       </ul>
       <Button kind="secondary" icon={<LogOut aria-hidden />} onClick={onSignOut} style={{ alignSelf: "flex-start" }}>Sign out</Button>
     </div>
+  );
+}
+
+function Devices() {
+  const [list, setList] = useState<{ devices: Device[]; max: number } | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState("");
+  const load = () => {
+    setError("");
+    listDevices()
+      .then((r) => setList({ devices: r.devices, max: r.max_devices }))
+      .catch((e) => setError(e instanceof Error ? e.message : "Couldn’t load your devices."));
+  };
+  useEffect(load, []);
+  const end = async (d: Device) => {
+    setBusy(d.id);
+    try {
+      await signOutDevice(d.id);
+      setList((l) => (l ? { ...l, devices: l.devices.filter((x) => x.id !== d.id) } : l));
+      announce("Signed out on that device.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn’t sign that device out.");
+    } finally {
+      setBusy("");
+    }
+  };
+  return (
+    <section className="stack gap-3" aria-labelledby="devices-h">
+      <h2 id="devices-h" className="t-section">Signed-in devices</h2>
+      {!list && !error && <Spinner label="Loading devices…" />}
+      {error && <Banner tone="error" title="Something went wrong" live="assertive" actions={<Button kind="secondary" onClick={load}>Retry</Button>}>{error}</Banner>}
+      {list && (
+        <>
+          <ul className="list">
+            {list.devices.map((d) => (
+              <li key={d.id} className="list-row">
+                <Monitor aria-hidden width={20} height={20} />
+                <span className="grow stack">
+                  <span className="t-strong">{d.device || "Unknown device"}</span>
+                  <span className="t-support">Last active {fmtWhen(d.last_seen_at)} · signed in {fmtWhen(d.created_at)}</span>
+                </span>
+                {d.current ? <Pill tone="info">This device</Pill> : <Button kind="tertiary" busy={busy === d.id} onClick={() => void end(d)}>Sign out</Button>}
+              </li>
+            ))}
+          </ul>
+          <p className="t-meta">Up to {list.max} devices can be signed in at once; signing in on another one signs out the one used least recently.</p>
+        </>
+      )}
+    </section>
   );
 }
 

@@ -78,6 +78,63 @@ const gameState = () => ({
   days_studied_7d: 2,
 });
 
+const demoDevices = () => [
+  { id: "d1", device: "Chrome on Linux", created_at: "2026-01-01T10:00:00Z", last_seen_at: "2026-01-02T10:00:00Z", current: true },
+  { id: "d2", device: "Safari on iPhone", created_at: "2026-01-01T09:00:00Z", last_seen_at: "2026-01-01T12:00:00Z", current: false },
+];
+
+const TASKS = { T1: { min_words: 60, max_words: 120, timer_seconds: 600 }, T2: { min_words: 120, max_words: 150, timer_seconds: 1200 }, T3: { min_words: 120, max_words: 180, timer_seconds: 1800 } } as const;
+const taskSpecs = (writing: boolean) =>
+  Object.fromEntries(
+    (Object.keys(TASKS) as (keyof typeof TASKS)[]).map((id) => [
+      id,
+      writing
+        ? { id, name: `Tâche ${id.slice(1)}`, name_en: `Task ${id.slice(1)}`, desc_en: "Write a message.", ...TASKS[id] }
+        : { id, name: `Tâche ${id.slice(1)}`, name_en: `Task ${id.slice(1)}`, desc_en: "Speak.", timer_seconds: 120 },
+    ]),
+  );
+const writeSubjects = {
+  T1: [{ id: "w1", title: "Invitation", prompt: "Invitez un ami à dîner.", requirements: ["Dire la date", "Proposer un plat"] }],
+  T2: [{ id: "w2", title: "Article", prompt: "Racontez un voyage." }],
+  T3: [{ id: "w3", title: "Débat", prompt: "Pour ou contre ?", doc1: "Document un.", doc2: "Document deux." }],
+};
+const speakSubjects = {
+  T1: [{ id: "s1", title: "Présentation", prompt: "Présentez-vous.", questions: ["Comment vous appelez-vous ?"] }],
+  T2: [{ id: "s2", title: "Location", prompt: "Vous louez un vélo.", role_examiner: "Le loueur", target_points: ["Prix", "Horaires"] }],
+  T3: [{ id: "s3", title: "Télétravail", prompt: "Le télétravail est-il une bonne idée ?", structure_hints: ["Opinion", "Exemple"] }],
+};
+const feedback1 = {
+  checklist: [{ point: "Dire la date", covered: true, note: "" }],
+  praise: "Clear and polite.",
+  errors: [{ span: "je suis allé", type: "agreement", hint: "Check the past participle." }],
+};
+const feedback2 = (text: string) => ({
+  fixed_errors: [{ span: "je suis allé", fixed: true, comment: "Good." }],
+  remaining_errors: [],
+  corrected_text: text,
+  corrected_transcript: text,
+  sentences: [{ original: "je suis allé", corrected: "Je suis allée au marché.", explanation: "Agreement with a female subject.", chunk: "suis allée" }],
+  structures: [],
+});
+const listeningSession = (id: string) => ({
+  id,
+  material: {
+    text: "On va au marché.",
+    translation_en: "We are going to the market.",
+    source: "studied",
+    words: [{ w: "marché", ipa: "maʁʃe", en: "market", note: "" }],
+    question: { prompt: "Où vont-ils ?", options: ["Au marché", "À la plage"] } as { prompt: string; options: string[]; answer_index?: number; explanation?: string },
+  },
+  rate: 1,
+  rate_stage: "normal",
+  blind_plays: 0,
+  relisten_stages: [] as string[],
+  revealed: false,
+  blind_self: null as number | null,
+  audio_url_normal: `/api/listening/sessions/${id}/audio?stage=normal`,
+  audio_url_slow: `/api/listening/sessions/${id}/audio?stage=slow20`,
+});
+
 interface Item {
   sentence: string;
   build_up: { fr: string }[];
@@ -102,7 +159,17 @@ export const fake = {
   episodes: demoEpisodes(),
   /** Seconds received by /api/game/heartbeat, by lane. */
   heartbeats: {} as Record<string, number>,
+  /** Writing and speaking attempts by id; feedback is ready on the first poll. */
+  practice: new Map<string, Record<string, unknown>>(),
+  listening: new Map<string, Record<string, unknown>>(),
+  /** /api/listening/sessions answers 409 (no studied sentences yet). */
+  noListening: false,
+  devices: demoDevices(),
   reset() {
+    this.practice = new Map();
+    this.listening = new Map();
+    this.noListening = false;
+    this.devices = demoDevices();
     this.srs = demoSrs();
     this.studyRecords = [];
     this.attempts = [];
@@ -252,6 +319,58 @@ function srsRoute(method: string, url: URL, body: Record<string, unknown>): Resp
     c.state = again ? "learning" : "review";
     c.due = new Date(Date.now() + (again ? 10 * 60_000 : 86_400_000)).toISOString();
     return json(200, { ...c, game: {} });
+  }
+  /* ---------- Practice ---------- */
+  if (p === "/api/write/tasks") return json(200, { recommended_task: "T1", recommended_level: "A2", tasks: taskSpecs(true), subjects: writeSubjects, attempts: [...fake.practice.values()].filter((a) => a.kind === "write") });
+  if (p === "/api/speak/tasks") return json(200, { recommended_task: "T1", recommended_level: "A2", tasks: taskSpecs(false), subjects: speakSubjects });
+  const pa = p.match(/^\/api\/(write|speak)\/attempts(?:\/([^/]+))?(\/round2)?$/);
+  if (pa) {
+    const [, kind, id, r2] = pa;
+    const field = kind === "write" ? "text" : "transcript";
+    if (!id && method === "POST") {
+      const a = { id: `${kind}-${++seq}`, kind, task: body.task, subject: body.subject, level: body.level, status: "generating_1", [`${field}_1`]: body[field], feedback_1: {}, [`${field}_2`]: null, feedback_2: {}, seconds: body.seconds, error: null, created_at: "2026-01-01T10:00:00Z" };
+      fake.practice.set(a.id, a);
+      return json(200, a);
+    }
+    const a = id && fake.practice.get(decodeURIComponent(id));
+    if (!a) return json(404, { detail: { message: "Not found." } });
+    if (r2) {
+      Object.assign(a, { status: "generating_2", [`${field}_2`]: body[field] });
+      return json(200, a);
+    }
+    // A poll finishes whichever round is running.
+    if (a.status === "generating_1") Object.assign(a, { status: "ready", feedback_1: kind === "speak" ? { ...feedback1, stats: { duration_sec: 30, wpm: 90, pace_note: "Good pace." } } : feedback1 });
+    if (a.status === "generating_2") Object.assign(a, { status: "ready", feedback_2: feedback2(String(a[`${field}_2`])) });
+    return json(200, a);
+  }
+  if (p === "/api/speak/roleplay/reply") return json(200, { reply: "Bien sûr, c’est dix euros." });
+  if (p === "/api/listening/sessions" && method === "POST") {
+    if (fake.noListening) return json(409, { detail: { message: "No studied sentences yet." } });
+    const x = listeningSession(`ls-${++seq}`);
+    fake.listening.set(x.id, x);
+    return json(200, x);
+  }
+  const ls = p.match(/^\/api\/listening\/sessions\/([^/]+)(?:\/(blind|reveal|relisten|check))?$/);
+  if (ls) {
+    const x = fake.listening.get(decodeURIComponent(ls[1])) as ReturnType<typeof listeningSession> & Record<string, unknown>;
+    if (!x) return json(404, { detail: { message: "Not found." } });
+    if (ls[2] === "blind") Object.assign(x, { blind_self: body.self, blind_plays: body.plays });
+    if (ls[2] === "reveal") x.revealed = true;
+    if (ls[2] === "relisten") x.relisten_stages = [...x.relisten_stages, String(body.stage)];
+    if (ls[2] === "check") {
+      x.material.question = { ...x.material.question, answer_index: 0, explanation: "Ils vont au marché." };
+      Object.assign(x, { answer_index: body.answer_index, result: { correct: body.answer_index === 0 } });
+    }
+    return json(200, x);
+  }
+  if (p === "/api/transform") return json(200, { text: "Je voudrais un café, s’il vous plaît.", task_mode: "translate", task_label: "Translated", quality_check: "passed" });
+  if (p === "/api/speech") return json(200, { audio_url: "/files/fake.mp3", srt_url: "/files/fake.srt", voice: body.voice });
+  if (p === "/api/transcribe") return json(200, { text: "Bonjour, je m’appelle Léa.", duration: 4 });
+  if (p === "/api/auth/devices") return json(200, { devices: fake.devices, max_devices: 3 });
+  const dv = p.match(/^\/api\/auth\/devices\/([^/]+)$/);
+  if (dv && method === "DELETE") {
+    fake.devices = fake.devices.filter((d) => d.id !== decodeURIComponent(dv[1]));
+    return json(200, { success: true });
   }
   return json(404, { detail: `No fake route for ${method} ${p}` });
 }

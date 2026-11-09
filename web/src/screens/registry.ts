@@ -9,7 +9,6 @@ import {
   armSlow,
   get,
   go,
-  initialExam,
   markMastered,
   nowMs,
   patchStudy,
@@ -20,8 +19,6 @@ import {
   undoMastery,
   updatePlayer,
   type AppState,
-  type ExamSection,
-  type ExamState,
   type PlayerState,
 } from "../state/store";
 import { ensureSession, forceExerciseState, submitAnswer } from "./Exercise";
@@ -149,15 +146,6 @@ function mastery(state?: "undone" | "expired" | "queued" | "syncing" | "conflict
   at("review/library");
 }
 
-function exam(mode: ExamState["mode"], section: ExamSection, extra: Partial<ExamState> = {}) {
-  online();
-  const now = Date.now();
-  const minutes = mode === "full" ? 167 : { listening: 35, reading: 60, writing: 60, speaking: 12 }[section];
-  set((s) => ({
-    exam: { ...initialExam(), practiceResults: s.exam.practiceResults, mockResults: s.exam.mockResults, mode, section, timed: mode !== "practice", startedAt: now, sectionStartedAt: now, budgetSeconds: minutes * 60, phase: "running", ...extra },
-  }));
-  at("practice/exams/run");
-}
 
 const states = (...xs: [string, string, () => void][]): DemoState[] => xs.map(([key, label, apply]) => ({ key, label, apply }));
 const word = (entry: string, wstate: string, multi = true, index = 0) => {
@@ -562,145 +550,14 @@ export const REGISTRY: ScreenEntry[] = [
     ),
   },
   { id: "SCR-PRA-01", title: "Practice hub", area: "Practice", states: states(["hub", "Hub", () => at("practice")]) },
-  {
-    id: "SCR-PRA-02", title: "Writing practice", area: "Practice",
-    states: states(
-      ["draft", "Draft", () => at("practice/write")],
-      ["empty", "Empty validation", () => at("practice/write", "SCR-PRA-02", "empty")],
-      ["submitting", "Submitting", () => at("practice/write", "SCR-PRA-02", "submitting")],
-      ["feedback", "Feedback", () => at("practice/write", "SCR-PRA-02", "feedback")],
-      ["failed", "Failure · retry", () => at("practice/write", "SCR-PRA-02", "failed")],
-      ["done", "Complete", () => at("practice/write", "SCR-PRA-02", "done")],
-    ),
-  },
-  {
-    id: "SCR-PRA-03", title: "Speaking practice", area: "Practice",
-    states: states(
-      ["idle", "Ready", () => at("practice/speak")],
-      ["recording", "Simulated recording", () => at("practice/speak", "SCR-PRA-03", "recording")],
-      ["recorded", "Recorded · playback", () => at("practice/speak", "SCR-PRA-03", "recorded")],
-      ["failed", "Recording failure", () => at("practice/speak", "SCR-PRA-03", "failed")],
-      ["feedback", "Unofficial feedback", () => at("practice/speak", "SCR-PRA-03", "feedback")],
-      ["done", "Complete", () => at("practice/speak", "SCR-PRA-03", "done")],
-    ),
-  },
-  {
-    id: "SCR-PRA-04", title: "Listening practice", area: "Practice",
-    states: states(
-      ["start", "Clip and questions", () => at("practice/listen")],
-      ["audio-error", "Audio failure", () => { armFailure("audio"); startPlayback({ kind: "practice", label: "Listening clip", route: "practice/listen" }, 14); at("practice/listen"); }],
-      ["checked", "Answers with explanations", () => at("practice/listen", "SCR-PRA-04", "checked")],
-      ["done", "Complete", () => at("practice/listen", "SCR-PRA-04", "done")],
-    ),
-  },
-  {
-    id: "SCR-PRA-05", title: "Audio Studio", area: "Practice",
-    states: states(
-      ["choose", "Choose text", () => at("practice/studio")],
-      ["preparing", "Preparing", () => at("practice/studio", "SCR-PRA-05", "preparing")],
-      ["error", "Preparation error", () => at("practice/studio", "SCR-PRA-05", "error")],
-      ["ready", "Ready · player", () => at("practice/studio", "SCR-PRA-05", "ready")],
-    ),
-  },
-  {
-    id: "SCR-EXM-01", title: "Exam collection", area: "Practice",
-    states: states(
-      ["gate", "Not ready · checklist", () => at("practice/exams")],
-      ["loading", "Loading", () => at("practice/exams", "SCR-EXM-01", "loading")],
-      ["empty", "Empty", () => at("practice/exams", "SCR-EXM-01", "empty")],
-      ["error", "Error", () => at("practice/exams", "SCR-EXM-01", "error")],
-    ),
-  },
-  { id: "SCR-EXM-02", title: "Mode and preflight", area: "Practice", states: states(["modes", "Mode selection", () => at("practice/exams/modes")]) },
-  {
-    id: "SCR-EXM-03", title: "Listening section", area: "Practice",
-    states: states(
-      ["practice", "Practice (untimed)", () => exam("practice", "listening")],
-      ["timed", "Timed section", () => exam("section", "listening")],
-      ["unfilled", "Unfilled slot", () => exam("section", "listening", { qIndex: 10 })],
-      ["audio-error", "Audio failure", () => { exam("section", "listening"); armFailure("audio"); startPlayback({ kind: "practice", label: "Exam sample audio", route: "practice/exams/run" }, 12); }],
-    ),
-  },
-  {
-    id: "SCR-EXM-04", title: "Reading section", area: "Practice",
-    states: states(
-      ["practice", "Practice", () => exam("practice", "reading")],
-      ["timed", "Timed · answers kept", () => exam("section", "reading", { answers: { "x-r1": 1 }, qIndex: 1 })],
-    ),
-  },
-  {
-    id: "SCR-EXM-05", title: "Writing section", area: "Practice",
-    states: states(
-      ["practice", "Practice", () => exam("practice", "writing")],
-      ["timed", "Timed · draft saved", () => exam("section", "writing", { writing: { w1: "Bonjour Marc, je t’invite à dîner vendredi soir." }, writingSave: { w1: "saved" } })],
-      ["save-error", "Draft save error", () => exam("section", "writing", { writing: { w1: "Bonjour Marc…" }, writingSave: { w1: "failed" } })],
-    ),
-  },
-  {
-    id: "SCR-EXM-06", title: "Speaking section", area: "Practice",
-    states: states(
-      ["t1", "Task 1", () => exam("section", "speaking", { speakingStage: 0 })],
-      ["prep", "Preparation (inside 12 min)", () => exam("section", "speaking", { speakingStage: 1 })],
-      ["t2", "Task 2", () => exam("section", "speaking", { speakingStage: 2 })],
-      ["t3", "Task 3", () => exam("section", "speaking", { speakingStage: 3 })],
-      ["done", "Complete", () => exam("section", "speaking", { speakingStage: 4 })],
-    ),
-  },
-  {
-    id: "SCR-EXM-07", title: "Full-flow transitions", area: "Practice",
-    states: states(
-      ["start", "Full mock · Listening", () => exam("full", "listening")],
-      ["transition", "Section transition", () => exam("full", "listening", { phase: "transition", answers: { "x-l1": 1 } })],
-      ["reading", "Reading with answers kept", () => exam("full", "reading", { answers: { "x-l1": 1, "x-l2": 2 } })],
-    ),
-  },
-  {
-    id: "SCR-EXM-08", title: "Leave, timeout, submit", area: "Practice",
-    states: states(
-      ["resumed", "Resumed after leaving", () => { exam("section", "reading", { answers: { "x-r1": 1 } }); set((s) => ({ ss: { ...s.ss, "SCR-EXM-08": "resumed" } })); }],
-      ["near", "30 seconds left", () => exam("section", "listening", { startedAt: Date.now() - (35 * 60 - 30) * 1000 })],
-      ["timeout", "Timeout → submit", () => exam("section", "listening", { startedAt: Date.now() - 35 * 60 * 1000 + 2000, answers: { "x-l1": 1 } })],
-      ["submitfail", "Submit failure · retry", () => { exam("section", "listening", { answers: { "x-l1": 1 } }); set((s) => ({ ss: { ...s.ss, "SCR-EXM-08": "submitfail" } })); }],
-    ),
-  },
-  {
-    id: "SCR-EXM-09", title: "Results", area: "Practice",
-    states: states(
-      ["mock", "Timed mock results", () => {
-        set((s) => ({ exam: { ...s.exam, phase: "results", mockResults: [...s.exam.mockResults, { id: `r${Date.now()}`, mode: "full", timedOut: false, sections: [
-          { key: "listening", name: "Listening", correct: 2, answered: 3, sample: 3, unfilled: 36, missed: ["x-l3"] },
-          { key: "reading", name: "Reading", correct: 3, answered: 3, sample: 3, unfilled: 36, missed: [] },
-          { key: "writing", name: "Writing", missed: ["w3"], qualitative: "Clear purpose in each task you completed. Next: vary sentence openings." },
-          { key: "speaking", name: "Speaking", missed: [], qualitative: "On topic throughout. Next: one concrete example per point." },
-        ] }] } }));
-        at("practice/exams/results");
-      }],
-      ["practice", "Practice record", () => {
-        set((s) => ({ exam: { ...s.exam, phase: "results", practiceResults: [...s.exam.practiceResults, { id: `r${Date.now()}`, mode: "practice", timedOut: false, sections: [{ key: "reading", name: "Reading", correct: 1, answered: 2, sample: 3, unfilled: 36, missed: ["x-r2", "x-r3"] }] }] } }));
-        at("practice/exams/results");
-      }],
-    ),
-  },
-  {
-    id: "SCR-SET-01", title: "Learning preferences", area: "Settings",
-    states: states(
-      ["default", "Defaults", () => at("settings")],
-      ["saving", "Saving", () => at("settings", "SCR-SET-01", "saving")],
-      ["saved", "Saved", () => at("settings", "SCR-SET-01", "saved")],
-      ["failed", "Error", () => at("settings", "SCR-SET-01", "failed")],
-      ["offline", "Offline pending", () => at("settings", "SCR-SET-01", "offline")],
-      ["conflict", "Conflicting setting", () => at("settings", "SCR-SET-01", "conflict")],
-    ),
-  },
-  {
-    id: "SCR-SET-02", title: "Account and sync", area: "Settings",
-    states: states(
-      ["synced", "Synced · friend access", () => at("settings/account", "SCR-SET-02", "synced")],
-      ["pending", "Pending", () => at("settings/account", "SCR-SET-02", "pending")],
-      ["error", "Error · retry", () => at("settings/account", "SCR-SET-02", "error")],
-      ["conflict", "Conflict", () => at("settings/account", "SCR-SET-02", "conflict")],
-    ),
-  },
+  { id: "SCR-PRA-02", title: "Writing practice", area: "Practice", states: states(["draft", "Task and draft", () => at("practice/write")]) },
+  { id: "SCR-PRA-03", title: "Speaking practice", area: "Practice", states: states(["idle", "Task and recorder", () => at("practice/speak")]) },
+  { id: "SCR-PRA-04", title: "Listening practice", area: "Practice", states: states(["start", "Start", () => at("practice/listen")]) },
+  { id: "SCR-PRA-05", title: "Audio Studio", area: "Practice", states: states(["choose", "Text and voice", () => at("practice/studio")]) },
+  { id: "SCR-EXM-01", title: "Exam practice (planned)", area: "Practice", states: states(["placeholder", "Placeholder", () => at("practice/exams")]) },
+
+  { id: "SCR-SET-01", title: "Settings", area: "Settings", states: states(["default", "Review, playback and devices", () => at("settings")]) },
+  { id: "SCR-SET-02", title: "Account", area: "Settings", states: states(["account", "Account and devices", () => at("settings/account")]) },
   {
     id: "SCR-LEG-01", title: "Moved page", area: "System",
     states: states(["moved", "Legacy link landing", () => { history.pushState(null, "", "/app/cockpit"); set(() => ({ route: "moved", ss: {} })); }]),

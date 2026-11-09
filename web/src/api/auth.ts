@@ -87,3 +87,16 @@ export async function logout(): Promise<void> {
     setSession({ status: "out", user: null });
   }
 }
+
+/** auth_db.list_sessions, one per signed-in browser. */
+export interface Device {
+  id: string;
+  device: string;
+  created_at: string;
+  last_seen_at: string;
+  current: boolean;
+}
+
+export const listDevices = () => apiFetch<{ devices: Device[]; max_devices: number }>("/api/auth/devices");
+
+export const signOutDevice = (id: string) => apiFetch<{ success: boolean }>(`/api/auth/devices/${encodeURIComponent(id)}`, { method: "DELETE" });

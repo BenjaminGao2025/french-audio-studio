@@ -238,41 +238,22 @@ export interface AppState {
 
   settings: { speed: number; repeat: boolean; timezone: string };
   episodePositions: Record<string, number>;
-  /** Generic preserved drafts (Practice writing, Audio Studio, exam writing…). */
+  /** Generic preserved drafts (Practice writing, speaking, Audio Studio…). */
   drafts: Record<string, string>;
 
-  exam: ExamState;
 }
 
-export type ExamSection = "listening" | "reading" | "writing" | "speaking";
-export interface ExamState {
-  mode: "practice" | "section" | "full";
-  section: ExamSection;
-  timed: boolean;
-  startedAt: number | null;
-  budgetSeconds: number;
-  demoPausedAt: number | null;
-  pausedTotal: number;
-  answers: Record<string, number>;
-  writing: Record<string, string>;
-  writingSave: Record<string, "saved" | "saving" | "failed">;
-  speakingStage: number;
-  recordings: Record<string, "none" | "recording" | "recorded" | "failed">;
-  phase: "intro" | "running" | "transition" | "submitting" | "submitfail" | "results" | "timeout";
-  leftAt: number | null;
-  resumedNotice: boolean;
-  qIndex: number;
-  missedRetry: string | null;
-  practiceResults: ExamResult[];
-  mockResults: ExamResult[];
-  sectionStartedAt: number | null;
-}
+const PLAYBACK_KEY = "frenchStudio.playback";
+export const SPEEDS = [0.75, 1, 1.25, 1.5] as const;
 
-export interface ExamResult {
-  id: string;
-  mode: "practice" | "section" | "full";
-  timedOut: boolean;
-  sections: { key: ExamSection; name: string; correct?: number; answered?: number; sample?: number; unfilled?: number; missed: string[]; qualitative?: string }[];
+/** Playback speed and repeat are kept on this device only. */
+function loadPlaybackPrefs(): { speed: number; repeat: boolean } {
+  try {
+    const p = JSON.parse(localStorage.getItem(PLAYBACK_KEY) ?? "{}");
+    return { speed: (SPEEDS as readonly number[]).includes(p.speed) ? p.speed : 1, repeat: p.repeat === true };
+  } catch {
+    return { speed: 1, repeat: false };
+  }
 }
 
 /* ---------------- initial state ---------------- */
@@ -334,35 +315,9 @@ function initialState(): AppState {
     activeRun: null,
     history: { analyses: HISTORY_ANALYSES, audio: HISTORY_AUDIO, attempts: HISTORY_ATTEMPTS },
     audioStats: { todaySeconds: 18 * 60, weekSeconds: 3 * 3600 + 25 * 60, lifetimeHours: 125, last28Hours: 14 },
-    settings: { speed: 1, repeat: false, timezone: "America/Toronto" },
+    settings: { ...loadPlaybackPrefs(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC" },
     episodePositions: {},
     drafts: {},
-    exam: initialExam(),
-  };
-}
-
-export function initialExam(): ExamState {
-  return {
-    mode: "practice",
-    section: "listening",
-    timed: false,
-    startedAt: null,
-    budgetSeconds: 0,
-    demoPausedAt: null,
-    pausedTotal: 0,
-    answers: {},
-    writing: {},
-    writingSave: {},
-    speakingStage: 0,
-    recordings: {},
-    phase: "intro",
-    leftAt: null,
-    resumedNotice: false,
-    qIndex: 0,
-    missedRetry: null,
-    practiceResults: [],
-    mockResults: [],
-    sectionStartedAt: null,
   };
 }
 
@@ -417,14 +372,11 @@ export function parseLocation(): string {
 
 export function go(route: string, opts: { focus?: boolean; keepDemo?: boolean } = {}) {
   set((s) => {
-    // Leaving a running timed exam keeps the timer running (demo rule).
-    const leavingExam = s.route.startsWith("practice/exams/run") && !route.startsWith("practice/exams/run");
-    const exam = leavingExam && s.exam.phase === "running" && s.exam.timed ? { ...s.exam, leftAt: Date.now() } : s.exam;
     const leavingStudy = s.route.startsWith("study") && !route.startsWith("study");
     const hasDraft = !!(s.study.drafts.text.trim() || s.study.drafts.ideas.trim());
     const study = leavingStudy && hasDraft && s.study.analysis.status !== "done" ? { ...s.study, restored: true } : s.study;
     // Ordinary navigation clears any state forced from the Demo states navigator.
-    return { route, menuOpen: false, exam, study, ss: opts.keepDemo ? s.ss : {} };
+    return { route, menuOpen: false, study, ss: opts.keepDemo ? s.ss : {} };
   });
   const url = routeUrl(route);
   if (location.pathname + location.search !== url) history.pushState(null, "", url);
@@ -607,7 +559,7 @@ function stopAudio() {
 export function startPlayback(
   owner: PlayerOwner,
   duration: number,
-  opts: { scope?: PlayerState["scope"]; position?: number; speed?: number; texts?: string[]; src?: string } = {},
+  opts: { scope?: PlayerState["scope"]; position?: number; speed?: number; repeat?: boolean; texts?: string[]; src?: string } = {},
 ) {
   const prev = get().player;
   if (prev) commitAudio(prev);
@@ -624,7 +576,7 @@ export function startPlayback(
       startPosition: opts.position ?? 0,
       duration,
       speed: opts.speed ?? s.settings.speed,
-      repeat: s.settings.repeat,
+      repeat: opts.repeat ?? s.settings.repeat,
       countedSeconds: 0,
       contentSeconds: 0,
       texts: opts.texts,
@@ -691,7 +643,7 @@ export function updatePlayer(p: Partial<PlayerState>) {
 export function retryPlayback() {
   const p = get().player;
   if (!p) return;
-  startPlayback(p.owner, p.duration, { scope: p.scope, position: p.position, speed: p.speed, texts: p.texts, src: p.src });
+  startPlayback(p.owner, p.duration, { scope: p.scope, position: p.position, speed: p.speed, repeat: p.repeat, texts: p.texts, src: p.src });
 }
 
 export function stopPlayback() {
@@ -888,6 +840,15 @@ function trimUnshownNewCards(): number {
 export function setDailyNew(n: number) {
   set(() => ({ dailyNew: n }));
   trimUnshownNewCards();
+}
+
+export function setPlaybackPrefs(prefs: { speed?: number; repeat?: boolean }) {
+  set((s) => ({ settings: { ...s.settings, ...prefs } }));
+  try {
+    localStorage.setItem(PLAYBACK_KEY, JSON.stringify({ speed: get().settings.speed, repeat: get().settings.repeat }));
+  } catch {
+    // Storage blocked: the choice still applies until the page is reloaded.
+  }
 }
 
 /** Applies from the next session; a locked session keeps its cards. */
