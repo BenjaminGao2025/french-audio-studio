@@ -373,16 +373,29 @@ a { color: var(--primary); }
 
 /* ===== Study ===== */
 .sentence-fr { font-size: 24px; line-height: 40px; font-weight: 500; letter-spacing: -0.005em; }
-.word-btn {
-  font: inherit; color: inherit; background: none; border: 0; padding: 0 2px; margin: 0 -2px; cursor: pointer;
-  border-radius: 6px; text-decoration: underline; text-decoration-color: #94a3b8; text-decoration-thickness: 1px; text-underline-offset: 6px;
+/* Selectable French: words are spans (never buttons) so a native drag-selection survives. */
+.fr-text { user-select: text; -webkit-user-select: text; }
+.fr-word {
+  user-select: text; -webkit-user-select: text; cursor: pointer;
+  border-radius: 4px; padding: 0 1px; color: inherit;
+  text-decoration: underline; text-decoration-color: var(--divider);
+  text-decoration-thickness: 1px; text-underline-offset: 5px;
 }
-.word-btn:hover { background: var(--primary-weak); text-decoration-color: var(--primary); }
-.word-btn[aria-expanded="true"] { background: var(--primary-weak); color: var(--primary-hover); text-decoration-color: var(--primary); text-decoration-thickness: 2px; }
+.fr-word:hover, .fr-word:focus-visible {
+  background: var(--primary-weak); text-decoration-color: var(--primary); text-decoration-thickness: 2px;
+}
+.fr-added { background: var(--mark-bg); border-radius: 4px; box-shadow: inset 0 -2px 0 var(--warning); }
+.step-fr { font-size: 20px; line-height: 30px; font-weight: 500; }
+.step-badge {
+  align-self: flex-start; font-size: 12px; line-height: 16px; font-weight: 600;
+  color: var(--primary-hover); background: var(--primary-weak); border-radius: 999px; padding: 2px 10px;
+}
 mark.added { background: var(--mark-bg); color: inherit; padding: 0 3px; border-radius: 4px; box-shadow: inset 0 -2px 0 #b45309; }
 .step-item { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: var(--s3); padding: var(--s4) 0; }
 .step-num { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-weight: 600; font-size: 14px; background: var(--canvas); border: 1px solid var(--border-strong); }
 .step-item[aria-current="step"] .step-num { background: var(--primary); color: #fff; border-color: var(--primary); }
+.step-item.is-playing { background: var(--primary-weak); border-radius: var(--r-control); }
+.step-item.is-playing .step-num { background: var(--primary); color: var(--surface); border-color: var(--primary); }
 .ocr-item { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--s3); padding: var(--s4); align-items: start; }
 .ocr-tools { display: flex; gap: var(--s1); flex-wrap: wrap; }
 .low-conf { text-decoration: underline wavy #b45309; text-underline-offset: 4px; }
@@ -433,6 +446,49 @@ details.disc > summary::-webkit-details-marker { display: none; }
 details.disc > summary svg { transition: transform 120ms; }
 details.disc[open] > summary svg { transform: rotate(180deg); }
 details.disc > .disc-body { padding-bottom: var(--s3); }
+
+/* ===== Word card (redesigned WordPanel) ===== */
+.word-card { max-height: 70vh; overflow-y: auto; }
+.wp-head { position: sticky; top: 0; z-index: 1; background: var(--surface); }
+.wp-headword { font-size: 24px; line-height: 32px; font-weight: 600; }
+.wp-ipa { font-size: 14px; line-height: 20px; color: var(--text-2); margin-top: var(--s1); }
+.wp-chips { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin-top: var(--s2); }
+.wp-chip {
+  font-size: 12px; line-height: 16px; font-weight: 500; border-radius: 999px; padding: 2px 10px;
+  background: var(--canvas); border: 1px solid var(--divider); color: var(--text-2);
+}
+.wp-chip--action {
+  font-size: 12px; line-height: 16px; font-weight: 500; cursor: pointer;
+  background: var(--primary-weak); border-color: var(--primary); color: var(--primary-hover);
+}
+.wp-chip--action:hover { background: var(--mark-bg); }
+.wp-label {
+  font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-2);
+  text-transform: uppercase; letter-spacing: 0.03em;
+}
+.wp-insentence {
+  background: var(--primary-weak); border-left: 3px solid var(--primary);
+  border-radius: var(--r-control); padding: var(--s3);
+}
+.wp-insentence-zh { font-size: 20px; line-height: 28px; font-weight: 600; }
+.wp-insentence-en { font-size: 14px; line-height: 20px; color: var(--text-2); margin-top: 2px; }
+.wp-mark { background: var(--mark-bg); color: inherit; border-radius: 3px; padding: 0 2px; }
+.wp-phrase { background: var(--canvas); border: 1px solid var(--divider); border-radius: var(--r-control); padding: var(--s3); }
+.wp-collapsible { border-top: 1px solid var(--divider); padding-top: var(--s2); }
+.wp-toggle {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s2);
+  width: 100%; min-height: 40px; padding: 0; border: 0; background: none; cursor: pointer; color: var(--text);
+}
+.wp-toggle svg { transition: transform 120ms; }
+.wp-collapsible--open .wp-toggle svg { transform: rotate(180deg); }
+.wp-collapsible-body { padding: var(--s2) 0 var(--s3); }
+.wp-ety--open {
+  background: var(--warning-bg); border-radius: var(--r-control);
+  padding: var(--s2) var(--s3); border-top: 0;
+}
+.wp-ety--open .wp-label { color: var(--warning); }
+.wp-clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.wp-footer { border-top: 1px solid var(--divider); padding-top: var(--s3); }
 
 /* ===== Library ===== */
 .lib-group { padding: var(--s4); display: flex; flex-direction: column; gap: var(--s2); }

@@ -1,12 +1,24 @@
-import { useEffect, useState } from "react";
-import { Bookmark, BookmarkCheck } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, Bookmark, BookmarkCheck, ChevronDown, Volume2 } from "lucide-react";
 import { ApiError } from "../api/client";
-import { lookupWord, recordLookup, useLookupCount, type DictionaryEntry } from "../api/lookup";
+import {
+  etymology,
+  lookupWord,
+  phraseContext,
+  recordLookup,
+  useLookupCount,
+  wordContext,
+  type DictionaryEntry,
+  type Phrase,
+  type WordContextHints,
+  type WordContextResult,
+} from "../api/lookup";
 import { loadFavorites, setFavorite } from "../api/review";
 import type { StudySentence } from "../data/fixtures";
+import { cx } from "../lib/format";
 import { lookupKey } from "../lib/lookup";
-import { announce, get, patchStudy, useApp } from "../state/store";
-import { Banner, Button, Disclosure, Importance, Skeleton, Spinner } from "../components/ui";
+import { announce, get, patchStudy, sayFrench, useApp } from "../state/store";
+import { Banner, Button, Importance, Pill, Skeleton, Spinner } from "../components/ui";
 
 /** Remembers that a word of this sentence was looked up, so Add to review can offer it as a Fill-in card. */
 function pick(sentenceId: string, wordIndex: number) {
@@ -15,143 +27,351 @@ function pick(sentenceId: string, wordIndex: number) {
   if (!list.includes(wordIndex)) patchStudy({ picked: { ...picked, [sentenceId]: [...list, wordIndex] } });
 }
 
+const wordChars = (s: string) =>
+  s
+    .toLocaleLowerCase("fr")
+    .replace(/[^\p{L}\p{N}'’-]+/gu, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+
+/** Does a fixed expression overlap the picked word or phrase? */
+function phraseOverlaps(pick: string, phraseText: string): boolean {
+  const a = wordChars(pick).filter((w) => w.length > 1);
+  const b = wordChars(phraseText);
+  if (a.some((w) => b.includes(w)) || b.some((w) => w.length > 1 && a.includes(w))) return true;
+  const p = pick.toLocaleLowerCase("fr").trim();
+  const q = phraseText.toLocaleLowerCase("fr").trim();
+  return Boolean(p && q && (p.includes(q) || q.includes(p)));
+}
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** The sentence with every word of the pick highlighted using --mark-bg. */
+function Highlight({ sentence, pick }: { sentence: string; pick: string }) {
+  const words = Array.from(new Set(wordChars(pick).filter((w) => w.length > 1)));
+  if (!words.length) return <>{sentence}</>;
+  const re = new RegExp(`(${words.map(escapeRe).join("|")})`, "gi");
+  const parts = sentence.split(re);
+  const set = new Set(words);
+  return (
+    <>
+      {parts.map((part, i) =>
+        set.has(part.toLocaleLowerCase("fr")) ? (
+          <mark key={i} className="wp-mark">{part}</mark>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </>
+  );
+}
+
+type LoadState = "idle" | "loading" | "ready" | "error";
+
+const EMPTY_HINTS: WordContextHints = { meaning_zh: "", meaning_en: "", note_en: "", lemma: "", pos: "" };
+
 /*
- * A word's meaning: "In this sentence" comes from the analysis itself (no request); the dictionary
- * entry is an AI lookup of the base form. Opening the panel counts one lookup on the server.
+ * A word card in four levels: L1 headword/chips, L2 the meaning in this sentence and its context,
+ * L3 the collapsed details (why, dictionary, roots), L4 the footer. Analysis words show their
+ * fields instantly; a free selection or a word with no analysis asks /api/word-context.
  */
 export function WordPanel({
   sentence,
+  text,
   wordIndex,
-  entry,
+  occurrence = 0,
   onGrammar,
   onClose,
   inSheet,
 }: {
   sentence: StudySentence;
+  /** The clicked word or the free selection. */
+  text: string;
+  /** Present only for a word that came from the analysis word list. */
   wordIndex?: number;
-  entry: string;
+  /** Index of this text among its occurrences in the sentence (for /api/word-context). */
+  occurrence?: number;
   onGrammar: () => void;
   onClose: () => void;
   inSheet?: boolean;
 }) {
   const w = wordIndex !== undefined ? sentence.raw?.words?.[wordIndex] : undefined;
-  const headword = w?.lemma || entry;
-  const count = useLookupCount(entry);
+  const isAnalysis = w !== undefined;
+  const translation_zh = sentence.raw?.translation_zh ?? "";
+  const hints = useMemo<WordContextHints>(
+    () => (w ? { meaning_zh: w.meaning_zh, meaning_en: w.meaning, note_en: w.why, lemma: w.lemma, pos: w.type } : EMPTY_HINTS),
+    [w],
+  );
+
+  const count = useLookupCount(text);
+  const fav = useApp((s) => Boolean(s.favorites[lookupKey(text)]));
+
+  const [nested, setNested] = useState<string | null>(null);
+  const shown = nested ?? text;
+  const ipa = w?.ipa || "";
+  const pos = w?.type || "";
+  const baseForm = w?.lemma && w.lemma.toLowerCase() !== text.toLowerCase() ? w.lemma : "";
+  const falseFriend = w?.false_friend;
+  const englishLink = w?.english_link;
+  const lemmaForEty = baseForm || text;
+
   const [dict, setDict] = useState<DictionaryEntry | null>(null);
-  const [st, setSt] = useState<"loading" | "ready" | "error">("loading");
-  const [error, setError] = useState("");
-  const [counted, setCounted] = useState<boolean | null>(null);
-  const fav = useApp((s) => Boolean(s.favorites[lookupKey(entry)]));
+  const [dictSt, setDictSt] = useState<LoadState>("loading");
+  const [dictErr, setDictErr] = useState("");
+  const [dictMore, setDictMore] = useState(false);
+
+  const [ctx, setCtx] = useState<WordContextResult | null>(null);
+  const [ctxSt, setCtxSt] = useState<LoadState>(isAnalysis ? "idle" : "loading");
+
+  const [phrases, setPhrases] = useState<Phrase[]>([]);
+
+  const [whyOpen, setWhyOpen] = useState(false);
+  const [etyOpen, setEtyOpen] = useState(false);
+  const [ety, setEty] = useState("");
+  const [etySt, setEtySt] = useState<LoadState>("idle");
+
+  const abort = useRef(new AbortController());
+  const alive = () => !abort.current.signal.aborted;
+
   useEffect(() => {
     loadFavorites().catch(() => undefined);
+    return () => abort.current.abort();
   }, []);
 
-  const load = () => {
-    setSt("loading");
-    lookupWord(headword)
+  const loadDict = useCallback(() => {
+    setDictSt("loading");
+    lookupWord(shown)
       .then((d) => {
+        if (!alive()) return;
         setDict(d);
-        setSt("ready");
+        setDictSt("ready");
       })
       .catch((e) => {
-        setError(e instanceof ApiError ? e.message : "");
-        setSt("error");
+        if (!alive()) return;
+        setDictErr(e instanceof ApiError ? e.message : "");
+        setDictSt("error");
         announce("Dictionary request failed.", true);
       });
-  };
+  }, [shown]);
+
+  const loadCtx = useCallback(() => {
+    if (isAnalysis) return;
+    setCtxSt("loading");
+    wordContext({ sentence: sentence.fr, word: text, occurrence, translation_zh, hints }, abort.current.signal)
+      .then((r) => {
+        if (!alive()) return;
+        setCtx(r.context);
+        setCtxSt("ready");
+      })
+      .catch(() => {
+        if (alive()) setCtxSt("error");
+      });
+  }, [isAnalysis, sentence.fr, text, occurrence, translation_zh, hints]);
+
+  const loadEty = useCallback(() => {
+    setEtySt("loading");
+    etymology(shown, lemmaForEty, abort.current.signal)
+      .then((r) => {
+        if (!alive()) return;
+        setEty(r.text);
+        setEtySt("ready");
+      })
+      .catch(() => {
+        if (alive()) setEtySt("error");
+      });
+  }, [shown, lemmaForEty]);
 
   useEffect(() => {
-    setDict(null);
-    setCounted(null);
-    load();
-    if (wordIndex !== undefined) pick(sentence.id, wordIndex);
-    recordLookup(entry)
-      .then((r) => setCounted(r.incremented))
-      .catch(() => setCounted(null));
-  }, [entry, sentence.id, wordIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+    loadDict();
+  }, [loadDict]);
 
-  const main = w?.meaning || dict?.explanation_en || "";
-  const ipa = w?.ipa || dict?.phonetic || "";
-  const pos = w?.type || dict?.pos || "";
-  const baseForm = w?.lemma && w.lemma.toLowerCase() !== entry.toLowerCase() ? w.lemma : "";
+  useEffect(() => {
+    setNested(null);
+    setDictMore(false);
+    setPhrases([]);
+    setEty("");
+    setEtySt("idle");
+    setEtyOpen(false);
+    recordLookup(text).catch(() => undefined);
+    if (wordIndex !== undefined) pick(sentence.id, wordIndex);
+    loadCtx();
+    // Phrase context is cached per sentence for the page, so it is fetched without this card's
+    // abort signal (closing a card must not forget the shared answer).
+    phraseContext(sentence.fr, translation_zh).then((r) => {
+      if (alive()) setPhrases(r.phrases ?? []);
+    }).catch(() => undefined);
+  }, [text, sentence.id, wordIndex, sentence.fr, translation_zh, loadCtx]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const openEty = () => {
+    const next = !etyOpen;
+    setEtyOpen(next);
+    if (next && etySt === "idle") loadEty();
+  };
+
+  const useBaseForm = () => {
+    sayFrench(baseForm);
+    setNested(baseForm);
+  };
+
+  const overlapping = phrases.find((p) => phraseOverlaps(text, p.text));
+  const whyZh = ctx?.why_zh || w?.why || "";
+  const dictText = dict && (dict.explanation_cn || dict.explanation_en) ? dict : null;
 
   return (
-    <div className="stack gap-3" aria-busy={st === "loading"}>
-      <div className="word-head" style={{ position: "sticky", top: inSheet ? 0 : -16, background: "var(--surface)", paddingTop: 2, zIndex: 1 }}>
-        <div className="grow stack gap-1">
-          <span className="t-support">
-            French <span lang="fr" className="t-strong" style={{ color: "var(--text)" }}>{entry}</span>
-            {ipa && <span> · /{ipa}/</span>}
-          </span>
-          {main ? (
-            <span className="word-main" data-autofocus tabIndex={-1}>{main}</span>
-          ) : (
-            !inSheet && <span className="t-strong" data-autofocus tabIndex={-1}>Meaning</span>
-          )}
+    <div className="word-card stack gap-3" aria-busy={dictSt === "loading" || ctxSt === "loading"}>
+      {/* L1 — headword, replay, IPA and chips */}
+      <div className="wp-head">
+        <div className="row gap-2" style={{ alignItems: "baseline" }}>
+          <span className="wp-headword" lang="fr" data-autofocus tabIndex={-1}>{shown}</span>
+          <Button
+            kind="tertiary"
+            className="btn--sm-text wp-replay"
+            iconOnly
+            aria-label={`Replay “${shown}”`}
+            icon={<Volume2 aria-hidden />}
+            onClick={() => sayFrench(shown)}
+          />
         </div>
+        {ipa && <p className="wp-ipa">/{ipa}/</p>}
+        <div className="wp-chips">
+          {pos && <span className="wp-chip">{pos}</span>}
+          {baseForm && !nested && (
+            <button type="button" className="wp-chip wp-chip--action" onClick={useBaseForm}>
+              base form: <span lang="fr">{baseForm}</span>
+            </button>
+          )}
+          {falseFriend && <Pill tone="warning">False friend</Pill>}
+        </div>
+        {nested && (
+          <Button kind="tertiary" className="btn--sm-text" icon={<ArrowLeft aria-hidden />} onClick={() => setNested(null)}>
+            Back to {text}
+          </Button>
+        )}
       </div>
 
-      {count !== undefined && <Importance count={count} />}
-      {counted === false && <p className="t-meta">Not counted again: you looked this up less than 5 seconds ago.</p>}
-
-      {w && (
-        <div className="stack gap-1">
-          <span className="def-label">In this sentence</span>
-          {w.meaning !== main && <p>{w.meaning}</p>}
-          {w.meaning_zh && <p className="t-support" lang="zh">{w.meaning_zh}</p>}
-          {(baseForm || pos) && (
-            <p className="t-meta">
-              {baseForm && <>Base form <span lang="fr">{baseForm}</span>{pos ? " · " : ""}</>}
-              {pos}
-            </p>
-          )}
-          {w.false_friend && <p className="t-meta">False friend: it doesn’t mean what the English look-alike means.</p>}
-          {w.english_link && !w.false_friend && <p className="t-meta">Like English “{w.english_link}”.</p>}
-        </div>
-      )}
-
-      {st === "loading" && (
+      {!nested && (
         <>
-          <Spinner label="Looking up the dictionary entry…" />
-          <Skeleton lines={2} />
+          {/* L2 — meaning in this sentence */}
+          <section className="stack gap-1" aria-label="In this sentence">
+            <span className="wp-label">In this sentence</span>
+            {isAnalysis ? (
+              <div className="wp-insentence">
+                <p className="wp-insentence-zh" lang="zh">{w!.meaning_zh || "—"}</p>
+                <p className="wp-insentence-en">{w!.meaning}</p>
+              </div>
+            ) : ctxSt === "loading" ? (
+              <div className="wp-insentence"><Spinner label="Explaining it here…" /><Skeleton lines={2} /></div>
+            ) : ctxSt === "error" ? (
+              <div className="wp-insentence">
+                <p className="t-support">Couldn’t explain it here.</p>
+                <Button kind="secondary" onClick={loadCtx}>Retry</Button>
+              </div>
+            ) : (
+              <div className="wp-insentence">
+                <p className="wp-insentence-zh" lang="zh">{ctx?.meaning_zh || "—"}</p>
+                <p className="wp-insentence-en">{ctx?.meaning_en || ""}</p>
+              </div>
+            )}
+          </section>
+
+          {/* L2 — context */}
+          <section className="stack gap-1" aria-label="Context">
+            <span className="wp-label">Context</span>
+            <p className="t-body" lang="fr"><Highlight sentence={sentence.fr} pick={text} /></p>
+            {translation_zh && <p className="t-support" lang="zh">{translation_zh}</p>}
+            <p className="t-support">{sentence.en}</p>
+            {overlapping && (
+              <div className="wp-phrase">
+                <p className="row gap-2">
+                  <span className="wp-chip">Fixed phrase</span>
+                  <span className="t-strong" lang="fr">{overlapping.phrase || overlapping.text}</span>
+                </p>
+                <p className="t-support" lang="zh">{overlapping.meaning_zh} · {overlapping.meaning_en}</p>
+                {overlapping.literal_zh && <p className="t-meta" lang="zh">{overlapping.literal_zh}</p>}
+              </div>
+            )}
+          </section>
+
+          {/* L3 — why this form (collapsed) */}
+          {(whyZh || englishLink) && (
+            <section className={cx("wp-collapsible", whyOpen && "wp-collapsible--open")}>
+              <button type="button" className="wp-toggle" aria-expanded={whyOpen} onClick={() => setWhyOpen(!whyOpen)}>
+                <span className="wp-label">Why this form</span>
+                <ChevronDown aria-hidden width={16} height={16} />
+              </button>
+              {whyOpen && (
+                <div className="wp-collapsible-body">
+                  {whyZh && <p className="t-support" lang="zh" style={{ color: "var(--text)" }}>{whyZh}</p>}
+                  {englishLink && !falseFriend && <p className="t-meta">Like English “{englishLink}”.</p>}
+                </div>
+              )}
+            </section>
+          )}
         </>
       )}
-      {st === "error" && (
-        <Banner tone="error" title="Dictionary request failed" live="assertive" actions={<Button kind="secondary" onClick={load}>Retry</Button>}>
-          {error || "The dictionary didn’t respond."} {w ? "The meaning in this sentence is unaffected." : ""}
-        </Banner>
-      )}
-      {st === "ready" && dict && (dict.explanation_en || dict.explanation_cn) && (
-        <div className="stack gap-1">
-          <span className="def-label">Dictionary meaning{dict.lemma && dict.lemma.toLowerCase() !== entry.toLowerCase() ? ` · ${dict.lemma}` : ""}</span>
-          {dict.explanation_en && <p>{dict.explanation_en}</p>}
-          {dict.explanation_cn && <p className="t-support" lang="zh">{dict.explanation_cn}</p>}
-        </div>
+
+      {/* L3 — dictionary (clamped to three lines) */}
+      <section className="stack gap-1" aria-label="Dictionary">
+        <span className="wp-label">Dictionary{dict?.lemma && dict.lemma.toLowerCase() !== shown.toLowerCase() ? ` · ${dict.lemma}` : ""}</span>
+        {dictSt === "loading" && <><Spinner label="Looking up the dictionary entry…" /><Skeleton lines={2} /></>}
+        {dictSt === "error" && (
+          <Banner tone="error" title="Dictionary request failed" live="assertive" actions={<Button kind="secondary" onClick={loadDict}>Retry</Button>}>
+            {dictErr || "The dictionary didn’t respond."}
+          </Banner>
+        )}
+        {dictSt === "ready" && dictText && (
+          <>
+            <div className={cx("wp-dict", !dictMore && "wp-clamp")}>
+              {dictText.explanation_cn && <span lang="zh">{dictText.explanation_cn}</span>}
+              {dictText.explanation_cn && dictText.explanation_en && <span aria-hidden> · </span>}
+              {dictText.explanation_en && <span>{dictText.explanation_en}</span>}
+            </div>
+            <Button kind="tertiary" className="btn--sm-text" aria-expanded={dictMore} onClick={() => setDictMore(!dictMore)}>
+              {dictMore ? "Less" : "More"}
+            </Button>
+          </>
+        )}
+      </section>
+
+      {!nested && (
+        /* L3 — roots & origin (fetched only when expanded) */
+        <section className={cx("wp-collapsible wp-ety", etyOpen && "wp-ety--open")} aria-label="Roots and origin">
+          <button type="button" className="wp-toggle" aria-expanded={etyOpen} onClick={openEty}>
+            <span className="wp-label">Roots &amp; origin · 词根词源</span>
+            <ChevronDown aria-hidden width={16} height={16} />
+          </button>
+          {etyOpen && (
+            <div className="wp-collapsible-body">
+              {etySt === "loading" && <Spinner label="Looking up the roots…" />}
+              {etySt === "error" && (
+                <div className="stack gap-2">
+                  <p className="t-support">Couldn’t load the roots.</p>
+                  <Button kind="secondary" onClick={loadEty}>Retry</Button>
+                </div>
+              )}
+              {etySt === "ready" && <p className="t-support" lang="zh" style={{ color: "var(--text)" }}>{ety}</p>}
+            </div>
+          )}
+        </section>
       )}
 
-      {w?.why && (
-        <Disclosure summary="Why this form">
-          <p className="t-support" style={{ color: "var(--text)" }}>{w.why}</p>
-        </Disclosure>
-      )}
-      <p className="t-meta">Meanings are written by AI and can be wrong. Each lookup raises the word’s importance.</p>
-
-      <div className="btn-row" style={{ justifyContent: "space-between" }}>
-        <div className="row gap-2">
-          <Button kind="tertiary" className="btn--sm-text" style={{ marginLeft: -12 }} onClick={onGrammar}>
-            Grammar for this sentence
-          </Button>
+      {/* L4 — footer */}
+      <div className="wp-footer">
+        <div className="row gap-2" style={{ flexWrap: "wrap" }}>
+          {count !== undefined && <Importance count={count} />}
           <Button
             kind="tertiary"
             className="btn--sm-text"
             aria-pressed={fav}
             icon={fav ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />}
-            onClick={() => void setFavorite(entry, !fav)}
+            onClick={() => void setFavorite(text, !fav)}
           >
             {fav ? "Favorited" : "Favorite"}
           </Button>
+          <Button kind="tertiary" className="btn--sm-text" onClick={onGrammar}>Grammar for this sentence</Button>
+          {!inSheet && <Button kind="tertiary" className="btn--sm-text" onClick={onClose}>Close</Button>}
         </div>
-        {!inSheet && <Button kind="tertiary" className="btn--sm-text" onClick={onClose}>Close</Button>}
+        <p className="t-meta">Meanings are written by AI and can be wrong. Each lookup raises the word’s importance.</p>
       </div>
     </div>
   );

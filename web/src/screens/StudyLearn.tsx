@@ -5,7 +5,8 @@ import { lookupWord } from "../api/lookup";
 import { cardKey, saveNote, useSavedCards, type NoteTarget } from "../api/srs";
 import { stepText, type ApiWord } from "../api/study";
 import type { DerivedCard, StudySentence } from "../data/fixtures";
-import { fmtClock, plural } from "../lib/format";
+import { cx, fmtClock, plural } from "../lib/format";
+import { estimate } from "../state/audio";
 import {
   announce,
   get,
@@ -17,11 +18,23 @@ import {
   stopPlayback,
   updatePlayer,
   useApp,
-  type PlayerState,
 } from "../state/store";
-import { Banner, Button, Dialog, PageHead, Popover, Segmented, Skeleton, Spinner, Tabs, useNarrow } from "../components/ui";
+import { Banner, Button, Dialog, PageHead, Popover, Skeleton, Spinner, Tabs, useNarrow } from "../components/ui";
+import { FrText, stepSegments, type FrPick } from "../components/FrText";
 import { WordPanel } from "./WordPopup";
 import { Exercise } from "./Exercise";
+
+interface Pick {
+  text: string;
+  el: HTMLElement;
+  wordIndex?: number;
+  occurrence: number;
+}
+
+/** The player owns a list of texts; a button must restart fresh when it wants a different list. */
+function sameTexts(a: string[] | undefined, b: string[]): boolean {
+  return !!a && a.length === b.length && a.every((x, i) => x === b[i]);
+}
 
 export function StudyLearn() {
   const study = useApp((s) => s.study);
@@ -30,25 +43,34 @@ export function StudyLearn() {
   const s = study.sentences[study.index];
   const total = study.sentences.length;
   const practising = study.tab === "recall" || study.tab === "dictation";
-  const [word, setWord] = useState<{ entry: string; el: HTMLElement; seg: number; wi?: number } | null>(null);
+  const [pick, setPick] = useState<Pick | null>(null);
   const [srcOpen, setSrcOpen] = useState(study.sourceOpen);
   const sentRef = useRef<HTMLDivElement>(null);
   const narrow = useNarrow();
 
+  // Demo-state forcing: open the card for a word chosen through the Demo states navigator.
   useEffect(() => {
     const entry = forcedWord || (forcedSentence === "selected-word" ? "failli" : "");
     if (forcedSentence === "source") setSrcOpen(true);
     if (!entry) return;
     requestAnimationFrame(() => {
       const el = document.querySelector<HTMLElement>(`[data-word="${entry}"]`);
-      if (el) setWord({ entry, el, seg: -1 });
+      if (el) {
+        setPick({
+          text: entry,
+          el,
+          wordIndex: el.dataset.wi !== undefined ? Number(el.dataset.wi) : undefined,
+          occurrence: 0,
+        });
+      }
     });
   }, [forcedSentence, forcedWord]);
 
   if (!s) return null;
+  const onPick = (p: FrPick) => setPick({ text: p.text, el: p.anchor, wordIndex: p.wordIndex, occurrence: p.occurrence });
   const goSentence = (i: number) => {
-    setWord(null);
-    patchStudy({ index: i, step: 0 });
+    setPick(null);
+    patchStudy({ index: i });
     announce(`Sentence ${i + 1} of ${total}.`);
     const p = get().player;
     if (p?.owner.kind === "study") stopPlayback();
@@ -117,30 +139,20 @@ export function StudyLearn() {
             <p className="t-support">The sentence is hidden while you practise. It appears after you check your answer or choose Show answer.</p>
           ) : (
             <div ref={sentRef} style={{ position: "relative" }}>
-              <p className="sentence-fr" lang="fr">
-                {s.segments.map((g, i) =>
-                  g.w ? (
-                    <button
-                      key={i}
-                      type="button"
-                      className="word-btn"
-                      data-word={g.t}
-                      aria-expanded={word?.seg === i}
-                      aria-haspopup="dialog"
-                      onClick={(e) => setWord(word?.seg === i ? null : { entry: g.t, el: e.currentTarget, seg: i, wi: g.wi })}
-                    >
-                      {g.t}
-                    </button>
-                  ) : (
-                    <span key={i}>{g.t}</span>
-                  ),
-                )}
-              </p>
+              <FrText segments={s.segments} className="sentence-fr" onPick={onPick} />
               <p className="t-body muted" style={{ marginTop: 8 }}>{s.en}</p>
-              <p className="t-meta" style={{ marginTop: 4 }}>Select a word or phrase to see its meaning.</p>
-              {word && !narrow && (
-                <Popover anchor={word.el} container={sentRef.current} onClose={() => setWord(null)} label={`Meaning of ${word.entry}`}>
-                  <WordPanel entry={word.entry} sentence={s} wordIndex={word.wi} onGrammar={() => { setWord(null); patchStudy({ tab: "grammar" }); }} onClose={() => setWord(null)} />
+              <p className="t-meta" style={{ marginTop: 4 }}>Tap a word or select a phrase to hear it and see its meaning.</p>
+              {pick && !narrow && (
+                <Popover anchor={pick.el} container={sentRef.current} onClose={() => setPick(null)} label={`Meaning of ${pick.text}`}>
+                  <WordPanel
+                    key={`${pick.text}-${pick.wordIndex ?? ""}`}
+                    sentence={s}
+                    text={pick.text}
+                    wordIndex={pick.wordIndex}
+                    occurrence={pick.occurrence}
+                    onGrammar={() => { setPick(null); patchStudy({ tab: "grammar" }); }}
+                    onClose={() => setPick(null)}
+                  />
                 </Popover>
               )}
             </div>
@@ -161,7 +173,7 @@ export function StudyLearn() {
             idBase="learn"
             value={study.tab}
             onChange={(t) => {
-              setWord(null);
+              setPick(null);
               const p = get().player;
               if (p && (p.owner.kind === "exercise" || p.owner.kind === "study")) stopPlayback();
               patchStudy({ tab: t });
@@ -174,7 +186,7 @@ export function StudyLearn() {
             ]}
           />
           <div id="learn-panel" role="tabpanel" aria-labelledby={`learn-tab-${study.tab}`}>
-            {study.tab === "steps" && <StepsPanel sentence={s} />}
+            {study.tab === "steps" && <StepsPanel sentence={s} onPick={onPick} />}
             {study.tab === "grammar" && <GrammarPanel sentence={s} />}
             {(study.tab === "recall" || study.tab === "dictation") && (
               <Exercise
@@ -199,35 +211,57 @@ export function StudyLearn() {
         </div>
       </div>
 
-      {word && narrow && (
-        <Dialog sheet title={`Meaning of “${word.entry}”`} onClose={() => setWord(null)}>
-          <WordPanel entry={word.entry} sentence={s} wordIndex={word.wi} onGrammar={() => { setWord(null); patchStudy({ tab: "grammar" }); }} onClose={() => setWord(null)} inSheet />
+      {pick && narrow && (
+        <Dialog sheet title={`Meaning of “${pick.text}”`} onClose={() => setPick(null)}>
+          <WordPanel
+            key={`${pick.text}-${pick.wordIndex ?? ""}`}
+            sentence={s}
+            text={pick.text}
+            wordIndex={pick.wordIndex}
+            occurrence={pick.occurrence}
+            onGrammar={() => { setPick(null); patchStudy({ tab: "grammar" }); }}
+            onClose={() => setPick(null)}
+            inSheet
+          />
         </Dialog>
       )}
     </div>
   );
 }
 
-/* ---------------- SCR-AUD-01: one scoped main player ---------------- */
+/* ---------------- SCR-AUD-01: the sentence player ---------------- */
 function StudyPlayer({ practising }: { practising: boolean }) {
   const study = useApp((s) => s.study);
   const p = useApp((s) => s.player);
-  const [scope, setScope] = useState<NonNullable<PlayerState["scope"]>>("sentence");
   const mine = p && p.owner.kind === "study" ? p : null;
 
   if (practising) return null; // exercises use their own neutral "Practice audio" control
 
   const cur = study.sentences[study.index];
-  const texts =
-    scope === "all" ? study.sentences.map((x) => x.fr) : scope === "sentence" ? [cur.fr] : [stepText(cur.steps[study.step] ?? cur.steps[0])];
-  const duration = texts.reduce((a, t) => a + Math.max(1, t.length / 13), 0);
-  const scopeLabel = scope === "all" ? "All sentences" : scope === "sentence" ? `Sentence ${study.index + 1}` : `Step ${study.step + 1} of sentence ${study.index + 1}`;
-  const start = () =>
-    startPlayback({ kind: "study", label: `Study audio · ${scopeLabel}`, route: "study" }, duration, { scope, texts });
+  const wanted = [cur.fr];
+  const allTexts = study.sentences.map((x) => x.fr);
+  const dur = (ts: string[]) => ts.reduce((a, t) => a + estimate(t), 0);
+  const label = `Sentence ${study.index + 1}`;
+  const sameWanted = sameTexts(mine?.texts, wanted);
+  const sameAll = sameTexts(mine?.texts, allTexts);
 
+  const startSentence = () =>
+    startPlayback({ kind: "study", label: `Study audio · ${label}`, route: "study" }, dur(wanted), { texts: wanted });
+  const startAll = () =>
+    startPlayback({ kind: "study", label: "Study audio · All sentences", route: "study" }, dur(allTexts), { texts: allTexts });
+
+  // If the player's texts differ from what this button wants, always start fresh instead of
+  // resuming/restarting the OLD texts (the step-1 → step-2 bug).
   const toggle = () => {
-    if (!mine) return start();
-    if (mine.status === "playing" || mine.status === "buffering") return updatePlayer({ status: "paused" });
+    if (!mine || !sameWanted) return startSentence();
+    if (mine.status === "playing" || mine.status === "buffering" || mine.status === "loading") return updatePlayer({ status: "paused" });
+    if (mine.status === "paused") return updatePlayer({ status: "playing" });
+    if (mine.status === "ended") return updatePlayer({ status: "playing", position: 0 });
+    if (mine.status === "error") return retryPlayback();
+  };
+  const toggleAll = () => {
+    if (!mine || !sameAll) return startAll();
+    if (mine.status === "playing" || mine.status === "buffering" || mine.status === "loading") return updatePlayer({ status: "paused" });
     if (mine.status === "paused") return updatePlayer({ status: "playing" });
     if (mine.status === "ended") return updatePlayer({ status: "playing", position: 0 });
     if (mine.status === "error") return retryPlayback();
@@ -239,36 +273,20 @@ function StudyPlayer({ practising }: { practising: boolean }) {
 
   return (
     <div className="player" role="group" aria-label="Sentence player">
-      <Segmented
-        label="Playback scope"
-        value={scope}
-        onChange={(v) => {
-          setScope(v);
-          if (mine) {
-            stopPlayback();
-            announce(`Scope changed to ${v === "all" ? "All sentences" : v === "sentence" ? "Current sentence" : "Current step"}. Previous playback stopped.`);
-          }
-        }}
-        options={[
-          { value: "all", label: "All sentences" },
-          { value: "sentence", label: "Current sentence" },
-          { value: "step", label: "Current step" },
-        ]}
-      />
       <div className="player-main">
         <Button
           kind="primary"
           className="play-btn"
           iconOnly
           busy={mine?.status === "loading"}
-          aria-label={`${playing ? "Pause" : mine?.status === "error" ? "Retry" : "Play"} ${scopeLabel}`}
+          aria-label={`${playing ? "Pause" : mine?.status === "error" ? "Retry" : "Play"} ${label}`}
           icon={playing ? <Pause aria-hidden /> : mine?.status === "error" ? <RotateCcw aria-hidden /> : <Play aria-hidden />}
           onClick={toggle}
         />
         <div className="grow stack gap-1" style={{ minWidth: 160 }}>
-          <span className="t-strong">{scopeLabel}</span>
+          <span className="t-strong">{label}</span>
           <span className="t-support num" aria-live="off">
-            {statusText} · {fmtClock(mine?.position ?? 0)} / {fmtClock(mine?.duration ?? duration)}
+            {statusText} · {fmtClock(mine?.position ?? 0)} / {fmtClock(mine?.duration ?? dur(wanted))}
           </span>
           <div className="progress-track" aria-hidden>
             <div className="progress-fill" style={{ width: `${mine ? Math.min(100, (mine.position / mine.duration) * 100) : 0}%` }} />
@@ -296,6 +314,9 @@ function StudyPlayer({ practising }: { practising: boolean }) {
           Repeat {(mine?.repeat ?? false) ? "on" : "off"}
         </Button>
       </div>
+      <div className="btn-row">
+        <Button kind="secondary" icon={<Play aria-hidden />} onClick={toggleAll}>Play all sentences</Button>
+      </div>
       {mine?.status === "error" && (
         <Banner tone="error" title="Audio couldn’t play" live="assertive" actions={<Button kind="secondary" onClick={retryPlayback}>Retry</Button>}>
           The voice didn’t load. Your place in the sentence is kept.
@@ -308,56 +329,79 @@ function StudyPlayer({ practising }: { practising: boolean }) {
   );
 }
 
-/* ---------------- SCR-STU-03 ---------------- */
-function StepsPanel({ sentence }: { sentence: StudySentence }) {
-  const step = useApp((s) => s.study.step);
-  const n = sentence.steps.length;
+/* ---------------- SCR-STU-03: every step, played directly ---------------- */
+function StepsPanel({ sentence, onPick }: { sentence: StudySentence; onPick: (p: FrPick) => void }) {
+  const player = useApp((s) => s.player);
+  const playingText =
+    player && player.owner.kind === "study" &&
+    (player.status === "playing" || player.status === "loading" || player.status === "buffering") &&
+    player.texts && player.texts.length === 1
+      ? player.texts[0]
+      : null;
+
+  const playStep = (i: number) => {
+    const texts = [stepText(sentence.steps[i])];
+    const p = get().player;
+    const mine = p && p.owner.kind === "study" ? p : null;
+    if (mine && sameTexts(mine.texts, texts)) {
+      if (mine.status === "playing" || mine.status === "buffering" || mine.status === "loading") return updatePlayer({ status: "paused" });
+      if (mine.status === "paused") return updatePlayer({ status: "playing" });
+      if (mine.status === "ended") return updatePlayer({ status: "playing", position: 0 });
+      if (mine.status === "error") return retryPlayback();
+      return;
+    }
+    startPlayback({ kind: "study", label: `Study audio · Step ${i + 1}`, route: "study" }, estimate(texts[0]), { texts });
+  };
+  const playAllSteps = () => {
+    const texts = sentence.steps.map(stepText);
+    startPlayback({ kind: "study", label: "Study audio · All steps", route: "study" }, texts.reduce((a, t) => a + estimate(t), 0), { texts });
+  };
+
   return (
     <div className="stack gap-3">
       <div className="row row--between">
         <p className="t-support">
           Build the sentence a piece at a time. Each step marks what is <mark className="added">new</mark>.
         </p>
-        <p className="t-label num" aria-live="polite">Step {step + 1} of {n}</p>
+        <Button kind="secondary" icon={<Play aria-hidden />} onClick={playAllSteps}>Play all steps</Button>
       </div>
       <ol className="list" style={{ padding: "0 16px" }}>
-        {sentence.steps.map((st, i) => (
-          <li key={i} className="step-item" aria-current={i === step ? "step" : undefined}>
-            <span className="step-num" aria-hidden>{i + 1}</span>
-            <div className="stack gap-2">
-              <p className="t-fr-lg" lang="fr" style={{ fontSize: 20, lineHeight: "30px" }}>
-                <span className="sr-only">Step {i + 1}: </span>
-                {st.parts.map((p, k) =>
-                  p.added ? (
-                    <mark key={k} className="added">
-                      <span className="sr-only">new: </span>
-                      {p.t}
-                    </mark>
-                  ) : (
-                    <span key={k}>{p.t}</span>
-                  ),
-                )}
-              </p>
-              <p className="t-support">{st.en}</p>
-              <p className="t-body">
-                <span className="t-strong">{/[.!?…]$/.test(st.addedLabel) ? st.addedLabel : `${st.addedLabel}.`}</span>
-                {st.how && ` ${st.how}`}
-              </p>
-              {i === step ? (
-                <p className="t-meta">Current step · choose “Current step” in the player to hear only this part.</p>
-              ) : (
-                <Button kind="tertiary" className="btn--sm-text" style={{ alignSelf: "flex-start", marginLeft: -12 }} onClick={() => { patchStudy({ step: i }); announce(`Step ${i + 1} of ${n} selected.`); }}>
-                  Practise step {i + 1}
+        {sentence.steps.map((st, i) => {
+          const text = stepText(st);
+          const isPlaying = playingText === text;
+          return (
+            <li
+              key={i}
+              className={cx("step-item", isPlaying && "is-playing")}
+              onClick={(e) => {
+                const t = e.target as HTMLElement;
+                if (t.closest(".fr-word, button, a, summary, input, label")) return;
+                playStep(i);
+              }}
+            >
+              <span className="step-num" aria-hidden>{i + 1}</span>
+              <div className="stack gap-2">
+                <span className="step-badge">Step {i + 1}</span>
+                <FrText segments={stepSegments(st.parts)} className="step-fr" onPick={onPick} />
+                <p className="t-support">{st.en}</p>
+                <p className="t-body">
+                  <span className="t-strong">{/[.!?…]$/.test(st.addedLabel) ? st.addedLabel : `${st.addedLabel}.`}</span>
+                  {st.how && ` ${st.how}`}
+                </p>
+                <Button
+                  kind="tertiary"
+                  className="btn--sm-text"
+                  style={{ alignSelf: "flex-start", marginLeft: -12 }}
+                  icon={<Play aria-hidden />}
+                  onClick={(e) => { e.stopPropagation(); playStep(i); }}
+                >
+                  Play step {i + 1}
                 </Button>
-              )}
-            </div>
-          </li>
-        ))}
+              </div>
+            </li>
+          );
+        })}
       </ol>
-      <div className="btn-row">
-        <Button kind="secondary" disabledReason={step === 0 ? "This is the first step." : undefined} onClick={() => patchStudy({ step: step - 1 })}>Previous step</Button>
-        <Button kind="secondary" disabledReason={step === n - 1 ? "This is the last step." : undefined} onClick={() => patchStudy({ step: step + 1 })}>Next step</Button>
-      </div>
     </div>
   );
 }
@@ -366,13 +410,12 @@ function StepsPanel({ sentence }: { sentence: StudySentence }) {
 function GrammarPanel({ sentence }: { sentence: StudySentence }) {
   const forced = useApp((s) => s.ss["SCR-GRA-01"]);
   const index = useApp((s) => s.study.index);
-  const step = useApp((s) => s.study.step);
   // The notes arrive with the analysis, so there is nothing to load.
   const state = forced && forced !== "auto" ? forced : sentence.grammar ? "content" : "none";
   const notes = sentence.grammar ?? [];
   return (
     <div className="stack gap-4" aria-busy={state === "loading"}>
-      <p className="t-support">Grammar for this sentence. Your place is kept: sentence {index + 1}, step {step + 1}.</p>
+      <p className="t-support">Grammar for this sentence. Your place is kept: sentence {index + 1}.</p>
       {state === "loading" && (
         <>
           <Spinner label="Loading grammar notes…" />

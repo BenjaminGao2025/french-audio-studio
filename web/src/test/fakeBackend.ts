@@ -165,6 +165,8 @@ export const fake = {
   /** /api/listening/sessions answers 409 (no studied sentences yet). */
   noListening: false,
   devices: demoDevices(),
+  /** The next N /api/etymology requests fail with a 503 (for Retry-state tests). */
+  etymologyFails: 0,
   reset() {
     this.practice = new Map();
     this.listening = new Map();
@@ -176,6 +178,7 @@ export const fake = {
     this.episodes = demoEpisodes();
     this.heartbeats = {};
     this.lookups = {};
+    this.etymologyFails = 0;
     this.failNext.clear();
     this.saveFails = 0;
     this.delay = 40;
@@ -261,6 +264,21 @@ function route(method: string, url: URL, body: Record<string, unknown>): Respons
     });
   if (p === "/api/game/days")
     return json(200, { days: [{ day: "2026-01-01", seconds: 1500, manual_seconds: 600, lanes: { reading: 900, review: 600 } }] });
+  /* ---------- word card context (routers/tutor.py) ---------- */
+  if (p === "/api/word-context" && method === "POST") {
+    return json(200, {
+      context: { meaning_zh: "这里的意思", meaning_en: "the meaning here", why_zh: "它在这句话里的用法说明。" },
+      state: "ready",
+    });
+  }
+  if (p === "/api/phrase-context" && method === "POST") return json(200, { phrases: [], cached: true });
+  if (p === "/api/etymology" && method === "POST") {
+    if (fake.etymologyFails > 0) {
+      fake.etymologyFails--;
+      return json(503, { detail: "etymology_failed" });
+    }
+    return json(200, { text: "这是一个示例词根词源说明。", cached: false });
+  }
   return srsRoute(method, url, body);
 }
 

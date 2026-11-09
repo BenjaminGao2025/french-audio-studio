@@ -31,6 +31,42 @@ export function ensureAudioSession(): Promise<void> {
 
 /** Rough length of a clip before its metadata loads (about 13 characters a second). */
 const estimate = (text: string) => Math.max(1, text.length / 13);
+export { estimate };
+
+/* ---------------- one-shot "say this" ---------------- */
+
+let oneShot: HTMLAudioElement | null = null;
+let oneShotSeq = 0;
+
+/**
+ * Reads one short piece of French aloud in its own <audio> element. It never creates or replaces
+ * the store's main `player` (so a word or a phrase selection never takes over sentence playback).
+ * A new call stops the previous clip. Empty text is ignored and long text is capped.
+ */
+export function speakOnce(text: string, rate = 1): void {
+  const clean = text.trim().slice(0, 200);
+  if (!clean) return;
+  // jsdom (unit tests) exposes HTMLMediaElement but cannot actually play anything; skip it there.
+  if (typeof navigator !== "undefined" && /jsdom/i.test(navigator.userAgent)) return;
+  const id = ++oneShotSeq;
+  try {
+    oneShot ??= new Audio();
+    oneShot.pause(); // stop whatever one-shot clip is currently playing
+  } catch {
+    return; // no usable Audio element (e.g. a DOM-less/jsdom environment)
+  }
+  ensureAudioSession().then(() => {
+    if (id !== oneShotSeq || !oneShot) return; // a newer call superseded this one
+    try {
+      oneShot.src = ttsUrl(clean);
+      oneShot.playbackRate = rate;
+      const playing = oneShot.play() as Promise<void> | undefined;
+      if (playing && typeof playing.catch === "function") playing.catch(() => undefined);
+    } catch {
+      // Playback is unavailable here; the caller still got its sayFrench side effects.
+    }
+  });
+}
 
 export interface ClipEvents {
   onPlaying: () => void;

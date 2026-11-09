@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { playTexts, playUrl, type AudioHandle, type ClipEvents } from "./audio";
+import { playTexts, playUrl, speakOnce, type AudioHandle, type ClipEvents } from "./audio";
 import {
   AI_FALLBACK,
   CACHED_KEYS,
@@ -653,6 +653,18 @@ export function stopPlayback() {
   stopAudio();
   set(() => ({ player: null }));
   announce("Playback stopped.");
+}
+
+/**
+ * Say one short word or a free selection aloud without taking over sentence playback. The main
+ * player is only paused so the two clips never play at once; its position and `texts` are kept.
+ */
+export function sayFrench(text: string, rate = 1) {
+  const p = get().player;
+  if (p && (p.status === "playing" || p.status === "buffering" || p.status === "loading")) {
+    updatePlayer({ status: "paused" });
+  }
+  speakOnce(text, rate);
 }
 
 /** Records the session's counted time in Audio activity history and remembers episode positions. */
