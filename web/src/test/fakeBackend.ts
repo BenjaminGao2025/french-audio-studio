@@ -8,6 +8,20 @@ const BASE = Date.UTC(2026, 0, 1);
 const MODE = { Listen: "listen", Speak: "speak", "Fill-in": "cloze" } as const;
 const STATE = { new: "new", learning: "learning", review: "review" } as const;
 
+/** Seconds to the next review for Again/Hard/Good/Easy, as srs._preview_intervals returns. */
+const PREVIEW_INTERVALS: Record<string, number> = { 1: 60, 2: 600, 3: 86400, 4: 345600 };
+
+/** The meaning snapshot kept when a word card was saved (no live lookup needed to review it). */
+function wordMeta(word: string): Record<string, string> {
+  return {
+    meaning_zh: "这个词的意思", meaning_en: "the meaning of this word",
+    ctx_zh: "它在这句话里的意思", ctx_en: "what it means here",
+    dict_zh: "词典释义", dict_en: "dictionary gloss",
+    why_zh: "为什么这里用这个词。", hook: "一个记忆钩子。",
+    lemma: word, pos: "noun", ipa: "ipa", snap: "1",
+  };
+}
+
 /** The demo library as the server would hold it (saved cards only). */
 function demoSrs() {
   const { sentences, cards } = buildLibrary();
@@ -19,13 +33,17 @@ function demoSrs() {
       note_id: c.sentenceId,
       mode: MODE[c.kind],
       target: c.word ?? "",
-      target_meta: {},
+      target_meta: c.word ? wordMeta(c.word) : {},
+      intervals: { ...PREVIEW_INTERVALS },
       due: new Date(BASE).toISOString(),
       importance: 3,
       archived: c.mastered,
       state: STATE[c.status],
       created_at: new Date(BASE + c.savedAt * 1000).toISOString(),
-      note: { id: s.id, sentence: s.fr, translation_en: s.en, translation_zh: "" },
+      note: {
+        id: s.id, sentence: s.fr, translation_en: s.en, translation_zh: "中文翻译。",
+        extra: { grammar: [{ title: "passé composé", explanation: "An auxiliary plus a past participle.", hook: " hier = yesterday" }] },
+      },
     };
   };
   return {

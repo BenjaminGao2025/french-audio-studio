@@ -134,6 +134,16 @@ export interface ReviewUI {
   hinted?: boolean;
   /** When the server scheduled the card next (ISO), after the review was recorded. */
   nextDue?: string;
+  /** Rating highlighted after a typed Check (1 Again / 2 Hard / 3 Good). */
+  suggested?: number;
+  /** The typed answer to send with the rating (set by Check). */
+  answer?: string;
+  /** A rating POST is in flight. */
+  rateBusy?: boolean;
+  /** A rating POST failed; the card is kept for a retry. */
+  techfail?: boolean;
+  /** A rating was recorded on the server. */
+  rated?: boolean;
 }
 
 export interface MasteryAction {

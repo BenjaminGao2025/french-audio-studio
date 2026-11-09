@@ -126,7 +126,7 @@ describe("9. whole-document answer-leak checks (Recall, Dictation, Review)", () 
     }
   });
 
-  it("Review unrevealed cards and the next card after grading do not leak their target anywhere in the document", async () => {
+  it("Review unrevealed cards and the next card after rating do not leak their target anywhere in the document", async () => {
     await act(async () => resetDemo());
     await act(async () => REGISTRY.find((r) => r.id === "SCR-REV-02")!.states.find((s) => s.key === "answer")!.apply());
     await wait(50);
@@ -134,30 +134,22 @@ describe("9. whole-document answer-leak checks (Recall, Dictation, Review)", () 
     const card0 = cards[0];
     expect(wholeDocumentSnapshot()).not.toContain(card0.target);
 
-    // Grade card 0, then advance to card 1 (which is from a different sentence) and verify card 1's target is not in the document.
-    const ta = document.querySelector<HTMLTextAreaElement>("#rev-input")!;
+    // Space reveals the Anki-style ratings; "3" (Good) rates card 0 and advances to card 1.
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
-      setter.call(ta, card0.target);
-      ta.dispatchEvent(new Event("input", { bubbles: true }));
+      document.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", key: " ", bubbles: true }));
     });
-    const checkBtn = Array.from(document.querySelectorAll("button")).find((b) => b.textContent === "Check")!;
-    await act(async () => checkBtn.click());
+    expect(document.querySelector(".rev-ratings")).toBeTruthy();
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "3", bubbles: true }));
+    });
     await wait(800);
-    // Focus moved to #rev-result after Check
-    expect(document.activeElement?.id).toBe("rev-result");
-
-    const nextBtn = Array.from(document.querySelectorAll("button")).find((b) => b.textContent === "Next card")!;
-    await act(async () => nextBtn.click());
-    await wait(50);
 
     const card1 = cards[1];
     expect(card1.sentenceId).not.toBe(card0.sentenceId);
     expect(wholeDocumentSnapshot()).not.toContain(card1.target);
-    // Neither card 0's sentence nor card 1's sentence leaks on card 1
     expect(wholeDocumentSnapshot()).not.toContain(card0.sentenceFr);
 
-    // Also check unrevealed Speak card in Review
+    // Also check an unrevealed Speak card in Review
     await act(async () => REGISTRY.find((r) => r.id === "SCR-REV-02")!.states.find((s) => s.key === "speak")!.apply());
     await wait(50);
     const speakCard = get().review.sessionCards![get().review.index];
@@ -189,16 +181,15 @@ describe("1. same-attempt retry must not hide a reveal", () => {
     expect(document.getElementById("main")!.textContent).toContain("Recorded as: Answer known");
   });
 
-  it("Review: techfail → Show answer → Retry check records Answer known", async () => {
+  it("Review: a grading techfail keeps the answer revealed with its rating buttons", async () => {
     await act(async () => resetDemo());
     await act(async () => REGISTRY.find((r) => r.id === "SCR-REV-02")!.states.find((s) => s.key === "techfail")!.apply());
     await wait(50);
-    const showAnswer = Array.from(document.querySelectorAll("button")).find((b) => b.textContent === "Show answer")!;
-    await act(async () => showAnswer.click());
-    const retry = Array.from(document.querySelectorAll("button")).find((b) => b.textContent === "Retry check")!;
-    await act(async () => retry.click());
-    await wait(800);
-    expect(document.getElementById("main")!.textContent).toContain("Answer known");
+    const main = document.getElementById("main")!;
+    // The reveal is never hidden: the correct answer and the four Anki-style ratings stay visible.
+    expect(main.querySelector(".rev-ratings")).toBeTruthy();
+    expect(main.textContent).toContain("Again");
+    expect(main.textContent).toContain("Good");
   });
 });
 
@@ -223,7 +214,7 @@ describe("2. Review queue spacing and Speak card speaking flow", () => {
     });
   });
 
-  it("Speak cards use speaking flow: English prompt, say it aloud, Show answer, self-check rated on the server", async () => {
+  it("Speak cards show the answer, then a Good rating is recorded on the server", async () => {
     await act(async () => resetDemo());
     await act(async () => REGISTRY.find((r) => r.id === "SCR-REV-02")!.states.find((s) => s.key === "speak")!.apply());
     await wait(50);
@@ -233,14 +224,12 @@ describe("2. Review queue spacing and Speak card speaking flow", () => {
 
     const showBtn = Array.from(main.querySelectorAll("button")).find((b) => b.textContent === "Show answer")!;
     await act(async () => showBtn.click());
-    expect(main.textContent).toContain("I said it correctly");
-    expect(main.textContent).toContain("Not yet");
+    expect(main.textContent).toContain("Again");
+    expect(main.textContent).toContain("Easy");
 
-    const saidOk = Array.from(main.querySelectorAll("button")).find((b) => b.textContent === "I said it correctly")!;
-    await act(async () => saidOk.click());
+    const good = Array.from(main.querySelectorAll("button")).find((b) => b.querySelector(".rev-rate-name")?.textContent === "Good")!;
+    await act(async () => good.click());
     await wait(300);
-    expect(main.textContent).toContain("Said correctly");
-    expect(main.textContent).toContain("Next review tomorrow");
     const rated = fake.calls.filter((c) => /\/api\/srs\/cards\/.+\/review$/.test(c.path));
     expect(rated).toHaveLength(1);
     expect(rated[0].body).toMatchObject({ rating: 3 });
@@ -740,12 +729,15 @@ describe("13. word library order", () => {
     expect(lib).toEqual([...lib].sort((a, b) => a - b));
 
     await act(async () => go("review/saved"));
-    await wait(50);
-    const s = get();
-    const newest = new Map<string, number>();
-    for (const c of s.cards) if (c.saved && !c.mastered) newest.set(c.sentenceId, Math.max(newest.get(c.sentenceId) ?? 0, c.savedAt));
-    const expected = s.sentences.filter((x) => newest.has(x.id)).sort((a, b) => newest.get(b.id)! - newest.get(a.id)!).map((x) => x.number);
-    expect(numbers().slice(0, 5)).toEqual(expected.slice(0, 5));
+    await wait(300);
+    const table = document.querySelector("#main table.saved-table")!;
+    expect(table).toBeTruthy();
+    // Saved is now a table whose default sort is newest saved first.
+    const savedTh = Array.from(table.querySelectorAll("th")).find((th) => th.textContent?.trim().startsWith("Saved"))!;
+    expect(savedTh.getAttribute("aria-sort")).toBe("descending");
+    const savedOrder = Array.from(table.querySelectorAll("tbody tr")).map((r) => Number(r.getAttribute("data-saved")));
+    expect(savedOrder.length).toBeGreaterThan(0);
+    expect(savedOrder).toEqual([...savedOrder].sort((a, b) => b - a));
   });
 });
 

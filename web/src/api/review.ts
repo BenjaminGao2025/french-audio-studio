@@ -1,7 +1,7 @@
 /* Review on the server (routers/srs.py): today's queue, ratings, mastered (archive), the card library, settings, favorites. */
 import { apiFetch } from "./client";
 import { lookupKey } from "../lib/lookup";
-import { DEFAULT_SESSION_SIZE, type LibCard, type LibSentence, type ReviewCard } from "../data/fixtures";
+import { DEFAULT_SESSION_SIZE, type LibCard, type LibSentence, type ReviewCard, type ReviewGrammar } from "../data/fixtures";
 import { announce, get, markMastered, set, undoMastery } from "../state/store";
 
 export type CardMode = "listen" | "speak" | "cloze" | "recognize" | "grammar";
@@ -17,7 +17,15 @@ export interface ServerCard {
   archived: boolean;
   state: "new" | "learning" | "review" | "relearning";
   created_at: string;
-  note?: { id: string; sentence: string; translation_zh: string; translation_en: string };
+  /** Seconds to the next review for ratings 1–4 (srs.py _preview_intervals on queue cards). */
+  intervals?: Record<string, number>;
+  note?: {
+    id: string;
+    sentence: string;
+    translation_zh: string;
+    translation_en: string;
+    extra?: { grammar?: ReviewGrammar[]; [k: string]: unknown };
+  };
 }
 
 export interface QueueCounts {
@@ -50,21 +58,33 @@ const groupOf = (state: ServerCard["state"]): ReviewCard["group"] => (state === 
 export function toReviewCard(c: ServerCard): ReviewCard {
   const fr = c.note?.sentence ?? "";
   const meaning = c.note?.translation_en || c.note?.translation_zh || "";
-  const base = { id: c.id, sentenceId: c.note_id, group: groupOf(c.state), sentenceFr: fr };
-  if (c.mode === "listen") return { ...base, kind: "Listen", prompt: "", target: fr };
-  if (c.mode === "speak") return { ...base, kind: "Speak", prompt: meaning, target: fr };
+  const meta = c.target_meta ?? {};
+  // The front/back layouts use these snapshots; keeping them here means a review needs no live lookup.
+  const shared = {
+    id: c.id,
+    sentenceId: c.note_id,
+    group: groupOf(c.state),
+    sentenceFr: fr,
+    mode: c.mode,
+    intervals: c.intervals,
+    meta,
+    translationZh: c.note?.translation_zh ?? "",
+    translationEn: c.note?.translation_en ?? "",
+    grammar: c.note?.extra?.grammar ?? [],
+  };
+  if (c.mode === "listen") return { ...shared, kind: "Listen", prompt: "", target: fr };
+  if (c.mode === "speak") return { ...shared, kind: "Speak", prompt: meaning, target: fr };
   if (c.mode === "grammar") {
-    const m = c.target_meta ?? {};
-    const answer = m.answer || c.target;
-    if (m.prompt_fr && answer) {
-      const full = m.full_fr || m.prompt_fr.replace(/_{2,}/, answer);
-      return { ...base, kind: "Fill-in", prompt: m.prompt_fr, target: answer, sentenceFr: full };
+    const answer = meta.answer || c.target;
+    if (meta.prompt_fr && answer) {
+      const full = meta.full_fr || meta.prompt_fr.replace(/_{2,}/, answer);
+      return { ...shared, kind: "Fill-in", prompt: meta.prompt_fr, target: answer, sentenceFr: full };
     }
   }
   // cloze, recognize (old word cards) and grammar without its example: blank the word in the sentence.
   const blanked = blankOut(fr, c.target);
-  if (blanked) return { ...base, kind: "Fill-in", prompt: blanked, target: c.target.trim() };
-  return { ...base, kind: "Recall", prompt: meaning, target: fr };
+  if (blanked) return { ...shared, kind: "Fill-in", prompt: blanked, target: c.target.trim() };
+  return { ...shared, kind: "Recall", prompt: meaning, target: fr };
 }
 
 const savedLabel = (iso: string) => {
@@ -88,18 +108,23 @@ export function toLibrary(cards: ServerCard[]): { sentences: LibSentence[]; card
   const sentences = [...notes.values()].sort((a, b) => a.created.localeCompare(b.created)).map((x, i) => ({ ...x.s, number: i + 1 }));
   const lib: LibCard[] = cards
     .filter((c) => c.note)
-    .map((c) => ({
-      id: c.id,
-      sentenceId: c.note_id,
-      kind: KIND[c.mode],
-      word: c.mode === "listen" || c.mode === "speak" ? undefined : (c.mode === "grammar" ? c.target_meta?.answer : undefined) || c.target || undefined,
-      savedAt: Date.parse(c.created_at) || 0,
-      status: STATUS[c.state],
-      mastered: c.archived,
-      favorite: false,
-      lookups: 0,
-      saved: true,
-    }));
+    .map((c) => {
+      const meta = c.target_meta ?? {};
+      return {
+        id: c.id,
+        sentenceId: c.note_id,
+        kind: KIND[c.mode],
+        word: c.mode === "listen" || c.mode === "speak" ? undefined : (c.mode === "grammar" ? c.target_meta?.answer : undefined) || c.target || undefined,
+        savedAt: Date.parse(c.created_at) || 0,
+        status: STATUS[c.state],
+        mastered: c.archived,
+        favorite: false,
+        lookups: 0,
+        saved: true,
+        due: c.due,
+        meaning: meta.meaning_zh || meta.meaning_en || c.note?.translation_zh || c.note?.translation_en || "",
+      };
+    });
   return { sentences, cards: lib };
 }
 

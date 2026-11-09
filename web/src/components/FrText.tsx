@@ -16,6 +16,8 @@ export interface FrSegment {
   wi?: number;
   /** Marks the part a build-up step just added. */
   added?: boolean;
+  /** Highlights the review card's target word using --mark-bg. */
+  mark?: boolean;
 }
 
 export interface FrPick {
@@ -178,7 +180,7 @@ export function FrText({
         seg.w ? (
           <span
             key={i}
-            className={`fr-word${seg.added ? " fr-added" : ""}`}
+            className={`fr-word${seg.added ? " fr-added" : ""}${seg.mark ? " fr-mark" : ""}`}
             data-word={seg.t}
             data-wi={seg.wi}
             data-pos={posOf[i]}
@@ -201,7 +203,7 @@ export function FrText({
             {seg.t}
           </span>
         ) : (
-          <span key={i} className={seg.added ? "fr-added" : undefined}>
+          <span key={i} className={`${seg.added ? "fr-added" : ""}${seg.mark ? " fr-mark" : ""}` || undefined}>
             {seg.t}
           </span>
         ),

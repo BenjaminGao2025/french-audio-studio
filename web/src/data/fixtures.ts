@@ -321,6 +321,10 @@ export interface LibCard {
   lookups: number;
   /** Saved = member of the saved card library. Favorite is a separate bookmark. */
   saved: boolean;
+  /** ISO due date from the server (real library); demo fixtures leave it undefined. */
+  due?: string;
+  /** Short meaning kept with the card (meta meaning, else the note translation). */
+  meaning?: string;
 }
 export interface LibSentence {
   id: string;
@@ -469,6 +473,17 @@ export const CHOOSABLE: PracticeItem[] = [
 
 /* ---------- Review queue pool; default session = 40 cards = 8 learning + 1 due review + 31 new ---------- */
 
+export type ReviewMode = "listen" | "speak" | "cloze" | "recognize" | "grammar";
+
+/** A grammar note saved with the note (note.extra.grammar). */
+export interface ReviewGrammar {
+  title?: string;
+  explanation?: string;
+  body?: string;
+  hook?: string;
+  example?: string;
+}
+
 export interface ReviewCard {
   id: string;
   sentenceId: string;
@@ -477,6 +492,15 @@ export interface ReviewCard {
   prompt: string; // English prompt or fill-in sentence with a blank (never the full target)
   target: string;
   sentenceFr: string;
+  /** The server card's mode drives the front/back layout. Demo fixtures default to listen. */
+  mode?: ReviewMode;
+  /** Seconds until the next review for each Again/Hard/Good/Easy rating (server queue cards). */
+  intervals?: Record<string, number>;
+  /** target_meta snapshot: meaning, dictionary, context, why, hook, grammar fields, … */
+  meta?: Record<string, string>;
+  translationZh?: string;
+  translationEn?: string;
+  grammar?: ReviewGrammar[];
 }
 
 export function wordCardImportance(c: LibCard, lookups: Record<string, { count: number }> = {}): number {
@@ -498,12 +522,17 @@ export function sortNewCardsForIntroduction(cards: LibCard[], lookups: Record<st
 
 export function toReviewCard(c: LibCard, group: ReviewCard["group"], sentences: LibSentence[]): ReviewCard {
   const s = sentences.find((x) => x.id === c.sentenceId)!;
+  // Demo fixtures carry no server snapshot; real cards are built by api/review.ts toReviewCard.
+  const base: ReviewCard = {
+    id: c.id, sentenceId: c.sentenceId, group, prompt: "", target: s.fr, sentenceFr: s.fr,
+    mode: "listen", meta: {}, translationZh: "", translationEn: s.en, grammar: [], kind: "Listen",
+  };
   if (c.kind === "Fill-in" && c.word) {
     const blanked = s.fr.replace(new RegExp(c.word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"), "_____");
-    return { id: c.id, sentenceId: c.sentenceId, group, kind: "Fill-in", prompt: blanked, target: c.word, sentenceFr: s.fr };
+    return { ...base, kind: "Fill-in", mode: "cloze", prompt: blanked, target: c.word };
   }
-  if (c.kind === "Listen") return { id: c.id, sentenceId: c.sentenceId, group, kind: "Listen", prompt: "", target: s.fr, sentenceFr: s.fr };
-  return { id: c.id, sentenceId: c.sentenceId, group, kind: "Speak", prompt: s.en, target: s.fr, sentenceFr: s.fr };
+  if (c.kind === "Listen") return { ...base, kind: "Listen", mode: "listen" };
+  return { ...base, kind: "Speak", mode: "speak", prompt: s.en };
 }
 
 /**
