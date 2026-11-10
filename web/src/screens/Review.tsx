@@ -20,7 +20,7 @@ import { announce, get, getCardLookups, go, introduceNewCard, sayFrench, set, us
 import { Banner, Button, Dialog, DisabledReason, Disclosure, FieldText, Importance, PageHead, Pill, Popover, Skeleton, Spinner, Tabs, useNarrow } from "../components/ui";
 import { FrText, tokenizeFrench, type FrPick, type FrSegment } from "../components/FrText";
 import { WordPanel } from "./WordPopup";
-import { AccentBar, MarkedLine } from "./Exercise";
+import { MarkedLine } from "./Exercise";
 import { runItems } from "./Launcher";
 import { DailyLimitField } from "./Settings";
 
@@ -715,7 +715,6 @@ function ReviewSession() {
                   />
                   {u.emptyError && <p id="rev-err" className="field-error" role="alert">Type an answer before checking. Nothing was recorded.</p>}
                 </div>
-                <AccentBar target={inputRef} />
               </div>
             )}
             <div className="sticky-actions">
