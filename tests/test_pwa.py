@@ -2,6 +2,7 @@ import json
 import pathlib
 import struct
 import unittest
+from urllib.parse import urlsplit
 
 import testenv  # noqa: F401  (must run before the app is imported)
 from fastapi.testclient import TestClient
@@ -34,7 +35,7 @@ class PwaTests(unittest.TestCase):
         self.assertIn(("512x512", "any"), sizes)
         self.assertIn(("512x512", "maskable"), sizes)
         for icon in m["icons"]:
-            w, h = _png_size(STATIC / icon["src"].removeprefix("/static/"))
+            w, h = _png_size(STATIC / urlsplit(icon["src"]).path.removeprefix("/static/"))
             self.assertEqual(f"{w}x{h}", icon["sizes"])
             self.assertEqual(self.client.get(icon["src"]).status_code, 200)
         self.assertEqual(_png_size(STATIC / "pwa" / "apple-touch-icon.png"), (180, 180))
