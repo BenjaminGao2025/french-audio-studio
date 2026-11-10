@@ -39,10 +39,10 @@ class Batch2Tests(unittest.TestCase):
         self.assertIn("太频繁", ctx.exception.detail["message"])
         self.assertIn("Retry-After", ctx.exception.headers)
 
-    def test_ai_endpoint_rate_limited_via_http(self):
+    def test_dictionary_endpoint_has_its_own_rate_limit(self):
         headers, _ = self._user()
         with (
-            patch.dict(web_common.RATE_LIMITS, {"ai": (1.0, 0.0001)}),
+            patch.dict(web_common.RATE_LIMITS, {"dictionary": (1.0, 0.0001)}),
             patch("routers.tutor.request_word_lookup", new_callable=AsyncMock, return_value={"word": "x"}),
         ):
             self.assertEqual(self.client.get("/api/lookup?word=bonjour", headers=headers).status_code, 200)

@@ -10,6 +10,19 @@ export interface DictionaryEntry {
   phonetic: string;
   explanation_cn: string;
   explanation_en: string;
+  dictionary_source?: "wiktionnaire";
+  dictionary_state?: "found" | "not_found";
+  entries?: {
+    lemma: string;
+    pos: string;
+    phonetic: string;
+    senses: string[];
+    source_url: string;
+    history_url: string;
+  }[];
+  attribution?: string;
+  license_url?: string;
+  changes?: string;
 }
 
 const entries = new Map<string, Promise<DictionaryEntry>>();

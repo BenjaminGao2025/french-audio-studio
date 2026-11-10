@@ -105,10 +105,10 @@ describe("Task B — Study word card, selection and steps", () => {
     const panel = host.querySelector(".word-card")!;
     expect(panel.querySelector(".wp-definition")?.textContent).toBe("madam; a polite address");
     expect(panel.textContent).not.toMatch(/\p{Script=Han}/u);
-    expect(panel.textContent).not.toContain("dictionary: madame");
+    expect(panel.textContent).not.toContain("Définition de madame.");
     expect(panel.textContent).not.toContain("A polite way to address a woman.");
     await act(async () => findButton("Dictionary").click());
-    expect(panel.textContent).toContain("dictionary: madame");
+    expect(panel.textContent).toContain("Définition de madame.");
     await act(async () => findButton("Usage notes").click());
     expect(panel.textContent).toContain("A polite way to address a woman.");
     expect(panel.textContent).not.toMatch(/\p{Script=Han}/u);
@@ -173,30 +173,20 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(Array.from(document.querySelectorAll("button")).some((b) => b.textContent === "Previous step" || b.textContent === "Next step")).toBe(false);
   });
 
-  it("etymology is fetched only on expand, and its failure offers Retry which then succeeds", async () => {
-    await act(async () => {
-      headerWord("madame").click();
-    });
+  it("dictionary errors retry the real source and never request generated roots", async () => {
+    fake.failNext.add("dictionary");
+    await act(async () => headerWord("madame").click());
     await wait(150);
-    expect(fake.calls.filter((c) => c.path === "/api/etymology")).toHaveLength(0);
-
-    fake.etymologyFails = 1;
-    await act(async () => {
-      findButton("Roots & origin").click();
-    });
+    await act(async () => findButton("Dictionary").click());
+    expect(document.querySelector(".word-card")?.textContent).toContain("Dictionary request failed");
+    await act(async () => findButton("Retry").click());
     await wait(150);
-    expect(fake.calls.filter((c) => c.path === "/api/etymology").length).toBeGreaterThanOrEqual(1);
-    const ety = () => document.querySelector<HTMLElement>(".wp-ety")!;
-    expect(ety().textContent).toContain("Couldn’t load the roots.");
-    const retry = Array.from(ety().querySelectorAll("button")).find((b) => b.textContent === "Retry");
-    expect(retry).toBeTruthy();
-
-    await act(async () => {
-      Array.from(ety().querySelectorAll("button")).find((b) => b.textContent === "Retry")!.click();
-    });
-    await wait(150);
-    expect(ety().textContent).toContain("A short English note about the word’s origin.");
-    expect(fake.calls.find((call) => call.path === "/api/etymology")?.body).toMatchObject({ language: "en" });
-    expect(document.querySelector(".word-card")?.textContent).not.toMatch(/\p{Script=Han}/u);
+    const panel = document.querySelector(".word-card")!;
+    expect(panel.textContent).toContain("Définition de madame.");
+    expect(panel.querySelector('a[href="https://fr.wiktionary.org/wiki/madame#fr"]')).toBeTruthy();
+    expect(panel.textContent).toContain("CC BY-SA 4.0");
+    expect(panel.textContent).not.toMatch(/\p{Script=Han}/u);
+    expect(fake.calls.filter((call) => call.path === "/api/etymology")).toHaveLength(0);
+    expect(panel.textContent).not.toContain("Roots & origin");
   });
 });

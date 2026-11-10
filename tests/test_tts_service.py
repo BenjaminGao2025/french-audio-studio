@@ -852,8 +852,10 @@ class FrenchAudioStudioTests(unittest.TestCase):
             "lemma": "bonjour",
             "pos": "n.m.",
             "phonetic": "/bɔ̃.ʒuʁ/",
-            "explanation_cn": "你好，问候语",
-            "explanation_en": "hello, good morning",
+            "explanation_cn": "",
+            "explanation_en": "",
+            "dictionary_source": "wiktionnaire",
+            "entries": [{"lemma": "bonjour", "senses": ["Salutation."]}],
         }
         res = self.client.get(
             "/api/lookup?word=bonjour",
@@ -863,7 +865,8 @@ class FrenchAudioStudioTests(unittest.TestCase):
         data = res.json()
         self.assertEqual(data["token"], "bonjour")
         self.assertEqual(data["pos"], "n.m.")
-        self.assertEqual(data["explanation_cn"], "你好，问候语")
+        self.assertEqual(data["dictionary_source"], "wiktionnaire")
+        self.assertEqual(data["entries"][0]["senses"], ["Salutation."])
 
     def test_quick_lookup_requires_auth(self):
         res = self.client.get("/api/lookup?word=bonjour")

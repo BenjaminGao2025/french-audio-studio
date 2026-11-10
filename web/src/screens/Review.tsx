@@ -750,7 +750,7 @@ function ReviewSession() {
               )}
               {(dictLine || hereLine || meta.why_zh || meta.hook) && (
                 <div className="rev-snapshot stack gap-1">
-                  {dictLine && <p className="t-support"><span className="def-label">Dictionary:</span> {dictLine}</p>}
+                  {dictLine && <p className="t-support"><span className="def-label">Saved meaning:</span> {dictLine}</p>}
                   {hereLine && <p className="t-support"><span className="def-label">Here:</span> {hereLine}</p>}
                   {meta.why_zh && <p className="t-support" lang="zh">{meta.why_zh}</p>}
                   {meta.hook && <p className="t-support">Memory hook: {meta.hook}</p>}

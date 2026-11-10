@@ -125,6 +125,7 @@ def client_ip(request: Request) -> str:
 # Rate limiting: in-memory token buckets. One process, so a dict is enough.
 # ---------------------------------------------------------------------------
 RATE_LIMITS: dict[str, tuple[float, float]] = {
+    "dictionary": (120.0, 2.0),
     # bucket: (capacity, refill tokens per second)
     "ai": (float(os.getenv("RATE_AI_BURST", "40")), float(os.getenv("RATE_AI_PER_MIN", "30")) / 60),
     "speech": (float(os.getenv("RATE_SPEECH_BURST", "120")), float(os.getenv("RATE_SPEECH_PER_MIN", "60")) / 60),

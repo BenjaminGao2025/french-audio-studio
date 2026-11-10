@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Bookmark, BookmarkCheck, ChevronDown, Volume2, X } from "lucide-react";
 import { ApiError } from "../api/client";
 import {
-  etymology,
   lookupWord,
   phraseContext,
   recordLookup,
@@ -18,7 +17,7 @@ import type { StudySentence } from "../data/fixtures";
 import { cx } from "../lib/format";
 import { lookupKey } from "../lib/lookup";
 import { announce, get, patchStudy, sayFrench, useApp } from "../state/store";
-import { Banner, Button, Importance, Pill, Skeleton, Spinner } from "../components/ui";
+import { Banner, Button, Importance, Skeleton, Spinner } from "../components/ui";
 import { findWordSpans } from "../components/FrText";
 
 /** Server limits from word_context.py: a long free selection is spoken but not looked up. */
@@ -109,14 +108,11 @@ export function WordPanel({
 
   const [nested, setNested] = useState<string | null>(null);
   const shown = nested ?? text;
-  const ipa = w?.ipa || "";
-  const pos = w?.type || "";
-  const baseForm = w?.lemma && w.lemma.toLowerCase() !== text.toLowerCase() ? w.lemma : "";
-  const falseFriend = w?.false_friend;
-  const englishLink = w?.english_link;
-  const lemmaForEty = baseForm || text;
-
   const [dict, setDict] = useState<DictionaryEntry | null>(null);
+  const ipa = dict?.dictionary_source === "wiktionnaire" ? dict.phonetic : "";
+  const pos = dict?.dictionary_source === "wiktionnaire" ? [...new Set(dict.entries?.map((entry) => entry.pos))].join(" · ") : "";
+  const lemmas = [...new Set(dict?.entries?.map((entry) => entry.lemma))];
+  const baseForm = lemmas.length === 1 && lemmas[0].toLowerCase() !== shown.toLowerCase() ? lemmas[0] : "";
   const [dictSt, setDictSt] = useState<LoadState>(tooLong ? "idle" : "loading");
   const [dictErr, setDictErr] = useState("");
   const [dictOpen, setDictOpen] = useState(false);
@@ -127,10 +123,6 @@ export function WordPanel({
   const [phrases, setPhrases] = useState<Phrase[]>([]);
 
   const [whyOpen, setWhyOpen] = useState(false);
-  const [etyOpen, setEtyOpen] = useState(false);
-  const [ety, setEty] = useState("");
-  const [etySt, setEtySt] = useState<LoadState>("idle");
-
   const abort = useRef(new AbortController());
   const alive = () => !abort.current.signal.aborted;
 
@@ -172,19 +164,6 @@ export function WordPanel({
       });
   }, [isAnalysis, tooLong, sentence.fr, text, occurrence, translation_zh, hints]);
 
-  const loadEty = useCallback(() => {
-    setEtySt("loading");
-    etymology(shown, lemmaForEty, abort.current.signal)
-      .then((r) => {
-        if (!alive()) return;
-        setEty(r.text);
-        setEtySt("ready");
-      })
-      .catch(() => {
-        if (alive()) setEtySt("error");
-      });
-  }, [shown, lemmaForEty]);
-
   useEffect(() => {
     loadDict();
   }, [loadDict]);
@@ -193,9 +172,6 @@ export function WordPanel({
     setNested(null);
     setDictOpen(false);
     setPhrases([]);
-    setEty("");
-    setEtySt("idle");
-    setEtyOpen(false);
     recordLookup(text).catch(() => undefined);
     if (wordIndex !== undefined) pick(sentence.id, wordIndex);
     loadCtx();
@@ -205,12 +181,6 @@ export function WordPanel({
       if (alive()) setPhrases(r.phrases ?? []);
     }).catch(() => undefined);
   }, [text, sentence.id, wordIndex, sentence.fr, translation_zh, loadCtx]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const openEty = () => {
-    const next = !etyOpen;
-    setEtyOpen(next);
-    if (next && etySt === "idle") loadEty();
-  };
 
   const useBaseForm = () => {
     sayFrench(baseForm);
@@ -222,7 +192,7 @@ export function WordPanel({
   const englishOnly = (value?: string) => value && !/\p{Script=Han}/u.test(value) ? value : "";
   const why = englishOnly(w?.why);
   const meaning = englishOnly(w?.meaning) || englishOnly(ctx?.meaning_en);
-  const dictionary = englishOnly(dict?.explanation_en);
+
 
   return (
     <div className="word-card" aria-busy={dictSt === "loading" || ctxSt === "loading"}>
@@ -240,14 +210,13 @@ export function WordPanel({
         {baseForm && !nested && (
           <button type="button" className="wp-base" onClick={useBaseForm}>Base form: <span lang="fr">{baseForm}</span></button>
         )}
-        {falseFriend && <Pill tone="warning">False friend</Pill>}
         {nested && <Button kind="tertiary" className="btn--sm-text" icon={<ArrowLeft aria-hidden />} onClick={() => setNested(null)}>Back to {text}</Button>}
       </header>
 
       {!nested && (
         <>
           <section className="wp-meaning" aria-label="Meaning in this sentence">
-            <h3 className="wp-label">Meaning in this sentence</h3>
+            <h3 className="wp-label">Meaning in this sentence <span className="wp-ai">AI</span></h3>
             {tooLong ? (
               <p className="t-support">Select a word or a short phrase to see its meaning.</p>
             ) : meaning ? (
@@ -285,37 +254,35 @@ export function WordPanel({
             {dictOpen && <div className="wp-collapsible-body">
               {dictSt === "loading" && <Spinner label="Loading dictionary…" />}
               {dictSt === "error" && <Banner tone="error" title="Dictionary request failed" actions={<Button kind="secondary" onClick={loadDict}>Retry</Button>}>{englishOnly(dictErr) || "Please try again."}</Banner>}
-              {dictSt === "ready" && <>
-                {dict?.lemma && dict.lemma.toLowerCase() !== shown.toLowerCase() && <p className="wp-meta" lang="fr">{dict.lemma}</p>}
-                <p className="t-support" lang="en">{dictionary || "No English dictionary entry available."}</p>
-              </>}
+              {dictSt === "ready" && (dict?.dictionary_source === "wiktionnaire" && dict.entries?.length ? <>
+                <p className="t-meta">Wiktionnaire · French definitions</p>
+                {dict.entries.map((entry, index) => (
+                  <div className="wp-source-entry" key={`${entry.lemma}-${entry.pos}-${index}`}>
+                    <p className="t-strong"><span lang="fr">{entry.lemma}</span><span className="wp-meta"> · {entry.pos}{entry.phonetic ? ` · /${entry.phonetic}/` : ""}</span></p>
+                    <ol className="wp-senses" lang="fr">{entry.senses.map((sense, i) => <li key={i}>{sense}</li>)}</ol>
+                    <p className="t-meta"><a href={entry.source_url} target="_blank" rel="noopener noreferrer">Source entry</a> · <a href={entry.history_url} target="_blank" rel="noopener noreferrer">Contributors</a></p>
+                  </div>
+                ))}
+                <p className="wp-attribution t-meta">
+                  {dict.attribution} <a href={dict.license_url} target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a>
+                  {dict.changes && <span> {dict.changes}</span>}
+                </p>
+              </> : <p className="t-support">No dictionary entry found. The meaning in this sentence is shown above.</p>)}
             </div>}
           </section>
 
-          {!nested && (why || englishOnly(englishLink)) && (
+          {!nested && why && (
             <section className={cx("wp-collapsible", whyOpen && "wp-collapsible--open")}>
               <button type="button" className="wp-toggle" aria-expanded={whyOpen} onClick={() => setWhyOpen(!whyOpen)}>
                 <span>Usage notes</span><ChevronDown aria-hidden width={16} height={16} />
               </button>
               {whyOpen && <div className="wp-collapsible-body">
                 {why && <p className="t-support" lang="en">{why}</p>}
-                {englishOnly(englishLink) && !falseFriend && <p className="t-support" lang="en">Like English “{englishLink}”.</p>}
               </div>}
             </section>
           )}
 
-          {!nested && !text.includes(" ") && (
-            <section className={cx("wp-collapsible wp-ety", etyOpen && "wp-collapsible--open")} aria-label="Roots and origin">
-              <button type="button" className="wp-toggle" aria-expanded={etyOpen} onClick={openEty}>
-                <span>Roots &amp; origin</span><ChevronDown aria-hidden width={16} height={16} />
-              </button>
-              {etyOpen && <div className="wp-collapsible-body">
-                {etySt === "loading" && <Spinner label="Looking up the roots…" />}
-                {etySt === "error" && <div className="stack gap-2"><p className="t-support">Couldn’t load the roots.</p><Button kind="secondary" onClick={loadEty}>Retry</Button></div>}
-                {etySt === "ready" && <p className="t-support" lang="en">{englishOnly(ety) || "No English origin note available."}</p>}
-              </div>}
-            </section>
-          )}
+
         </div>
       )}
 

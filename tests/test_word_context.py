@@ -314,33 +314,21 @@ class LookupTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(tts_service.app)
         _, self.headers = _session()
-        tutor.LOOKUP_CACHE.clear()
+    def test_reads_source_definitions_without_an_ai_call(self):
+        entry = {"token": "partir", "lemma": "partir", "pos": "verb", "dictionary_source": "wiktionnaire", "entries": [{"lemma": "partir", "senses": ["Quitter un lieu."]}]}
+        with mock.patch("offline_dictionary.lookup", return_value=entry), mock.patch("services.ai.post_chat") as post_chat:
+            res = self.client.get("/api/lookup", params={"word": "partir"}, headers=self.headers)
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json(), entry)
+        post_chat.assert_not_called()
 
-    def tearDown(self):
-        tutor.LOOKUP_CACHE.clear()
-
-    def test_asks_for_the_dictionary_meaning_and_bounds_fields(self):
-        entry = {
-            "token": "partir",
-            "lemma": "partir",
-            "pos": "v.",
-            "phonetic": "/paʁ.tiʁ/",
-            "explanation_cn": "<b>离开</b>；出发" + "长" * 1000,
-            "explanation_en": "to leave",
-        }
-        with mock.patch("services.ai.post_chat", return_value=_reply(entry)) as post_chat:
-            got = self.client.get("/api/lookup", params={"word": "partir"}, headers=self.headers).json()
-        self.assertIn("there is no sentence around it", post_chat.call_args.args[1]["messages"][0]["content"])
-        self.assertNotIn("<", got["explanation_cn"])
-        self.assertLessEqual(len(got["explanation_cn"]), tutor.LOOKUP_FIELD_LIMITS["explanation_cn"])
-        self.assertEqual(got["pos"], "v.")
-
-    def test_reply_without_a_meaning_is_an_error_not_cached(self):
-        with mock.patch("services.ai.post_chat", return_value=_reply({"token": "zut"})):
-            res = self.client.get("/api/lookup", params={"word": "zut"}, headers=self.headers)
-        self.assertEqual(res.status_code, 502)
-        self.assertEqual(res.json()["detail"]["code"], "lookup_bad_output")
-        self.assertNotIn("zut", tutor.LOOKUP_CACHE)
+    def test_missing_word_is_an_explicit_miss_without_ai_fallback(self):
+        with mock.patch("offline_dictionary.lookup", return_value=None), mock.patch("services.ai.post_chat") as post_chat:
+            res = self.client.get("/api/lookup", params={"word": "unknown-word"}, headers=self.headers)
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["dictionary_state"], "not_found")
+        self.assertEqual(res.json()["entries"], [])
+        post_chat.assert_not_called()
 
     def test_word_is_bounded(self):
         with mock.patch("services.ai.post_chat") as post_chat:

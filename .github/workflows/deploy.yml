@@ -66,7 +66,8 @@ jobs:
 
       - name: Build candidate image
         run: |
-          if ! docker build -t "$CANDIDATE" .; then
+          # Build exactly the commit being released, excluding unrelated untracked work in the shared checkout.
+          if ! "$RUNNER_TEMP/g" archive HEAD | docker build -t "$CANDIDATE" -; then
             echo "::error::Image build failed; restoring code to $PREV (live container untouched)"
             "$RUNNER_TEMP/g" reset --hard "$PREV"
             exit 1

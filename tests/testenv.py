@@ -7,6 +7,8 @@ import unittest
 os.environ["OUTPUT_DIR"] = tempfile.mkdtemp(prefix="tts-tests-")
 os.environ["AUTH_SECRET"] = "test-only-secret-" + "x" * 32
 os.environ["ALLOW_REGISTRATION"] = "true"
+# Dictionary tests use their own fixture; never read the operator’s production index.
+os.environ["FRENCH_DICTIONARY_PATH"] = ""
 os.environ["WEB2API_API_KEY"] = "server-test-key"
 # Fast password hashing and roomy sign-in limits; tests that check either patch them back.
 os.environ["PBKDF2_ITERATIONS"] = "1000"

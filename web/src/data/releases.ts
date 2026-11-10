@@ -8,6 +8,15 @@ export const RELEASES = [
     version: APP_VERSION,
     date: "2026-11-09",
     changes: [
+      "Dictionary now shows genuine French Wiktionnaire definitions, with source and contributor links.",
+      "AI explains only the meaning in the current sentence; missing dictionary entries are no longer generated.",
+      "Added inflected-word lookup with Lexique 3.83 and removed generated origin notes from word cards.",
+    ],
+  },
+  {
+    version: "1.0.3",
+    date: "2026-11-09",
+    changes: [
       "Simplified word cards with a clear English meaning, a French example and expandable details.",
       "Removed Chinese explanations and added English roots and origin notes.",
       "Removed the inner scrollbar so each word popup has a single scroll area.",

@@ -479,6 +479,11 @@ details.disc > .disc-body { padding-bottom: var(--s3); }
 .wp-collapsible-body { display: flex; flex-direction: column; gap: var(--s2); padding: 0 0 var(--s3); }
 .wp-footer { display: flex; flex-direction: column; gap: var(--s1); }
 .wp-footer > .btn { align-self: flex-start; }
+.wp-ai { font-size: 10px; letter-spacing: 0; padding: 2px 5px; margin-left: 4px; background: var(--primary-weak); color: var(--primary); border-radius: 4px; }
+.wp-source-entry + .wp-source-entry { border-top: 1px solid var(--divider); padding-top: var(--s3); }
+.wp-senses { padding-left: 20px; margin: var(--s2) 0; font-size: 14px; line-height: 22px; }
+.wp-senses li + li { margin-top: var(--s2); }
+.wp-attribution { border-top: 1px solid var(--divider); padding-top: var(--s2); }
 
 /* ===== Saved cards ===== */
 .saved-table input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--primary); }

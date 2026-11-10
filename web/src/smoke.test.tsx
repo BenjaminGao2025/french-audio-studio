@@ -250,7 +250,7 @@ describe("3. lookup importance comes from the server count", () => {
     expect(fake.calls.filter((c) => c.path === "/api/srs/lookups")).toHaveLength(1);
     expect(document.body.textContent).toContain("Importance, 4 out of 5, based on 5 lookups.");
     await act(async () => buttonWith("Dictionary").click());
-    expect(document.body.textContent).toContain("dictionary: ");
+    expect(document.body.textContent).toContain("Définition de ");
   });
 });
 

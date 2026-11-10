@@ -13,8 +13,8 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
-import analysis
 import auth_db
+import offline_dictionary
 import phrase_context
 import srs
 import word_context
@@ -361,103 +361,23 @@ async def ask_to_card(request: AskCardRequest, authorization: str | None = Heade
     )
 
 
-LOOKUP_CACHE: dict[str, dict] = {}
-LOOKUP_MAX_CHARS = 200  # the selection bar's Meaning cap
-LOOKUP_FIELD_LIMITS = {
-    "token": 200,
-    "lemma": 200,
-    "pos": 40,
-    "phonetic": 120,
-    "explanation_cn": 400,
-    "explanation_en": 400,
-}
+LOOKUP_MAX_CHARS = 200
 
 
-async def request_word_lookup(word: str, api_key: str, model: str = ai.DEFAULT_MODEL) -> dict:
-    clean_word = word.strip()
-    cache_key = clean_word.lower()
-    if cache_key in LOOKUP_CACHE:
-        return LOOKUP_CACHE[cache_key]
-
-    prompt = (
-        "You are an expert French pedagogical lexicographer for learners.\n"
-        "Provide accurate linguistic details for the given French word or short phrase in valid JSON format ONLY.\n"
-        "Give its own dictionary meaning, as a dictionary does: there is no sentence around it.\n"
-        "For a phrase, explain it as a whole (its meaning as a unit), not word by word.\n"
-        "Schema:\n"
-        "{\n"
-        '  "token": "...",\n'
-        '  "lemma": "dictionary canonical base form (infinitive for verbs, masc sing for nouns/adjectives)",\n'
-        '  "pos": "part of speech (e.g. v., n.m., n.f., adj., adv., prep., conj.)",\n'
-        '  "phonetic": "IPA phonetic transcription (e.g. /bɔ̃.ʒuʁ/)",\n'
-        '  "explanation_cn": "concise, accurate Chinese definition and grammatical nuance",\n'
-        '  "explanation_en": "concise, accurate English definition"\n'
-        "}\n"
-        "If the token is a number, ordinal, date part or abbreviation (1er, 2026, 15h30, TCF), "
-        "explanation_cn must say how to read it aloud in French words, e.g. '读作 premier（第一）'."
-    )
-
-    payload = {
-        "model": ai.AGY_MODEL,
-        "messages": [
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": f"Define this French word: {clean_word}"},
-        ],
-        "response_format": {"type": "json_object"},
-        "stream": False,
-        "temperature": 0.0,
-    }
-
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        _, raw_text = await ai.post_chat(client, payload, headers)
-
-    cleaned = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip()
-    fence_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned)
-    candidate = fence_match.group(1).strip() if fence_match else cleaned
-
+async def request_word_lookup(word: str, api_key: str = "", model: str = ai.DEFAULT_MODEL) -> dict:
+    """Read genuine source definitions. Kept callable by the snapshot backfill script; no AI calls."""
     try:
-        data = json.loads(candidate)
-    except Exception:
-        first_brace = candidate.find("{")
-        last_brace = candidate.rfind("}")
-        if first_brace != -1 and last_brace > first_brace:
-            try:
-                data = json.loads(candidate[first_brace : last_brace + 1])
-            except Exception:
-                data = {}
-        else:
-            data = {}
-    if not isinstance(data, dict):
-        data = {}
-
-    # Model output is untrusted and shared by every user: plain bounded text only
-    def field(key: str, default: str = "") -> str:
-        value = data.get(key)
-        return phrase_context.clean_text(value if isinstance(value, str) else default, LOOKUP_FIELD_LIMITS[key])
-
-    result = {
-        "token": field("token", clean_word) or clean_word,
-        "lemma": field("lemma", clean_word) or clean_word,
-        "pos": field("pos"),
-        "phonetic": analysis.format_friendly_phonetic(field("phonetic")),
-        "explanation_cn": field("explanation_cn"),
-        "explanation_en": field("explanation_en"),
+        result = await run_in_threadpool(offline_dictionary.lookup, word)
+    except offline_dictionary.DictionaryUnavailable as exc:
+        raise HTTPException(status_code=503, detail={"code": "dictionary_unavailable", "message": "The dictionary is temporarily unavailable. Please try again."}) from exc
+    if result is not None:
+        return result
+    return {
+        "token": word, "lemma": word, "pos": "", "phonetic": "",
+        "explanation_cn": "", "explanation_en": "", "entries": [],
+        "dictionary_source": "wiktionnaire", "dictionary_state": "not_found",
+        "source_language": "fr", "source_name": "Wiktionnaire",
     }
-    if not result["explanation_cn"] and not result["explanation_en"]:
-        # Never cached: the next tap may get a real definition
-        logger.warning("Lookup reply without a definition: %r", raw_text[:300])
-        raise HTTPException(
-            status_code=502,
-            detail={"code": "lookup_bad_output", "message": "暂无法获取释义，请稍后再试。"},
-        )
-
-    LOOKUP_CACHE[cache_key] = result
-    return result
 
 
 @router.get("/api/lookup")
@@ -466,15 +386,12 @@ async def lookup_word(
     model: str = ai.DEFAULT_MODEL,
     authorization: str | None = Header(default=None),
 ):
-    clean = word.strip()
-    if not clean:
-        raise HTTPException(status_code=400, detail={"message": "请提供待查询单词"})
-    if clean.lower() in LOOKUP_CACHE:  # cached: still login-only, but free
-        _require_user_id(authorization)
-        return LOOKUP_CACHE[clean.lower()]
-    api_key = ai.upstream_key(authorization)
-    result = await request_word_lookup(clean, api_key, model=model)
-    return result
+    user_id = _require_user_id(authorization)
+    clean = offline_dictionary.normalize(word)
+    if not clean or any(ord(c) < 32 for c in word):
+        raise HTTPException(status_code=400, detail={"message": "Enter a word to look up."})
+    rate_limit(user_id, "dictionary")
+    return await request_word_lookup(clean)
 
 
 class EtymologyRequest(BaseModel):
