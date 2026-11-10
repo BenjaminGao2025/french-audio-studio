@@ -36,6 +36,7 @@ import {
 } from "../state/store";
 import { Banner, Button, Pill, WidthContext } from "./ui";
 import { Brand } from "./Brand";
+import { VersionInfo } from "./VersionInfo";
 
 export const NAV = [
   { key: "study", label: "Study", icon: BookOpen },
@@ -131,6 +132,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </ul>
         <div className="nav-foot">
           <p className="t-meta">Everything you do is saved to your account. Exam practice is planned.</p>
+          <VersionInfo />
         </div>
       </nav>
       <Header />
@@ -163,6 +165,7 @@ function Header() {
   return (
     <header className="header">
       <span className="header-brand"><Brand /></span>
+      <VersionInfo className="header-version" />
       {offline && <Pill tone="warning" icon={<CloudOff aria-hidden />}>Offline · simulated</Pill>}
       {auth === "in" && !isConnected(route) && <SyncIndicator sync={sync} offline={offline} />}
       {auth === "in" ? (

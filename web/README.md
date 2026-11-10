@@ -19,3 +19,8 @@ Structure: `src/api` (fetch client, auth/session) · `src/lib` (grading, lookup 
 `src/data/fixtures.ts` (shared types and sample data for the design reference and tests) · `src/state` (store, routing) ·
 `src/components` (shell, UI primitives) · `src/screens` (one file per area; `registry.ts` lists every
 screen state for the smoke tests and the design reference at `/app/design`).
+
+Release version: `package.json` is the source for the version shown in the app. When releasing,
+bump it with `npm version <version> --no-git-tag-version` and prepend the user-facing changes to
+`src/data/releases.ts`. Use `APP_VERSION` only for the newest entry; change the previous entry to its
+published version number before adding the new one.
