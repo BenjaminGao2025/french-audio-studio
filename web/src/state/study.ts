@@ -84,7 +84,7 @@ export async function runAnalysis(source: "Pasted text" | "Photo import" | "My o
     const french = mode === "ideas" ? await ideaToFrench(input, ctl.signal) : ((await cleanInput(input, ctl.signal)) ?? input);
     if (!still()) return;
     stage(1);
-    const { sentences: raw } = await analyzeText(french, {
+    const { sentences: raw, failedParts } = await analyzeText(french, {
       signal: ctl.signal,
       onProgress: (p) => p.done === p.total && stage(2),
     });
@@ -97,7 +97,7 @@ export async function runAnalysis(source: "Pasted text" | "Photo import" | "My o
     }
     const sentences = raw.map(toStudySentence);
     patchStudy({
-      analysis: { ...get().study.analysis, status: "done", input: french },
+      analysis: { ...get().study.analysis, status: "done", input: french, failedParts },
       sentences,
       index: 0,
       step: 0,

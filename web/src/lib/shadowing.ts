@@ -105,13 +105,14 @@ export function evaluateShadowing(target: string, transcript: string) {
   for (let i = 1; i <= n; i++) for (let j = 1; j <= m; j++)
     dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + 1 - similarities[i - 1][j - 1]);
   const scores = expected.map(() => 0);
+  const extras: string[] = [];
   let i = n, j = m;
   while (i || j) {
     if (i && j && Math.abs(dp[i][j] - (dp[i - 1][j - 1] + 1 - similarities[i - 1][j - 1])) < 1e-6) {
       scores[i - 1] = similarities[i - 1][j - 1]; i--; j--;
-    } else if (i && dp[i][j] === dp[i - 1][j] + 1) i--; else j--;
+    } else if (i && dp[i][j] === dp[i - 1][j] + 1) i--; else { extras.unshift(spoken[j - 1]); j--; }
   }
-  const accuracy = n ? Math.round(scores.reduce((a, b) => a + b, 0) / n * 100) : 0;
+  const accuracy = n ? Math.round(scores.reduce((a, b) => a + b, 0) / Math.max(n, m) * 100) : 0;
   const completeness = n ? Math.round(scores.reduce((a, b) => a + (b >= .82 ? 1 : b >= .55 ? .5 : 0), 0) / n * 100) : 0;
-  return { accuracy, completeness, score: Math.round(accuracy * .7 + completeness * .3), words: expected.map((word, i) => ({ word, score: Math.round(scores[i] * 100), status: scores[i] >= .82 ? "correct" : scores[i] >= .55 ? "close" : "missed" })) };
+  return { accuracy, completeness, extras, score: Math.round(accuracy * .7 + completeness * .3), words: expected.map((word, i) => ({ word, score: Math.round(scores[i] * 100), status: scores[i] >= .82 ? "correct" : scores[i] >= .55 ? "close" : "missed" })) };
 }

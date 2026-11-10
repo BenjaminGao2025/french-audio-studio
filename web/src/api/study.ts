@@ -159,7 +159,7 @@ export interface PhotoItem {
 
 /** Downscales a photo to at most 1600 px on the long side as JPEG 0.8 (the server's upload limit). */
 export async function photoToDataUrl(file: Blob): Promise<string> {
-  const bitmap = await createImageBitmap(file);
+  const bitmap = await createImageBitmap(file).catch(() => { throw new Error("This image could not be opened. Try a PNG or JPEG screenshot."); });
   const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(bitmap.width * scale);

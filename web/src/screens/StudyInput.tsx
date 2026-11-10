@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Camera, ChevronLeft, Image as ImageIcon, Mic2, PenLine, Trash2, X, Headphones } from "lucide-react";
+import { StudyReviewNotice } from "../components/StudyReviewNotice";
 import { ApiError } from "../api/client";
 import { photoExtract, photoToDataUrl } from "../api/study";
 import { canReopen, fmtWhen, listStudyRecords, sentenceCount, type StudyRecord } from "../api/history";
@@ -40,6 +41,7 @@ function useLastAnalysis(wanted: boolean) {
 export function StudyInput() {
   const study = useApp((s) => s.study);
   const forced = useApp((s) => s.ss["SCR-STU-01"]);
+  const [photoError, setPhotoError] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
   useEffect(() => {
     if (forced === "clear") setConfirmClear(true);
@@ -54,6 +56,11 @@ export function StudyInput() {
   const source = mode === "ideas" ? "My own idea" : "Pasted text";
   const last = useLastAnalysis(study.sentences.length === 0 && a.status === "idle");
 
+  const importPhoto = (file: File) => {
+    if (busy) return;
+    try { selectStudyPhoto(file); go("study/photo"); }
+    catch (e) { setPhotoError(e instanceof Error ? e.message : "Couldn’t open this image."); }
+  };
   const setDraft = (val: string) => {
     patchStudy({ drafts: { ...study.drafts, [mode]: val }, analysis: a.status === "invalid" ? { ...a, status: "idle" } : a });
   };
@@ -74,6 +81,8 @@ export function StudyInput() {
         actions={study.sentences.length > 0 && !busy ? <Button kind="tertiary" onClick={() => go("study")}>Back to current sentence</Button> : undefined}
       />
       <div className="stack gap-5">
+        <StudyReviewNotice />
+        <div className="btn-row"><Button kind="secondary" onClick={() => go("study/personal")}>Practise my own words</Button><Button kind="tertiary" onClick={() => go("study/grammar")}>My grammar map</Button></div>
         <Segmented
           label="Input mode"
           value={mode}
@@ -114,7 +123,7 @@ export function StudyInput() {
             </label>
             <p id="study-help" className="field-help">
               {mode === "text"
-                ? `Paste one or more French sentences — an article, a message or a page of notes. Up to ${nf.format(limit)} characters.`
+                ? `Paste one or more French sentences — an article, a message or a page of notes. Up to ${nf.format(limit)} characters. You can also paste or drop a screenshot here.`
                 : `Write a short idea you want to express. We turn it into one French example sentence to learn. Up to ${limit} characters.`}
             </p>
             <textarea
@@ -126,6 +135,17 @@ export function StudyInput() {
               value={draft}
               aria-invalid={v === "over" || a.status === "invalid" ? true : undefined}
               aria-describedby={`study-help study-count${a.status === "invalid" ? " study-err" : ""}`}
+              onPaste={(e) => {
+                const file = Array.from(e.clipboardData.files).find((f) => f.type.startsWith("image/"));
+                if (file) { e.preventDefault(); importPhoto(file); }
+              }}
+              onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }}
+              onDrop={(e) => {
+                if (!e.dataTransfer.files.length) return;
+                e.preventDefault();
+                const file = Array.from(e.dataTransfer.files).find((f) => f.type.startsWith("image/"));
+                if (file) importPhoto(file); else setPhotoError("Choose an image file to read its French text.");
+              }}
               onChange={(e) => setDraft(e.target.value)}
               disabled={busy}
             />
@@ -150,6 +170,7 @@ export function StudyInput() {
             {v === "over" && <p className="field-error">This is longer than {nf.format(limit)} characters. Remove some text to continue.</p>}
           </div>
 
+          {photoError && <Banner tone="error" title="Couldn’t import image">{photoError}</Banner>}
           <AnalysisStatus />
 
           <div className="sticky-actions" style={{ background: "var(--surface)" }}>
@@ -275,20 +296,31 @@ function AnalysisStatus() {
 // The chosen photo lives outside the store: it is a local file the learner picked on this page.
 let photoFile: { file: File; url: string } | null = null;
 
+export function selectStudyPhoto(file: File) {
+  if (!file.type.startsWith("image/")) throw new Error("Choose an image file.");
+  if (file.size > 25 * 1024 * 1024) throw new Error("Choose an image smaller than 25 MB.");
+  if (photoFile) URL.revokeObjectURL(photoFile.url);
+  photoFile = { file, url: URL.createObjectURL(file) };
+  patchStudy({ ocr: { phase: "select", photoId: file.name, lines: [], partial: false } });
+}
+
 export function StudyPhoto() {
   const ocr = useApp((s) => s.study.ocr);
   const [photo, setPhoto] = useState(photoFile);
   const [error, setError] = useState("");
+  const [photoStage, setPhotoStage] = useState("Preparing image");
   const runRef = useRef<AbortController | null>(null);
+  useEffect(() => () => {
+    runRef.current?.abort();
+    if (get().study.ocr.phase === "processing") patchStudy({ ocr: { ...get().study.ocr, phase: "cancelled" } });
+  }, []);
   const inputRef = useRef<HTMLInputElement>(null);
   const patch = (p: Partial<typeof ocr>) => patchStudy({ ocr: { ...get().study.ocr, ...p } });
 
   const choose = (file: File | undefined) => {
     if (!file) return;
-    if (photoFile) URL.revokeObjectURL(photoFile.url);
-    photoFile = { file, url: URL.createObjectURL(file) };
-    setPhoto(photoFile);
-    patch({ phase: "select", photoId: file.name });
+    try { selectStudyPhoto(file); setPhoto(photoFile); setError(""); }
+    catch (e) { setError(e instanceof Error ? e.message : "Couldn’t open this image."); }
   };
 
   const start = async () => {
@@ -300,9 +332,13 @@ export function StudyPhoto() {
     setError("");
     announce("Reading French text from the photo.");
     try {
-      const items = await photoExtract(await photoToDataUrl(photo.file), ctl.signal);
+      setPhotoStage("Preparing and resizing image");
+      const image = await photoToDataUrl(photo.file);
       if (ctl.signal.aborted) return;
-      const lines = items.map((it, i) => ({ id: `p${i}`, text: it.fr, selected: i < OCR_LIMIT }));
+      setPhotoStage("Uploading image and reading French text");
+      const items = await photoExtract(image, ctl.signal);
+      if (ctl.signal.aborted) return;
+      const lines = items.map((it, i) => ({ id: `p${i}`, text: it.fr, selected: i < OCR_LIMIT, accentFrom: it.accent_fixed_from }));
       if (!lines.length) {
         patch({ phase: "none" });
         announce("No French text found in this photo.");
@@ -318,7 +354,7 @@ export function StudyPhoto() {
         announce("No French text found in this photo.");
         return;
       }
-      setError(e instanceof ApiError ? e.message : "");
+      setError(e instanceof Error ? e.message : "The image could not be read. Try a PNG or JPEG screenshot.");
       patch({ phase: "failed" });
       announce("The photo could not be read. Your photo is kept.", true);
     }
@@ -374,16 +410,17 @@ export function StudyPhoto() {
               <Camera width={28} height={28} />
             </span>
             <span className="t-strong">Take or choose a photo</span>
-            <span className="t-support">JPEG, PNG or HEIC. Large photos are made smaller before upload.</span>
+            <span className="t-support">JPEG or PNG recommended. Other image formats depend on your browser. Large photos are resized before upload.</span>
           </button>
         )}
 
         {busy && (
           <div className="row row--between">
-            <Spinner label="Reading French text from the photo…" />
+            <Spinner label={`${photoStage}…`} />
             <Button kind="secondary" icon={<X aria-hidden />} onClick={cancel}>Cancel</Button>
           </div>
         )}
+        {error && ocr.phase !== "failed" && <p className="field-error" role="alert">{error}</p>}
         {ocr.phase === "cancelled" && (
           <Banner tone="neutral" title="Import cancelled" live="polite">
             Nothing was lost. Your photo is still selected — read it again, or choose another one.
@@ -428,6 +465,7 @@ function OcrResults({ back, photoTitle }: { back: React.ReactNode; photoTitle: s
   const lines = ocr.lines;
   const selected = lines.filter((l) => l.selected && l.text.trim());
   const over = selected.length > OCR_LIMIT;
+  const textOver = selected.map((l) => l.text.trim()).join("\n").length > LIMITS.text;
   const patchLines = (next: typeof lines) => patchStudy({ ocr: { ...get().study.ocr, lines: next } });
   const move = (i: number, d: number) => {
     const next = [...lines];
@@ -437,7 +475,7 @@ function OcrResults({ back, photoTitle }: { back: React.ReactNode; photoTitle: s
     announce(`Moved to position ${i + d + 1} of ${lines.length}.`);
     requestAnimationFrame(() => document.getElementById(`ocr-move-${x.id}-${d < 0 ? "up" : "down"}`)?.focus());
   };
-  const reason = !selected.length ? "Select at least one sentence." : over ? `Select ${OCR_LIMIT} or fewer sentences. Deselect ${selected.length - OCR_LIMIT} to continue.` : undefined;
+  const reason = !selected.length ? "Select at least one sentence." : textOver ? "Shorten the selected text to 15,000 characters or fewer." : over ? `Select ${OCR_LIMIT} or fewer sentences. Deselect ${selected.length - OCR_LIMIT} to continue.` : undefined;
 
   return (
     <div className="page">
@@ -446,7 +484,7 @@ function OcrResults({ back, photoTitle }: { back: React.ReactNode; photoTitle: s
       <div className="stack gap-4">
         {(ocr.partial || forced === "partial") && (
           <Banner tone="warning" title="Only part of the photo could be read">
-            We found {plural(lines.length, "sentence")}. Glare covered the rest of the board. You can continue with what was found or add text by hand later.
+            We found {plural(lines.length, "sentence")}. Some text may be missing. You can continue with what was found or add text by hand later.
           </Banner>
         )}
         {over && (
@@ -485,6 +523,7 @@ function OcrResults({ back, photoTitle }: { back: React.ReactNode; photoTitle: s
                     aria-describedby={l.low ? `ocr-low-${l.id}` : undefined}
                     onChange={(e) => patchLines(lines.map((x) => (x.id === l.id ? { ...x, text: e.target.value, low: undefined } : x)))}
                   />
+                  {l.accentFrom && <p className="t-support">Accents corrected from: <span lang="fr">{l.accentFrom}</span>. Check the spelling before continuing.</p>}
                   {l.low && (
                     <p id={`ocr-low-${l.id}`} className="t-support" style={{ color: "var(--warning)" }}>
                       Low confidence: <span className="low-conf" lang="fr">{l.low.join(", ")}</span> — please check {l.low.length > 1 ? "these words" : "this word"}.

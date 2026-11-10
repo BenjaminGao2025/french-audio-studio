@@ -12,9 +12,9 @@ export function takeAudioFocus(origin?: HTMLMediaElement | null) {
 const takes = new Map<string, { blob: Blob; url: string; saved: boolean }>();
 
 /** Keeps the last take while switching study tabs; failed processing can retry the same recording. */
-export function StudyRecorder({ id, label, actionLabel = "Check recording", onTake, autoSubmit = true, disabled = false }: {
+export function StudyRecorder({ id, label, actionLabel = "Check recording", onTake, autoSubmit = true, disabled = false, onPendingChange }: {
   id: string; label: string; actionLabel?: string;
-  onTake: (blob: Blob, signal: AbortSignal) => Promise<void>; autoSubmit?: boolean; disabled?: boolean;
+  onTake: (blob: Blob, signal: AbortSignal) => Promise<void>; autoSubmit?: boolean; disabled?: boolean; onPendingChange?: (pending: boolean) => void;
 }) {
   const [take, setTake] = useState(takes.get(id));
   const [phase, setPhase] = useState<"idle" | "asking" | "recording" | "busy">("idle");
@@ -24,20 +24,29 @@ export function StudyRecorder({ id, label, actionLabel = "Check recording", onTa
   const recorder = useRef<MediaRecorder | null>(null);
   const player = useRef<HTMLAudioElement | null>(null);
   const mounted = useRef(true);
+  const capture = useRef(0);
   const abort = useRef<AbortController | null>(null);
   const callback = useRef(onTake); callback.current = onTake;
+  const pendingCallback = useRef(onPendingChange); pendingCallback.current = onPendingChange;
+  const pending = phase !== "idle" || !!take && !take.saved;
+  useEffect(() => {
+    pendingCallback.current?.(pending);
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    if (pending) window.addEventListener("beforeunload", warn);
+    return () => { pendingCallback.current?.(false); window.removeEventListener("beforeunload", warn); };
+  }, [pending]);
   const globalPlayer = useApp((s) => s.player);
 
   const stop = () => { if (recorder.current?.state === "recording") recorder.current.stop(); };
   const release = () => { stream.current?.getTracks().forEach((t) => t.stop()); stream.current = null; };
   useEffect(() => {
     mounted.current = true;
-    const pause = (e: Event) => { if ((e as CustomEvent).detail !== player.current) player.current?.pause(); stop(); };
+    const pause = (e: Event) => { capture.current++; if ((e as CustomEvent).detail !== player.current) player.current?.pause(); stop(); };
     window.addEventListener(EXCLUSIVE_AUDIO, pause);
-    return () => { mounted.current = false; abort.current?.abort(); stop(); release(); player.current?.pause(); window.removeEventListener(EXCLUSIVE_AUDIO, pause); };
+    return () => { mounted.current = false; capture.current++; abort.current?.abort(); stop(); release(); player.current?.pause(); window.removeEventListener(EXCLUSIVE_AUDIO, pause); };
   }, []);
   useEffect(() => {
-    if (globalPlayer && ["playing", "loading", "buffering"].includes(globalPlayer.status)) { player.current?.pause(); stop(); }
+    if (globalPlayer && ["playing", "loading", "buffering"].includes(globalPlayer.status)) { capture.current++; player.current?.pause(); stop(); }
   }, [globalPlayer?.status, globalPlayer?.owner.label]);
   useEffect(() => {
     if (phase !== "recording") return;
@@ -63,10 +72,11 @@ export function StudyRecorder({ id, label, actionLabel = "Check recording", onTa
   };
   const start = async () => {
     setError(""); setPhase("asking"); takeAudioFocus();
+    const request = ++capture.current;
     try {
       if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") throw new Error("Recording is not supported in this browser.");
       const media = await navigator.mediaDevices.getUserMedia({ audio: true });
-      if (!mounted.current) { media.getTracks().forEach((t) => t.stop()); return; }
+      if (!mounted.current || request !== capture.current) { media.getTracks().forEach((t) => t.stop()); if (mounted.current) setPhase("idle"); return; }
       stream.current = media;
       const mime = ["audio/webm;codecs=opus", "audio/mp4", "audio/webm", "audio/ogg"].find((x) => MediaRecorder.isTypeSupported(x));
       const r = new MediaRecorder(media, mime ? { mimeType: mime } : undefined);
@@ -77,12 +87,14 @@ export function StudyRecorder({ id, label, actionLabel = "Check recording", onTa
       r.onstop = () => {
         release();
         const blob = new Blob(chunks, { type: r.mimeType || "audio/webm" });
-        if (!mounted.current) return;
-        setPhase("idle");
+        if (mounted.current) setPhase("idle");
+        if (!blob.size && !mounted.current) return;
         if (!blob.size) { setError("No audio was recorded. Please try again."); return; }
         const old = takes.get(id); if (old) URL.revokeObjectURL(old.url);
         const next = { blob, url: URL.createObjectURL(blob), saved: false };
-        takes.set(id, next); setTake(next);
+        takes.set(id, next);
+        if (!mounted.current) return;
+        setTake(next);
         if (autoSubmit) void submit(next);
       };
       setSeconds(0); r.start(); setPhase("recording");

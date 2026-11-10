@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { BookOpen, Check, Mic, Volume2, MessageCircle, Layers, PenLine, Headphones, Map, Plus } from "lucide-react";
+import { BookOpen, Check, Mic, Volume2, MessageCircle, Layers, PenLine, Headphones, Map as MapIcon, Plus } from "lucide-react";
 import type { StudySentence } from "../data/fixtures";
 import { type AppState, go, sayFrench } from "../state/store";
 import { cardKey, useSavedCards } from "../api/srs";
@@ -11,7 +11,7 @@ import { StudyRecorder } from "../components/StudyRecorder";
 
 type Tab = AppState["study"]["tab"];
 const GROUPS = [
-  { title: "Understand", tabs: [{ id: "words", label: "Words", icon: BookOpen }, { id: "grammar", label: "Grammar", icon: Map }, { id: "sounds", label: "Sounds", icon: Volume2 }] },
+  { title: "Understand", tabs: [{ id: "words", label: "Words", icon: BookOpen }, { id: "grammar", label: "Grammar", icon: MapIcon }, { id: "sounds", label: "Sounds", icon: Volume2 }] },
   { title: "Listen & speak", tabs: [{ id: "steps", label: "Steps", icon: Layers }, { id: "shadowing", label: "Say it", icon: Mic }] },
   { title: "Check yourself", tabs: [{ id: "recall", label: "Recall", icon: PenLine }, { id: "dictation", label: "Dictation", icon: Headphones }, { id: "explain", label: "Explain it", icon: MessageCircle }] },
 ] as const;
@@ -60,6 +60,7 @@ export function ShadowingPanel({ text, id, compact = false, onPick }: { text: st
     }} />
     {result && <div className="study-score stack gap-3" aria-live="polite"><div className="study-score-metrics"><strong>{result.score}<small>/100</small></strong><span>Similarity <b>{result.accuracy}%</b></span><span>Completeness <b>{result.completeness}%</b></span></div>
       <div className="study-score-words">{result.words.map((w, i) => <span key={i} className={`shadow-${w.status}`} title={`${w.status}: ${w.score}%`}>{onPick ? <FrText text={w.word} onPick={onPick} /> : w.word}<span className="sr-only"> {w.status}</span></span>)}</div>
+      {!!result.extras.length && <p className="t-support">Extra words heard: <span lang="fr">{result.extras.join(" ")}</span></p>}
       <p className="t-meta">Green: matched · Amber: close · Underlined: missed or different</p><p className="t-support">Heard: <span lang="fr">{transcript}</span></p><p className="t-meta">Practice feedback compares recognised words. Listen to both recordings to check pronunciation.</p>
     </div>}
   </section>;
@@ -77,7 +78,7 @@ export function StructurePanel({ sentence }: { sentence: StudySentence }) {
   const [selected, setSelected] = useState<number | null>(null);
   const spans = sentence.raw?.structure ?? [];
   const part = selected === null ? null : spans[selected];
-  return <div className="stack gap-3">{!!spans.length && <><p className="t-label">How the sentence fits together</p><div className="study-structure">{spans.map((s, i) => <button key={i} className={`structure-${s.block}`} aria-pressed={selected === i} onClick={() => setSelected(selected === i ? null : i)}><span lang="fr">{s.text}</span><small>{s.block === "N" ? "Noun group" : s.block === "V" ? "Verb" : "Sentence building"}</small></button>)}</div>{part && <div className="study-note"><strong>{part.role}</strong><p>{part.detail}</p>{part.gid && <Button kind="tertiary" onClick={() => go(`study/grammar?point=${encodeURIComponent(part.gid!)}`)}>Explore this grammar point</Button>}</div>}</>}<Button kind="tertiary" icon={<Map aria-hidden />} onClick={() => go("study/grammar")}>My grammar map</Button></div>;
+  return <div className="stack gap-3">{!!spans.length && <><p className="t-label">How the sentence fits together</p><div className="study-structure">{spans.map((s, i) => <button key={i} className={`structure-${s.block}`} aria-pressed={selected === i} onClick={() => setSelected(selected === i ? null : i)}><span lang="fr">{s.text}</span><small>{s.block === "N" ? "Noun group" : s.block === "V" ? "Verb" : "Sentence building"}</small></button>)}</div>{part && <div className="study-note"><strong>{part.role}</strong><p>{part.detail}</p>{part.gid && <Button kind="tertiary" onClick={() => go(`study/grammar?point=${encodeURIComponent(part.gid!)}`)}>Explore this grammar point</Button>}</div>}</>}<Button kind="tertiary" icon={<MapIcon aria-hidden />} onClick={() => go("study/grammar")}>My grammar map</Button></div>;
 }
 
 interface ExplainState { explanation: string; variation: string; question: string; feedback?: ExplanationFeedback; history: TutorTurn[]; saved: number[] }
@@ -108,13 +109,13 @@ export function ExplainPanel({ sentence }: { sentence: StudySentence }) {
   };
   const fb = state.feedback;
   return <div className="stack gap-5"><section className="panel stack gap-3"><h3 className="t-section">Explain it in your own words</h3><p className="t-support">What does the sentence mean, and why is it built this way? Use Chinese or English. The tutor helps you find gaps.</p>
-    <label className="field-label" htmlFor="explain-draft">My explanation</label><textarea id="explain-draft" rows={4} maxLength={2000} value={state.explanation} disabled={!!busy} onChange={(e) => update({ explanation: e.target.value })} />
-    <StudyRecorder id={`explain:${sentence.id}`} label="Speak my explanation" disabled={!!busy} onTake={spoken("explanation")} />
-    <details><summary>Try a sentence of my own</summary><label className="sr-only" htmlFor="explain-variation">My own French sentence</label><textarea id="explain-variation" lang="fr" rows={2} maxLength={500} disabled={!!busy} value={state.variation} onChange={(e) => update({ variation: e.target.value })} placeholder="Change a detail and make a new French sentence." /></details>
+    <label className="field-label" htmlFor="explain-draft">My explanation</label><textarea className="textarea" id="explain-draft" rows={4} maxLength={2000} value={state.explanation} disabled={!!busy} onChange={(e) => update({ explanation: e.target.value })} />
+    <StudyRecorder id={`explain:${sentence.id}`} label="Speak my explanation (Chinese)" disabled={!!busy} onTake={spoken("explanation")} />
+    <details><summary>Try a sentence of my own</summary><label className="sr-only" htmlFor="explain-variation">My own French sentence</label><textarea className="textarea" id="explain-variation" lang="fr" rows={2} maxLength={500} disabled={!!busy} value={state.variation} onChange={(e) => update({ variation: e.target.value })} placeholder="Change a detail and make a new French sentence." /></details>
     <Button kind="primary" disabled={!state.explanation.trim() || !!busy} busy={busy === "explain"} onClick={() => void check()}>Check my understanding</Button>
     {fb && <div className="study-feedback stack gap-3" aria-live="polite"><h4 className="t-strong">{fb.verdict === "solid" ? "You explained the key ideas" : fb.verdict === "partial" ? "A few gaps to work on" : "Let’s revisit the key ideas"}</h4>{!!fb.got_right.length && <div><p className="t-label">What you got right</p><ul>{fb.got_right.map((s, i) => <li key={i}>{s}</li>)}</ul></div>}{!!fb.gaps.length && <div><p className="t-label">What to revisit</p><ul>{fb.gaps.map((s, i) => <li key={i}>{s}</li>)}</ul></div>}{fb.variation && <p>{fb.variation.ok ? "Your sentence works." : `Try: ${fb.variation.corrected}`} {fb.variation.note}</p>}{fb.follow_up && <div className="study-note"><strong>Think about this</strong><p>{fb.follow_up}</p><Button kind="tertiary" onClick={() => { update({ history: [...state.history, { role: "tutor", content: fb.follow_up }] }); document.getElementById("tutor-question")?.focus(); }}>Answer below</Button></div>}</div>}
   </section><section className="panel stack gap-3"><h3 className="t-section">Ask about this sentence</h3><div className="study-conversation" aria-live="polite">{state.history.map((turn, i) => <article key={i} className={`study-turn study-turn--${turn.role}`}><p className="t-meta">{turn.role === "learner" ? "You" : "Tutor"}</p><p style={{ whiteSpace: "pre-wrap" }}>{turn.content}</p>{turn.role === "tutor" && i > 0 && state.history[i - 1]?.role === "learner" && <Button kind="tertiary" disabled={state.saved.includes(i) || !!busy} busy={busy === `save-${i}`} onClick={() => void request(`save-${i}`, async (signal) => { await saveAnswer(sentence, state.history[i - 1].content, turn.content); if (!signal.aborted) update({ saved: [...current.current.saved, i] }); })}>{state.saved.includes(i) ? "Practice card saved" : "Turn this answer into a practice card"}</Button>}</article>)}</div>
-    <label className="field-label" htmlFor="tutor-question">My question or follow-up answer</label><textarea id="tutor-question" rows={2} maxLength={1000} value={state.question} disabled={!!busy} onChange={(e) => update({ question: e.target.value })} placeholder="Why is this word here? Could I say it another way?" />
-    <StudyRecorder id={`ask:${sentence.id}`} label="Ask by speaking" disabled={!!busy} onTake={spoken("question")} /><Button kind="primary" disabled={!state.question.trim() || !!busy} busy={busy === "ask"} onClick={() => void ask()}>Ask tutor</Button>
+    <label className="field-label" htmlFor="tutor-question">My question or follow-up answer</label><textarea className="textarea" id="tutor-question" rows={2} maxLength={1000} value={state.question} disabled={!!busy} onChange={(e) => update({ question: e.target.value })} placeholder="Why is this word here? Could I say it another way?" />
+    <StudyRecorder id={`ask:${sentence.id}`} label="Ask by speaking (Chinese)" disabled={!!busy} onTake={spoken("question")} /><Button kind="primary" disabled={!state.question.trim() || !!busy} busy={busy === "ask"} onClick={() => void ask()}>Ask tutor</Button>
   </section>{error && <Banner tone="error" title="Couldn’t finish" live="assertive">{error} Your draft is kept. Try again.</Banner>}</div>;
 }

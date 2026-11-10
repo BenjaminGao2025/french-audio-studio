@@ -31,10 +31,10 @@ export function sentenceKey(s: string): string {
   return s.replace(/’/g, "'").replace(/ /g, " ").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
-/** Saved cards of one sentence: "listen", "speak", and "cloze:<word>" (word lower-cased). */
+/** Saved cards of one sentence: "listen", "speak", and "cloze:<word>", and "grammar:<title>" (targets lower-cased). */
 export type SavedSet = ReadonlySet<string>;
 
-export const cardKey = (mode: string, target = "") => (mode === "cloze" ? `cloze:${sentenceKey(target)}` : mode);
+export const cardKey = (mode: string, target = "") => (["cloze", "grammar"].includes(mode) ? `${mode}:${sentenceKey(target)}` : mode);
 
 let saved: Record<string, SavedSet> = {};
 const listeners = new Set<() => void>();

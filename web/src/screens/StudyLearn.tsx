@@ -25,6 +25,7 @@ import { WordPanel } from "./WordPopup";
 import { Exercise } from "./Exercise";
 import { ExplainPanel, GrammarSave, ShadowingPanel, SoundsPanel, StructurePanel, StudyNavigation, WordsPanel } from "./StudyTools";
 import "./study-tools.css";
+import { StudyReviewNotice } from "../components/StudyReviewNotice";
 
 interface Pick {
   text: string;
@@ -103,6 +104,9 @@ export function StudyLearn() {
       />
 
       <div className="stack gap-5">
+        <StudyReviewNotice />
+        {!!study.analysis.failedParts && <Banner tone="warning" title="Some text could not be analysed">{study.analysis.failedParts} parts failed. Your original text is kept. Open New text to retry the missing parts.</Banner>}
+        {!practising && s.raw?.accent_fixed_from && <Banner tone="info" title="Accents corrected">Original: <span lang="fr">{s.raw.accent_fixed_from}</span>. The sentence below uses corrected French accents.</Banner>}
         {/* Source, collapsed after success. Hidden while practising so the target never shows. */}
         {!practising && (
           <div className="stack gap-2">

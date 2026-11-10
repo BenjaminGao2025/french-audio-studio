@@ -188,6 +188,7 @@ export interface AppState {
       source: AnalysisRec["source"];
       /** Server message when the analysis failed (e.g. trial ended, too many requests). */
       error?: string;
+      failedParts?: number;
     };
     sentences: StudySentence[];
     index: number;
@@ -199,7 +200,7 @@ export interface AppState {
     ocr: {
       phase: "select" | "processing" | "failed" | "cancelled" | "none" | "results";
       photoId?: string;
-      lines: (OcrLine & { selected: boolean })[];
+      lines: (OcrLine & { selected: boolean; accentFrom?: string })[];
       partial: boolean;
     };
   };
