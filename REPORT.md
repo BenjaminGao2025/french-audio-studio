@@ -65,4 +65,6 @@ Rollback: revert the merge commit on `main`. Do not force-push. Production auto-
 
 ## Commit
 
-Implementation commit SHA is filled in after `git rev-parse HEAD` of the product commit. See the latest `fix(study)` commit on this branch.
+`755c71cfbfd8d18eca30d361ba71f712b6530be7` on `fix/review-card-ui`.
+
+`git log -1 --oneline` after that commit is `fix(study): restore friendly IPA and a calmer study/review UI`. This report’s SHA line is the only follow-up.
