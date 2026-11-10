@@ -295,7 +295,7 @@ function route(method: string, url: URL, body: Record<string, unknown>): Respons
       fake.etymologyFails--;
       return json(503, { detail: "etymology_failed" });
     }
-    return json(200, { text: "这是一个示例词根词源说明。", cached: false });
+    return json(200, { text: body.language === "en" ? "A short English note about the word’s origin." : "这是一个示例词根词源说明。", cached: false });
   }
   return srsRoute(method, url, body);
 }

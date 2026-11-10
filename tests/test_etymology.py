@@ -14,6 +14,22 @@ class EtymologyApiTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(tts_service.app)
 
+    def test_english_origin_has_its_own_cache_and_prompt(self):
+        auth_db.set_etymology("étymo-language", "étymo-language", "", "旧的中文词源")
+        chat = AsyncMock(return_value=({}, "Origin uncertain. Remember the base word."))
+        headers = testenv.session_headers()
+        with patch.object(services.ai, "post_chat", chat):
+            body = {"word": "étymo-language", "language": "en"}
+            first = self.client.post("/api/etymology", headers=headers, json=body)
+            self.assertEqual(first.status_code, 200)
+            self.assertEqual(first.json()["text"], "Origin uncertain. Remember the base word.")
+            self.assertIn("English only", chat.call_args.args[1]["messages"][0]["content"])
+            self.assertEqual(chat.call_args.args[1]["messages"][1]["content"], "French base word: étymo-language")
+            second = self.client.post("/api/etymology", headers=headers, json=body)
+            self.assertTrue(second.json()["cached"])
+            chat.assert_awaited_once()
+            self.assertEqual(auth_db.get_etymology("étymo-language"), "旧的中文词源")
+
     def test_shared_persistent_cache_skips_llm_and_upstream_key(self):
         chat = AsyncMock(return_value=({}, "<think>reasoning</think>构词：empêcher。\n记忆：被阻挡。"))
         with patch.object(services.ai, "post_chat", chat):

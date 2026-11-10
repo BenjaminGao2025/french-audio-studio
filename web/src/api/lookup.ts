@@ -123,7 +123,7 @@ export function phraseContext(sentence: string, translation_zh: string, signal?:
 /** Fetched only when the Roots & origin section is expanded. */
 export function etymology(word: string, lemma: string, signal?: AbortSignal): Promise<EtymologyResponse> {
   const key = JSON.stringify([word, lemma]);
-  return cached(etyCache, key, () => apiFetch<EtymologyResponse>("/api/etymology", { body: { word, lemma }, signal }));
+  return cached(etyCache, key, () => apiFetch<EtymologyResponse>("/api/etymology", { body: { word, lemma, language: "en" }, signal }));
 }
 
 /** Test helper: forget cached dictionaries/contexts between renders. */

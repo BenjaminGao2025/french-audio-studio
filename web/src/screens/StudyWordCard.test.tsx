@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StudySentence } from "../data/fixtures";
 import { StudyLearn } from "../screens/StudyLearn";
+import { WordPanel } from "./WordPopup";
 import { fake, installFakeBackend } from "../test/fakeBackend";
 import { resetLookupCaches } from "../api/lookup";
 import { get, resetDemo, set, updatePlayer } from "../state/store";
@@ -94,6 +95,25 @@ afterEach(async () => {
 });
 
 describe("Task B — Study word card, selection and steps", () => {
+  it("prioritizes the English meaning and keeps dictionary and usage notes collapsed", async () => {
+    const sentence: StudySentence = {
+      ...SENTENCE,
+      raw: { ...SENTENCE.raw!, words: [{ fr: "madame", ipa: "madam", lemma: "madame", type: "noun", meaning: "madam; a polite address", meaning_zh: "女士", why: "A polite way to address a woman.", english_link: "madam", false_friend: false }] },
+    };
+    await act(async () => root.render(<WordPanel sentence={sentence} text="madame" wordIndex={0} onGrammar={() => {}} onClose={() => {}} />));
+    await wait(150);
+    const panel = host.querySelector(".word-card")!;
+    expect(panel.querySelector(".wp-definition")?.textContent).toBe("madam; a polite address");
+    expect(panel.textContent).not.toMatch(/\p{Script=Han}/u);
+    expect(panel.textContent).not.toContain("dictionary: madame");
+    expect(panel.textContent).not.toContain("A polite way to address a woman.");
+    await act(async () => findButton("Dictionary").click());
+    expect(panel.textContent).toContain("dictionary: madame");
+    await act(async () => findButton("Usage notes").click());
+    expect(panel.textContent).toContain("A polite way to address a woman.");
+    expect(panel.textContent).not.toMatch(/\p{Script=Han}/u);
+  });
+
   it("clicking a word calls sayFrench(word) and opens the word card", async () => {
     const spy = vi.spyOn(store, "sayFrench");
     await act(async () => {
@@ -175,6 +195,8 @@ describe("Task B — Study word card, selection and steps", () => {
       Array.from(ety().querySelectorAll("button")).find((b) => b.textContent === "Retry")!.click();
     });
     await wait(150);
-    expect(ety().textContent).toContain("这是一个示例词根词源说明。");
+    expect(ety().textContent).toContain("A short English note about the word’s origin.");
+    expect(fake.calls.find((call) => call.path === "/api/etymology")?.body).toMatchObject({ language: "en" });
+    expect(document.querySelector(".word-card")?.textContent).not.toMatch(/\p{Script=Han}/u);
   });
 });

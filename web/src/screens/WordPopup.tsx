@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Bookmark, BookmarkCheck, ChevronDown, Volume2 } from "lucide-react";
+import { ArrowLeft, Bookmark, BookmarkCheck, ChevronDown, Volume2, X } from "lucide-react";
 import { ApiError } from "../api/client";
 import {
   etymology,
@@ -69,8 +69,8 @@ type LoadState = "idle" | "loading" | "ready" | "error";
 const EMPTY_HINTS: WordContextHints = { meaning_zh: "", meaning_en: "", note_en: "", lemma: "", pos: "" };
 
 /*
- * A word card in four levels: L1 headword/chips, L2 the meaning in this sentence and its context,
- * L3 the collapsed details (why, dictionary, roots), L4 the footer. Analysis words show their
+ * English word meaning and a French example first, with secondary details collapsed.
+ * The surrounding popover/sheet owns scrolling. Analysis words show their
  * fields instantly; a free selection or a word with no analysis asks /api/word-context.
  */
 export function WordPanel({
@@ -119,7 +119,7 @@ export function WordPanel({
   const [dict, setDict] = useState<DictionaryEntry | null>(null);
   const [dictSt, setDictSt] = useState<LoadState>(tooLong ? "idle" : "loading");
   const [dictErr, setDictErr] = useState("");
-  const [dictMore, setDictMore] = useState(false);
+  const [dictOpen, setDictOpen] = useState(false);
 
   const [ctx, setCtx] = useState<WordContextResult | null>(null);
   const [ctxSt, setCtxSt] = useState<LoadState>(isAnalysis || tooLong ? "idle" : "loading");
@@ -191,7 +191,7 @@ export function WordPanel({
 
   useEffect(() => {
     setNested(null);
-    setDictMore(false);
+    setDictOpen(false);
     setPhrases([]);
     setEty("");
     setEtySt("idle");
@@ -218,173 +218,114 @@ export function WordPanel({
   };
 
   const overlapping = phrases.find((p) => phraseOverlaps(text, p.text));
-  const whyZh = ctx?.why_zh || w?.why || "";
-  const dictText = dict && (dict.explanation_cn || dict.explanation_en) ? dict : null;
+  // Legacy analyses can contain Chinese notes; only English explanations belong in this card.
+  const englishOnly = (value?: string) => value && !/\p{Script=Han}/u.test(value) ? value : "";
+  const why = englishOnly(w?.why);
+  const meaning = englishOnly(w?.meaning) || englishOnly(ctx?.meaning_en);
+  const dictionary = englishOnly(dict?.explanation_en);
 
   return (
-    <div className="word-card stack gap-3" aria-busy={dictSt === "loading" || ctxSt === "loading"}>
-      {/* L1 — headword, replay, IPA and chips */}
-      <div className="wp-head">
-        <div className="row gap-2" style={{ alignItems: "baseline" }}>
-          <span className="wp-headword" lang="fr" data-autofocus tabIndex={-1}>{shown}</span>
-          <Button
-            kind="tertiary"
-            className="btn--sm-text wp-replay"
-            iconOnly
-            aria-label={`Replay “${shown}”`}
-            icon={<Volume2 aria-hidden />}
-            onClick={() => sayFrench(shown)}
-          />
+    <div className="word-card" aria-busy={dictSt === "loading" || ctxSt === "loading"}>
+      <header className="wp-head">
+        <div className="row row--between row--top">
+          <div className="grow">
+            <div className="row gap-2">
+              <span className="wp-headword" lang="fr" data-autofocus tabIndex={-1}>{shown}</span>
+              <Button kind="tertiary" iconOnly aria-label={`Replay “${shown}”`} icon={<Volume2 aria-hidden />} onClick={() => sayFrench(shown)} />
+            </div>
+            {(ipa || pos) && <p className="wp-meta">{[ipa && `/${ipa}/`, pos].filter(Boolean).join(" · ")}</p>}
+          </div>
+          {!inSheet && <Button kind="tertiary" iconOnly aria-label="Close word card" icon={<X aria-hidden />} onClick={onClose} />}
         </div>
-        {ipa && <p className="wp-ipa">/{ipa}/</p>}
-        <div className="wp-chips">
-          {pos && <span className="wp-chip">{pos}</span>}
-          {baseForm && !nested && (
-            <button type="button" className="wp-chip wp-chip--action" onClick={useBaseForm}>
-              base form: <span lang="fr">{baseForm}</span>
-            </button>
-          )}
-          {falseFriend && <Pill tone="warning">False friend</Pill>}
-        </div>
-        {nested && (
-          <Button kind="tertiary" className="btn--sm-text" icon={<ArrowLeft aria-hidden />} onClick={() => setNested(null)}>
-            Back to {text}
-          </Button>
+        {baseForm && !nested && (
+          <button type="button" className="wp-base" onClick={useBaseForm}>Base form: <span lang="fr">{baseForm}</span></button>
         )}
-      </div>
+        {falseFriend && <Pill tone="warning">False friend</Pill>}
+        {nested && <Button kind="tertiary" className="btn--sm-text" icon={<ArrowLeft aria-hidden />} onClick={() => setNested(null)}>Back to {text}</Button>}
+      </header>
 
       {!nested && (
         <>
-          {/* L2 — meaning in this sentence */}
-          <section className="stack gap-1" aria-label="In this sentence">
-            <span className="wp-label">In this sentence</span>
+          <section className="wp-meaning" aria-label="Meaning in this sentence">
+            <h3 className="wp-label">Meaning in this sentence</h3>
             {tooLong ? (
-              <div className="wp-insentence">
-                <p className="t-support">Pick a few words to see their meaning here.</p>
-                {translation_zh && <p className="t-support" lang="zh">{translation_zh}</p>}
-                {sentence.en && <p className="t-support">{sentence.en}</p>}
-              </div>
-            ) : isAnalysis ? (
-              <div className="wp-insentence">
-                <p className="wp-insentence-zh" lang="zh">{w!.meaning_zh || "—"}</p>
-                <p className="wp-insentence-en">{w!.meaning}</p>
-              </div>
+              <p className="t-support">Select a word or a short phrase to see its meaning.</p>
+            ) : meaning ? (
+              <p className="wp-definition" lang="en">{meaning}</p>
             ) : ctxSt === "loading" ? (
-              <div className="wp-insentence"><Spinner label="Explaining it here…" /><Skeleton lines={2} /></div>
+              <><Spinner label="Finding the meaning…" /><Skeleton lines={1} /></>
             ) : ctxSt === "error" ? (
-              <div className="wp-insentence">
-                <p className="t-support">Couldn’t explain it here.</p>
-                <Button kind="secondary" onClick={loadCtx}>Retry</Button>
-              </div>
+              <div className="stack gap-2"><p className="t-support">Couldn’t load the meaning in this sentence.</p><Button kind="secondary" onClick={loadCtx}>Retry</Button></div>
             ) : (
-              <div className="wp-insentence">
-                <p className="wp-insentence-zh" lang="zh">{ctx?.meaning_zh || "—"}</p>
-                <p className="wp-insentence-en">{ctx?.meaning_en || ""}</p>
-              </div>
+              <p className="t-support">No English meaning available for this sentence.</p>
             )}
           </section>
 
-          {/* L2 — context */}
-          <section className="stack gap-1" aria-label="Context">
-            <span className="wp-label">Context</span>
-            <p className="t-body" lang="fr"><Highlight sentence={sentence.fr} pick={text} occurrence={occurrence} /></p>
-            {translation_zh && <p className="t-support" lang="zh">{translation_zh}</p>}
-            <p className="t-support">{sentence.en}</p>
-            {overlapping && (
+          <section className="wp-context" aria-label="Example sentence">
+            <h3 className="wp-label">Example sentence</h3>
+            <p className="wp-example" lang="fr"><Highlight sentence={sentence.fr} pick={text} occurrence={occurrence} /></p>
+            {englishOnly(sentence.en) && <p className="t-support" lang="en">{sentence.en}</p>}
+            {overlapping && englishOnly(overlapping.meaning_en) && (
               <div className="wp-phrase">
-                <p className="row gap-2">
-                  <span className="wp-chip">Fixed phrase</span>
-                  <span className="t-strong" lang="fr">{overlapping.phrase || overlapping.text}</span>
-                </p>
-                <p className="t-support" lang="zh">{overlapping.meaning_zh} · {overlapping.meaning_en}</p>
-                {overlapping.literal_zh && <p className="t-meta" lang="zh">{overlapping.literal_zh}</p>}
+                <p className="t-meta">Fixed expression</p>
+                <p className="t-strong" lang="fr">{overlapping.phrase || overlapping.text}</p>
+                <p className="t-support" lang="en">{overlapping.meaning_en}</p>
               </div>
             )}
           </section>
-
-          {/* L3 — why this form (collapsed) */}
-          {(whyZh || englishLink) && (
-            <section className={cx("wp-collapsible", whyOpen && "wp-collapsible--open")}>
-              <button type="button" className="wp-toggle" aria-expanded={whyOpen} onClick={() => setWhyOpen(!whyOpen)}>
-                <span className="wp-label">Why this form</span>
-                <ChevronDown aria-hidden width={16} height={16} />
-              </button>
-              {whyOpen && (
-                <div className="wp-collapsible-body">
-                  {whyZh && <p className="t-support" lang="zh" style={{ color: "var(--text)" }}>{whyZh}</p>}
-                  {englishLink && !falseFriend && <p className="t-meta">Like English “{englishLink}”.</p>}
-                </div>
-              )}
-            </section>
-          )}
         </>
       )}
 
-      {/* L3 — dictionary (clamped to three lines). Skipped for a long free selection. */}
       {!tooLong && (
-        <section className="stack gap-1" aria-label="Dictionary">
-          <span className="wp-label">Dictionary{dict?.lemma && dict.lemma.toLowerCase() !== shown.toLowerCase() ? ` · ${dict.lemma}` : ""}</span>
-          {dictSt === "loading" && <><Spinner label="Looking up the dictionary entry…" /><Skeleton lines={2} /></>}
-          {dictSt === "error" && (
-            <Banner tone="error" title="Dictionary request failed" live="assertive" actions={<Button kind="secondary" onClick={loadDict}>Retry</Button>}>
-              {dictErr || "The dictionary didn’t respond."}
-            </Banner>
-          )}
-          {dictSt === "ready" && dictText && (
-            <>
-              <div className={cx("wp-dict", !dictMore && "wp-clamp")}>
-                {dictText.explanation_cn && <span lang="zh">{dictText.explanation_cn}</span>}
-                {dictText.explanation_cn && dictText.explanation_en && <span aria-hidden> · </span>}
-                {dictText.explanation_en && <span>{dictText.explanation_en}</span>}
-              </div>
-              <Button kind="tertiary" className="btn--sm-text" aria-expanded={dictMore} onClick={() => setDictMore(!dictMore)}>
-                {dictMore ? "Less" : "More"}
-              </Button>
-            </>
-          )}
-        </section>
-      )}
+        <div className="wp-details">
+          <section className={cx("wp-collapsible", dictOpen && "wp-collapsible--open")} aria-label="Dictionary">
+            <button type="button" className="wp-toggle" aria-expanded={dictOpen} onClick={() => setDictOpen(!dictOpen)}>
+              <span>Dictionary</span><ChevronDown aria-hidden width={16} height={16} />
+            </button>
+            {dictOpen && <div className="wp-collapsible-body">
+              {dictSt === "loading" && <Spinner label="Loading dictionary…" />}
+              {dictSt === "error" && <Banner tone="error" title="Dictionary request failed" actions={<Button kind="secondary" onClick={loadDict}>Retry</Button>}>{englishOnly(dictErr) || "Please try again."}</Banner>}
+              {dictSt === "ready" && <>
+                {dict?.lemma && dict.lemma.toLowerCase() !== shown.toLowerCase() && <p className="wp-meta" lang="fr">{dict.lemma}</p>}
+                <p className="t-support" lang="en">{dictionary || "No English dictionary entry available."}</p>
+              </>}
+            </div>}
+          </section>
 
-      {!nested && !text.includes(" ") && !tooLong && (
-        /* L3 — roots & origin (fetched only when expanded) */
-        <section className={cx("wp-collapsible wp-ety", etyOpen && "wp-ety--open")} aria-label="Roots and origin">
-          <button type="button" className="wp-toggle" aria-expanded={etyOpen} onClick={openEty}>
-            <span className="wp-label">Roots &amp; origin · 词根词源</span>
-            <ChevronDown aria-hidden width={16} height={16} />
-          </button>
-          {etyOpen && (
-            <div className="wp-collapsible-body">
-              {etySt === "loading" && <Spinner label="Looking up the roots…" />}
-              {etySt === "error" && (
-                <div className="stack gap-2">
-                  <p className="t-support">Couldn’t load the roots.</p>
-                  <Button kind="secondary" onClick={loadEty}>Retry</Button>
-                </div>
-              )}
-              {etySt === "ready" && <p className="t-support" lang="zh" style={{ color: "var(--text)" }}>{ety}</p>}
-            </div>
+          {!nested && (why || englishOnly(englishLink)) && (
+            <section className={cx("wp-collapsible", whyOpen && "wp-collapsible--open")}>
+              <button type="button" className="wp-toggle" aria-expanded={whyOpen} onClick={() => setWhyOpen(!whyOpen)}>
+                <span>Usage notes</span><ChevronDown aria-hidden width={16} height={16} />
+              </button>
+              {whyOpen && <div className="wp-collapsible-body">
+                {why && <p className="t-support" lang="en">{why}</p>}
+                {englishOnly(englishLink) && !falseFriend && <p className="t-support" lang="en">Like English “{englishLink}”.</p>}
+              </div>}
+            </section>
           )}
-        </section>
-      )}
 
-      {/* L4 — footer */}
-      <div className="wp-footer">
-        <div className="row gap-2" style={{ flexWrap: "wrap" }}>
-          {count !== undefined && <Importance count={count} />}
-          <Button
-            kind="tertiary"
-            className="btn--sm-text"
-            aria-pressed={fav}
-            icon={fav ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />}
-            onClick={() => void setFavorite(text, !fav)}
-          >
-            {fav ? "Favorited" : "Favorite"}
-          </Button>
-          <Button kind="tertiary" className="btn--sm-text" onClick={onGrammar}>Grammar for this sentence</Button>
-          {!inSheet && <Button kind="tertiary" className="btn--sm-text" onClick={onClose}>Close</Button>}
+          {!nested && !text.includes(" ") && (
+            <section className={cx("wp-collapsible wp-ety", etyOpen && "wp-collapsible--open")} aria-label="Roots and origin">
+              <button type="button" className="wp-toggle" aria-expanded={etyOpen} onClick={openEty}>
+                <span>Roots &amp; origin</span><ChevronDown aria-hidden width={16} height={16} />
+              </button>
+              {etyOpen && <div className="wp-collapsible-body">
+                {etySt === "loading" && <Spinner label="Looking up the roots…" />}
+                {etySt === "error" && <div className="stack gap-2"><p className="t-support">Couldn’t load the roots.</p><Button kind="secondary" onClick={loadEty}>Retry</Button></div>}
+                {etySt === "ready" && <p className="t-support" lang="en">{englishOnly(ety) || "No English origin note available."}</p>}
+              </div>}
+            </section>
+          )}
         </div>
-        <p className="t-meta">Meanings are written by AI and can be wrong. Each lookup raises the word’s importance.</p>
-      </div>
+      )}
+
+      <footer className="wp-footer">
+        <div className="row row--between">
+          <Button kind="tertiary" className="btn--sm-text" aria-pressed={fav} icon={fav ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />} onClick={() => void setFavorite(text, !fav)}>{fav ? "Favorited" : "Favorite"}</Button>
+          {count !== undefined && <Importance count={count} />}
+        </div>
+        {!nested && <Button kind="tertiary" className="btn--sm-text" onClick={onGrammar}>Sentence grammar</Button>}
+      </footer>
     </div>
   );
 }

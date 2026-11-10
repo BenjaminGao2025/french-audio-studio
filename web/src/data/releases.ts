@@ -8,6 +8,15 @@ export const RELEASES = [
     version: APP_VERSION,
     date: "2026-11-09",
     changes: [
+      "Simplified word cards with a clear English meaning, a French example and expandable details.",
+      "Removed Chinese explanations and added English roots and origin notes.",
+      "Removed the inner scrollbar so each word popup has a single scroll area.",
+    ],
+  },
+  {
+    version: "1.0.2",
+    date: "2026-11-09",
+    changes: [
       "Simplified Review to a single Saved cards table and removed the separate Word library view.",
       "Existing Word library links now open Saved cards.",
     ],

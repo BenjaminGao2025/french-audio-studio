@@ -480,6 +480,7 @@ async def lookup_word(
 class EtymologyRequest(BaseModel):
     word: str = Field(min_length=1, max_length=200)
     lemma: str | None = Field(default=None, max_length=200)
+    language: Literal["zh", "en"] = "zh"
 
 
 @router.post("/api/etymology")
@@ -492,7 +493,8 @@ async def etymology_word(
     lemma = (request.lemma or "").strip()
     if not word:
         raise HTTPException(status_code=400, detail={"message": "请提供待查询单词"})
-    key = (lemma or word).lower()
+    headword = (lemma or word).lower()
+    key = f"en:{headword}" if request.language == "en" else headword
     cached = auth_db.get_etymology(key)
     if cached is not None:
         return {"text": cached, "cached": True}
@@ -504,13 +506,18 @@ async def etymology_word(
             {
                 "role": "system",
                 "content": (
+                    "You are a careful French etymology teacher. Explain the base word's formation, "
+                    "its origin if known, and one short memory cue in English only. Clearly distinguish "
+                    "real etymology from a memory association. State uncertainty and never invent origins. "
+                    "Use plain text, at most 80 words in 4 short lines."
+                    if request.language == "en" else
                     "你是严谨的法语词源老师。用简体中文纯文本解释所给原形词的词根/构词、"
                     "词源（如拉丁语来源，已知才写）和恰好一条简短记忆钩子。"
                     "不确定时明确说不确定，不编造词源；区分真实词源和记忆联想。"
                     "只解释原形词，便于同词族复用。总计约120个汉字以内，最多4短行，不用Markdown。"
                 ),
             },
-            {"role": "user", "content": f"法语原形词：{key}"},
+            {"role": "user", "content": f"French base word: {headword}"},
         ],
         "stream": False,
         "temperature": 0.0,
