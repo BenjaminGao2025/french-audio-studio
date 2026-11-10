@@ -19,10 +19,12 @@ import {
   updatePlayer,
   useApp,
 } from "../state/store";
-import { Banner, Button, Dialog, PageHead, Popover, Skeleton, Spinner, Tabs, useNarrow } from "../components/ui";
+import { Banner, Button, Dialog, PageHead, Popover, Skeleton, Spinner, useNarrow } from "../components/ui";
 import { FrText, stepSegments, type FrPick } from "../components/FrText";
 import { WordPanel } from "./WordPopup";
 import { Exercise } from "./Exercise";
+import { ExplainPanel, GrammarSave, ShadowingPanel, SoundsPanel, StructurePanel, StudyNavigation, WordsPanel } from "./StudyTools";
+import "./study-tools.css";
 
 interface Pick {
   text: string;
@@ -149,7 +151,7 @@ export function StudyLearn() {
               <FrText segments={s.segments} className="sentence-fr" onPick={onPick} />
               <p className="t-body muted" style={{ marginTop: 8 }}>{s.en}</p>
               <p className="t-meta" style={{ marginTop: 4 }}>Tap a word or select a phrase to hear it and see its meaning.</p>
-              {pick && !narrow && (
+              {pick && !narrow && sentRef.current?.contains(pick.el) && (
                 <Popover anchor={pick.el} container={sentRef.current} onClose={() => setPick(null)} label={`Meaning of ${pick.text}`}>
                   <WordPanel
                     key={`${pick.text}-${pick.wordIndex ?? ""}`}
@@ -175,26 +177,19 @@ export function StudyLearn() {
         </section>
 
         <div className="stack gap-4">
-          <Tabs
-            label="Sentence practice"
-            idBase="learn"
-            value={study.tab}
-            onChange={(t) => {
-              setPick(null);
-              const p = get().player;
-              if (p && (p.owner.kind === "exercise" || p.owner.kind === "study")) stopPlayback();
-              patchStudy({ tab: t });
-            }}
-            tabs={[
-              { value: "steps", label: "Steps" },
-              { value: "grammar", label: "Grammar" },
-              { value: "recall", label: "Recall" },
-              { value: "dictation", label: "Dictation" },
-            ]}
-          />
+          <StudyNavigation value={study.tab} onChange={(tab) => {
+            setPick(null);
+            const p = get().player;
+            if (p && (p.owner.kind === "exercise" || p.owner.kind === "study")) stopPlayback();
+            patchStudy({ tab });
+          }} />
           <div id="learn-panel" role="tabpanel" aria-labelledby={`learn-tab-${study.tab}`}>
-            {study.tab === "steps" && <StepsPanel sentence={s} onPick={onPick} />}
-            {study.tab === "grammar" && <GrammarPanel sentence={s} />}
+            {study.tab === "steps" && <StepsPanel key={s.id} sentence={s} onPick={onPick} />}
+            {study.tab === "grammar" && <GrammarPanel key={s.id} sentence={s} />}
+            {study.tab === "words" && <WordsPanel sentence={s} onPick={onPick} />}
+            {study.tab === "sounds" && <SoundsPanel sentence={s} onPick={onPick} />}
+            {study.tab === "shadowing" && <ShadowingPanel key={s.id} id={`shadow:${s.id}`} text={s.fr} onPick={onPick} />}
+            {study.tab === "explain" && <ExplainPanel key={s.id} sentence={s} />}
             {(study.tab === "recall" || study.tab === "dictation") && (
               <Exercise
                 key={`${s.id}-${study.tab}`}
@@ -218,7 +213,7 @@ export function StudyLearn() {
         </div>
       </div>
 
-      {pick && narrow && (
+      {pick && (narrow || !sentRef.current?.contains(pick.el)) && (
         <Dialog sheet title={`Meaning of “${pick.text}”`} onClose={() => setPick(null)}>
           <WordPanel
             key={`${pick.text}-${pick.wordIndex ?? ""}`}
@@ -352,6 +347,9 @@ function StepsPanel({ sentence, onPick }: { sentence: StudySentence; onPick: (p:
   // The one live study playback, by its owner label: a step button shows Pause only for its own step.
   const liveLabel = player && player.owner.kind === "study" && isLive(player.status) ? player.owner.label : null;
   const allStepsPlaying = liveLabel === ALL_STEPS_LABEL;
+  const [blind, setBlind] = useState(false);
+  const [revealed, setRevealed] = useState<number[]>([]);
+  const [recordStep, setRecordStep] = useState<number | null>(null);
 
   const playStep = (i: number) => {
     const texts = [stepText(sentence.steps[i])];
@@ -390,6 +388,11 @@ function StepsPanel({ sentence, onPick }: { sentence: StudySentence; onPick: (p:
           {allStepsPlaying ? "Pause all steps" : "Play all steps"}
         </Button>
       </div>
+      <div className="study-step-tools btn-row">
+        <Button kind={blind ? "primary" : "secondary"} aria-pressed={blind} onClick={() => { setBlind(!blind); setRevealed([]); }}>{blind ? "Show all words" : "Test me · hide new words"}</Button>
+        {blind && <Button kind="tertiary" onClick={() => setRevealed(revealed.length ? [] : sentence.steps.map((_, i) => i))}>{revealed.length ? "Hide again" : "Reveal all"}</Button>}
+      </div>
+      {blind && <p className="t-support">Say the missing part from memory, then reveal it or record yourself.</p>}
       <ol className="list" style={{ padding: "0 16px" }}>
         {sentence.steps.map((st, i) => {
           const isPlaying = liveLabel === STEP_LABEL(i + 1);
@@ -406,12 +409,12 @@ function StepsPanel({ sentence, onPick }: { sentence: StudySentence; onPick: (p:
               <span className="step-num" aria-hidden>{i + 1}</span>
               <div className="stack gap-2">
                 <span className="step-badge">Step {i + 1}</span>
-                <FrText segments={stepSegments(st.parts)} className="step-fr" onPick={onPick} />
+                {blind && !revealed.includes(i) ? <p className="step-fr" lang="fr">{st.parts.map((part, j) => part.added || i === 0 ? <button type="button" key={j} className="study-blank" aria-label={`Reveal new words in step ${i + 1}`} onClick={(e) => { e.stopPropagation(); setRevealed([...revealed, i]); }}>•••</button> : <span key={j}>{part.t}</span>)}</p> : <FrText segments={stepSegments(st.parts)} className="step-fr" onPick={onPick} />}
                 <p className="t-support">{st.en}</p>
-                <p className="t-body">
+                {(!blind || revealed.includes(i)) && <p className="t-body">
                   <span className="t-strong">{/[.!?…]$/.test(st.addedLabel) ? st.addedLabel : `${st.addedLabel}.`}</span>
                   {st.how && ` ${st.how}`}
-                </p>
+                </p>}
                 <Button
                   kind="tertiary"
                   className="btn--sm-text"
@@ -421,6 +424,14 @@ function StepsPanel({ sentence, onPick }: { sentence: StudySentence; onPick: (p:
                 >
                   {isPlaying ? `Pause step ${i + 1}` : `Play step ${i + 1}`}
                 </Button>
+                <div className="btn-row" onClick={(e) => e.stopPropagation()}>
+                  <Button kind="tertiary" aria-pressed={!!player?.repeat && liveLabel === STEP_LABEL(i + 1)} onClick={() => {
+                    if (liveLabel === STEP_LABEL(i + 1) && player?.repeat) stopPlayback();
+                    else startPlayback({ kind: "study", label: STEP_LABEL(i + 1), route: "study" }, estimate(stepText(st)), { texts: [stepText(st)], repeat: true });
+                  }}>Repeat this step</Button>
+                  <Button kind="secondary" aria-expanded={recordStep === i} onClick={() => setRecordStep(recordStep === i ? null : i)}>{recordStep === i ? "Close recorder" : "Say this step"}</Button>
+                </div>
+                {recordStep === i && <div onClick={(e) => e.stopPropagation()}><ShadowingPanel key={i} id={`shadow:${sentence.id}:step:${i}`} text={stepText(st)} compact onPick={onPick} /></div>}
               </div>
             </li>
           );
@@ -439,6 +450,7 @@ function GrammarPanel({ sentence }: { sentence: StudySentence }) {
   const notes = sentence.grammar ?? [];
   return (
     <div className="stack gap-4" aria-busy={state === "loading"}>
+      <StructurePanel sentence={sentence} />
       <p className="t-support">Grammar for this sentence. Your place is kept: sentence {index + 1}.</p>
       {state === "loading" && (
         <>
@@ -462,6 +474,7 @@ function GrammarPanel({ sentence }: { sentence: StudySentence }) {
             <li key={g.title + g.body} className="stack gap-2" style={{ padding: 16 }}>
               <h3 className="t-strong">{g.title}</h3>
               {g.body && <p>{g.body}</p>}
+              <GrammarSave key={sentence.id + g.title} sentence={sentence} point={{ title: g.title, explanation: g.body, hook: g.example ?? "" }} />
               {g.example && (
                 <p className="t-support">
                   <span className="t-strong" style={{ color: "var(--text)" }}>{g.example}</span>
