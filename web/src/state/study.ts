@@ -5,7 +5,7 @@ import { fmtWhen, sourceLabel, type StudyRecord } from "../api/history";
 import { analyzeText, cleanInput, ideaToFrench, saveStudyHistory, toStudySentence } from "../api/study";
 import { announce, get, go, patchStudy } from "./store";
 
-export const LIMITS = { text: 2000, ideas: 300 } as const;
+export const LIMITS = { text: 15000, ideas: 2000 } as const;
 export const STAGES = ["Finding sentences", "Looking up words and phrases", "Preparing steps"];
 
 
