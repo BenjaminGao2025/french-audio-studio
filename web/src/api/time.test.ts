@@ -7,6 +7,7 @@ import type { PlayerOwner, PlayerState } from "../state/store";
 
 describe("lanes", () => {
   it("counts each screen under its skill and episodes as listening on the go", () => {
+    expect(laneForRoute("study/personal")).toBeNull();
     expect(laneForRoute("study/recall")).toBe("reading");
     expect(laneForRoute("review/session?x=1")).toBe("review");
     expect(laneForRoute("practice/write")).toBe("writing");

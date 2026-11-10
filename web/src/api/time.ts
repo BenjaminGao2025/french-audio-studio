@@ -23,6 +23,8 @@ const tz = () => new Date().getTimezoneOffset();
 /** The lane a screen's own use counts under; null for screens that only count their audio. */
 export function laneForRoute(route: string): Lane | null {
   const r = route.split("?")[0];
+  // Homework records its speaking time through /api/homework; page time would double-count it.
+  if (r === "study/personal") return null;
   if (r === "study" || r.startsWith("study/")) return "reading";
   if (r === "review" || r.startsWith("review/")) return "review";
   if (r.startsWith("practice/write")) return "writing";

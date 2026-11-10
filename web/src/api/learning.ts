@@ -81,7 +81,7 @@ export async function downloadJournal(id: string) {
   a.href = url; a.download = `french-practice-${id}.zip`; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
-export interface GrammarPoint { id: string; name_en: string; name: string; count: number; focus: boolean; [key: string]: unknown }
+export interface GrammarPoint { id: string; en: string; fr: string; level: string; count: number; focus: boolean; [key: string]: unknown }
 export interface GrammarBlock { id: string; en: string; zh: string; points: GrammarPoint[] }
 export const getGrammarMap = () => apiFetch<{ blocks: GrammarBlock[]; seen: number }>("/api/grammar/map");
-export const getGrammarSentences = (id: string) => apiFetch<{ sentences: { sentence: string; translation_en?: string; translation_zh?: string }[] }>(`/api/grammar/${encodeURIComponent(id)}/sentences`);
+export const getGrammarSentences = (id: string) => apiFetch<{ sentences: { sentence: string; translation_en?: string; translation_zh?: string; history_id?: string; ts?: string }[] }>(`/api/grammar/${encodeURIComponent(id)}/sentences`);
