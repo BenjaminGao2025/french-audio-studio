@@ -92,9 +92,9 @@ Not done, and not claimed: 17 (focus the first invalid field), 20 (`Intl` relati
 ## Git
 
 - Branch: `design/shadcn` (from `244aa21`, v1.0.5).
-- Commit: see the SHA below after the push. The message is `design: migrate study UI to shadcn/ui 1.0.6`.
+- Commit: `7a347be9ba2db7b0d28a2e8d9d61a01c3404a07d` — `design: migrate study UI to shadcn/ui 1.0.6`.
 - Tree: https://github.com/BenjaminGao2025/french-audio-studio/tree/design/shadcn
-- Commit URL: `https://github.com/BenjaminGao2025/french-audio-studio/commit/<sha>`
+- Commit URL: https://github.com/BenjaminGao2025/french-audio-studio/commit/7a347be9ba2db7b0d28a2e8d9d61a01c3404a07d
 - Not committed: `web/node_modules`, `web/src/preview-main.tsx`, `web/vite.audit.config.ts`, screenshot PNGs, secrets.
 - No pull request. No merge. No force-push.
 
