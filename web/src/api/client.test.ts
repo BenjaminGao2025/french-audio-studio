@@ -93,6 +93,8 @@ describe("routing", () => {
     expect(parseLocation()).toBe("study");
     history.replaceState(null, "", "/app/review/session/");
     expect(parseLocation()).toBe("review/session");
+    history.replaceState(null, "", "/app/review/library/?from=bookmark");
+    expect(parseLocation()).toBe("review/saved?from=bookmark");
     history.replaceState(null, "", "/app/progress/history?tab=attempts");
     expect(parseLocation()).toBe("progress/history?tab=attempts");
     history.replaceState(null, "", "/app/cockpit");

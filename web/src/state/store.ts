@@ -366,6 +366,8 @@ const LEGACY = ["coach", "learn", "exams", "homework", "cards", "cockpit", "hour
 // Route prefix of the app: the build is served under /app/ (vite base).
 export const BASE = "/app/";
 
+const canonicalRoute = (route: string) => route.replace(/^review\/library(?=\?|$)/, "review/saved");
+
 export function routeUrl(route: string): string {
   return BASE + route;
 }
@@ -377,10 +379,11 @@ export function parseLocation(): string {
   if (!raw) return "study";
   const top = raw.split(/[/?]/)[0];
   if (LEGACY.includes(top)) return "moved";
-  return raw;
+  return canonicalRoute(raw);
 }
 
 export function go(route: string, opts: { focus?: boolean; keepDemo?: boolean } = {}) {
+  route = canonicalRoute(route);
   set((s) => {
     const leavingStudy = s.route.startsWith("study") && !route.startsWith("study");
     const hasDraft = !!(s.study.drafts.text.trim() || s.study.drafts.ideas.trim());

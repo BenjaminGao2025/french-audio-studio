@@ -8,6 +8,14 @@ export const RELEASES = [
     version: APP_VERSION,
     date: "2026-11-09",
     changes: [
+      "Simplified Review to a single Saved cards table and removed the separate Word library view.",
+      "Existing Word library links now open Saved cards.",
+    ],
+  },
+  {
+    version: "1.0.1",
+    date: "2026-11-09",
+    changes: [
       "Clicking a word on the front of a review card now opens its meaning and plays its pronunciation.",
       "Removed the French character shortcut buttons below the review answer field.",
       "Added a version number and update history to the app.",

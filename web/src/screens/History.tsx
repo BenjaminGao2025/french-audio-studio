@@ -183,7 +183,7 @@ function AnalysisDetail({ r, onBack }: { r: StudyRecord; onBack: () => void }) {
             Put the text in Study
           </Button>
         )}
-        <Button kind="secondary" onClick={() => go("review/library")}>Saved cards in Word library</Button>
+        <Button kind="secondary" onClick={() => go("review/saved")}>Saved cards</Button>
       </div>
     </div>
   );
@@ -335,7 +335,7 @@ function AttemptDetail({ a, onBack }: { a: AttemptRecord; onBack: () => void }) 
         </div>
       </dl>
       <div className="btn-row">
-        <Button kind="secondary" onClick={() => { set((s) => ({ libFilters: { ...s.libFilters, q: a.sentence } })); go("review/library"); }}>Find card in Word library</Button>
+        <Button kind="secondary" onClick={() => { set((s) => ({ libFilters: { ...s.libFilters, q: a.sentence } })); go("review/saved"); }}>Find saved card</Button>
         <Button kind="tertiary" onClick={() => { patchStudy({ tab: kind === "Recall" ? "recall" : "dictation" }); go(kind === "Recall" ? "study/recall" : "study/dictation"); }}>Practise again</Button>
       </div>
     </div>

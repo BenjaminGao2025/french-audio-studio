@@ -143,7 +143,7 @@ function mastery(state?: "undone" | "expired" | "queued" | "syncing" | "conflict
   if (state === "undone" || state === "queued") undoMastery(last.id);
   if (state === "expired") set((s) => ({ mastery: s.mastery.map((m) => (m.id === last.id ? { ...m, at: nowMs() - 6500 } : m)) }));
   if (state === "syncing" || state === "conflict") set((s) => ({ mastery: s.mastery.map((m) => (m.id === last.id ? { ...m, state, undoAt: m.at + 3200 } : m)) }));
-  at("review/library");
+  at("review/saved");
 }
 
 
@@ -399,19 +399,19 @@ export const REGISTRY: ScreenEntry[] = [
     ),
   },
   {
-    id: "SCR-LIB-01", title: "Word library", area: "Review",
+    id: "SCR-LIB-01", title: "Saved cards", area: "Review",
     states: states(
-      ["default", "Sentence/card hierarchy", () => { set((s) => ({ libFilters: { ...s.libFilters, q: "", savedOnly: false, mastered: "hide", minImportance: 0, favoritesOnly: false } })); at("review/library"); }],
-      ["search", "Search", () => { set((s) => ({ libFilters: { ...s.libFilters, q: "musée" } })); at("review/library"); }],
-      ["nomatch", "No matches", () => { set((s) => ({ libFilters: { ...s.libFilters, q: "zzzz" } })); at("review/library"); }],
-      ["combined", "Saved + mastered + importance 4+", () => { set(() => ({ libFilters: { q: "", savedOnly: true, mastered: "show", minImportance: 4, favoritesOnly: false } })); at("review/library"); }],
-      ["favorites", "Favorites only", () => { set((s) => ({ libFilters: { ...s.libFilters, q: "", favoritesOnly: true } })); at("review/library"); }],
-      ["loading", "Loading", () => at("review/library", "SCR-LIB-01", "loading")],
+      ["default", "Saved cards table", () => { set((s) => ({ libFilters: { ...s.libFilters, q: "", savedOnly: false, mastered: "hide", minImportance: 0, favoritesOnly: false } })); at("review/saved"); }],
+      ["search", "Search", () => { set((s) => ({ libFilters: { ...s.libFilters, q: "musée" } })); at("review/saved"); }],
+      ["nomatch", "No matches", () => { set((s) => ({ libFilters: { ...s.libFilters, q: "zzzz" } })); at("review/saved"); }],
+      ["combined", "Saved + mastered + importance 4+", () => { set(() => ({ libFilters: { q: "", savedOnly: true, mastered: "show", minImportance: 4, favoritesOnly: false } })); at("review/saved"); }],
+      ["favorites", "Favorites only", () => { set((s) => ({ libFilters: { ...s.libFilters, q: "", favoritesOnly: true } })); at("review/saved"); }],
+      ["loading", "Loading", () => at("review/saved", "SCR-LIB-01", "loading")],
     ),
   },
   {
     id: "SCR-LIB-02", title: "Bulk practice", area: "Review",
-    states: states(["bulk", "200 selected cards", () => { set((s) => ({ libFilters: { ...s.libFilters, q: "", savedOnly: false, mastered: "hide", minImportance: 0, favoritesOnly: false } })); at("review/library", "SCR-LIB-02", "bulk"); }]),
+    states: states(["bulk", "200 selected cards", () => { set((s) => ({ libFilters: { ...s.libFilters, q: "", savedOnly: false, mastered: "hide", minImportance: 0, favoritesOnly: false } })); at("review/saved", "SCR-LIB-02", "bulk"); }]),
   },
   {
     id: "SCR-MAS-01", title: "Mark mastered + Undo", area: "Review",

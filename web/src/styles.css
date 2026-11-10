@@ -499,14 +499,8 @@ details.disc > .disc-body { padding-bottom: var(--s3); }
 .wp-clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .wp-footer { border-top: 1px solid var(--divider); padding-top: var(--s3); }
 
-/* ===== Library ===== */
-.lib-group { padding: var(--s4); display: flex; flex-direction: column; gap: var(--s2); }
-.lib-card {
-  display: grid; grid-template-columns: 24px minmax(0, 2fr) minmax(72px, 1fr) minmax(0, 1.5fr) auto auto;
-  align-items: center; gap: var(--s2) var(--s3); padding: var(--s2) 0 var(--s2) var(--s4);
-  border-left: 2px solid var(--divider); font-size: 14px; line-height: 20px; font-variant-numeric: tabular-nums;
-}
-.lib-card input[type=checkbox], .saved-table input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--primary); }
+/* ===== Saved cards ===== */
+.saved-table input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--primary); }
 .filter-bar { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: flex-end; }
 .bulk-bar { position: sticky; bottom: 0; z-index: 6; background: var(--surface); border-top: 1px solid var(--divider); padding: var(--s3) var(--s4); display: flex; gap: var(--s3); align-items: center; flex-wrap: wrap; box-shadow: 0 -4px 12px rgba(23,32,51,.06); }
 
@@ -611,7 +605,6 @@ details.disc > .disc-body { padding-bottom: var(--s3); }
 @container app (max-width: 640px) {
   /* Only French, Due and Actions remain; hiding the <col> and its cells keeps the table at 100%. */
   .saved-table .saved-col-hide { display: none; }
-  .lib-card { grid-template-columns: 24px minmax(0, 1fr) auto; }
 }
 
 @container app (max-width: 420px) {

@@ -53,12 +53,12 @@ export function Legacy() {
       <div className="stack gap-5" style={{ maxWidth: 640 }}>
         <div className="btn-row">
           <Button kind="primary" iconAfter={<ArrowRight aria-hidden />} onClick={() => go("study")}>Continue to Study</Button>
-          <Button kind="secondary" onClick={() => go("review/library")}>Find my saved content</Button>
+          <Button kind="secondary" onClick={() => go("review/saved")}>Find my saved content</Button>
         </div>
         <section className="stack gap-3">
           <h2 className="t-section">Can’t find something?</h2>
           <ul className="list">
-            <li className="list-row"><span className="grow">Saved cards and sentences</span><Button kind="tertiary" onClick={() => go("review/library")}>Review → Word library</Button></li>
+            <li className="list-row"><span className="grow">Saved cards and sentences</span><Button kind="tertiary" onClick={() => go("review/saved")}>Review → Saved cards</Button></li>
             <li className="list-row"><span className="grow">Mastered cards</span><Button kind="tertiary" onClick={() => go("review/mastered")}>Review → Mastered</Button></li>
             <li className="list-row"><span className="grow">Past analyses and practice attempts</span><Button kind="tertiary" onClick={() => go("progress/history")}>Progress → History</Button></li>
             <li className="list-row"><span className="grow">Exam practice</span><Button kind="tertiary" onClick={() => go("practice/exams")}>Practice → Exam practice</Button></li>

@@ -433,14 +433,14 @@ describe("8. feedback and copy cleanups", () => {
     expect(main.querySelector(".issues")).toBeNull();
   });
 
-  it("History analysis Open in Study loads that analysis's sentences, and Find card in Word library filters by full sentence", async () => {
+  it("History analysis Open in Study loads that analysis's sentences, and Find saved card filters by full sentence", async () => {
     await act(async () => resetDemo());
     fake.attempts = [attemptRow("t1", "Nous avons pris un café près de la gare.")];
     fake.studyRecords = [studyRecord("r1", ["Le plat du jour est excellent.", "Nous avons pris un café."])];
     await act(async () => go("progress/history?tab=attempts"));
     await wait(200);
     await act(async () => buttonWith("Nous avons pris un café près de la gare.").click());
-    await act(async () => buttonWith("Find card in Word library").click());
+    await act(async () => buttonWith("Find saved card").click());
     expect(get().libFilters.q).toBe("Nous avons pris un café près de la gare.");
 
     await act(async () => go("progress/history?tab=analyses"));
@@ -714,22 +714,17 @@ describe("12. changing limits mid-session", () => {
   });
 });
 
-describe("13. word library order", () => {
-  it("Word library lists sentences by number; Saved lists the newest saved first", async () => {
+describe("13. saved cards order", () => {
+  it("keeps the Saved table and sends the legacy library route to it", async () => {
     await act(async () => resetDemo());
     set((s) => ({ libFilters: { ...s.libFilters, q: "" } }));
     await act(async () => go("review/library"));
     await wait(300);
-    const numbers = () => Array.from(document.querySelectorAll("#main .lib-group .t-meta"))
-        .map((e) => e.textContent!.match(/^Sentence (\d+) ·/))
-        .filter((m): m is RegExpMatchArray => m !== null)
-        .map((m) => Number(m[1]));
-    const lib = numbers();
-    expect(lib.length).toBeGreaterThan(3);
-    expect(lib).toEqual([...lib].sort((a, b) => a - b));
-
-    await act(async () => go("review/saved"));
-    await wait(300);
+    expect(get().route).toBe("review/saved");
+    expect(location.pathname).toBe("/app/review/saved");
+    expect(document.querySelector('#review-tab-library')).toBeNull();
+    expect(mainText()).not.toContain("Word library");
+    expect(document.querySelector("#main .lib-group")).toBeNull();
     const table = document.querySelector("#main table.saved-table")!;
     expect(table).toBeTruthy();
     // Saved is now a table whose default sort is newest saved first.

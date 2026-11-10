@@ -144,20 +144,19 @@ function markedSegments(full: string, target: string): FrSegment[] {
 
 const TABS = [
   { value: "due", label: "Due today" },
-  { value: "library", label: "Word library" },
   { value: "saved", label: "Saved" },
   { value: "mastered", label: "Mastered" },
 ];
 
 export function ReviewScreen({ sub }: { sub: string }) {
-  const tab = sub === "session" ? "due" : sub;
+  const tab = sub === "session" ? "due" : sub === "library" ? "saved" : sub;
   return (
     <div className="page">
       <PageHead title="Review" desc="Cards you saved come back when they’re due. Only answering cards here changes their review schedule." />
       <div className="stack gap-5">
         <Tabs label="Review sections" idBase="review" value={tab} tabs={TABS} onChange={(v) => go(`review/${v}`, { focus: false })} />
         <div id="review-panel" role="tabpanel" aria-labelledby={`review-tab-${tab}`}>
-          {sub === "session" ? <ReviewSession /> : tab === "due" ? <DueToday /> : tab === "library" ? <Library mode="library" /> : tab === "saved" ? <Library mode="saved" /> : <MasteredList />}
+          {sub === "session" ? <ReviewSession /> : tab === "due" ? <DueToday /> : tab === "saved" ? <SavedCards /> : <MasteredList />}
         </div>
       </div>
     </div>
@@ -321,7 +320,7 @@ function DueToday() {
           actions={
             <>
               {plan.cards.length > 0 && <Button kind="primary" onClick={startNextSession}>Start another session ({plan.cards.length} cards)</Button>}
-              <Button kind="secondary" onClick={() => go("review/library")}>Open Word library</Button>
+              <Button kind="secondary" onClick={() => go("review/saved")}>Open saved cards</Button>
             </>
           }
         >
@@ -607,7 +606,7 @@ function ReviewSession() {
         <div className="btn-row">
           {plan.cards.length > 0 && <Button kind="primary" onClick={startNextSession}>Start another session ({plan.cards.length} cards)</Button>}
           <Button kind={plan.cards.length ? "secondary" : "primary"} onClick={() => go("review")}>Done — back to Due today</Button>
-          <Button kind="secondary" onClick={() => go("review/library")}>Open Word library</Button>
+          <Button kind="secondary" onClick={() => go("review/saved")}>Open saved cards</Button>
         </div>
       </div>
     );
@@ -829,7 +828,7 @@ function ReviewSession() {
 
 const STATUS_LABEL: Record<LibCard["status"], string> = { new: "New", learning: "Learning", review: "In review" };
 
-function Library({ mode }: { mode: "library" | "saved" }) {
+function SavedCards() {
   const sentences = useApp((s) => s.sentences);
   const cards = useApp((s) => s.cards);
   const lookups = useApp((s) => s.lookups);
@@ -837,7 +836,6 @@ function Library({ mode }: { mode: "library" | "saved" }) {
   const f = useApp((s) => s.libFilters);
   const forced = useApp((s) => s.ss["SCR-LIB-01"]);
   const lib = useLibrary();
-  const [limit, setLimit] = useState(12);
   const [selecting, setSelecting] = useState(false);
   const [sel, setSel] = useState<Record<string, boolean>>({});
   const [savedSort, setSavedSort] = useState<{ key: "saved" | "due" | "importance"; dir: "asc" | "desc" }>({ key: "saved", dir: "desc" });
@@ -855,20 +853,6 @@ function Library({ mode }: { mode: "library" | "saved" }) {
       (!f.favoritesOnly || fav)
     );
   };
-  const groups = useMemo(() => {
-    const bySentence = new Map<string, LibCard[]>();
-    for (const c of cards) if (matchCard(c)) (bySentence.get(c.sentenceId) ?? bySentence.set(c.sentenceId, []).get(c.sentenceId)!).push(c);
-    let list = sentences
-      .filter((s) => bySentence.has(s.id))
-      .filter((s) => !q || s.fr.toLowerCase().includes(q) || s.en.toLowerCase().includes(q) || bySentence.get(s.id)!.some((c) => c.word?.toLowerCase().includes(q)))
-      .map((s) => ({ s, cards: bySentence.get(s.id)! }));
-    // Word library: sentence number. Saved: newest saved first.
-    list = list.sort((a, b) =>
-      mode === "saved" ? Math.max(...b.cards.map((c) => c.savedAt)) - Math.max(...a.cards.map((c) => c.savedAt)) : a.s.number - b.s.number,
-    );
-    return list;
-  }, [cards, sentences, lookups, favorites, f, mode]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Saved is a flat, sortable, paginated table; the Word library keeps its sentence/card hierarchy.
   const savedRows = useMemo(() => {
     const byS = new Map<string, LibSentence>(sentences.map((s) => [s.id, s]));
     const dir = savedSort.dir === "asc" ? 1 : -1;
@@ -894,8 +878,9 @@ function Library({ mode }: { mode: "library" | "saved" }) {
   const ariaSort = (key: "saved" | "due" | "importance"): "ascending" | "descending" | "none" =>
     savedSort.key !== key ? "none" : savedSort.dir === "asc" ? "ascending" : "descending";
   const sortMark = (key: "saved" | "due" | "importance") => (savedSort.key !== key ? "↕" : savedSort.dir === "asc" ? "↑" : "↓");
-  useEffect(() => setPage(0), [q, f.mastered, f.minImportance, f.favoritesOnly, savedSort.key, savedSort.dir, mode]); // eslint-disable-line react-hooks/exhaustive-deps
-  const matchingCards = mode === "saved" ? savedRows.length : groups.reduce((n, g) => n + g.cards.length, 0);
+  useEffect(() => setPage(0), [q, f.mastered, f.minImportance, f.favoritesOnly, savedSort.key, savedSort.dir]); // eslint-disable-line react-hooks/exhaustive-deps
+  const matchingCards = savedRows.length;
+  const matchingSentences = new Set(savedRows.map(({ c }) => c.sentenceId)).size;
   const sortHeader = (key: "saved" | "due" | "importance", label: string, hide = false) => (
     <th scope="col" className={hide ? "saved-col-hide" : undefined} aria-sort={ariaSort(key)}>
       <button type="button" className="saved-sort" onClick={() => toggleSort(key)}>
@@ -941,13 +926,9 @@ function Library({ mode }: { mode: "library" | "saved" }) {
 
   return (
     <div className="stack gap-5">
-      {mode === "saved" ? (
-        <p className="t-support">
-          Saved means a card is in your library and can come up in Review. Favorite is a separate bookmark. Neither changes importance or mastery.
-        </p>
-      ) : (
-        <p className="t-support">Sentences with the cards made from them. Default view hides mastered cards.</p>
-      )}
+      <p className="t-support">
+        Saved means a card is in your library and can come up in Review. Favorite is a separate bookmark. Neither changes importance or mastery.
+      </p>
       <div className="filter-bar">
         <div style={{ flex: "1 1 220px" }}>
           <FieldText label="Search" type="search" inputMode="search" value={f.q} onChange={(v) => setF({ q: v })} placeholder="French or English" lang="fr" />
@@ -974,13 +955,13 @@ function Library({ mode }: { mode: "library" | "saved" }) {
       </div>
       <div className="row row--between">
         <p className="t-support" aria-live="polite">
-          Showing {plural(groups.length, "sentence")} · {plural(matchingCards, "card")} · Library total {sentences.length} sentences · {nf.format(savedTotal)} saved cards
+          Showing {plural(matchingSentences, "sentence")} · {plural(matchingCards, "card")} · Library total {sentences.length} sentences · {nf.format(savedTotal)} saved cards
         </p>
         {!selecting ? (
           <Button kind="secondary" onClick={() => setSelecting(true)} disabledReason={!matchingCards ? "No cards to select." : undefined}>Select cards to practise</Button>
         ) : (
-          <Button kind="tertiary" onClick={() => setSel(Object.fromEntries(groups.flatMap((g) => g.cards.filter((c) => c.saved)).map((c) => [c.id, true])))}>
-            Select all {plural(groups.flatMap((g) => g.cards.filter((c) => c.saved)).length, "matching saved card")}
+          <Button kind="tertiary" onClick={() => setSel(Object.fromEntries(savedRows.map(({ c }) => c).filter((c) => c.saved).map((c) => [c.id, true])))}>
+            Select all {plural(savedRows.map(({ c }) => c).filter((c) => c.saved).length, "matching saved card")}
           </Button>
         )}
       </div>
@@ -993,7 +974,7 @@ function Library({ mode }: { mode: "library" | "saved" }) {
         >
           Your library still has {nf.format(savedTotal)} saved cards. Try fewer filters or a different search.
         </Banner>
-      ) : mode === "saved" ? (
+      ) : (
         <>
           <div className="table-wrap saved-table-wrap">
             <table className="saved-table">
@@ -1061,63 +1042,6 @@ function Library({ mode }: { mode: "library" | "saved" }) {
             <Button kind="secondary" iconAfter={<ChevronRight aria-hidden />} disabledReason={curPage >= pageCount - 1 ? "You are on the last page." : undefined} onClick={() => setPage(curPage + 1)}>Next</Button>
             <span className="t-support num">Rows {rowFrom}–{rowTo} of {savedRows.length}</span>
           </div>
-        </>
-      ) : (
-        <>
-          <ul className="list">
-            {groups.slice(0, limit).map(({ s, cards: cs }) => (
-              <li key={s.id} className="lib-group">
-                <div className="row row--between row--top">
-                  <div className="stack gap-1 grow">
-                    <p lang="fr" className="t-strong">{s.fr}</p>
-                    <p className="t-support">{s.en}</p>
-                  </div>
-                  <span className="t-meta">Sentence {s.number}{s.topic ? ` · ${s.topic}` : ""}</span>
-                </div>
-                <ul className="stack" aria-label={`Cards from sentence ${s.number}`}>
-                  {cs.map((c) => {
-                    const wordLookups = getCardLookups({ lookups }, c);
-                    const fav = Boolean(favorites[favoriteKey(c)]);
-                    return (
-                      <li key={c.id} className="lib-card" data-card-id={c.id} data-word={c.word}>
-                        {selecting && c.saved ? (
-                          <input type="checkbox" aria-label={`Select ${c.kind} card${c.word ? ` for ${c.word}` : ""}`} checked={!!sel[c.id]} onChange={(e) => setSel({ ...sel, [c.id]: e.target.checked })} />
-                        ) : (
-                          <span aria-hidden />
-                        )}
-                        <span className="grow">
-                          {c.kind} card{c.word ? <> · <span lang="fr">{c.word}</span></> : ""}
-                        </span>
-                        <Pill>{c.mastered ? "Mastered" : STATUS_LABEL[c.status]}</Pill>
-                        <span className="lib-imp">
-                          {wordLookups !== null ? <Importance count={wordLookups} /> : <span className="t-meta">—</span>}
-                        </span>
-                        <Button
-                          kind="tertiary"
-                          className="btn--sm-text"
-                          aria-pressed={fav}
-                          icon={fav ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />}
-                          onClick={() => void setFavorite(c.word || sentences.find((x) => x.id === c.sentenceId)?.fr || "", !fav)}
-                        >
-                          {fav ? "Favorited" : "Favorite"}
-                        </Button>
-                        {c.mastered ? (
-                          <Button kind="tertiary" className="btn--sm-text" onClick={() => go("review/mastered")}>In Mastered</Button>
-                        ) : (
-                          <Button kind="tertiary" className="btn--sm-text" icon={<Archive aria-hidden />} onClick={() => masterCard(c.id)}>Mark mastered</Button>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </li>
-            ))}
-          </ul>
-          {groups.length > limit && (
-            <Button kind="secondary" onClick={() => setLimit(limit + 12)} style={{ alignSelf: "flex-start" }}>
-              Show {Math.min(12, groups.length - limit)} more sentences ({groups.length - limit} remaining)
-            </Button>
-          )}
         </>
       )}
       {selecting && (
