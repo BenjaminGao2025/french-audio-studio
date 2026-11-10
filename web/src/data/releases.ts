@@ -6,6 +6,17 @@ export const APP_VERSION = version;
 export const RELEASES = [
   {
     version: APP_VERSION,
+    date: "2026-11-10",
+    changes: [
+      "IPA is back to the friendly style, like [prɔpɔze], with brackets and no syllable dots.",
+      "Word cards are a small panel next to the word: meaning in this sentence, dictionary shown, clear Favorite and Importance.",
+      "A calmer, consistent layout across Study, Review and Saved; Due today only appears on the Study home.",
+      "Words in revealed answers open the word card; Try it now lets you retry after showing the answer.",
+      "Gentle sounds and streak praise for correct answers, adjustable in Settings → Practice feedback.",
+    ],
+  },
+  {
+    version: "1.0.4",
     date: "2026-11-09",
     changes: [
       "Dictionary now shows genuine French Wiktionnaire definitions, with source and contributor links.",
