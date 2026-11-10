@@ -40,7 +40,7 @@ PWA_HEAD = (
     '<meta name="mobile-web-app-capable" content="yes">\n'
     '<meta name="apple-mobile-web-app-title" content="1000H French">\n'
     '<meta name="apple-mobile-web-app-status-bar-style" content="default">\n'
-    '<link rel="apple-touch-icon" sizes="180x180" href="/static/pwa/apple-touch-icon.png">\n'
+    '<link rel="apple-touch-icon" sizes="180x180" href="/static/pwa/apple-touch-icon.png?v=brand-1">\n'
     '<link rel="stylesheet" href="/static/pwa.css?v=__ASSET_VERSION__">\n'
     '<script src="/static/pwa-register.js?v=__ASSET_VERSION__" defer></script>\n'
 )
