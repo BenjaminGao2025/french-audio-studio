@@ -4,6 +4,8 @@ import { go, useApp } from "../state/store";
 import { Button, PageHead } from "../components/ui";
 
 const BENEFITS: Record<string, { title: string; text: string }> = {
+  "study/personal": { title: "Personal speaking practice", text: "Save your own ideas, recordings and reflection in your practice archive." },
+  "study/grammar": { title: "My grammar map", text: "Revisit the grammar patterns you have met in your own saved sentences." },
   review: { title: "Review", text: "Your saved cards come back on the right day, so the words you studied stay with you. Review keeps your queue, library and mastered cards in your account." },
   practice: { title: "Practice", text: "Writing, speaking and listening practice keep their drafts and results in your account." },
   progress: { title: "Progress", text: "See your audio time toward 1,000 hours and your practice history." },

@@ -5,7 +5,7 @@ import { fmtWhen, sourceLabel, type StudyRecord } from "../api/history";
 import { analyzeText, cleanInput, ideaToFrench, saveStudyHistory, toStudySentence } from "../api/study";
 import { announce, get, go, patchStudy } from "./store";
 
-export const LIMITS = { text: 2000, ideas: 300 } as const;
+export const LIMITS = { text: 15000, ideas: 2000 } as const;
 export const STAGES = ["Finding sentences", "Looking up words and phrases", "Preparing steps"];
 
 
@@ -84,7 +84,7 @@ export async function runAnalysis(source: "Pasted text" | "Photo import" | "My o
     const french = mode === "ideas" ? await ideaToFrench(input, ctl.signal) : ((await cleanInput(input, ctl.signal)) ?? input);
     if (!still()) return;
     stage(1);
-    const { sentences: raw } = await analyzeText(french, {
+    const { sentences: raw, failedParts } = await analyzeText(french, {
       signal: ctl.signal,
       onProgress: (p) => p.done === p.total && stage(2),
     });
@@ -97,7 +97,7 @@ export async function runAnalysis(source: "Pasted text" | "Photo import" | "My o
     }
     const sentences = raw.map(toStudySentence);
     patchStudy({
-      analysis: { ...get().study.analysis, status: "done", input: french },
+      analysis: { ...get().study.analysis, status: "done", input: french, failedParts },
       sentences,
       index: 0,
       step: 0,

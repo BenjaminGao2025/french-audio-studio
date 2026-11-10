@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { AppRoot, Announcer, Frame, Shell, Toasts } from "./components/Shell";
 import { StudyInput, StudyPhoto } from "./screens/StudyInput";
+import { StudyPersonal } from "./screens/StudyPersonal";
+import { StudyGrammar } from "./screens/StudyGrammar";
 import { StudyLearn } from "./screens/StudyLearn";
 import { Launcher, RunScreen } from "./screens/Launcher";
 import { ReviewScreen } from "./screens/Review";
@@ -25,6 +27,8 @@ function Routes() {
 
   switch (top) {
     case "study":
+      if (parts[1] === "personal") return auth === "out" ? <Gate dest="study/personal" /> : <StudyPersonal />;
+      if (parts[1] === "grammar") return auth === "out" ? <Gate dest="study/grammar" /> : <StudyGrammar />;
       if (parts[1] === "photo") return <StudyPhoto />;
       if (parts[1] === "recall") return <Launcher kind="Recall" />;
       if (parts[1] === "dictation") return <Launcher kind="Dictation" />;

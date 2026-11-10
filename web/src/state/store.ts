@@ -188,10 +188,11 @@ export interface AppState {
       source: AnalysisRec["source"];
       /** Server message when the analysis failed (e.g. trial ended, too many requests). */
       error?: string;
+      failedParts?: number;
     };
     sentences: StudySentence[];
     index: number;
-    tab: "steps" | "grammar" | "recall" | "dictation";
+    tab: "steps" | "words" | "grammar" | "sounds" | "shadowing" | "recall" | "dictation" | "explain";
     step: number;
     sourceOpen: boolean;
     /** Words the learner looked up, per sentence id (word indexes): they can be saved as Fill-in cards. */
@@ -199,7 +200,7 @@ export interface AppState {
     ocr: {
       phase: "select" | "processing" | "failed" | "cancelled" | "none" | "results";
       photoId?: string;
-      lines: (OcrLine & { selected: boolean })[];
+      lines: (OcrLine & { selected: boolean; accentFrom?: string })[];
       partial: boolean;
     };
   };
@@ -378,6 +379,8 @@ export function parseLocation(): string {
   const raw = path.replace(/\/+$/, "") + location.search;
   if (!raw) return "study";
   const top = raw.split(/[/?]/)[0];
+  if (top === "grammar") return "study/grammar" + location.search;
+  if (top === "homework") return "study/personal";
   if (LEGACY.includes(top)) return "moved";
   return canonicalRoute(raw);
 }
