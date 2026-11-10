@@ -591,7 +591,6 @@ function ReviewSession() {
   }, []);
 
   const onWordPick = (p: FrPick) => {
-    if (!revealed) return; // front words already spoke via FrText; don't open the full sentence's panel before the reveal
     setPick({ text: p.text, anchor: p.anchor, wordIndex: p.wordIndex, occurrence: p.occurrence });
   };
 

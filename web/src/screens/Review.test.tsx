@@ -5,6 +5,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import type { ReviewCard } from "../data/fixtures";
 import { ReviewScreen } from "../screens/Review";
 import { loadLibrary, resetReviewCache, toReviewCard } from "../api/review";
+import { resetLookupCaches } from "../api/lookup";
 import { fake, installFakeBackend } from "../test/fakeBackend";
 import * as store from "../state/store";
 
@@ -64,6 +65,7 @@ beforeAll(() => {
 beforeEach(() => {
   fake.reset();
   resetReviewCache();
+  resetLookupCaches();
   window.getSelection()?.removeAllRanges();
   host = document.createElement("div");
   document.body.appendChild(host);
@@ -154,6 +156,28 @@ describe("Task C — Anki-style review card", () => {
     expect(text).toContain("我们坐了公交车。");
     expect(text).toContain("Blank means:");
     expect(text).toContain("有（助动词）");
+  });
+
+  it.each([
+    { mode: "cloze" as const, word: "Nous" },
+    { mode: "recognize" as const, word: "avons" },
+  ])("a $mode front word speaks and opens its meaning without revealing or rating the card", async ({ mode, word }) => {
+    const spy = vi.spyOn(store, "sayFrench").mockImplementation(() => {});
+    const c = card({ mode });
+    await mount(c);
+    spy.mockClear();
+    await act(async () => host.querySelector<HTMLElement>(`.fr-word[data-word="${word}"]`)!.click());
+    await wait(150);
+
+    expect(spy).toHaveBeenCalledWith(word);
+    expect(document.querySelector(".word-card")).toBeTruthy();
+    expect(document.querySelector(".wp-headword")?.textContent).toBe(word);
+    expect(fake.calls.find((call) => call.path === "/api/word-context")?.body).toMatchObject({
+      sentence: FR, word, occurrence: 0,
+    });
+    expect(store.get().reviewUi[c.id].revealed).toBe(false);
+    expect(host.querySelector(".rev-ratings")).toBeNull();
+    expect(fake.calls.filter((call) => /\/api\/srs\/cards\/.+\/review$/.test(call.path))).toHaveLength(0);
   });
 
   it("before the reveal, R on a cloze and a speak card never calls sayFrench", async () => {
