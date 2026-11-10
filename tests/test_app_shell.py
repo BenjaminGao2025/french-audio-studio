@@ -75,6 +75,21 @@ class AppShellTests(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertIn("no-store", res.headers["cache-control"])
 
+    def test_public_and_app_pages_still_send_no_store(self):
+        # The stale "/" + "/study" no-cache block in the security middleware is gone; the pages
+        # that really need no-store still get it from pages._html_page and the SPA shell itself.
+        for path in ("/privacy", "/app/study"):
+            with self.subTest(path=path):
+                res = self.client.get(path, follow_redirects=False)
+                self.assertEqual(res.status_code, 200)
+                self.assertIn("no-store", res.headers["cache-control"])
+        # "/" and "/study" are now redirects, so the old middleware block must not fire on them.
+        for path in ("/", "/study"):
+            with self.subTest(path=path):
+                res = self.client.get(path, follow_redirects=False)
+                self.assertEqual(res.status_code, 302)
+                self.assertNotIn("no-store", res.headers.get("cache-control", ""))
+
     def test_shell_requires_no_login(self):
         # The SPA itself redirects to /app/login when an API call returns 401.
         self.assertEqual(self.client.get("/app/settings").status_code, 200)

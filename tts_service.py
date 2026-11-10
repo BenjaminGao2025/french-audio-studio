@@ -94,10 +94,6 @@ async def security_headers(request, call_next):
     response.headers["Referrer-Policy"] = "same-origin"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY
-    if request.url.path in {"/", "/study"}:
-        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-        response.headers["Pragma"] = "no-cache"
-        response.headers["Expires"] = "0"
     return response
 
 

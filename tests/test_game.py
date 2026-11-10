@@ -89,6 +89,28 @@ class LevelCurveTests(unittest.TestCase):
         self.assertEqual(sum(game.lane_week_targets(datetime.date(2027, 9, 1)).values()), 960)
 
 
+class TcfSkillLinkTests(unittest.TestCase):
+    """Focus-skill links must point at the SPA routes, not the deleted old pages."""
+
+    def test_skill_links_match_the_old_page_redirects(self):
+        from routers import pages
+
+        self.assertEqual(
+            game.TCF_SKILL_LINKS,
+            {
+                "CO": "/app/practice/episodes",
+                "CE": "/app/study",
+                "EE": "/app/practice/write",
+                "EO": "/app/practice/speak",
+            },
+        )
+        destinations = set(pages.OLD_PAGES.values())
+        for skill, link in game.TCF_SKILL_LINKS.items():
+            with self.subTest(skill=skill):
+                self.assertIn(link, destinations)
+                self.assertNotIn(link, pages.OLD_PAGES)
+
+
 class StudyTimeTests(unittest.TestCase):
     def setUp(self):
         self.user_id, _ = _new_user()
@@ -128,28 +150,28 @@ class StudyTimeTests(unittest.TestCase):
         self.assertEqual(total_target, 960)
         self.assertEqual(week["target"], 960)
         self.assertEqual(week["focus_skill"]["skill"], "EO")  # nothing done: the biggest target is furthest behind
-        self.assertEqual(week["focus_skill"]["link"], "/speak")
+        self.assertEqual(week["focus_skill"]["link"], "/app/practice/speak")
 
         # Log speaking time: 300 min speaking -> EO is done and CE is furthest behind (target 240)
         game.log_time(self.user_id, "speaking", 300, "", PDT, now)
         st = game.state(self.user_id, PDT, now)
         week = st["week"]
         self.assertEqual(week["focus_skill"]["skill"], "CE")
-        self.assertEqual(week["focus_skill"]["link"], "/study")
+        self.assertEqual(week["focus_skill"]["link"], "/app/study")
 
         # Log reading time: 240 min reading -> CO becomes furthest behind (target 210 vs EE 120)
         game.log_time(self.user_id, "reading", 240, "", PDT, now)
         st = game.state(self.user_id, PDT, now)
         week = st["week"]
         self.assertEqual(week["focus_skill"]["skill"], "CO")
-        self.assertEqual(week["focus_skill"]["link"], "/listen")
+        self.assertEqual(week["focus_skill"]["link"], "/app/practice/episodes")
 
         # Log listening time: 210 min listening -> EE becomes furthest behind
         game.log_time(self.user_id, "listening", 210, "", PDT, now)
         st = game.state(self.user_id, PDT, now)
         week = st["week"]
         self.assertEqual(week["focus_skill"]["skill"], "EE")
-        self.assertEqual(week["focus_skill"]["link"], "/write")
+        self.assertEqual(week["focus_skill"]["link"], "/app/practice/write")
 
     def test_week_lane_targets_add_up_to_the_week_target(self):
         week = game.state(self.user_id, PDT, _at("2026-10-06", 10))["week"]
