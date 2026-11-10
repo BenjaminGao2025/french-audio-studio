@@ -139,6 +139,8 @@ export function FrText({
   const onPickRef = useRef(onPick);
   onPickRef.current = onPick;
   const lastSelection = useRef<{ start: number; end: number } | null>(null);
+  /** The last mouse gesture barely moved: it is a click on a word, not a drag-selection. */
+  const lastWasClick = useRef(false);
 
   const occurrenceOf = useCallback(
     (value: string, pos: number): number => {
@@ -201,6 +203,7 @@ export function FrText({
     let primaryDown = false; // primary mouse button held
     let touchActive = false; // a touch/pen gesture is driving selectionchange
     let drag: { start: number; end: number } | undefined;
+    let downAt: { x: number; y: number } | undefined;
     const wordAt = (e: PointerEvent) => {
       const word = e.target instanceof Element ? e.target.closest<HTMLElement>(".fr-word") : null;
       return word && root.contains(word) ? Number(word.dataset.pos) : undefined;
@@ -225,6 +228,7 @@ export function FrText({
       if (isPrimaryMouse(e)) {
         primaryDown = true;
         touchActive = false;
+        downAt = { x: e.clientX, y: e.clientY };
         const pos = wordAt(e);
         drag = pos === undefined ? undefined : { start: pos, end: pos };
         // Drop any debounced selectionchange left over from a previous gesture; it must not fire
@@ -247,8 +251,13 @@ export function FrText({
       if (!isPrimaryMouse(e)) return; // touch/pen keep the debounced selectionchange path
       primaryDown = false;
       if (timer) { clearTimeout(timer); timer = undefined; }
-      attempt(drag); // finish the drag on the document-level release, wherever it lands
+      // Chrome keeps an old selection until after a click inside it, so a click must not be read
+      // as a selection; the word's onClick handles it.
+      const moved = downAt ? Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) : Infinity;
+      lastWasClick.current = moved < 4;
+      if (!lastWasClick.current) attempt(drag); // finish the drag on the document-level release, wherever it lands
       drag = undefined;
+      downAt = undefined;
     };
     const onSelectionChange = () => {
       if (primaryDown) return; // a native mouse drag is in progress; wait for the release
@@ -319,9 +328,13 @@ export function FrText({
             data-word={seg.t}
             data-wi={seg.wi}
             data-pos={posOf[i]}
-            onClick={() => {
+            onClick={(e) => {
+              if (e.detail > 1) return; // double-click: the first click already spoke the word
               const sel = typeof window !== "undefined" ? window.getSelection() : null;
-              if (sel && !sel.isCollapsed) return; // a drag just ended; the selection handler owns it
+              if (sel && !sel.isCollapsed) {
+                if (!lastWasClick.current) return; // a drag just ended; the selection handler owns it
+                sel.removeAllRanges(); // a click inside an old selection picks this word, not the old phrase
+              }
               setActive(wordIdx.indexOf(i));
               pickWord(i);
             }}

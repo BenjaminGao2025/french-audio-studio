@@ -165,4 +165,31 @@ describe("FrText — keyboard access and native selection", () => {
     expect(spy).toHaveBeenCalledTimes(1);
     expect(spy).toHaveBeenCalledWith(FR.slice(0, FR.indexOf(" ?")));
   });
+
+  it("a click on a word inside a kept selection speaks that word, not the old phrase", async () => {
+    const spy = vi.spyOn(store, "sayFrench").mockImplementation(() => {});
+    await render({ text: FR });
+    const words = Array.from(host.querySelectorAll<HTMLElement>(".fr-word"));
+    // Drag over the first three words.
+    await act(async () => {
+      words[0].dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, clientX: 0, clientY: 10 }));
+      const range = document.createRange();
+      range.setStart(words[0].firstChild!, 0);
+      range.setEnd(words[2].firstChild!, words[2].textContent!.length);
+      window.getSelection()!.addRange(range);
+      words[2].dispatchEvent(new MouseEvent("pointerup", { bubbles: true, clientX: 200, clientY: 10 }));
+    });
+    expect(spy).toHaveBeenCalledTimes(1);
+    const phrase = spy.mock.calls[0][0];
+    expect(phrase).toContain(words[2].textContent!);
+    // Click the second word while the old selection is still there (Chrome keeps it until after the click).
+    await act(async () => {
+      words[1].dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, clientX: 90, clientY: 10 }));
+      words[1].dispatchEvent(new MouseEvent("pointerup", { bubbles: true, clientX: 90, clientY: 10 }));
+      words[1].dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1, clientX: 90, clientY: 10 }));
+    });
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(spy).toHaveBeenLastCalledWith(words[1].textContent);
+    expect(window.getSelection()!.isCollapsed).toBe(true);
+  });
 });
