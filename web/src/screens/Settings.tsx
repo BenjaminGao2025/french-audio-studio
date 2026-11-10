@@ -62,7 +62,9 @@ export function DailyLimitField({ compact }: { compact?: boolean }) {
         <div style={{ width: 200 }}>
           <FieldText
             label="Daily new cards"
+            name="daily-new"
             inputMode="numeric"
+            spellCheck={false}
             value={value}
             onChange={(v) => {
               setValue(v);
@@ -139,7 +141,9 @@ export function SessionSizeField() {
         <div style={{ width: 200 }}>
           <FieldText
             label="Cards per review session"
+            name="session-size"
             inputMode="numeric"
+            spellCheck={false}
             value={value}
             onChange={(v) => {
               setValue(v);
@@ -214,7 +218,7 @@ function Playback() {
         <label className="field" style={{ width: 200 }}>
           <span className="field-label">Default playback speed</span>
           <select className="select" value={settings.speed} onChange={(e) => { setPlaybackPrefs({ speed: Number(e.target.value) }); announce("Speed saved on this device."); }}>
-            {SPEEDS.map((v) => <option key={v} value={v}>{v}×</option>)}
+            {SPEEDS.map((v) => <option key={v} value={v}>{v}&nbsp;×</option>)}
           </select>
         </label>
         <label className="check">
@@ -243,21 +247,40 @@ function FeedbackSettings() {
   return (
     <section className="stack gap-4" aria-labelledby="feedback-h">
       <h2 id="feedback-h" className="t-section">Practice feedback</h2>
-      <div className="row gap-4" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
-        <label className="check">
-          <input type="checkbox" checked={prefs.sound} onChange={(e) => saveFeedback({ sound: e.target.checked })} /> Sound
-        </label>
-        <label className="field" style={{ width: 200 }}>
-          <span className="field-label">Volume</span>
-          <input className="range" type="range" min={0} max={100} value={Math.round(prefs.volume * 100)} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(prefs.volume * 100)} aria-valuetext={`${Math.round(prefs.volume * 100)} percent`} onChange={(e) => saveFeedback({ volume: Number(e.target.value) / 100 })} />
-        </label>
-        <label className="check">
-          <input type="checkbox" checked={prefs.spoken} onChange={(e) => saveFeedback({ spoken: e.target.checked })} /> Spoken praise
-        </label>
-        <label className="check">
-          <input type="checkbox" checked={prefs.animation} onChange={(e) => saveFeedback({ animation: e.target.checked })} /> Animation
-        </label>
-      </div>
+      <ul className="feedback-list">
+        <li>
+          <label className="check">
+            <input type="checkbox" checked={prefs.sound} onChange={(e) => saveFeedback({ sound: e.target.checked })} /> Sound
+          </label>
+        </li>
+        <li className="feedback-row">
+          <span className="field-label" id="feedback-volume-label">Volume</span>
+          <input
+            className="range"
+            type="range"
+            min={0}
+            max={100}
+            value={Math.round(prefs.volume * 100)}
+            aria-labelledby="feedback-volume-label"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(prefs.volume * 100)}
+            aria-valuetext={`${Math.round(prefs.volume * 100)} percent`}
+            onChange={(e) => saveFeedback({ volume: Number(e.target.value) / 100 })}
+          />
+          <span className="feedback-volume-num num" aria-hidden>{Math.round(prefs.volume * 100)}</span>
+        </li>
+        <li>
+          <label className="check">
+            <input type="checkbox" checked={prefs.spoken} onChange={(e) => saveFeedback({ spoken: e.target.checked })} /> Spoken praise
+          </label>
+        </li>
+        <li>
+          <label className="check">
+            <input type="checkbox" checked={prefs.animation} onChange={(e) => saveFeedback({ animation: e.target.checked })} /> Animation
+          </label>
+        </li>
+      </ul>
       {reduced && prefs.animation && !animationOn(prefs, reduced) && <p className="t-meta">Animation stays off while this device asks for reduced motion.</p>}
     </section>
   );
@@ -327,7 +350,10 @@ function Devices() {
                 <Monitor aria-hidden width={20} height={20} />
                 <span className="grow stack">
                   <span className="t-strong">{d.device || "Unknown device"}</span>
-                  <span className="t-support">Last active {fmtWhen(d.last_seen_at)} · signed in {fmtWhen(d.created_at)}</span>
+                  <span className="device-meta t-support">
+                    <span>Last active {fmtWhen(d.last_seen_at)}</span>
+                    <span>Signed in {fmtWhen(d.created_at)}</span>
+                  </span>
                 </span>
                 {d.current ? <Pill tone="info">This device</Pill> : <Button kind="tertiary" busy={busy === d.id} onClick={() => void end(d)}>Sign out</Button>}
               </li>

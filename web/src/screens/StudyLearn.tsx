@@ -90,7 +90,12 @@ export function StudyLearn() {
     <div className="page page--wide">
       <PageHead
         title="Study"
-        eyebrow={`${study.analysis.source} · ${plural(total, "sentence")}`}
+        eyebrow={
+          <dl className="meta-row">
+            <div><dt>Source</dt><dd>{study.analysis.source}</dd></div>
+            <div><dt>Sentences</dt><dd>{plural(total, "sentence")}</dd></div>
+          </dl>
+        }
         actions={
           <>
             <Button kind="tertiary" icon={<HistoryIcon aria-hidden />} onClick={() => go("progress/history?tab=analyses")}>
@@ -142,10 +147,10 @@ export function StudyLearn() {
           </div>
         )}
 
-        {!practising && <section className="panel stack gap-4" aria-labelledby="current-sentence-heading">
+        {!practising && <section className="sentence-stage" aria-labelledby="current-sentence-heading">
           <div className="row row--between">
-            <h2 id="current-sentence-heading" tabIndex={-1} className="t-label">
-              {total > 1 ? `Sentence ${study.index + 1} of ${total}` : "Your sentence"}
+            <h2 id="current-sentence-heading" tabIndex={-1} className={total > 1 ? "t-meta" : "sr-only"}>
+              {total > 1 ? `Sentence ${study.index + 1} of ${total}` : "Current sentence"}
             </h2>
             {total > 1 && (
               <div className="btn-row">
@@ -154,21 +159,14 @@ export function StudyLearn() {
               </div>
             )}
           </div>
-
-          {!practising && (
-            <div ref={sentRef} style={{ position: "relative" }}>
-              <FrText segments={s.segments} className="sentence-fr" onPick={onPick} />
-              <p className="t-body muted" style={{ marginTop: 8 }}>{s.en}</p>
-            </div>
-          )}
-
+          <div ref={sentRef} style={{ position: "relative" }}>
+            <FrText segments={s.segments} className="sentence-fr" onPick={onPick} />
+            <p className="t-body muted" style={{ marginTop: 8 }}>{s.en}</p>
+          </div>
           <StudyPlayer practising={practising} />
-
-          {!practising && (
-            <div className="btn-row">
-              <AddToReview sentence={s} />
-            </div>
-          )}
+          <div className="btn-row">
+            <AddToReview sentence={s} />
+          </div>
         </section>}
 
         <div className="stack gap-4">
@@ -292,35 +290,26 @@ function StudyPlayer({ practising }: { practising: boolean }) {
 
   return (
     <div className="player" role="group" aria-label="Sentence player">
-      <div className="player-main">
+      <div className="player-main btn-row">
         <Button
-          kind="primary"
-          className="play-btn"
+          kind="secondary"
           iconOnly
           busy={loading}
           aria-label={`${playing ? "Pause" : errored ? "Retry" : "Play"} ${label}`}
           icon={playing ? <Pause aria-hidden /> : errored ? <RotateCcw aria-hidden /> : <Play aria-hidden />}
           onClick={toggle}
         />
-        <div className="grow stack gap-1" style={{ minWidth: 160 }}>
-          <span className="t-strong">{label}</span>
-          <span className="t-support num" aria-live="off">
-            {statusText} · {fmtClock(mine?.position ?? 0)} / {fmtClock(mine?.duration ?? dur(wanted))}
-          </span>
-          <div className="progress-track" aria-hidden>
-            <div className="progress-fill" style={{ width: `${mine ? Math.min(100, (mine.position / mine.duration) * 100) : 0}%` }} />
-          </div>
-        </div>
         <label className="row gap-2">
           <span className="t-support">Speed</span>
           <select
             className="select"
-            style={{ width: 92 }}
+            style={{ width: 96 }}
+            aria-label="Playback speed"
             value={mine?.speed ?? 1}
             onChange={(e) => (mine ? updatePlayer({ speed: Number(e.target.value) }) : set((st) => ({ settings: { ...st.settings, speed: Number(e.target.value) } })))}
           >
             {[0.75, 1, 1.25, 1.5, 2].map((v) => (
-              <option key={v} value={v}>{v}×</option>
+              <option key={v} value={v}>{`${v}\u00a0×`}</option>
             ))}
           </select>
         </label>
@@ -335,6 +324,13 @@ function StudyPlayer({ practising }: { practising: boolean }) {
         <Button kind="secondary" icon={allPlaying ? <Pause aria-hidden /> : <Play aria-hidden />} onClick={toggleAll}>
           {allPlaying ? "Pause all sentences" : "Play all sentences"}
         </Button>
+      </div>
+      <dl className="meta-row">
+        <div><dt>Status</dt><dd>{statusText}</dd></div>
+        <div><dt>Time</dt><dd className="num">{fmtClock(mine?.position ?? 0)} / {fmtClock(mine?.duration ?? dur(wanted))}</dd></div>
+      </dl>
+      <div className="progress-track" aria-hidden>
+        <div className="progress-fill" style={{ width: `${mine ? Math.min(100, (mine.position / mine.duration) * 100) : 0}%` }} />
       </div>
       {mine?.status === "error" && (
         <Banner tone="error" title="Audio couldn’t play" live="assertive" actions={<Button kind="secondary" onClick={retryPlayback}>Retry</Button>}>
@@ -384,17 +380,15 @@ function StepsPanel({ sentence, onPick }: { sentence: StudySentence; onPick: (p:
 
   return (
     <div className="stack gap-3">
-      <div className="row row--between">
-        <p className="t-support">
-          Build the sentence a piece at a time. Each step marks what is <mark className="added">new</mark>.
-        </p>
+      <p className="t-support">
+        Build the sentence a piece at a time. Each step marks what is <mark className="added">new</mark>.
+      </p>
+      <div className="study-step-tools btn-row">
+        <Button kind={blind ? "primary" : "secondary"} aria-pressed={blind} onClick={() => { setBlind(!blind); setRevealed([]); }}>{blind ? "Show all words" : "Hide new words"}</Button>
+        {blind && <Button kind="tertiary" onClick={() => setRevealed(revealed.length ? [] : sentence.steps.map((_, i) => i))}>{revealed.length ? "Hide again" : "Reveal all"}</Button>}
         <Button kind="secondary" icon={allStepsPlaying ? <Pause aria-hidden /> : <Play aria-hidden />} onClick={playAllSteps}>
           {allStepsPlaying ? "Pause all steps" : "Play all steps"}
         </Button>
-      </div>
-      <div className="study-step-tools btn-row">
-        <Button kind={blind ? "primary" : "secondary"} aria-pressed={blind} onClick={() => { setBlind(!blind); setRevealed([]); }}>{blind ? "Show all words" : "Test me · hide new words"}</Button>
-        {blind && <Button kind="tertiary" onClick={() => setRevealed(revealed.length ? [] : sentence.steps.map((_, i) => i))}>{revealed.length ? "Hide again" : "Reveal all"}</Button>}
       </div>
       {blind && <p className="t-support">Say the missing part from memory, then reveal it or record yourself.</p>}
       <ol className="list" style={{ padding: "0 16px" }}>
@@ -412,8 +406,7 @@ function StepsPanel({ sentence, onPick }: { sentence: StudySentence; onPick: (p:
             >
               <span className="step-num" aria-hidden>{i + 1}</span>
               <div className="stack gap-2">
-                <span className="step-badge">Step {i + 1}</span>
-                {blind && !revealed.includes(i) ? <p className="step-fr" lang="fr">{st.parts.map((part, j) => part.added || i === 0 ? <button type="button" key={j} className="study-blank" aria-label={`Reveal new words in step ${i + 1}`} onClick={(e) => { e.stopPropagation(); setRevealed([...revealed, i]); }}>•••</button> : <span key={j}>{part.t}</span>)}</p> : <FrText segments={stepSegments(st.parts)} className="step-fr" onPick={onPick} />}
+                {blind && !revealed.includes(i) ? <p className="step-fr" lang="fr">{st.parts.map((part, j) => part.added || i === 0 ? <button type="button" key={j} className="study-blank" aria-label={`Reveal new words in step ${i + 1}`} onClick={(e) => { e.stopPropagation(); setRevealed([...revealed, i]); }}>…</button> : <span key={j}>{part.t}</span>)}</p> : <FrText segments={stepSegments(st.parts)} className="step-fr" onPick={onPick} />}
                 <p className="t-support">{st.en}</p>
                 {(!blind || revealed.includes(i)) && <p className="t-body">
                   <span className="t-strong">{/[.!?…]$/.test(st.addedLabel) ? st.addedLabel : `${st.addedLabel}.`}</span>
@@ -449,8 +442,14 @@ function StepsPanel({ sentence, onPick }: { sentence: StudySentence; onPick: (p:
 function GrammarPanel({ sentence }: { sentence: StudySentence }) {
   const forced = useApp((s) => s.ss["SCR-GRA-01"]);
   const index = useApp((s) => s.study.index);
+  const [retried, setRetried] = useState(false);
   // The notes arrive with the analysis, so there is nothing to load.
-  const state = forced && forced !== "auto" ? forced : sentence.grammar ? "content" : "none";
+  const base = forced && forced !== "auto" ? forced : sentence.grammar ? "content" : "none";
+  const state = retried && sentence.grammar?.length ? "content" : base;
+  const retryNotes = () => {
+    if (sentence.grammar?.length) setRetried(true);
+    else announce("Grammar notes are still unavailable.");
+  };
   const notes = sentence.grammar ?? [];
   return (
     <div className="stack gap-4" aria-busy={state === "loading"}>
@@ -468,8 +467,8 @@ function GrammarPanel({ sentence }: { sentence: StudySentence }) {
         </Banner>
       )}
       {state === "error" && (
-        <Banner tone="error" title="Grammar notes didn’t load" live="assertive">
-          Your place in the sentence is kept.
+        <Banner tone="error" title="Grammar notes didn’t load" live="assertive" actions={<Button kind="secondary" onClick={retryNotes}>Retry</Button>}>
+          Your place in the sentence is kept. Retry to load the notes again.
         </Banner>
       )}
       {state === "content" && (
@@ -597,7 +596,7 @@ function AddToReview({ sentence }: { sentence: StudySentence }) {
     }
   };
 
-  const label = allSaved ? `Already saved · ${plural(savedCount, "card")}` : savedCount ? `Add to review · ${savedCount} saved` : "Add to review";
+  const label = allSaved ? `Already saved (${plural(savedCount, "card")})` : savedCount ? `Add to review (${plural(savedCount, "saved card")})` : "Add to review";
   const body =
     phase === "added" ? (
       <Banner tone="success" title={`${plural(count, "card")} added to your library`} live="polite">

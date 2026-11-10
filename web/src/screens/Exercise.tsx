@@ -373,15 +373,16 @@ export function Exercise({
   const play = (slow: boolean) =>
     startPlayback({ kind: "exercise", label: "Practice audio", route }, Math.max(1, t.fr.length / 13), { speed: slow ? 0.75 : 1, texts: [t.fr] });
 
-  const qLabel = `${kind} · Question ${sess.index + 1} of ${sess.items.length}${sess.mode === "step" ? ` · Step ${step + 1} of ${stepCount}` : ""}`;
-
   return (
     <section className={compact ? "exercise" : "exercise"} aria-labelledby={`ex-q-${sessionKey}`}>
       <div className="stack gap-3">
-        <div className="row row--between">
-          <h2 id={`ex-q-${sessionKey}`} tabIndex={-1} className={compact ? "t-label" : "t-section"}>{qLabel}</h2>
-          <span className="t-support">Source: {sess.source} · {plural(sess.items.length, "sentence")}</span>
-        </div>
+        <h2 id={`ex-q-${sessionKey}`} tabIndex={-1} className={compact ? "t-label" : "t-section"}>{kind}</h2>
+        <dl className="meta-row">
+          <div><dt>Question</dt><dd>{sess.index + 1} of {sess.items.length}</dd></div>
+          {sess.mode === "step" ? <div><dt>Step</dt><dd>{step + 1} of {stepCount}</dd></div> : null}
+          <div><dt>Source</dt><dd>{sess.source}</dd></div>
+          <div><dt>Sentences</dt><dd>{plural(sess.items.length, "sentence")}</dd></div>
+        </dl>
         <Segmented
           label="Practice scope"
           value={sess.mode}
@@ -430,10 +431,13 @@ export function Exercise({
           </>
         )}
         {ui.hint && ui.phase !== "graded" && (
-          <p className="banner banner--info" role="status">
+          <div className="banner banner--info" role="status">
             <Lightbulb aria-hidden />
-            <span lang={kind === "Recall" ? "fr" : "en"}>{hintFor(kind, t)}</span>
-          </p>
+            <div className="banner-body">
+              <p className="banner-title">Hint shown</p>
+              <p lang={kind === "Recall" ? "fr" : "en"}>{hintFor(kind, t)}</p>
+            </div>
+          </div>
         )}
         {ui.revealed && !ui.coverAnswer && ui.phase !== "graded" && (
           <div className="banner banner--warning" role="status">
@@ -492,20 +496,18 @@ export function Exercise({
               <Button kind="primary" busy={busy} onClick={() => submitAnswer(sessionKey)}>
                 {ui.phase === "techfail" ? "Retry check" : busy ? "Checking…" : "Check"}
               </Button>
-              {ui.hint ? (
-                <span className="status-chip status-chip--on" role="status"><Lightbulb aria-hidden /> Hint shown</span>
-              ) : (
+              {!ui.hint && (
                 <Button kind="tertiary" icon={<Lightbulb aria-hidden />} onClick={() => { patchUI(sessionKey, qk, { hint: true }); if (ui.attemptId) patchAttempt(ui.attemptId, { hinted: true }); announce("Hint shown."); }} disabledReason={busy ? "Checking in progress." : undefined}>
                   {kind === "Dictation" ? "Show English hint" : "Show hint"}
                 </Button>
               )}
-              {ui.revealed ? (
-                <span className="status-chip status-chip--on" role="status"><Eye aria-hidden /> Answer shown</span>
-              ) : (
+              {!ui.revealed ? (
                 <Button kind="tertiary" icon={<Eye aria-hidden />} onClick={() => { patchUI(sessionKey, qk, { revealed: true, coverAnswer: false }); if (ui.attemptId) patchAttempt(ui.attemptId, { answerKnown: true }); announce("Answer shown."); }} disabledReason={busy ? "Checking in progress." : undefined}>
                   Show answer
                 </Button>
-              )}
+              ) : ui.coverAnswer ? (
+                <p className="confirm-note" role="status">Answer shown</p>
+              ) : null}
             </div>
           </div>
         </div>

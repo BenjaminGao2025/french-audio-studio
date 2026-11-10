@@ -7,8 +7,14 @@ import { canReopen, fmtWhen, listStudyRecords, sentenceCount, type StudyRecord }
 import { EXAMPLE_TEXT, IDEAS_EXAMPLE, OCR_LIMIT } from "../data/fixtures";
 import { nf, plural } from "../lib/format";
 import { LIMITS, STAGES, cancelAnalysis, openAnalysisInStudy, runAnalysis, validate } from "../state/study";
-import { announce, get, go, patchStudy, useApp } from "../state/store";
+import { announce, get, go, patchStudy, routeUrl, useApp } from "../state/store";
 import { Banner, Button, Dialog, DisabledReason, PageHead, Segmented, Spinner } from "../components/ui";
+
+function followAppLink(event: { metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean; button: number; preventDefault: () => void }, route: string) {
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+  event.preventDefault();
+  go(route);
+}
 
 /* After a reload nothing is open in Study: offer the newest saved analysis once per visit. */
 let lastOffer: { status: "idle" | "loading" | "done"; record?: StudyRecord; dismissed?: boolean } = { status: "idle" };
@@ -77,17 +83,9 @@ export function StudyInput() {
     <div className="page page--wide study-home">
       <PageHead
         title="Study"
-        desc="Paste French, or an idea you want to say."
-        actions={study.sentences.length > 0 && !busy ? <Button kind="tertiary" onClick={() => go("study")}>Back to current sentence</Button> : undefined}
+        actions={study.sentences.length > 0 && !busy ? <a className="btn btn--tertiary" href={routeUrl("study")} onClick={(e) => followAppLink(e, "study")}>Back to current sentence</a> : undefined}
       />
-      <div className="stack gap-4">
-        <div className="study-home-tools">
-          <StudyReviewNotice />
-          <div className="btn-row">
-            <Button kind="secondary" onClick={() => go("study/personal")}>Practise my own words</Button>
-            <Button kind="tertiary" onClick={() => go("study/grammar")}>My grammar map</Button>
-          </div>
-        </div>
+      <div className="stack gap-5">
         <Segmented
           label="Input mode"
           value={mode}
@@ -97,31 +95,7 @@ export function StudyInput() {
             { value: "ideas", label: "Practise my own ideas" },
           ]}
         />
-        {last.record && !busy && (
-          <Banner
-            tone="info"
-            title="Pick up where you left off?"
-            actions={
-              <>
-                <Button kind="secondary" onClick={() => last.record && openAnalysisInStudy(last.record)}>Open last analysis</Button>
-                <Button kind="tertiary" onClick={last.dismiss}>Dismiss</Button>
-              </>
-            }
-          >
-            {fmtWhen(last.record.created_at)} · {plural(sentenceCount(last.record), "sentence")} saved.
-          </Banner>
-        )}
-        {(study.restored || forced === "restored") && draft.trim() && (
-          <Banner
-            tone="info"
-            title="Draft restored"
-            actions={<Button kind="tertiary" onClick={() => patchStudy({ restored: false })}>Dismiss</Button>}
-          >
-            We kept what you typed earlier in “{mode === "ideas" ? "Practise my own ideas" : "Study French text"}”. Each mode keeps its own draft.
-          </Banner>
-        )}
-
-        <div className="panel stack gap-4 study-composer">
+        <div className="stack gap-4 study-composer">
           <div className="field">
             <label htmlFor="study-input" className="field-label">
               {mode === "text" ? "French text" : "Your idea"}
@@ -131,12 +105,21 @@ export function StudyInput() {
                 ? `Up to ${nf.format(limit)} characters. Paste or drop a screenshot to import it.`
                 : `One idea, in English or simple French. Up to ${limit} characters.`}
             </p>
+            {(study.restored || forced === "restored") && draft.trim() && (
+              <p className="t-support" role="status">
+                Your earlier text is still here. This draft is for “{mode === "ideas" ? "Practise my own ideas" : "Study French text"}”. Each mode keeps its own draft.{" "}
+                <button type="button" className="text-link" onClick={() => patchStudy({ restored: false })}>Dismiss</button>
+              </p>
+            )}
             <textarea
               id="study-input"
+              name="study-draft"
+              autoComplete="off"
               ref={taRef}
               className="textarea"
               lang={mode === "text" ? "fr" : "en"}
               rows={mode === "text" ? 12 : 8}
+              placeholder={mode === "text" ? "e.g. j’ai failli…" : "e.g. I almost missed the train…"}
               value={draft}
               aria-invalid={v === "over" || a.status === "invalid" ? true : undefined}
               aria-describedby={`study-help study-count${a.status === "invalid" ? " study-err" : ""}`}
@@ -178,9 +161,9 @@ export function StudyInput() {
           {photoError && <Banner tone="error" title="Couldn’t import image">{photoError}</Banner>}
           <AnalysisStatus />
 
-          <div className="sticky-actions" style={{ background: "var(--surface)" }}>
+          <div className="sticky-actions">
             <div className="btn-row">
-              <Button kind="primary" onClick={() => runAnalysis(source)} disabledReason={reason} busy={busy}>
+              <Button kind="primary" onClick={() => runAnalysis(source)} disabledReason={reason} reasonVisible={!!reason && !busy} busy={busy}>
                 {busy ? "Analysing…" : mode === "text" ? "Analyse text" : "Create French example"}
               </Button>
               {mode === "text" && (
@@ -189,30 +172,52 @@ export function StudyInput() {
                 </Button>
               )}
             </div>
-            {reason && !busy && <DisabledReason>{reason}</DisabledReason>}
           </div>
         </div>
+
+        <StudyReviewNotice />
+        <div className="btn-row">
+          <a className="btn btn--secondary" href={routeUrl("study/personal")} onClick={(e) => followAppLink(e, "study/personal")}>Practise my own words</a>
+          <a className="btn btn--secondary" href={routeUrl("study/grammar")} onClick={(e) => followAppLink(e, "study/grammar")}>My grammar map</a>
+        </div>
+        {last.record && !busy && (
+          <Banner
+            tone="info"
+            title="Pick up where you left off?"
+            actions={
+              <>
+                <Button kind="secondary" onClick={() => last.record && openAnalysisInStudy(last.record)}>Open last analysis</Button>
+                <Button kind="tertiary" onClick={last.dismiss}>Dismiss</Button>
+              </>
+            }
+          >
+            <dl className="meta-row">
+              <div><dt>Saved</dt><dd>{fmtWhen(last.record.created_at)}</dd></div>
+              <div><dt>Sentences</dt><dd>{plural(sentenceCount(last.record), "sentence")}</dd></div>
+            </dl>
+          </Banner>
+        )}
 
         <section className="section" aria-labelledby="prl-h">
           <h2 id="prl-h" className="t-section">Practise without new text</h2>
           <ul className="list study-side-actions">
             <li>
-              <button className="list-btn" onClick={() => go("study/recall")}>
+              <a className="list-btn" href={routeUrl("study/recall")} onClick={(e) => followAppLink(e, "study/recall")}>
                 <span className="dest-icon"><PenLine aria-hidden /></span>
                 <span className="grow stack">
                   <span className="t-strong">Recall</span>
                   <span className="t-support">See the English meaning, type the French.</span>
                 </span>
-              </button>
+              </a>
             </li>
             <li>
-              <button className="list-btn" onClick={() => go("study/dictation")}>
+              <a className="list-btn" href={routeUrl("study/dictation")} onClick={(e) => followAppLink(e, "study/dictation")}>
                 <span className="dest-icon"><Headphones aria-hidden /></span>
                 <span className="grow stack">
                   <span className="t-strong">Dictation</span>
                   <span className="t-support">Listen to practice audio, type what you hear.</span>
                 </span>
-              </button>
+              </a>
             </li>
           </ul>
         </section>
@@ -291,7 +296,7 @@ function AnalysisStatus() {
   if (a.status === "nofrench")
     return (
       <Banner tone="warning" title="No usable French sentences found" live="polite">
-        We couldn’t find French sentences in this text. Check that it’s in French, or switch to “Practise my own ideas” to start from English.
+        No French sentences were found in this text. Check that it’s in French, or switch to “Practise my own ideas” to start from English.
       </Banner>
     );
   return null;
@@ -303,7 +308,7 @@ let photoFile: { file: File; url: string } | null = null;
 
 export function selectStudyPhoto(file: File) {
   if (!file.type.startsWith("image/")) throw new Error("Choose an image file.");
-  if (file.size > 25 * 1024 * 1024) throw new Error("Choose an image smaller than 25 MB.");
+  if (file.size > 25 * 1024 * 1024) throw new Error("Choose an image smaller than 25\u00a0MB.");
   if (photoFile) URL.revokeObjectURL(photoFile.url);
   photoFile = { file, url: URL.createObjectURL(file) };
   patchStudy({ ocr: { phase: "select", photoId: file.name, lines: [], partial: false } });
@@ -384,7 +389,7 @@ export function StudyPhoto() {
       <PageHead
         back={back}
         title="Import from photo"
-        desc="Take or choose a photo of French text — a page, a sign, your notes. We find the French sentences; you check them before studying."
+        desc="Take or choose a photo of French text — a page, a sign, your notes. The reader finds the French sentences; you check them before studying."
       />
       <div className="stack gap-5">
         <input
@@ -432,7 +437,7 @@ export function StudyPhoto() {
           </Banner>
         )}
         {ocr.phase === "failed" && (
-          <Banner tone="error" title="We couldn’t read this photo" live="assertive">
+          <Banner tone="error" title="This photo couldn’t be read" live="assertive">
             {error || "The text reader didn’t respond."} Your photo is kept; try again.
           </Banner>
         )}
@@ -443,7 +448,7 @@ export function StudyPhoto() {
             live="polite"
             actions={<Button kind="tertiary" onClick={() => go("study/new")}>Type text instead</Button>}
           >
-            We couldn’t find French in this photo. Try a sharper, closer photo.
+            No French was found in this photo. Try a sharper, closer photo.
           </Banner>
         )}
 
@@ -484,12 +489,12 @@ function OcrResults({ back, photoTitle }: { back: React.ReactNode; photoTitle: s
 
   return (
     <div className="page">
-      <PageHead back={back} title="Check the text we found" desc={`From ${photoTitle}. Fix any mistakes, choose the sentences to study, and put them in order.`} />
+      <PageHead back={back} title="Check the text from this photo" desc={`From ${photoTitle}. Fix any mistakes, choose the sentences to study, and put them in order.`} />
       <h2 id="ocr-results-h" tabIndex={-1} className="sr-only">Recognised sentences</h2>
       <div className="stack gap-4">
         {(ocr.partial || forced === "partial") && (
           <Banner tone="warning" title="Only part of the photo could be read">
-            We found {plural(lines.length, "sentence")}. Some text may be missing. You can continue with what was found or add text by hand later.
+            Found {plural(lines.length, "sentence")}. Some text may be missing. You can continue with what was found or add text by hand later.
           </Banner>
         )}
         {over && (

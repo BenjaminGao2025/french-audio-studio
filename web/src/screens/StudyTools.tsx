@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { BookOpen, Check, Mic, Volume2, MessageCircle, Layers, PenLine, Headphones, Map as MapIcon, Plus } from "lucide-react";
+import { Check, Volume2, Map as MapIcon, Plus } from "lucide-react";
 import type { StudySentence } from "../data/fixtures";
 import { type AppState, go, sayFrench } from "../state/store";
 import { cardKey, useSavedCards } from "../api/srs";
@@ -13,20 +13,41 @@ import { StudyRecorder } from "../components/StudyRecorder";
 
 type Tab = AppState["study"]["tab"];
 const GROUPS = [
-  { title: "Understand", tabs: [{ id: "words", label: "Words", icon: BookOpen }, { id: "grammar", label: "Grammar", icon: MapIcon }, { id: "sounds", label: "Sounds", icon: Volume2 }] },
-  { title: "Listen & speak", tabs: [{ id: "steps", label: "Steps", icon: Layers }, { id: "shadowing", label: "Say it", icon: Mic }] },
-  { title: "Check yourself", tabs: [{ id: "recall", label: "Recall", icon: PenLine }, { id: "dictation", label: "Dictation", icon: Headphones }, { id: "explain", label: "Explain it", icon: MessageCircle }] },
+  { title: "Understand", tabs: [{ id: "words", label: "Words" }, { id: "grammar", label: "Grammar" }, { id: "sounds", label: "Sounds" }] },
+  { title: "Listen & speak", tabs: [{ id: "steps", label: "Steps" }, { id: "shadowing", label: "Say it" }] },
+  { title: "Check yourself", tabs: [{ id: "recall", label: "Recall" }, { id: "dictation", label: "Dictation" }, { id: "explain", label: "Explain it" }] },
 ] as const;
 export function StudyNavigation({ value, onChange }: { value: Tab; onChange: (tab: Tab) => void }) {
   const tabs = GROUPS.flatMap((g) => [...g.tabs]);
-  return <div className="study-path" role="tablist" aria-label="Sentence practice" onKeyDown={(e) => {
-    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
-    e.preventDefault(); const i = tabs.findIndex((t) => t.id === value);
-    const next = e.key === "Home" ? tabs[0] : e.key === "End" ? tabs[tabs.length - 1] : tabs[(i + (e.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length];
-    onChange(next.id); document.getElementById(`learn-tab-${next.id}`)?.focus();
-  }}>
-    {tabs.map(({ id, label, icon: Icon }) => <button key={id} id={`learn-tab-${id}`} type="button" role="tab" aria-selected={value === id} aria-controls="learn-panel" tabIndex={value === id ? 0 : -1} onClick={() => onChange(id)}><Icon size={18} aria-hidden /><span>{label}</span></button>)}
-  </div>;
+  const move = (key: string) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(key)) return;
+    const i = tabs.findIndex((t) => t.id === value);
+    const next = key === "Home" ? tabs[0] : key === "End" ? tabs[tabs.length - 1] : tabs[(i + (key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length];
+    onChange(next.id);
+    document.getElementById(`learn-tab-${next.id}`)?.focus();
+  };
+  return (
+    <div className="study-nav-wrap">
+      <div className="study-nav" role="tablist" aria-label="Sentence practice" onKeyDown={(e) => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
+        e.preventDefault();
+        move(e.key);
+      }}>
+        {GROUPS.map((group) => (
+          <div className="study-group" role="presentation" key={group.title}>
+            <span className="study-group-label">{group.title}</span>
+            <div className="study-group-tabs">
+              {group.tabs.map(({ id, label }) => (
+                <button key={id} id={`learn-tab-${id}`} type="button" role="tab" className="tab" aria-selected={value === id} aria-controls="learn-panel" tabIndex={value === id ? 0 : -1} onClick={() => onChange(id)}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export function WordsPanel({ sentence, onPick }: { sentence: StudySentence; onPick: (p: FrPick) => void }) {
@@ -38,13 +59,13 @@ export function WordsPanel({ sentence, onPick }: { sentence: StudySentence; onPi
   return <section className="stack gap-4"><div><h3 className="t-section">Words in this sentence</h3></div>
     {!!raw?.alignment?.length && <div className="study-gloss" aria-label="Word by word">{raw.alignment.map((a, i) => <div key={i}><FrText text={a.fr} onPick={onPick} /><span className="t-support">{a.en}</span></div>)}</div>}
     {raw?.order_note && <p className="study-note">{raw.order_note}</p>}
-    {words.length ? <>{list(content.length ? content : functionWords)}{!!content.length && !!functionWords.length && <details className="panel"><summary>Function words · {functionWords.length}</summary>{list(functionWords)}</details>}</> : <Banner tone="neutral" title="No saved word breakdown">Tap words in the sentence above to look them up. Reanalyse an older text to get a full word breakdown.</Banner>}
+    {words.length ? <>{list(content.length ? content : functionWords)}{!!content.length && !!functionWords.length && <details className="panel"><summary>Function words ({functionWords.length})</summary>{list(functionWords)}</details>}</> : <Banner tone="neutral" title="No saved word breakdown">Tap words in the sentence above to look them up. Reanalyse an older text to get a full word breakdown.</Banner>}
   </section>;
 }
 
 export function SoundsPanel({ sentence, onPick }: { sentence: StudySentence; onPick: (p: FrPick) => void }) {
   const tips = sentence.raw?.pronunciation_tips ?? [];
-  return <section className="stack gap-4"><h3 className="t-section">Hear the details</h3><p className="t-support">Listen to the model, then try the same sounds in Say it.</p><Button kind="secondary" icon={<Volume2 aria-hidden />} onClick={() => sayFrench(sentence.fr)}>Listen to the sentence</Button>
+  return <section className="stack gap-4"><h3 className="t-section">Hear the details</h3><p className="t-support">Listen to the model, then try the same sounds in Say it.</p><div className="btn-row"><Button kind="secondary" icon={<Volume2 aria-hidden />} onClick={() => sayFrench(sentence.fr)}>Listen to the sentence</Button></div>
     {tips.length ? <ul className="list">{tips.map((tip, i) => <li className="study-tip stack gap-2" key={i}><p>{tip}</p><div className="btn-row">{[...tip.matchAll(/[«“"`]([^»”"`]+)[»”"`]/g)].map((m, j) => <FrText key={j} text={m[1]} onPick={onPick} />)}</div></li>)}</ul> : <Banner tone="neutral" title="No saved pronunciation tips">You can still listen and practise this sentence. Reanalyse older text to request fresh pronunciation notes.</Banner>}
   </section>;
 }
@@ -74,9 +95,9 @@ export function ShadowingPanel({ text, id, compact = false, onPick }: { text: st
 export function GrammarSave({ sentence, point }: { sentence: StudySentence; point: { title: string; explanation: string; hook: string } }) {
   const saved = useSavedCards(sentence.fr).has(cardKey("grammar", point.title));
   const [done, setDone] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
-  return <div className="stack gap-2"><Button kind="secondary" icon={saved || done ? <Check aria-hidden /> : <Plus aria-hidden />} busy={busy} disabled={saved || done} onClick={async () => {
+  return <div className="stack gap-2"><div className="btn-row"><Button kind="secondary" icon={saved || done ? <Check aria-hidden /> : <Plus aria-hidden />} busy={busy} disabled={saved || done} onClick={async () => {
     setBusy(true); setError(""); try { await saveGrammar(sentence, point); setDone(true); } catch (e) { setError(e instanceof Error ? e.message : "Couldn’t save. Try again."); } finally { setBusy(false); }
-  }}>{saved || done ? "Grammar card saved" : "Make a practice card"}</Button>{error && <p className="field-error" role="alert">{error}</p>}</div>;
+  }}>{saved || done ? "Grammar card saved" : "Make a practice card"}</Button></div>{error && <p className="field-error" role="alert">{error}</p>}</div>;
 }
 
 export function StructurePanel({ sentence }: { sentence: StudySentence }) {
@@ -114,13 +135,13 @@ export function ExplainPanel({ sentence }: { sentence: StudySentence }) {
   };
   const fb = state.feedback;
   return <div className="stack gap-5"><section className="panel stack gap-3"><h3 className="t-section">Explain it in your own words</h3><p className="t-support">What does the sentence mean, and why is it built this way? Use Chinese or English. The tutor helps you find gaps.</p>
-    <label className="field-label" htmlFor="explain-draft">My explanation</label><textarea className="textarea" id="explain-draft" rows={4} maxLength={2000} value={state.explanation} disabled={!!busy} onChange={(e) => update({ explanation: e.target.value })} />
+    <label className="field-label" htmlFor="explain-draft">My explanation</label><textarea className="textarea" id="explain-draft" name="explain-draft" autoComplete="off" rows={4} maxLength={2000} value={state.explanation} disabled={!!busy} onChange={(e) => update({ explanation: e.target.value })} />
     <StudyRecorder id={`explain:${sentence.id}`} label="Speak my explanation (Chinese)" disabled={!!busy} onTake={spoken("explanation")} />
-    <details><summary>Try a sentence of my own</summary><label className="sr-only" htmlFor="explain-variation">My own French sentence</label><textarea className="textarea" id="explain-variation" lang="fr" rows={2} maxLength={500} disabled={!!busy} value={state.variation} onChange={(e) => update({ variation: e.target.value })} placeholder="Change a detail and make a new French sentence." /></details>
+    <details><summary>Try a sentence of my own</summary><label className="sr-only" htmlFor="explain-variation">My own French sentence</label><textarea className="textarea" id="explain-variation" name="explain-variation" autoComplete="off" lang="fr" rows={2} maxLength={500} disabled={!!busy} value={state.variation} onChange={(e) => update({ variation: e.target.value })} placeholder="Change a detail and make a new French sentence…" /></details>
     <Button kind="primary" disabled={!state.explanation.trim() || !!busy} busy={busy === "explain"} onClick={() => void check()}>Check my understanding</Button>
     {fb && <div className="study-feedback stack gap-3" aria-live="polite"><h4 className="t-strong">{fb.verdict === "solid" ? "You explained the key ideas" : fb.verdict === "partial" ? "A few gaps to work on" : "Let’s revisit the key ideas"}</h4>{!!fb.got_right.length && <div><p className="t-label">What you got right</p><ul>{fb.got_right.map((s, i) => <li key={i}>{s}</li>)}</ul></div>}{!!fb.gaps.length && <div><p className="t-label">What to revisit</p><ul>{fb.gaps.map((s, i) => <li key={i}>{s}</li>)}</ul></div>}{fb.variation && <p>{fb.variation.ok ? "Your sentence works." : `Try: ${fb.variation.corrected}`} {fb.variation.note}</p>}{fb.follow_up && <div className="study-note"><strong>Think about this</strong><p>{fb.follow_up}</p><Button kind="tertiary" onClick={() => { update({ history: [...state.history, { role: "tutor", content: fb.follow_up }] }); document.getElementById("tutor-question")?.focus(); }}>Answer below</Button></div>}</div>}
   </section><section className="panel stack gap-3"><h3 className="t-section">Ask about this sentence</h3><div className="study-conversation" aria-live="polite">{state.history.map((turn, i) => <article key={i} className={`study-turn study-turn--${turn.role}`}><p className="t-meta">{turn.role === "learner" ? "You" : "Tutor"}</p><p style={{ whiteSpace: "pre-wrap" }}>{turn.content}</p>{turn.role === "tutor" && i > 0 && state.history[i - 1]?.role === "learner" && <Button kind="tertiary" disabled={state.saved.includes(i) || !!busy} busy={busy === `save-${i}`} onClick={() => void request(`save-${i}`, async (signal) => { await saveAnswer(sentence, state.history[i - 1].content, turn.content); if (!signal.aborted) update({ saved: [...current.current.saved, i] }); })}>{state.saved.includes(i) ? "Practice card saved" : "Turn this answer into a practice card"}</Button>}</article>)}</div>
-    <label className="field-label" htmlFor="tutor-question">My question or follow-up answer</label><textarea className="textarea" id="tutor-question" rows={2} maxLength={1000} value={state.question} disabled={!!busy} onChange={(e) => update({ question: e.target.value })} placeholder="Why is this word here? Could I say it another way?" />
+    <label className="field-label" htmlFor="tutor-question">My question or follow-up answer</label><textarea className="textarea" id="tutor-question" name="tutor-question" autoComplete="off" rows={2} maxLength={1000} value={state.question} disabled={!!busy} onChange={(e) => update({ question: e.target.value })} placeholder="Why is this word here? Could I say it another way…" />
     <StudyRecorder id={`ask:${sentence.id}`} label="Ask by speaking (Chinese)" disabled={!!busy} onTake={spoken("question")} /><Button kind="primary" disabled={!state.question.trim() || !!busy} busy={busy === "ask"} onClick={() => void ask()}>Ask tutor</Button>
   </section>{error && <Banner tone="error" title="Couldn’t finish" live="assertive">{error} Your draft is kept. Try again.</Banner>}</div>;
 }

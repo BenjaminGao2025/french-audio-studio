@@ -8,6 +8,17 @@ export const RELEASES = [
     version: APP_VERSION,
     date: "2026-11-10",
     changes: [
+      "The French sentence is set in Source Serif 4 and is the largest text on each learning page.",
+      "Playback sits in a quiet toolbar. Study and Review use the same underline tabs.",
+      "Saved French wraps, and the word card stays clear of the player and the bottom navigation.",
+      "Facts such as due counts and keyboard shortcuts are labeled separately, without middle-dot lists.",
+      "Practice feedback lines up label and control, and page titles no longer keep a mouse focus ring after navigation.",
+    ],
+  },
+  {
+    version: "1.0.5",
+    date: "2026-11-10",
+    changes: [
       "IPA is back to the friendly style, like [prɔpɔze], with brackets and no syllable dots.",
       "Word cards are a small panel next to the word: meaning in this sentence, dictionary shown, clear Favorite and Importance.",
       "A calmer, consistent layout across Study, Review and Saved; Due today only appears on the Study home.",

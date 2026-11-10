@@ -404,7 +404,14 @@ export function go(route: string, opts: { focus?: boolean; keepDemo?: boolean } 
 export function focusHeading() {
   requestAnimationFrame(() => {
     const h = document.querySelector<HTMLElement>("[data-page-title]");
-    h?.focus({ preventScroll: false });
+    if (!h) return;
+    h.classList.add("is-script-focus");
+    const clear = () => {
+      h.classList.remove("is-script-focus");
+      h.removeEventListener("blur", clear);
+    };
+    h.addEventListener("blur", clear);
+    h.focus({ preventScroll: false, focusVisible: false } as FocusOptions);
   });
 }
 

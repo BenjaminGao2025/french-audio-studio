@@ -30,10 +30,12 @@ interface BtnProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "role">
   busy?: boolean;
   /** Visible + announced reason why the action is unavailable. */
   disabledReason?: string;
+  /** Put the reason in the layout, not only in a screen-reader span. */
+  reasonVisible?: boolean;
   block?: boolean;
   iconOnly?: boolean;
 }
-export function Button({ kind = "secondary", icon, iconAfter, busy, disabledReason, block, iconOnly, className, children, onClick, disabled, ...rest }: BtnProps) {
+export function Button({ kind = "secondary", icon, iconAfter, busy, disabledReason, reasonVisible, block, iconOnly, className, children, onClick, disabled, ...rest }: BtnProps) {
   const reasonId = useId();
   const off = disabled || !!disabledReason || busy;
   return (
@@ -58,7 +60,7 @@ export function Button({ kind = "secondary", icon, iconAfter, busy, disabledReas
         {iconAfter}
       </button>
       {disabledReason && (
-        <span id={reasonId} className="sr-only">
+        <span id={reasonId} className={reasonVisible ? "btn-reason" : "sr-only"}>
           {disabledReason}
         </span>
       )}
@@ -159,7 +161,7 @@ export function PageHead({ title, eyebrow, desc, actions, back }: { title: strin
   return (
     <header className="page-head">
       {back}
-      {eyebrow && <p className="eyebrow">{eyebrow}</p>}
+      {eyebrow && <div className="eyebrow">{eyebrow}</div>}
       <div className="page-head-row">
         <h1 className="t-page" tabIndex={-1} data-page-title>
           {title}
@@ -187,6 +189,8 @@ export function FieldText({
   width,
   placeholder,
   autoComplete,
+  name,
+  spellCheck,
 }: {
   label: string;
   help?: ReactNode;
@@ -202,6 +206,8 @@ export function FieldText({
   width?: number;
   placeholder?: string;
   autoComplete?: string;
+  name?: string;
+  spellCheck?: boolean;
 }) {
   const auto = useId();
   const id = idProp ?? auto;
@@ -223,8 +229,10 @@ export function FieldText({
         inputMode={inputMode}
         lang={lang}
         value={value}
+        name={name}
         placeholder={placeholder}
-        autoComplete={autoComplete}
+        autoComplete={autoComplete ?? "off"}
+        spellCheck={spellCheck}
         aria-invalid={error ? true : undefined}
         aria-describedby={cx(help ? `${id}-help` : undefined, error ? `${id}-err` : undefined) || undefined}
         onChange={(e) => onChange(e.target.value)}
@@ -345,6 +353,21 @@ function useRestoreFocus() {
   }, []);
 }
 
+let shellInertCount = 0;
+function useInertShell(active: boolean) {
+  useEffect(() => {
+    if (!active) return;
+    const shell = document.querySelector<HTMLElement>("#app-root > .shell");
+    if (!shell) return;
+    shellInertCount += 1;
+    shell.setAttribute("inert", "");
+    return () => {
+      shellInertCount = Math.max(0, shellInertCount - 1);
+      if (shellInertCount === 0) shell.removeAttribute("inert");
+    };
+  }, [active]);
+}
+
 /* ---------- Modal dialog / sheet ---------- */
 export function Dialog({
   title,
@@ -372,13 +395,15 @@ export function Dialog({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
+  const portal = typeof document !== "undefined" ? document.getElementById("app-root") : null;
+  useInertShell(!!portal);
   useRestoreFocus();
   useEffect(() => {
     const el = ref.current!;
     const first = el.querySelector<HTMLElement>("[data-autofocus]") ?? el.querySelector<HTMLElement>(FOCUSABLE);
     first?.focus();
   }, []);
-  return (
+  const node = (
     <div
       className={cx("overlay", sheet && "overlay--sheet")}
       onMouseDown={(e) => {
@@ -425,6 +450,7 @@ export function Dialog({
       </div>
     </div>
   );
+  return portal ? createPortal(node, portal) : node;
 }
 
 /* ---------- Anchored popover (non-modal, desktop) ---------- */
@@ -451,12 +477,21 @@ export function Popover({
       const c = root.getBoundingClientRect();
       const width = Math.min(440, c.width - 16);
       const left = Math.max(8, Math.min(a.left - c.left, c.width - width - 8));
-      const below = c.bottom - a.bottom - 16;
-      const above = a.top - c.top - 16;
-      if (below < 280 && above > below) {
-        const maxHeight = Math.min(480, above);
-        setPos({ top: a.top - c.top - 8 - Math.min(maxHeight, ref.current?.offsetHeight ?? maxHeight), left, maxHeight });
-      } else setPos({ top: a.bottom - c.top + 8, left, maxHeight: Math.min(480, below) });
+      let clearance = 0;
+      for (const el of root.querySelectorAll<HTMLElement>(".player, .study-nav")) {
+        const r = el.getBoundingClientRect();
+        if (r.width < 8 || r.height < 8) continue;
+        clearance = Math.max(clearance, r.bottom - c.top);
+      }
+      let top = a.bottom - c.top + 8;
+      // A word in the sentence sits above the player and the tabs. Open the card under them.
+      if (clearance > 0 && top < clearance + 8 && a.top - c.top < clearance) top = clearance + 8;
+      let maxHeight = Math.min(480, Math.max(160, c.height - top - 8));
+      if (top + 160 > c.height - 8) {
+        top = Math.max(8, c.height - 8 - 220);
+        maxHeight = Math.min(480, c.height - top - 8);
+      }
+      setPos({ top, left, maxHeight });
     };
     place();
     const main = document.getElementById("main");
