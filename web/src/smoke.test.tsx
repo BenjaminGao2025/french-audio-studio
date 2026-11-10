@@ -178,7 +178,7 @@ describe("1. same-attempt retry must not hide a reveal", () => {
     expect(get().attempts).toHaveLength(1);
     expect(get().attempts[0].status).toBe("completed");
     expect(get().attempts[0].answerKnown).toBe(true);
-    expect(document.getElementById("main")!.textContent).toContain("Recorded as: Answer known");
+    expect(document.getElementById("main")!.textContent).toContain("Answer known");
   });
 
   it("Review: a grading techfail keeps the answer revealed with its rating buttons", async () => {
@@ -249,7 +249,6 @@ describe("3. lookup importance comes from the server count", () => {
     expect(fake.lookups[lookupKey("failli")]).toBe(5);
     expect(fake.calls.filter((c) => c.path === "/api/srs/lookups")).toHaveLength(1);
     expect(document.body.textContent).toContain("Importance, 4 out of 5, based on 5 lookups.");
-    await act(async () => buttonWith("Dictionary").click());
     expect(document.body.textContent).toContain("Définition de ");
   });
 });
@@ -421,7 +420,7 @@ describe("8. feedback and copy cleanups", () => {
     const text = document.getElementById("main")!.textContent!;
     expect(text.split(TARGET).length - 1).toBe(1);
     expect(document.querySelector("#main textarea")).toBeNull();
-    expect(text).toContain("Hint and answer flags were recorded when you checked.");
+    expect(text).not.toContain("Hint and answer flags were recorded when you checked.");
   });
 
   it("incorrect feedback labels each issue once on Correct answer (and without a third issue list)", async () => {
@@ -429,8 +428,8 @@ describe("8. feedback and copy cleanups", () => {
     await act(async () => REGISTRY.find((r) => r.id === "SCR-ANS-02")!.states.find((s) => s.key === "accent")!.apply());
     await wait(1700);
     const main = document.getElementById("main")!;
-    const tags = Array.from(main.querySelectorAll(".tok-tag")).map((e) => e.textContent);
-    expect(tags).toEqual([" (Accent · you wrote oublie)"]);
+    expect(main.querySelector(".tok-tag")).toBeNull();
+    expect(main.textContent).toContain("Accent: you wrote oublie");
     expect(main.querySelector(".issues")).toBeNull();
   });
 
@@ -469,7 +468,8 @@ describe("8. feedback and copy cleanups", () => {
 
     await act(async () => retry().click());
     await wait(200);
-    expect(main.textContent).toContain("Saved to practice history.");
+    expect(main.textContent).not.toContain("Couldn’t save to practice history");
+    expect(get().attempts.some((a) => a.history === "saved")).toBe(true);
     expect(get().attempts).toHaveLength(attempts);
     expect(fake.calls.filter((c) => c.path === "/api/dictation/attempts")).toHaveLength(2);
   });

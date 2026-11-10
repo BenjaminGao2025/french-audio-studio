@@ -74,15 +74,20 @@ export function StudyInput() {
           : undefined;
 
   return (
-    <div className="page">
+    <div className="page page--wide study-home">
       <PageHead
         title="Study"
-        desc="Bring your own French text, or an idea you want to say. We split it into sentences you can listen to, look up and practise."
+        desc="Paste French, or an idea you want to say."
         actions={study.sentences.length > 0 && !busy ? <Button kind="tertiary" onClick={() => go("study")}>Back to current sentence</Button> : undefined}
       />
-      <div className="stack gap-5">
-        <StudyReviewNotice />
-        <div className="btn-row"><Button kind="secondary" onClick={() => go("study/personal")}>Practise my own words</Button><Button kind="tertiary" onClick={() => go("study/grammar")}>My grammar map</Button></div>
+      <div className="stack gap-4">
+        <div className="study-home-tools">
+          <StudyReviewNotice />
+          <div className="btn-row">
+            <Button kind="secondary" onClick={() => go("study/personal")}>Practise my own words</Button>
+            <Button kind="tertiary" onClick={() => go("study/grammar")}>My grammar map</Button>
+          </div>
+        </div>
         <Segmented
           label="Input mode"
           value={mode}
@@ -103,7 +108,7 @@ export function StudyInput() {
               </>
             }
           >
-            Your last analysis ({fmtWhen(last.record.created_at)}, {plural(sentenceCount(last.record), "sentence")}) is saved. Open it to keep studying without analysing again.
+            {fmtWhen(last.record.created_at)} · {plural(sentenceCount(last.record), "sentence")} saved.
           </Banner>
         )}
         {(study.restored || forced === "restored") && draft.trim() && (
@@ -116,22 +121,22 @@ export function StudyInput() {
           </Banner>
         )}
 
-        <div className="panel stack gap-4">
+        <div className="panel stack gap-4 study-composer">
           <div className="field">
             <label htmlFor="study-input" className="field-label">
-              {mode === "text" ? "French text" : "Your idea (in English or simple French)"}
+              {mode === "text" ? "French text" : "Your idea"}
             </label>
             <p id="study-help" className="field-help">
               {mode === "text"
-                ? `Paste one or more French sentences — an article, a message or a page of notes. Up to ${nf.format(limit)} characters. You can also paste or drop a screenshot here.`
-                : `Write a short idea you want to express. We turn it into one French example sentence to learn. Up to ${limit} characters.`}
+                ? `Up to ${nf.format(limit)} characters. Paste or drop a screenshot to import it.`
+                : `One idea, in English or simple French. Up to ${limit} characters.`}
             </p>
             <textarea
               id="study-input"
               ref={taRef}
               className="textarea"
               lang={mode === "text" ? "fr" : "en"}
-              rows={mode === "text" ? 7 : 4}
+              rows={mode === "text" ? 12 : 8}
               value={draft}
               aria-invalid={v === "over" || a.status === "invalid" ? true : undefined}
               aria-describedby={`study-help study-count${a.status === "invalid" ? " study-err" : ""}`}
@@ -154,10 +159,10 @@ export function StudyInput() {
                 {nf.format(draft.length)} / {nf.format(limit)} characters{v === "over" ? ` · ${nf.format(draft.length - limit)} over the limit` : ""}
               </span>
               <span className="btn-row">
-                <Button kind="tertiary" className="btn--sm-text" onClick={() => setDraft(mode === "text" ? EXAMPLE_TEXT : IDEAS_EXAMPLE)} disabled={busy}>
+                <Button kind="tertiary" onClick={() => setDraft(mode === "text" ? EXAMPLE_TEXT : IDEAS_EXAMPLE)} disabled={busy}>
                   Use example
                 </Button>
-                <Button kind="tertiary" className="btn--sm-text" onClick={() => setConfirmClear(true)} disabledReason={!draft ? "Nothing to clear." : busy ? "Analysis is in progress." : undefined}>
+                <Button kind="tertiary" onClick={() => setConfirmClear(true)} disabledReason={!draft ? "Nothing to clear." : busy ? "Analysis is in progress." : undefined}>
                   Clear
                 </Button>
               </span>
@@ -190,7 +195,7 @@ export function StudyInput() {
 
         <section className="section" aria-labelledby="prl-h">
           <h2 id="prl-h" className="t-section">Practise without new text</h2>
-          <ul className="list">
+          <ul className="list study-side-actions">
             <li>
               <button className="list-btn" onClick={() => go("study/recall")}>
                 <span className="dest-icon"><PenLine aria-hidden /></span>

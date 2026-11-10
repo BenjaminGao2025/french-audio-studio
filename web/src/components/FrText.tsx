@@ -19,6 +19,8 @@ export interface FrSegment {
   added?: boolean;
   /** Highlights the review card's target word using --mark-bg. */
   mark?: boolean;
+  /** Grading tone: accent, different, missing, extra. Display only. */
+  tone?: string;
 }
 
 export interface FrPick {
@@ -324,7 +326,7 @@ export function FrText({
           <span
             key={i}
             id={spanId(i)}
-            className={`fr-word${seg.added ? " fr-added" : ""}${seg.mark ? " fr-mark" : ""}${i === activeSeg ? " is-active" : ""}`}
+            className={`fr-word${seg.added ? " fr-added" : ""}${seg.mark ? " fr-mark" : ""}${seg.tone ? ` tok tok--${seg.tone}` : ""}${i === activeSeg ? " is-active" : ""}`}
             data-word={seg.t}
             data-wi={seg.wi}
             data-pos={posOf[i]}

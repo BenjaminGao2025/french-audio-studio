@@ -240,6 +240,9 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
         "- Numbers, dates, ordinals and abbreviations are words too: 1er, 2026, 15h30, TCF. "
         "In meaning say how to read them aloud, e.g. '1er' → meaning: 'first (say: premier)', '2026' → meaning: 'say: deux mille vingt-six'. "
         "The ipa is for the spoken form.\n"
+        "Write each ipa in learner-friendly form: no slashes, no syllable dots or hyphens, use r instead of ʁ and g instead of ɡ. "
+        "Example: proposer is prɔpɔze, not /pʁɔ.pɔ.ze/.\n"
+        "meaning is this word in this sentence, in short simple English. Do not repeat the French word. Do not translate the whole sentence.\n"
         '- Never list a word that is not in the sentence. Example: if the sentence uses ne … aucune, do not list "ne … pas".\n'
         "- Every French sentence in the build-up must be correct French.\n\n"
         'Fixed expressions list ("phrases"):\n'
@@ -337,10 +340,10 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
         '        {"fr": "aucune", "ipa": "okyn", "lemma": "aucun", "type": "describing word", "meaning": "no, not any", "meaning_zh": "没有任何", "why": "Ends in -e because dispense is a feminine word. Used with ne, but without pas.", "english_link": "", "false_friend": false},\n'
         '        {"fr": "dispense", "ipa": "dispɑ̃s", "lemma": "dispense", "type": "naming word", "meaning": "exemption", "meaning_zh": "豁免", "why": "Feminine noun.", "english_link": "dispensation", "false_friend": false},\n'
         '        {"fr": "n\'est", "ipa": "nɛ", "lemma": "être", "type": "action word form", "meaning": "is (negative)", "meaning_zh": "不是", "why": "ne becomes n\' before a vowel. Combined with aucune.", "english_link": "", "false_friend": false},\n'
-        '        {"fr": "autorisée", "ipa": "otɔʁize", "lemma": "autoriser", "type": "action word form", "meaning": "authorized", "meaning_zh": "被允许的", "why": "Ends in -e because dispense is a feminine word.", "english_link": "authorized", "false_friend": false},\n'
-        '        {"fr": "par", "ipa": "paʁ", "lemma": "par", "type": "small linking word", "meaning": "by", "meaning_zh": "由；被", "why": "Shows who does the action.", "english_link": "", "false_friend": false},\n'
+        '        {"fr": "autorisée", "ipa": "otɔrize", "lemma": "autoriser", "type": "action word form", "meaning": "authorized", "meaning_zh": "被允许的", "why": "Ends in -e because dispense is a feminine word.", "english_link": "authorized", "false_friend": false},\n'
+        '        {"fr": "par", "ipa": "par", "lemma": "par", "type": "small linking word", "meaning": "by", "meaning_zh": "由；被", "why": "Shows who does the action.", "english_link": "", "false_friend": false},\n'
         '        {"fr": "les", "ipa": "le", "lemma": "le", "type": "small pointer word", "meaning": "the (plural)", "meaning_zh": "这些（复数）", "why": "Points to more than one authority.", "english_link": "", "false_friend": false},\n'
-        '        {"fr": "autorités", "ipa": "otɔʁite", "lemma": "autorité", "type": "naming word", "meaning": "authorities", "meaning_zh": "当局", "why": "Ends in -s because it is plural.", "english_link": "authorities", "false_friend": false},\n'
+        '        {"fr": "autorités", "ipa": "otɔrite", "lemma": "autorité", "type": "naming word", "meaning": "authorities", "meaning_zh": "当局", "why": "Ends in -s because it is plural.", "english_link": "authorities", "false_friend": false},\n'
         '        {"fr": "canadiennes", "ipa": "kanadjɛn", "lemma": "canadien", "type": "describing word", "meaning": "Canadian (plural)", "meaning_zh": "加拿大的", "why": "Ends in -nes because autorités is feminine plural.", "english_link": "Canadian", "false_friend": false}\n'
         "      ],\n"
         '      "grammar_points": [\n'

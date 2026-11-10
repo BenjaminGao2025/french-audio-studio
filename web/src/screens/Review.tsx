@@ -14,7 +14,9 @@ import {
 import { ApiError } from "../api/client";
 import { favoriteKey, libraryReady, loadLibrary, loadQueue, masterCard, rateCard, restoreMastered, setFavorite, toReviewCard as serverToReviewCard } from "../api/review";
 import { grade } from "../lib/grading";
+import { gradeFeedback } from "../lib/feedback";
 import { importanceFor } from "../lib/lookup";
+import { formatFriendlyPhonetic } from "../lib/phonetic";
 import { cx, nf, plural } from "../lib/format";
 import { announce, get, getCardLookups, go, introduceNewCard, sayFrench, set, useApp, type ReviewUI } from "../state/store";
 import { Banner, Button, Dialog, DisabledReason, Disclosure, FieldText, Importance, PageHead, Pill, Popover, Skeleton, Spinner, Tabs, useNarrow } from "../components/ui";
@@ -151,7 +153,7 @@ const TABS = [
 export function ReviewScreen({ sub }: { sub: string }) {
   const tab = sub === "session" ? "due" : sub === "library" ? "saved" : sub;
   return (
-    <div className="page">
+    <div className="page page--wide">
       <PageHead title="Review" desc="Cards you saved come back when they’re due. Only answering cards here changes their review schedule." />
       <div className="stack gap-5">
         <Tabs label="Review sections" idBase="review" value={tab} tabs={TABS} onChange={(v) => go(`review/${v}`, { focus: false })} />
@@ -374,7 +376,6 @@ function DueToday() {
             <div className="stat"><dt className="t-support">New cards introduced today</dt><dd className="t-section num" style={{ margin: 0 }}>{newUsed}</dd></div>
             <div className="stat"><dt className="t-support">Your whole library</dt><dd className="t-section num" style={{ margin: 0 }}>{libOk ? `${nf.format(sentences)} sentences · ${nf.format(savedCards)} cards` : "…"}</dd></div>
           </dl>
-          <p className="t-meta">Today’s session, the daily new-card limit and your whole library are separate numbers.</p>
           <span className="sr-only">Queue pool: {queue.length} cards</span>
         </section>
       )}
@@ -505,6 +506,7 @@ function ReviewSession() {
     const result = grade(card.target, u.draft);
     const hintUsed = Boolean(u.hinted || u.hint);
     const sugg: 1 | 2 | 3 = !result.correct ? 1 : hintUsed ? 2 : 3;
+    gradeFeedback(result.correct);
     patch({ revealed: true, result, suggested: sugg, answer: u.draft, emptyError: false });
     if (mode === "speak" || mode === "cloze" || mode === "grammar") sayFrench(cardSpeech(card));
     announce(result.correct ? "Correct. Pick how well you remembered." : "Not quite. Pick how well you remembered.");
@@ -529,6 +531,7 @@ function ReviewSession() {
 
   const rate = (rating: 1 | 2 | 3 | 4) => {
     if (!card || !revealed || u.rateBusy || u.rated) return;
+    if (!typed) gradeFeedback(rating > 1);
     patch({ rateBusy: true, techfail: false });
     rateCard(card.id, rating, { answer: u.answer, durationMs: Date.now() - shownAt.current })
       .then((saved) => {
@@ -623,9 +626,15 @@ function ReviewSession() {
     raw: { sentence: sentenceFr, translation_en: translationEn, translation_zh: translationZh, build_up: [], words: [], grammar_points: [] },
   };
   const backSegments = markedSegments(sentenceFr, markTarget);
-  const metaBits = [meta.pos, meta.lemma && meta.lemma.toLowerCase() !== card.target.toLowerCase() ? `base form ${meta.lemma}` : "", meta.ipa].filter(Boolean);
-  const dictLine = [meta.dict_zh || (!meta.snap ? meta.meaning_zh : ""), meta.dict_en || (!meta.snap ? meta.meaning_en : "")].filter(Boolean).join(" · ");
-  const hereLine = [meta.ctx_zh, meta.ctx_en].filter(Boolean).join(" · ");
+  const friendlyIpa = formatFriendlyPhonetic(meta.ipa || "");
+  const metaBits = [meta.pos, meta.lemma && meta.lemma.toLowerCase() !== card.target.toLowerCase() ? `base form ${meta.lemma}` : "", friendlyIpa].filter(Boolean);
+  const englishGloss = (value?: string) => {
+    const text = (value || "").trim();
+    if (!text || /\p{Script=Han}/u.test(text)) return "";
+    return text;
+  };
+  const dictLine = englishGloss(meta.dict_en) || (!meta.snap ? englishGloss(meta.meaning_en) : "");
+  const hereLine = englishGloss(meta.ctx_en);
   const showEnglish = Boolean(translationZh && translationEn);
 
   return (
@@ -727,32 +736,35 @@ function ReviewSession() {
         ) : (
           <>
             {/* ---------------- BACK, after Show answer or Check ---------------- */}
-            <div id="rev-result" tabIndex={-1} className="stack gap-3">
-              <div className="rev-answer-sentence" data-sentence={sentenceFr}>
+            <div id="rev-result" tabIndex={-1} className="stack gap-4">
+              <div className="rev-answer-row" data-sentence={sentenceFr}>
                 <FrText segments={backSegments} className="t-fr-lg" onPick={onWordPick} />
                 <div className="btn-row">
-                  <Button kind="tertiary" className="btn--sm-text" icon={<Play aria-hidden />} onClick={() => sayFrench(cardSpeech(card))}>Play</Button>
-                  <Button kind="tertiary" className="btn--sm-text" icon={<Volume2 aria-hidden />} onClick={() => sayFrench(cardSpeech(card), 0.75)}>Slow 0.75×</Button>
+                  <Button kind="secondary" icon={<Play aria-hidden />} onClick={() => sayFrench(cardSpeech(card))}>Play</Button>
+                  <Button kind="secondary" icon={<Volume2 aria-hidden />} onClick={() => sayFrench(cardSpeech(card), 0.75)}>Slow 0.75×</Button>
                 </div>
               </div>
-              {translationZh && <p className="t-support" lang="zh">{translationZh}</p>}
-              {translationEn && <p className="t-support">{translationEn}</p>}
+              {(translationZh || translationEn) && (
+                <div className="rev-translations">
+                  {translationZh && <p className="t-support" lang="zh">{translationZh}</p>}
+                  {translationEn && <p className="t-support">{translationEn}</p>}
+                </div>
+              )}
               {u.result && (
                 <div className="compare">
                   <MarkedLine label="Your answer" words={u.result.answer} side="answer" />
-                  <MarkedLine label="Correct answer" words={u.result.target} side="target" />
+                  <MarkedLine label="Correct answer" words={u.result.target} side="target" onPick={onWordPick} />
                 </div>
               )}
               {isWordCard && (
-                <p className="rev-target-line" lang="fr">
+                <p className="rev-meta t-support" lang="fr">
                   <strong>{card.target}</strong>{metaBits.length ? ` · ${metaBits.join(" · ")}` : ""}
                 </p>
               )}
-              {(dictLine || hereLine || meta.why_zh || meta.hook) && (
+              {(dictLine || (hereLine && hereLine !== dictLine) || meta.hook) && (
                 <div className="rev-snapshot stack gap-1">
-                  {dictLine && <p className="t-support"><span className="def-label">Saved meaning:</span> {dictLine}</p>}
-                  {hereLine && <p className="t-support"><span className="def-label">Here:</span> {hereLine}</p>}
-                  {meta.why_zh && <p className="t-support" lang="zh">{meta.why_zh}</p>}
+                  {dictLine && <p className="t-body"><span className="def-label">Saved meaning: </span>{dictLine}</p>}
+                  {hereLine && hereLine !== dictLine && <p className="t-support"><span className="def-label">In this sentence: </span>{hereLine}</p>}
                   {meta.hook && <p className="t-support">Memory hook: {meta.hook}</p>}
                 </div>
               )}
@@ -769,7 +781,6 @@ function ReviewSession() {
                   </ul>
                 </Disclosure>
               )}
-              <p className="t-meta">Click a word to hear it and open its card.</p>
             </div>
 
             {u.techfail && (
@@ -777,6 +788,7 @@ function ReviewSession() {
                 This is not a wrong answer. Your answer is kept and nothing was recorded.
               </Banner>
             )}
+            <div className="rev-actionbar">
             <div className="rev-ratings" role="group" aria-label="How well did you remember?">
               {RATINGS.map((r) => {
                 const secs = intervals[String(r.value)];
@@ -799,9 +811,10 @@ function ReviewSession() {
             </div>
             {u.rateBusy && <Spinner label="Saving your rating…" />}
             <div className="btn-row">
-              <Button kind="tertiary" icon={<Archive aria-hidden />} onClick={() => { masterCard(card.id); next(); }}>Mark mastered</Button>
+              <Button kind="secondary" icon={<Archive aria-hidden />} onClick={() => { masterCard(card.id); next(); }}>Mark mastered</Button>
             </div>
             <p className="t-meta">Press 1–4 to rate · Enter takes the suggestion{u.nextDue ? ` · Next review ${dueIn(u.nextDue)}` : ""}</p>
+            </div>
           </>
         )}
 
@@ -816,7 +829,7 @@ function ReviewSession() {
         </Popover>
       )}
       {pick && narrow && (
-        <Dialog sheet title={`Meaning of “${pick.text}”`} onClose={() => setPick(null)}>
+        <Dialog sheet titleHidden title={`Meaning of “${pick.text}”`} onClose={() => setPick(null)}>
           <WordPanel key={`${pick.text}-${pick.wordIndex ?? ""}`} sentence={wpSentence} text={pick.text} wordIndex={pick.wordIndex} occurrence={pick.occurrence} onGrammar={() => setPick(null)} onClose={() => setPick(null)} inSheet />
         </Dialog>
       )}
@@ -926,9 +939,7 @@ function SavedCards() {
 
   return (
     <div className="stack gap-5">
-      <p className="t-support">
-        Saved means a card is in your library and can come up in Review. Favorite is a separate bookmark. Neither changes importance or mastery.
-      </p>
+      <p className="t-meta">Saved cards come back in Review. Favorite is only a bookmark.</p>
       <div className="filter-bar">
         <div style={{ flex: "1 1 220px" }}>
           <FieldText label="Search" type="search" inputMode="search" value={f.q} onChange={(v) => setF({ q: v })} placeholder="French or English" lang="fr" />
@@ -942,20 +953,20 @@ function SavedCards() {
           </select>
         </label>
         <label className="field" style={{ minWidth: 210 }}>
-          <span className="field-label">Importance (word cards only)</span>
-          <select className="select" value={f.minImportance} onChange={(e) => setF({ minImportance: Number(e.target.value) as typeof f.minImportance })}>
+          <span className="field-label" title="Applies to Fill-in word cards only">Importance</span>
+          <select className="select" aria-describedby="imp-filter-note" value={f.minImportance} onChange={(e) => setF({ minImportance: Number(e.target.value) as typeof f.minImportance })}>
             <option value={0}>Any</option>
-            <option value={3}>3 or more (word cards)</option>
-            <option value={4}>4 or more (word cards)</option>
-            <option value={5}>5 only (word cards)</option>
+            <option value={3}>3 or more</option>
+            <option value={4}>4 or more</option>
+            <option value={5}>5 only</option>
           </select>
-          <span className="field-help">Applies to Fill-in word cards only</span>
+          <span id="imp-filter-note" className="sr-only">Applies to Fill-in word cards only</span>
         </label>
         <label className="check check--box"><input type="checkbox" checked={f.favoritesOnly} onChange={(e) => setF({ favoritesOnly: e.target.checked })} /> Favorites only</label>
       </div>
       <div className="row row--between">
         <p className="t-support" aria-live="polite">
-          Showing {plural(matchingSentences, "sentence")} · {plural(matchingCards, "card")} · Library total {sentences.length} sentences · {nf.format(savedTotal)} saved cards
+          Showing {plural(matchingSentences, "sentence")} · {plural(matchingCards, "card")}{(q || f.mastered !== "hide" || f.minImportance || f.favoritesOnly) ? ` of ${nf.format(savedTotal)} saved cards` : ""}
         </p>
         {!selecting ? (
           <Button kind="secondary" onClick={() => setSelecting(true)} disabledReason={!matchingCards ? "No cards to select." : undefined}>Select cards to practise</Button>
@@ -1018,7 +1029,7 @@ function SavedCards() {
                         <span className="saved-cell">{c.word ? <strong lang="fr">{c.word}</strong> : <span lang="fr" className="saved-sentence">{s?.fr ?? ""}</span>}</span>
                       </td>
                       <td className="saved-col-hide"><span className="saved-cell">{c.kind}</span></td>
-                      <td className="saved-col-hide saved-meaning" title={c.meaning || s?.en || ""}><span className="saved-cell">{c.meaning || s?.en || "—"}</span></td>
+                      <td className="saved-col-hide saved-meaning" title={[c.meaning, s?.en].find((v) => v && !/\p{Script=Han}/u.test(v)) || ""}><span className="saved-cell">{[c.meaning, s?.en].find((v) => v && !/\p{Script=Han}/u.test(v)) || "—"}</span></td>
                       <td className="saved-col-hide"><span className="saved-cell">{c.mastered ? "Mastered" : STATUS_LABEL[c.status]}</span></td>
                       <td className="num"><span className="saved-cell">{compactDue(c.due)}</span></td>
                       <td className="saved-col-hide" data-col="imp"><span className="saved-cell">{wordLookups !== null ? <span className="saved-imp"><Importance count={wordLookups} /></span> : "—"}</span></td>
