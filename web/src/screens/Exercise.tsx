@@ -1,7 +1,8 @@
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { Lightbulb, Eye, Play, Turtle, RotateCcw, History as HistoryIcon } from "lucide-react";
-import type { PracticeItem } from "../data/fixtures";
+import type { PracticeItem, StudySentence } from "../data/fixtures";
 import { grade, type DisplayWord } from "../lib/grading";
+import { gradeFeedback } from "../lib/feedback";
 import { plural } from "../lib/format";
 import {
   announce,
@@ -16,7 +17,9 @@ import {
   type QuestionUI,
 } from "../state/store";
 import { gradeAttempt } from "../api/dictation";
-import { Banner, Button, Segmented, Spinner } from "../components/ui";
+import { FrText, type FrPick, type FrSegment } from "../components/FrText";
+import { Banner, Button, Dialog, Popover, Segmented, Spinner, useNarrow } from "../components/ui";
+import { WordPanel } from "./WordPopup";
 
 /* ---------------- session helpers ---------------- */
 
@@ -181,6 +184,7 @@ export function submitAnswer(key: string) {
       });
       patchUI(key, qk, { phase: "graded" });
       const a = get().attempts.find((x) => x.id === attemptId)!;
+      if (!a.answerKnown) gradeFeedback(r.correct);
       announce(a.answerKnown ? "Checked. Recorded as answer known." : r.correct ? "Correct." : `Not quite. ${plural(res.issues.length, "difference")}.`);
       requestAnimationFrame(() => document.getElementById(`ex-result-${key}`)?.focus());
     })
@@ -203,47 +207,51 @@ function inlineTagFor(w: DisplayWord, side: "answer" | "target"): string | null 
   }
   if (w.mark === "missing") return "Missing word";
   const given = cleanCounterpart(w.counterpart);
-  if (w.mark === "different") return given ? `Different word · you wrote ${given}` : "Different word";
-  if (w.mark === "accent") return given ? `Accent · you wrote ${given}` : "Accent";
+  if (w.mark === "different") return given ? `Different word: you wrote ${given}` : "Different word";
+  if (w.mark === "accent") return given ? `Accent: you wrote ${given}` : "Accent";
   return null;
+}
+
+function targetSegments(words: DisplayWord[]): FrSegment[] {
+  const out: FrSegment[] = [];
+  words.forEach((w, i) => {
+    const word = /[\p{L}\p{N}]/u.test(w.text);
+    out.push({ t: w.text, w: word, tone: w.mark !== "ok" ? w.mark : undefined });
+    if (i < words.length - 1) out.push({ t: " " });
+  });
+  return out;
 }
 
 export function MarkedLine({
   words,
   label,
   side = label === "Your answer" ? "answer" : "target",
+  onPick,
 }: {
   words: DisplayWord[];
   label: string;
   side?: "answer" | "target";
+  /** Correct-answer French uses the same tappable text as the study sentence. */
+  onPick?: (p: FrPick) => void;
 }) {
+  const notes = [...new Set(words.map((w) => inlineTagFor(w, side)).filter((tag): tag is string => Boolean(tag)))];
+  const tappable = side === "target" && onPick;
   return (
     <div className="stack gap-1">
       <span className="def-label">{label}</span>
-      <p className="compare-line" lang="fr">
-        {words.map((w, i) => {
-          const tag = inlineTagFor(w, side);
-          return (
+      {tappable ? (
+        <FrText segments={targetSegments(words)} className="compare-line" onPick={onPick} />
+      ) : (
+        <p className="compare-line" lang="fr">
+          {words.map((w, i) => (
             <span key={i}>
-              {w.mark === "ok" ? (
-                w.text
-              ) : (
-                <span className={`tok tok--${w.mark}`}>
-                  {w.text}
-                  {tag && (
-                    <span className="tok-tag">
-                      <span className="sr-only"> (</span>
-                      {tag}
-                      <span className="sr-only">)</span>
-                    </span>
-                  )}
-                </span>
-              )}
+              {w.mark === "ok" ? w.text : <span className={`tok tok--${w.mark}`}>{w.text}</span>}
               {i < words.length - 1 ? " " : ""}
             </span>
-          );
-        })}
-      </p>
+          ))}
+        </p>
+      )}
+      {notes.length > 0 && <p className="compare-note t-meta">{notes.join(" · ")}</p>}
     </div>
   );
 }
@@ -287,6 +295,7 @@ export function Exercise({
   source,
   items,
   onDone,
+  onPick,
   compact,
   doneLabel = "Done — return to Study",
 }: {
@@ -295,6 +304,8 @@ export function Exercise({
   source: string;
   items: PracticeItem[];
   onDone: () => void;
+  /** Opens the study word card. When omitted, this exercise opens the same card itself. */
+  onPick?: (p: FrPick) => void;
   compact?: boolean;
   doneLabel?: string;
 }) {
@@ -304,6 +315,9 @@ export function Exercise({
   const player = useApp((s) => s.player);
   const route = useApp((s) => s.route);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [localPick, setLocalPick] = useState<FrPick | null>(null);
+  const narrow = useNarrow();
+  const handlePick = onPick ?? ((p: FrPick) => setLocalPick(p));
   if (!sess) return null;
 
   const item = sess.items[sess.index];
@@ -350,6 +364,12 @@ export function Exercise({
     announce("New attempt. Type your answer.");
     requestAnimationFrame(() => inputRef.current?.focus());
   };
+  const tryFromMemory = () => {
+    // The answer stays "shown" for scoring. Only the French on screen is covered.
+    setDraft("");
+    patchUI(sessionKey, qk, { coverAnswer: true });
+    inputRef.current?.focus();
+  };
   const play = (slow: boolean) =>
     startPlayback({ kind: "exercise", label: "Practice audio", route }, Math.max(1, t.fr.length / 13), { speed: slow ? 0.75 : 1, texts: [t.fr] });
 
@@ -367,10 +387,7 @@ export function Exercise({
           value={sess.mode}
           onChange={(m) => {
             if (busy) return;
-            patchSession(sessionKey, {
-              mode: m,
-              modeNotice: m === "step" ? "Now practising step by step. Your whole-sentence answer and progress are kept." : "Now practising the whole sentence. Your step answers and progress are kept.",
-            });
+            patchSession(sessionKey, { mode: m, modeNotice: "" });
             announce(m === "step" ? "Scope changed to step by step." : "Scope changed to whole sentence.");
           }}
           options={[
@@ -378,7 +395,6 @@ export function Exercise({
             { value: "step", label: "Step by step" },
           ]}
         />
-        {sess.modeNotice && <p className="t-support" role="status">{sess.modeNotice}</p>}
       </div>
 
       <hr className="divider" />
@@ -419,13 +435,15 @@ export function Exercise({
             <span lang={kind === "Recall" ? "fr" : "en"}>{hintFor(kind, t)}</span>
           </p>
         )}
-        {ui.revealed && ui.phase !== "graded" && (
+        {ui.revealed && !ui.coverAnswer && ui.phase !== "graded" && (
           <div className="banner banner--warning" role="status">
             <Eye aria-hidden />
             <div className="banner-body">
               <p className="banner-title">Answer shown</p>
-              <p lang="fr" className="t-fr-lg" style={{ fontSize: 20 }}>{t.fr}</p>
-              <p className="t-support" style={{ color: "inherit" }}>If you check now, it’s recorded as “Answer known” and not counted as an independent result.</p>
+              <FrText text={t.fr} className="t-fr-lg" onPick={handlePick} />
+              <div className="btn-row">
+                <Button kind="secondary" onClick={tryFromMemory}>Try it now</Button>
+              </div>
             </div>
           </div>
         )}
@@ -474,12 +492,20 @@ export function Exercise({
               <Button kind="primary" busy={busy} onClick={() => submitAnswer(sessionKey)}>
                 {ui.phase === "techfail" ? "Retry check" : busy ? "Checking…" : "Check"}
               </Button>
-              <Button kind="tertiary" icon={<Lightbulb aria-hidden />} onClick={() => { patchUI(sessionKey, qk, { hint: true }); if (ui.attemptId) patchAttempt(ui.attemptId, { hinted: true }); announce("Hint shown."); }} disabledReason={ui.hint ? "Hint already shown." : busy ? "Checking in progress." : undefined}>
-                {ui.hint ? "Hint shown" : kind === "Dictation" ? "Show English hint" : "Show hint"}
-              </Button>
-              <Button kind="tertiary" icon={<Eye aria-hidden />} onClick={() => { patchUI(sessionKey, qk, { revealed: true }); if (ui.attemptId) patchAttempt(ui.attemptId, { answerKnown: true }); announce("Answer shown."); }} disabledReason={ui.revealed ? "Answer already shown." : busy ? "Checking in progress." : undefined}>
-                {ui.revealed ? "Answer shown" : "Show answer"}
-              </Button>
+              {ui.hint ? (
+                <span className="status-chip status-chip--on" role="status"><Lightbulb aria-hidden /> Hint shown</span>
+              ) : (
+                <Button kind="tertiary" icon={<Lightbulb aria-hidden />} onClick={() => { patchUI(sessionKey, qk, { hint: true }); if (ui.attemptId) patchAttempt(ui.attemptId, { hinted: true }); announce("Hint shown."); }} disabledReason={busy ? "Checking in progress." : undefined}>
+                  {kind === "Dictation" ? "Show English hint" : "Show hint"}
+                </Button>
+              )}
+              {ui.revealed ? (
+                <span className="status-chip status-chip--on" role="status"><Eye aria-hidden /> Answer shown</span>
+              ) : (
+                <Button kind="tertiary" icon={<Eye aria-hidden />} onClick={() => { patchUI(sessionKey, qk, { revealed: true, coverAnswer: false }); if (ui.attemptId) patchAttempt(ui.attemptId, { answerKnown: true }); announce("Answer shown."); }} disabledReason={busy ? "Checking in progress." : undefined}>
+                  Show answer
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -492,6 +518,7 @@ export function Exercise({
             isLast={isLast}
             onNext={next}
             onTryAgain={tryAgain}
+            onPick={handlePick}
             onDone={onDone}
             doneLabel={doneLabel}
             sessionAttempts={sessionAttempts}
@@ -500,16 +527,19 @@ export function Exercise({
           />
         )
       )}
-      <p className="t-meta">
-        {kind} practice doesn’t use your daily new-card limit and doesn’t change review scheduling. Practice history is separate from saved cards.
-      </p>
+      {!onPick && localPick && (
+        <ExerciseWord sentence={{ id: item.id, fr: item.fr, en: item.en, segments: [], steps: [], grammar: null, cards: [] }} pick={localPick} narrow={narrow} onClose={() => setLocalPick(null)} />
+      )}
     </section>
   );
 }
 
-function outcomeLabel(a: Attempt) {
-  if (a.answerKnown) return "Answer known";
-  return `${a.hinted ? "Hint used" : "Unaided"} · ${a.outcome === "correct" ? "Correct" : "Incorrect"}`;
+function ExerciseWord({ sentence, pick, narrow, onClose }: { sentence: StudySentence; pick: FrPick; narrow: boolean; onClose: () => void }) {
+  const panel = (
+    <WordPanel sentence={sentence} text={pick.text} occurrence={pick.occurrence} onGrammar={onClose} onClose={onClose} inSheet={narrow} />
+  );
+  if (narrow) return <Dialog sheet titleHidden title={`Meaning of “${pick.text}”`} onClose={onClose}>{panel}</Dialog>;
+  return <Popover anchor={pick.anchor} onClose={onClose} label={`Meaning of ${pick.text}`}>{panel}</Popover>;
 }
 
 function Result({
@@ -519,6 +549,7 @@ function Result({
   isLast,
   onNext,
   onTryAgain,
+  onPick,
   onDone,
   doneLabel,
   sessionAttempts,
@@ -531,6 +562,7 @@ function Result({
   isLast: boolean;
   onNext: () => void;
   onTryAgain: () => void;
+  onPick: (p: FrPick) => void;
   onDone: () => void;
   doneLabel: string;
   sessionAttempts: Attempt[];
@@ -543,9 +575,7 @@ function Result({
     <div className="stack gap-4">
       <div id={`ex-result-${sessionKey}`} tabIndex={-1} className="stack gap-3">
         {attempt.answerKnown ? (
-          <Banner tone="neutral" title="Answer known">
-            You checked after showing the answer, so this is recorded as “Answer known” and isn’t counted as an independent result.
-          </Banner>
+          <Banner tone="neutral" title="Answer known" />
         ) : correct ? (
           <Banner tone="success" title={attempt.hinted ? "Correct · hint used" : "Correct"} />
         ) : (
@@ -554,7 +584,7 @@ function Result({
         {correct ? (
           <div className="result-compact">
             <span className="def-label">Answer</span>
-            <p lang="fr" className="t-fr-lg">{target}</p>
+            <FrText text={target} className="t-fr-lg" onPick={onPick} />
             <div className="btn-row">
               <Button kind="tertiary" icon={<Play aria-hidden />} onClick={() => startPlayback({ kind: "exercise", label: "Practice audio", route }, Math.max(1, target.length / 13), { texts: [target] })} style={{ marginLeft: -12 }}>
                 Play answer
@@ -564,13 +594,9 @@ function Result({
         ) : (
           <div className="compare">
             <MarkedLine label="Your answer" words={r.answer} side="answer" />
-            <MarkedLine label="Correct answer" words={r.target} side="target" />
+            <MarkedLine label="Correct answer" words={r.target} side="target" onPick={onPick} />
           </div>
         )}
-        <p className="t-support">
-          Recorded as: {outcomeLabel(attempt)} · {attempt.scope}
-          {attempt.step ? `, step ${attempt.step}` : ""}. Hint and answer flags were recorded when you checked.
-        </p>
         <HistoryStatus attempt={attempt} />
       </div>
 
@@ -595,7 +621,7 @@ function Result({
 
 export function HistoryStatus({ attempt }: { attempt: Attempt }) {
   if (attempt.history === "saving") return <Spinner label="Saving to practice history…" />;
-  if (attempt.history === "saved") return <p className="t-support">Saved to practice history.</p>;
+  if (attempt.history === "saved") return null;
   return (
     <Banner tone="error" title="Couldn’t save to practice history" live="assertive" actions={<Button kind="secondary" onClick={() => saveHistory(attempt.id, true)}>Retry saving</Button>}>
       Your result above is kept. Retrying won’t create a second attempt.

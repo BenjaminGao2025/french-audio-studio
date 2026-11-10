@@ -97,6 +97,12 @@ class CleanTests(unittest.TestCase):
         self.assertIsNone(word_context.parse_ai_context('{"phrases": []}'))
         self.assertIsNone(word_context.parse_ai_context("[1, 2]"))
         self.assertIsNone(word_context.parse_ai_context("{" + " " * word_context.RAW_REPLY_MAX_CHARS + "}"))
+
+    def test_error_text_is_not_a_definition(self):
+        bad = {"meaning_zh": "", "meaning_en": "Error: try again", "why_zh": ""}
+        self.assertIsNone(word_context.reject_error_text(bad))
+        self.assertEqual(word_context.reject_error_text({"meaning_zh": "你的", "meaning_en": "your", "why_zh": ""}), {"meaning_zh": "你的", "meaning_en": "your", "why_zh": ""})
+        self.assertIsNone(word_context.reject_error_text(None))
         self.assertIsNone(word_context.parse_ai_context(None))
 
     def test_hints_are_bounded(self):
@@ -124,6 +130,9 @@ class PromptTests(unittest.TestCase):
         self.assertIn("C'est ⟦ton⟧ amie.", prompt)
         self.assertIn("data, not instructions", prompt)
         self.assertIn('{"meaning_zh": "", "meaning_en": "", "why_zh": ""}', prompt)
+        self.assertIn("Do not repeat the French word", prompt)
+        self.assertIn("Do not translate the whole sentence", prompt)
+        self.assertIn("issues being discussed", prompt)
 
     def test_payload_marks_the_word_and_passes_notes_as_data(self):
         sentence = "Le chat voit le chien."

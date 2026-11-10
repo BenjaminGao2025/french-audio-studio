@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { LogOut, ArrowRight, Monitor } from "lucide-react";
 import { MAX_SESSION_SIZE, MIN_SESSION_SIZE } from "../data/fixtures";
 import { type Device, listDevices, logout, signOutDevice, useSession } from "../api/auth";
@@ -8,6 +8,7 @@ import { initials } from "../components/Shell";
 import { SPEEDS, announce, get, go, routeUrl, set, setDailyNew, setPlaybackPrefs, setSessionSize, stopPlayback, useApp } from "../state/store";
 import { fmtWhen } from "../api/history";
 import { Banner, Button, Dialog, FieldText, PageHead, Pill, Spinner } from "../components/ui";
+import { animationOn, feedbackPrefs, prefersReducedMotion, saveFeedback, subscribeFeedback } from "../lib/feedback";
 
 type SaveState = "idle" | "saving" | "saved" | "failed" | "offline";
 
@@ -184,6 +185,7 @@ export function SettingsScreen({ sub }: { sub?: string }) {
           <SessionSizeField />
         </section>
         <Playback />
+        <FeedbackSettings />
         <section ref={accountRef} className="stack gap-5" aria-labelledby="acct-h" style={{ scrollMarginTop: 16 }}>
           <h2 id="acct-h" className="t-section">Account</h2>
           <Account onSignOut={() => setSignOut(true)} />
@@ -222,6 +224,41 @@ function Playback() {
       <p className="t-support">
         Saved on this device only. Practice listening clips always play once at their own speed. Days are counted in this device’s time zone ({settings.timezone}).
       </p>
+    </section>
+  );
+}
+
+function FeedbackSettings() {
+  const prefs = useSyncExternalStore(subscribeFeedback, feedbackPrefs, feedbackPrefs);
+  const reduced = useSyncExternalStore(
+    (fn) => {
+      if (typeof matchMedia !== "function") return () => {};
+      const mq = matchMedia("(prefers-reduced-motion: reduce)");
+      mq.addEventListener("change", fn);
+      return () => mq.removeEventListener("change", fn);
+    },
+    prefersReducedMotion,
+    () => false,
+  );
+  return (
+    <section className="stack gap-4" aria-labelledby="feedback-h">
+      <h2 id="feedback-h" className="t-section">Practice feedback</h2>
+      <div className="row gap-4" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
+        <label className="check">
+          <input type="checkbox" checked={prefs.sound} onChange={(e) => saveFeedback({ sound: e.target.checked })} /> Sound
+        </label>
+        <label className="field" style={{ width: 200 }}>
+          <span className="field-label">Volume</span>
+          <input className="range" type="range" min={0} max={100} value={Math.round(prefs.volume * 100)} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(prefs.volume * 100)} aria-valuetext={`${Math.round(prefs.volume * 100)} percent`} onChange={(e) => saveFeedback({ volume: Number(e.target.value) / 100 })} />
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={prefs.spoken} onChange={(e) => saveFeedback({ spoken: e.target.checked })} /> Spoken praise
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={prefs.animation} onChange={(e) => saveFeedback({ animation: e.target.checked })} /> Animation
+        </label>
+      </div>
+      {reduced && prefs.animation && !animationOn(prefs, reduced) && <p className="t-meta">Animation stays off while this device asks for reduced motion.</p>}
     </section>
   );
 }

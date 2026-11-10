@@ -5,8 +5,10 @@ import { type AppState, go, sayFrench } from "../state/store";
 import { cardKey, useSavedCards } from "../api/srs";
 import { askQuestion, checkExplanation, saveAnswer, saveGrammar, transcribeExplanation, transcribeTake, type ExplanationFeedback, type TutorTurn } from "../api/learning";
 import { evaluateShadowing } from "../lib/shadowing";
+import { gradeFeedback } from "../lib/feedback";
 import { FrText, type FrPick } from "../components/FrText";
 import { Banner, Button } from "../components/ui";
+import { formatFriendlyPhonetic } from "../lib/phonetic";
 import { StudyRecorder } from "../components/StudyRecorder";
 
 type Tab = AppState["study"]["tab"];
@@ -23,7 +25,7 @@ export function StudyNavigation({ value, onChange }: { value: Tab; onChange: (ta
     const next = e.key === "Home" ? tabs[0] : e.key === "End" ? tabs[tabs.length - 1] : tabs[(i + (e.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length];
     onChange(next.id); document.getElementById(`learn-tab-${next.id}`)?.focus();
   }}>
-    {GROUPS.map((g, i) => <div className="study-path-group" key={g.title} role="presentation"><p className="t-meta" aria-hidden="true"><span>{i + 1}</span> {g.title}</p><div className="study-path-options" role="presentation">{g.tabs.map(({ id, label, icon: Icon }) => <button key={id} id={`learn-tab-${id}`} type="button" role="tab" aria-selected={value === id} aria-controls="learn-panel" tabIndex={value === id ? 0 : -1} onClick={() => onChange(id)}><Icon size={18} aria-hidden /><span>{label}</span></button>)}</div></div>)}
+    {tabs.map(({ id, label, icon: Icon }) => <button key={id} id={`learn-tab-${id}`} type="button" role="tab" aria-selected={value === id} aria-controls="learn-panel" tabIndex={value === id ? 0 : -1} onClick={() => onChange(id)}><Icon size={18} aria-hidden /><span>{label}</span></button>)}
   </div>;
 }
 
@@ -32,8 +34,8 @@ export function WordsPanel({ sentence, onPick }: { sentence: StudySentence; onPi
   const words = raw?.words ?? [];
   const content = words.map((w, i) => ({ ...w, index: i })).filter((w) => !/^(article|pronoun|preposition|conjunction|determiner|pronom|préposition|déterminant)\b/i.test(w.type));
   const functionWords = words.map((w, i) => ({ ...w, index: i })).filter((w) => !content.some((c) => c.index === w.index));
-  const list = (items: typeof content) => <div className="study-word-grid">{items.map((w) => <article key={w.index} className="study-word-item"><div className="row row--between"><FrText segments={[{ t: w.fr, w: true, wi: w.index }]} className="t-strong" onPick={onPick} /><span className="t-meta">{w.type}</span></div><p>{w.meaning}</p>{w.ipa && <p className="t-meta">/{w.ipa.replace(/^\/|\/$/g, "")}/</p>}<details><summary>Usage & memory</summary><div className="stack gap-2">{w.lemma && w.lemma !== w.fr && <p className="t-meta">Base form: {w.lemma}</p>}{w.why && <p>{w.why}</p>}{w.english_link && <p>{w.english_link}</p>}{w.false_friend && <p className="t-meta">False friend: check the meaning carefully.</p>}</div></details><Button kind="tertiary" onClick={(e) => onPick({ text: w.fr, wordIndex: w.index, occurrence: 0, anchor: e.currentTarget })}>Meaning & save card</Button></article>)}</div>;
-  return <section className="stack gap-4"><div><h3 className="t-section">Words in this sentence</h3><p className="t-support">Tap a word to hear it, explore its meaning or save it for review.</p></div>
+  const list = (items: typeof content) => <div className="study-word-grid">{items.map((w) => <article key={w.index} className="study-word-item"><div className="row row--between"><FrText segments={[{ t: w.fr, w: true, wi: w.index }]} className="t-strong" onPick={onPick} /><span className="t-meta">{w.type}</span></div><p>{w.meaning}</p>{formatFriendlyPhonetic(w.ipa) && <p className="t-meta">{formatFriendlyPhonetic(w.ipa)}</p>}<details><summary>Usage & memory</summary><div className="stack gap-2">{w.lemma && w.lemma !== w.fr && <p className="t-meta">Base form: {w.lemma}</p>}{w.why && <p>{w.why}</p>}{w.english_link && <p>{w.english_link}</p>}{w.false_friend && <p className="t-meta">False friend: check the meaning carefully.</p>}</div></details><Button kind="tertiary" onClick={(e) => onPick({ text: w.fr, wordIndex: w.index, occurrence: 0, anchor: e.currentTarget })}>Meaning & save card</Button></article>)}</div>;
+  return <section className="stack gap-4"><div><h3 className="t-section">Words in this sentence</h3></div>
     {!!raw?.alignment?.length && <div className="study-gloss" aria-label="Word by word">{raw.alignment.map((a, i) => <div key={i}><FrText text={a.fr} onPick={onPick} /><span className="t-support">{a.en}</span></div>)}</div>}
     {raw?.order_note && <p className="study-note">{raw.order_note}</p>}
     {words.length ? <>{list(content.length ? content : functionWords)}{!!content.length && !!functionWords.length && <details className="panel"><summary>Function words · {functionWords.length}</summary>{list(functionWords)}</details>}</> : <Banner tone="neutral" title="No saved word breakdown">Tap words in the sentence above to look them up. Reanalyse an older text to get a full word breakdown.</Banner>}
@@ -52,16 +54,19 @@ export function ShadowingPanel({ text, id, compact = false, onPick }: { text: st
   const [transcript, setTranscript] = useState(shadowResults.get(id) ?? "");
   const result = transcript ? evaluateShadowing(text, transcript) : null;
   return <section className="stack gap-3 study-shadow" aria-label={compact ? "Step shadowing" : "Sentence shadowing"}>
-    {!compact && <><h3 className="t-section">Listen, say it, compare</h3><p className="t-support">Read the sentence aloud. Compare the words we hear with the model, then try again.</p></>}
+    {!compact && <h3 className="t-section">Listen, say it, compare</h3>}
     <Button kind="tertiary" icon={<Volume2 aria-hidden />} onClick={() => sayFrench(text)}>Listen to model</Button>
     <StudyRecorder key={id} id={id} label={compact ? "Say this step" : "Record this sentence"} onTake={async (blob, signal) => {
       const spoken = await transcribeTake(blob, "fr", text, signal);
-      if (!signal.aborted) { shadowResults.set(id, spoken); setTranscript(spoken); }
+      if (signal.aborted) return;
+      shadowResults.set(id, spoken);
+      setTranscript(spoken);
+      gradeFeedback(evaluateShadowing(text, spoken).score >= 70);
     }} />
     {result && <div className="study-score stack gap-3" aria-live="polite"><div className="study-score-metrics"><strong>{result.score}<small>/100</small></strong><span>Similarity <b>{result.accuracy}%</b></span><span>Completeness <b>{result.completeness}%</b></span></div>
       <div className="study-score-words">{result.words.map((w, i) => <span key={i} className={`shadow-${w.status}`} title={`${w.status}: ${w.score}%`}>{onPick ? <FrText text={w.word} onPick={onPick} /> : w.word}<span className="sr-only"> {w.status}</span></span>)}</div>
       {!!result.extras.length && <p className="t-support">Extra words heard: <span lang="fr">{result.extras.join(" ")}</span></p>}
-      <p className="t-meta">Green: matched · Amber: close · Underlined: missed or different</p><p className="t-support">Heard: <span lang="fr">{transcript}</span></p><p className="t-meta">Practice feedback compares recognised words. Listen to both recordings to check pronunciation.</p>
+      <p className="t-support">Heard: <span lang="fr">{transcript}</span></p>
     </div>}
   </section>;
 }

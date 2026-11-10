@@ -102,6 +102,8 @@ export interface QuestionUI {
   phase: "answering" | "submitting" | "techfail" | "graded";
   hint: boolean;
   revealed: boolean;
+  /** Hides the shown answer so the learner can type it, without clearing answer-known. */
+  coverAnswer?: boolean;
   attemptId?: string;
   emptyError?: boolean;
   revealedAfter?: boolean;

@@ -25,7 +25,7 @@ import { WordPanel } from "./WordPopup";
 import { Exercise } from "./Exercise";
 import { ExplainPanel, GrammarSave, ShadowingPanel, SoundsPanel, StructurePanel, StudyNavigation, WordsPanel } from "./StudyTools";
 import "./study-tools.css";
-import { StudyReviewNotice } from "../components/StudyReviewNotice";
+
 
 interface Pick {
   text: string;
@@ -87,16 +87,16 @@ export function StudyLearn() {
   };
 
   return (
-    <div className="page">
+    <div className="page page--wide">
       <PageHead
         title="Study"
         eyebrow={`${study.analysis.source} · ${plural(total, "sentence")}`}
         actions={
           <>
-            <Button kind="tertiary" className="btn--sm-text" icon={<HistoryIcon aria-hidden />} onClick={() => go("progress/history?tab=analyses")}>
+            <Button kind="tertiary" icon={<HistoryIcon aria-hidden />} onClick={() => go("progress/history?tab=analyses")}>
               Analyses in History
             </Button>
-            <Button kind="tertiary" className="btn--sm-text" icon={<Plus aria-hidden />} onClick={() => go("study/new")}>
+            <Button kind="tertiary" icon={<Plus aria-hidden />} onClick={() => go("study/new")}>
               New text
             </Button>
           </>
@@ -104,7 +104,6 @@ export function StudyLearn() {
       />
 
       <div className="stack gap-5">
-        <StudyReviewNotice />
         {!!study.analysis.failedParts && <Banner tone="warning" title="Some text could not be analysed">{study.analysis.failedParts} parts failed. Your original text is kept. Open New text to retry the missing parts.</Banner>}
         {!practising && s.raw?.accent_fixed_from && <Banner tone="info" title="Accents corrected">Original: <span lang="fr">{s.raw.accent_fixed_from}</span>. The sentence below uses corrected French accents.</Banner>}
         {/* Source, collapsed after success. Hidden while practising so the target never shows. */}
@@ -112,7 +111,6 @@ export function StudyLearn() {
           <div className="stack gap-2">
             <Button
               kind="tertiary"
-              className="btn--sm-text"
               icon={<PencilLine aria-hidden />}
               aria-expanded={srcOpen}
               aria-controls="source-panel"
@@ -129,13 +127,22 @@ export function StudyLearn() {
                   <Button kind="secondary" onClick={() => go("study/new")}>Edit text and analyse again</Button>
                   <Button kind="tertiary" onClick={() => setSrcOpen(false)}>Cancel</Button>
                 </div>
-                <p className="t-meta">Cancelling keeps your place: sentence {study.index + 1} of {total}.</p>
               </div>
             )}
           </div>
         )}
 
-        <section className="panel stack gap-4" aria-labelledby="current-sentence-heading">
+        {practising && total > 1 && (
+          <div className="row row--between">
+            <h2 className="t-label">Sentence {study.index + 1} of {total}</h2>
+            <div className="btn-row">
+              <Button kind="secondary" iconOnly icon={<ChevronLeft aria-hidden />} aria-label="Previous sentence" disabledReason={study.index === 0 ? "This is the first sentence." : undefined} onClick={() => goSentence(study.index - 1)} />
+              <Button kind="secondary" iconOnly icon={<ChevronRight aria-hidden />} aria-label="Next sentence" disabledReason={study.index === total - 1 ? "This is the last sentence." : undefined} onClick={() => goSentence(study.index + 1)} />
+            </div>
+          </div>
+        )}
+
+        {!practising && <section className="panel stack gap-4" aria-labelledby="current-sentence-heading">
           <div className="row row--between">
             <h2 id="current-sentence-heading" tabIndex={-1} className="t-label">
               {total > 1 ? `Sentence ${study.index + 1} of ${total}` : "Your sentence"}
@@ -148,26 +155,10 @@ export function StudyLearn() {
             )}
           </div>
 
-          {practising ? (
-            <p className="t-support">The sentence is hidden while you practise. It appears after you check your answer or choose Show answer.</p>
-          ) : (
+          {!practising && (
             <div ref={sentRef} style={{ position: "relative" }}>
               <FrText segments={s.segments} className="sentence-fr" onPick={onPick} />
               <p className="t-body muted" style={{ marginTop: 8 }}>{s.en}</p>
-              <p className="t-meta" style={{ marginTop: 4 }}>Tap a word or select a phrase to hear it and see its meaning.</p>
-              {pick && !narrow && sentRef.current?.contains(pick.el) && (
-                <Popover anchor={pick.el} container={sentRef.current} onClose={() => setPick(null)} label={`Meaning of ${pick.text}`}>
-                  <WordPanel
-                    key={`${pick.text}-${pick.wordIndex ?? ""}`}
-                    sentence={s}
-                    text={pick.text}
-                    wordIndex={pick.wordIndex}
-                    occurrence={pick.occurrence}
-                    onGrammar={() => { setPick(null); patchStudy({ tab: "grammar" }); }}
-                    onClose={() => setPick(null)}
-                  />
-                </Popover>
-              )}
             </div>
           )}
 
@@ -178,7 +169,7 @@ export function StudyLearn() {
               <AddToReview sentence={s} />
             </div>
           )}
-        </section>
+        </section>}
 
         <div className="stack gap-4">
           <StudyNavigation value={study.tab} onChange={(tab) => {
@@ -210,6 +201,7 @@ export function StudyLearn() {
                   },
                 ]}
                 onDone={() => patchStudy({ tab: "steps" })}
+                onPick={onPick}
                 compact
               />
             )}
@@ -217,8 +209,21 @@ export function StudyLearn() {
         </div>
       </div>
 
-      {pick && (narrow || !sentRef.current?.contains(pick.el)) && (
-        <Dialog sheet title={`Meaning of “${pick.text}”`} onClose={() => setPick(null)}>
+      {pick && !narrow && (
+        <Popover anchor={pick.el} onClose={() => setPick(null)} label={`Meaning of ${pick.text}`}>
+          <WordPanel
+            key={`${pick.text}-${pick.wordIndex ?? ""}`}
+            sentence={s}
+            text={pick.text}
+            wordIndex={pick.wordIndex}
+            occurrence={pick.occurrence}
+            onGrammar={() => { setPick(null); patchStudy({ tab: "grammar" }); }}
+            onClose={() => setPick(null)}
+          />
+        </Popover>
+      )}
+      {pick && narrow && (
+        <Dialog sheet titleHidden title={`Meaning of “${pick.text}”`} onClose={() => setPick(null)}>
           <WordPanel
             key={`${pick.text}-${pick.wordIndex ?? ""}`}
             sentence={s}
@@ -320,15 +325,13 @@ function StudyPlayer({ practising }: { practising: boolean }) {
           </select>
         </label>
         <Button
-          kind="tertiary"
+          kind="secondary"
           icon={<Repeat aria-hidden />}
           aria-pressed={mine?.repeat ?? false}
           onClick={() => (mine ? updatePlayer({ repeat: !mine.repeat }) : set((st) => ({ settings: { ...st.settings, repeat: !st.settings.repeat } })))}
         >
           Repeat {(mine?.repeat ?? false) ? "on" : "off"}
         </Button>
-      </div>
-      <div className="btn-row">
         <Button kind="secondary" icon={allPlaying ? <Pause aria-hidden /> : <Play aria-hidden />} onClick={toggleAll}>
           {allPlaying ? "Pause all sentences" : "Play all sentences"}
         </Button>
@@ -338,9 +341,6 @@ function StudyPlayer({ practising }: { practising: boolean }) {
           The voice didn’t load. Your place in the sentence is kept.
         </Banner>
       )}
-      <p className="row t-meta">
-        <span>Canadian French voice</span>
-      </p>
     </div>
   );
 }

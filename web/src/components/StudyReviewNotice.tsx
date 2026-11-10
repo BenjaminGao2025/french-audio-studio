@@ -21,7 +21,12 @@ export function StudyReviewNotice() {
     return () => { ctl.abort(); window.removeEventListener("focus", refresh); };
   }, [auth, route]);
   if (!counts?.total) return null;
-  return <Banner tone="info" title={`Due today · ${counts.total} cards`} actions={<Button kind="secondary" onClick={() => go("review/due")}>Review today’s cards</Button>}>
-    {counts.review + counts.learning} to revisit · {counts.new} new · {counts.reviewed_today} reviewed today. About {Math.max(1, Math.round(counts.total / 3))} minutes.
-  </Banner>;
+  const revisit = counts.review + counts.learning;
+  return (
+    <Banner
+      tone="info"
+      title={`Due today · ${counts.total} cards · ${revisit} to revisit`}
+      actions={<Button kind="secondary" onClick={() => go("review/due")}>Review today’s cards</Button>}
+    />
+  );
 }

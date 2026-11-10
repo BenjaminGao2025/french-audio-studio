@@ -14,6 +14,7 @@ import {
 } from "../api/practice";
 import { ApiError } from "../api/client";
 import { fmtClock } from "../lib/format";
+import { formatFriendlyPhonetic } from "../lib/phonetic";
 import { announce, get, go, retryPlayback, set, startPlayback, updatePlayer, useApp } from "../state/store";
 import { Banner, Button, PageHead, Pill, Spinner } from "../components/ui";
 import { BackTo } from "./Practice";
@@ -205,14 +206,14 @@ function Transcript({ s }: { s: ListeningSession }) {
   const words = m.words.filter((w) => w.ipa || (w.en && w.en !== PLACEHOLDER_GLOSS)).slice(0, 12);
   return (
     <section className="panel stack gap-3" aria-label="Text of the clip">
-      <p lang="fr" className="t-fr-lg" style={{ fontSize: 20 }}>{m.text}</p>
+      <p lang="fr" className="t-fr-lg">{m.text}</p>
       {(m.translation_en || m.breakdown) && <p className="t-support">{m.translation_en || m.breakdown}</p>}
       {words.length > 0 && (
         <ul className="stack gap-1" style={{ paddingLeft: 20 }}>
           {words.map((w, i) => (
             <li key={i}>
               <span lang="fr" className="t-strong">{w.w}</span>
-              {w.ipa && <span className="t-meta"> /{w.ipa.replace(/^\/|\/$/g, "")}/</span>}
+              {formatFriendlyPhonetic(w.ipa) && <span className="t-meta"> {formatFriendlyPhonetic(w.ipa)}</span>}
               {w.en && w.en !== PLACEHOLDER_GLOSS && <span> — {w.en}</span>}
             </li>
           ))}

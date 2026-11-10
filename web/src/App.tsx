@@ -14,6 +14,7 @@ import { DesignReference } from "./screens/Design";
 import { Gate, Legacy, NotFound } from "./screens/Auth";
 import { startStudyTime } from "./api/time";
 import { go, parseLocation, resetPlaybackClock, set, tick, useApp } from "./state/store";
+import { GradeToast } from "./components/GradeFeedback";
 
 function Routes() {
   const route = useApp((s) => s.route);
@@ -83,6 +84,7 @@ export default function App() {
           <Routes />
         </Shell>
         <Toasts />
+        <GradeToast />
         <Announcer />
       </AppRoot>
     </Frame>

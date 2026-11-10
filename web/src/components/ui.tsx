@@ -356,6 +356,7 @@ export function Dialog({
   closeLabel = "Close",
   dismissible = true,
   describedBy,
+  titleHidden = false,
 }: {
   title: string;
   onClose: () => void;
@@ -366,6 +367,8 @@ export function Dialog({
   closeLabel?: string;
   dismissible?: boolean;
   describedBy?: string;
+  /** Keep the title for assistive tech when the card already shows its own heading. */
+  titleHidden?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -409,8 +412,8 @@ export function Dialog({
         }}
       >
         {sheet && <div className="sheet-grip" aria-hidden />}
-        <div className="dialog-head">
-          <h2 id={titleId} className="t-section">
+        <div className={cx("dialog-head", titleHidden && "dialog-head--tools")}>
+          <h2 id={titleId} className={cx("t-section", titleHidden && "sr-only")}>
             {title}
           </h2>
           {dismissible && (
@@ -446,7 +449,7 @@ export function Popover({
     const place = () => {
       const a = anchor.getBoundingClientRect();
       const c = root.getBoundingClientRect();
-      const width = Math.min(400, c.width - 16);
+      const width = Math.min(440, c.width - 16);
       const left = Math.max(8, Math.min(a.left - c.left, c.width - width - 8));
       const below = c.bottom - a.bottom - 16;
       const above = a.top - c.top - 16;
@@ -509,10 +512,11 @@ export function Popover({
 }
 
 /* ---------- Importance (read-only) ---------- */
-export function Importance({ count }: { count: number }) {
+export function Importance({ count, lookups = "inline" }: { count: number; lookups?: "inline" | "muted" }) {
   const n = importanceFor(count);
+  const times = `${count} ${count === 1 ? "lookup" : "lookups"}`;
   return (
-    <p className="row gap-2" style={{ flexWrap: "nowrap" }}>
+    <p className={cx("row gap-2", lookups === "muted" && "importance--muted")} style={{ flexWrap: "nowrap" }}>
       <span className="stars" aria-hidden>
         {[1, 2, 3, 4, 5].map((i) => (
           <Star key={i} className={i <= n ? "" : "off"} fill={i <= n ? "currentColor" : "none"} />
@@ -521,7 +525,7 @@ export function Importance({ count }: { count: number }) {
       <span className="t-support">
         <span className="sr-only">{importanceLabel(count)}</span>
         <span aria-hidden>
-          Importance {n}/5 · {count} {count === 1 ? "lookup" : "lookups"}
+          {lookups === "muted" ? times : `Importance ${n}/5 · ${times}`}
         </span>
       </span>
     </p>

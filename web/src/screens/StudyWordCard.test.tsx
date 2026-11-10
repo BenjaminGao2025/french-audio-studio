@@ -95,7 +95,7 @@ afterEach(async () => {
 });
 
 describe("Task B — Study word card, selection and steps", () => {
-  it("prioritizes the English meaning and keeps dictionary and usage notes collapsed", async () => {
+  it("shows the English meaning and the dictionary, and keeps usage notes collapsed", async () => {
     const sentence: StudySentence = {
       ...SENTENCE,
       raw: { ...SENTENCE.raw!, words: [{ fr: "madame", ipa: "madam", lemma: "madame", type: "noun", meaning: "madam; a polite address", meaning_zh: "女士", why: "A polite way to address a woman.", english_link: "madam", false_friend: false }] },
@@ -104,11 +104,11 @@ describe("Task B — Study word card, selection and steps", () => {
     await wait(150);
     const panel = host.querySelector(".word-card")!;
     expect(panel.querySelector(".wp-definition")?.textContent).toBe("madam; a polite address");
+    expect(panel.textContent).toContain("[madam]");
+    expect(panel.textContent).not.toContain("Example sentence");
     expect(panel.textContent).not.toMatch(/\p{Script=Han}/u);
-    expect(panel.textContent).not.toContain("Définition de madame.");
-    expect(panel.textContent).not.toContain("A polite way to address a woman.");
-    await act(async () => findButton("Dictionary").click());
     expect(panel.textContent).toContain("Définition de madame.");
+    expect(panel.textContent).not.toContain("A polite way to address a woman.");
     await act(async () => findButton("Usage notes").click());
     expect(panel.textContent).toContain("A polite way to address a woman.");
     expect(panel.textContent).not.toMatch(/\p{Script=Han}/u);
@@ -177,7 +177,6 @@ describe("Task B — Study word card, selection and steps", () => {
     fake.failNext.add("dictionary");
     await act(async () => headerWord("madame").click());
     await wait(150);
-    await act(async () => findButton("Dictionary").click());
     expect(document.querySelector(".word-card")?.textContent).toContain("Dictionary request failed");
     await act(async () => findButton("Retry").click());
     await wait(150);

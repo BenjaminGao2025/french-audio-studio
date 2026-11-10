@@ -547,7 +547,7 @@ async def _compute_word_context(
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     async with httpx.AsyncClient(timeout=30.0) as client:
         _, raw_text = await ai.post_chat(client, payload, headers)
-    result = word_context.parse_ai_context(raw_text)
+    result = word_context.reject_error_text(word_context.parse_ai_context(raw_text))
     if result is None:
         logger.warning("Word context reply not usable: %r", raw_text[:300])
         raise HTTPException(

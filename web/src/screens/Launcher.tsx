@@ -115,9 +115,6 @@ export function Launcher({ kind }: { kind: "Recall" | "Dictation" }) {
 
         <div className="panel stack gap-2" aria-live="polite">
           <p className="t-strong">Source: {srcName} · {plural(items.length, "sentence")}</p>
-          <p className="t-support">
-            This practice doesn’t use your daily new-card limit and doesn’t change review scheduling. Attempts are saved to practice history, separate from your saved cards.
-          </p>
         </div>
 
         {src !== "choose" && !items.length && effectivePhase === "idle" && (

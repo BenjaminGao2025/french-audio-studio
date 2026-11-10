@@ -17,6 +17,9 @@ def test_alignment_glosses_are_contextual_not_literal():
     assert "ce qu'on appelle = so-called / what people call" in p
     assert "ne … que = only, not a negation" in p
     assert "not 'that which'" in p
+    assert "learner-friendly form" in p
+    assert "not /pʁɔ.pɔ.ze/" in p
+    assert "Do not repeat the French word" in p
 
 
 load_tests = testenv.function_tests(globals())
