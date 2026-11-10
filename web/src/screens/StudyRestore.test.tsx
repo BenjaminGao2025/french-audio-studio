@@ -73,7 +73,7 @@ describe("restored study flows", () => {
   it("shows actual due counts and opens review", async () => {
     respond = () => ({ counts: { total: 9, review: 3, learning: 2, new: 4, reviewed_today: 6 } });
     await act(async () => root.render(<StudyReviewNotice />)); await settle();
-    expect(host.textContent).toContain("Due today · 9 cards"); expect(host.textContent).toContain("5 to revisit");
+    expect(host.textContent).toContain("Due today"); expect(host.textContent).toContain("9 cards"); expect(host.textContent).toContain("5 to revisit");
     await click("Review today"); expect(get().route).toBe("review/due");
   });
   it("keeps grammar-card save status separate for each point", async () => {

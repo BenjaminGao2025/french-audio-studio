@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api/client";
 import { go, useApp } from "../state/store";
-import { Banner, Button } from "./ui";
+import { Button } from "./ui";
 
 type Counts = { total: number; review: number; learning: number; new: number; reviewed_today: number };
 export function StudyReviewNotice() {
@@ -23,10 +23,11 @@ export function StudyReviewNotice() {
   if (!counts?.total) return null;
   const revisit = counts.review + counts.learning;
   return (
-    <Banner
-      tone="info"
-      title={`Due today · ${counts.total} cards · ${revisit} to revisit`}
-      actions={<Button kind="secondary" onClick={() => go("review/due")}>Review today’s cards</Button>}
-    />
+    <p className="due-line">
+      <span className="meta-k">Due today</span>
+      <span className="meta-chip">{counts.total} cards</span>
+      <span className="meta-chip">{revisit} to revisit</span>
+      <Button kind="secondary" onClick={() => go("review/due")}>Review today’s cards</Button>
+    </p>
   );
 }

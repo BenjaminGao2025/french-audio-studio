@@ -64,7 +64,7 @@ describe("revealed recall answer", () => {
     expect(host.textContent).not.toContain("If you check now");
     expect(host.textContent).toContain("Hint shown");
     expect(host.textContent).toContain("Answer shown");
-    expect(host.querySelector(".status-chip")?.className).toContain("status-chip--on");
+    expect(host.querySelector("[aria-pressed='true']")).toBeTruthy();
 
     const failli = [...words].find((el) => el.dataset.word === "failli");
     expect(failli).toBeTruthy();

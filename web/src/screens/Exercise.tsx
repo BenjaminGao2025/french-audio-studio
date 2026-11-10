@@ -18,7 +18,7 @@ import {
 } from "../state/store";
 import { gradeAttempt } from "../api/dictation";
 import { FrText, type FrPick, type FrSegment } from "../components/FrText";
-import { Banner, Button, Dialog, Popover, Segmented, Spinner, useNarrow } from "../components/ui";
+import { Banner, Button, Dialog, Segmented, Spinner, useNarrow, WordDock } from "../components/ui";
 import { WordPanel } from "./WordPopup";
 
 /* ---------------- session helpers ---------------- */
@@ -373,14 +373,19 @@ export function Exercise({
   const play = (slow: boolean) =>
     startPlayback({ kind: "exercise", label: "Practice audio", route }, Math.max(1, t.fr.length / 13), { speed: slow ? 0.75 : 1, texts: [t.fr] });
 
-  const qLabel = `${kind} · Question ${sess.index + 1} of ${sess.items.length}${sess.mode === "step" ? ` · Step ${step + 1} of ${stepCount}` : ""}`;
+  const qLabel = kind;
 
   return (
     <section className={compact ? "exercise" : "exercise"} aria-labelledby={`ex-q-${sessionKey}`}>
       <div className="stack gap-3">
         <div className="row row--between">
           <h2 id={`ex-q-${sessionKey}`} tabIndex={-1} className={compact ? "t-label" : "t-section"}>{qLabel}</h2>
-          <span className="t-support">Source: {sess.source} · {plural(sess.items.length, "sentence")}</span>
+          <p className="meta-row t-support">
+            <span>Question {sess.index + 1} of {sess.items.length}</span>
+            {sess.mode === "step" && <span>Step {step + 1} of {stepCount}</span>}
+            <span>Source: {sess.source}</span>
+            <span>{plural(sess.items.length, "sentence")}</span>
+          </p>
         </div>
         <Segmented
           label="Practice scope"
@@ -418,7 +423,7 @@ export function Exercise({
               </Button>
               {myAudio && myAudio.status !== "error" && (
                 <span className="t-support" aria-live="off">
-                  {myAudio.status === "playing" ? `Playing practice audio · ${myAudio.speed}×` : myAudio.status === "loading" ? "Loading…" : myAudio.status === "ended" ? "Played" : "Paused"}
+                  {myAudio.status === "playing" ? `Playing practice audio at ${myAudio.speed}\u00a0×` : myAudio.status === "loading" ? "Loading…" : myAudio.status === "ended" ? "Played" : "Paused"}
                 </span>
               )}
             </div>
@@ -456,6 +461,7 @@ export function Exercise({
             <label htmlFor={`ex-input-${sessionKey}`} className="field-label">Your answer in French</label>
             <textarea
               id={`ex-input-${sessionKey}`}
+              name="practice-answer"
               ref={inputRef}
               className="textarea textarea--answer"
               lang="fr"
@@ -492,20 +498,32 @@ export function Exercise({
               <Button kind="primary" busy={busy} onClick={() => submitAnswer(sessionKey)}>
                 {ui.phase === "techfail" ? "Retry check" : busy ? "Checking…" : "Check"}
               </Button>
-              {ui.hint ? (
-                <span className="status-chip status-chip--on" role="status"><Lightbulb aria-hidden /> Hint shown</span>
-              ) : (
-                <Button kind="tertiary" icon={<Lightbulb aria-hidden />} onClick={() => { patchUI(sessionKey, qk, { hint: true }); if (ui.attemptId) patchAttempt(ui.attemptId, { hinted: true }); announce("Hint shown."); }} disabledReason={busy ? "Checking in progress." : undefined}>
-                  {kind === "Dictation" ? "Show English hint" : "Show hint"}
-                </Button>
-              )}
-              {ui.revealed ? (
-                <span className="status-chip status-chip--on" role="status"><Eye aria-hidden /> Answer shown</span>
-              ) : (
-                <Button kind="tertiary" icon={<Eye aria-hidden />} onClick={() => { patchUI(sessionKey, qk, { revealed: true, coverAnswer: false }); if (ui.attemptId) patchAttempt(ui.attemptId, { answerKnown: true }); announce("Answer shown."); }} disabledReason={busy ? "Checking in progress." : undefined}>
-                  Show answer
-                </Button>
-              )}
+              <Button
+                kind="tertiary"
+                icon={<Lightbulb aria-hidden />}
+                aria-pressed={ui.hint || undefined}
+                onClick={() => {
+                  if (ui.hint || busy) return;
+                  patchUI(sessionKey, qk, { hint: true });
+                  if (ui.attemptId) patchAttempt(ui.attemptId, { hinted: true });
+                  announce("Hint shown.");
+                }}
+              >
+                {ui.hint ? "Hint shown" : kind === "Dictation" ? "Show English hint" : "Show hint"}
+              </Button>
+              <Button
+                kind="tertiary"
+                icon={<Eye aria-hidden />}
+                aria-pressed={ui.revealed || undefined}
+                onClick={() => {
+                  if (ui.revealed || busy) return;
+                  patchUI(sessionKey, qk, { revealed: true, coverAnswer: false });
+                  if (ui.attemptId) patchAttempt(ui.attemptId, { answerKnown: true });
+                  announce("Answer shown.");
+                }}
+              >
+                {ui.revealed ? "Answer shown" : "Show answer"}
+              </Button>
             </div>
           </div>
         </div>
@@ -539,7 +557,7 @@ function ExerciseWord({ sentence, pick, narrow, onClose }: { sentence: StudySent
     <WordPanel sentence={sentence} text={pick.text} occurrence={pick.occurrence} onGrammar={onClose} onClose={onClose} inSheet={narrow} />
   );
   if (narrow) return <Dialog sheet titleHidden title={`Meaning of “${pick.text}”`} onClose={onClose}>{panel}</Dialog>;
-  return <Popover anchor={pick.anchor} onClose={onClose} label={`Meaning of ${pick.text}`}>{panel}</Popover>;
+  return <WordDock label={`Meaning of ${pick.text}`} onClose={onClose}>{panel}</WordDock>;
 }
 
 function Result({

@@ -7,7 +7,7 @@ import { askQuestion, checkExplanation, saveAnswer, saveGrammar, transcribeExpla
 import { evaluateShadowing } from "../lib/shadowing";
 import { gradeFeedback } from "../lib/feedback";
 import { FrText, type FrPick } from "../components/FrText";
-import { Banner, Button } from "../components/ui";
+import { Banner, Button, Tabs } from "../components/ui";
 import { formatFriendlyPhonetic } from "../lib/phonetic";
 import { StudyRecorder } from "../components/StudyRecorder";
 
@@ -19,14 +19,15 @@ const GROUPS = [
 ] as const;
 export function StudyNavigation({ value, onChange }: { value: Tab; onChange: (tab: Tab) => void }) {
   const tabs = GROUPS.flatMap((g) => [...g.tabs]);
-  return <div className="study-path" role="tablist" aria-label="Sentence practice" onKeyDown={(e) => {
-    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
-    e.preventDefault(); const i = tabs.findIndex((t) => t.id === value);
-    const next = e.key === "Home" ? tabs[0] : e.key === "End" ? tabs[tabs.length - 1] : tabs[(i + (e.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length];
-    onChange(next.id); document.getElementById(`learn-tab-${next.id}`)?.focus();
-  }}>
-    {tabs.map(({ id, label, icon: Icon }) => <button key={id} id={`learn-tab-${id}`} type="button" role="tab" aria-selected={value === id} aria-controls="learn-panel" tabIndex={value === id ? 0 : -1} onClick={() => onChange(id)}><Icon size={18} aria-hidden /><span>{label}</span></button>)}
-  </div>;
+  return (
+    <Tabs
+      label="Sentence practice"
+      idBase="learn"
+      value={value}
+      tabs={tabs.map((t) => ({ value: t.id, label: t.label }))}
+      onChange={onChange}
+    />
+  );
 }
 
 export function WordsPanel({ sentence, onPick }: { sentence: StudySentence; onPick: (p: FrPick) => void }) {
@@ -38,7 +39,7 @@ export function WordsPanel({ sentence, onPick }: { sentence: StudySentence; onPi
   return <section className="stack gap-4"><div><h3 className="t-section">Words in this sentence</h3></div>
     {!!raw?.alignment?.length && <div className="study-gloss" aria-label="Word by word">{raw.alignment.map((a, i) => <div key={i}><FrText text={a.fr} onPick={onPick} /><span className="t-support">{a.en}</span></div>)}</div>}
     {raw?.order_note && <p className="study-note">{raw.order_note}</p>}
-    {words.length ? <>{list(content.length ? content : functionWords)}{!!content.length && !!functionWords.length && <details className="panel"><summary>Function words · {functionWords.length}</summary>{list(functionWords)}</details>}</> : <Banner tone="neutral" title="No saved word breakdown">Tap words in the sentence above to look them up. Reanalyse an older text to get a full word breakdown.</Banner>}
+    {words.length ? <>{list(content.length ? content : functionWords)}{!!content.length && !!functionWords.length && <details className="panel"><summary>Function words ({functionWords.length})</summary>{list(functionWords)}</details>}</> : <Banner tone="neutral" title="No saved word breakdown">Tap words in the sentence above to look them up. Reanalyse an older text to get a full word breakdown.</Banner>}
   </section>;
 }
 
@@ -116,11 +117,11 @@ export function ExplainPanel({ sentence }: { sentence: StudySentence }) {
   return <div className="stack gap-5"><section className="panel stack gap-3"><h3 className="t-section">Explain it in your own words</h3><p className="t-support">What does the sentence mean, and why is it built this way? Use Chinese or English. The tutor helps you find gaps.</p>
     <label className="field-label" htmlFor="explain-draft">My explanation</label><textarea className="textarea" id="explain-draft" rows={4} maxLength={2000} value={state.explanation} disabled={!!busy} onChange={(e) => update({ explanation: e.target.value })} />
     <StudyRecorder id={`explain:${sentence.id}`} label="Speak my explanation (Chinese)" disabled={!!busy} onTake={spoken("explanation")} />
-    <details><summary>Try a sentence of my own</summary><label className="sr-only" htmlFor="explain-variation">My own French sentence</label><textarea className="textarea" id="explain-variation" lang="fr" rows={2} maxLength={500} disabled={!!busy} value={state.variation} onChange={(e) => update({ variation: e.target.value })} placeholder="Change a detail and make a new French sentence." /></details>
+    <details><summary>Try a sentence of my own</summary><label className="sr-only" htmlFor="explain-variation">My own French sentence</label><textarea className="textarea" id="explain-variation" lang="fr" rows={2} maxLength={500} disabled={!!busy} value={state.variation} onChange={(e) => update({ variation: e.target.value })} name="explain-variation" autoComplete="off" placeholder="e.g. J’ai failli…" /></details>
     <Button kind="primary" disabled={!state.explanation.trim() || !!busy} busy={busy === "explain"} onClick={() => void check()}>Check my understanding</Button>
     {fb && <div className="study-feedback stack gap-3" aria-live="polite"><h4 className="t-strong">{fb.verdict === "solid" ? "You explained the key ideas" : fb.verdict === "partial" ? "A few gaps to work on" : "Let’s revisit the key ideas"}</h4>{!!fb.got_right.length && <div><p className="t-label">What you got right</p><ul>{fb.got_right.map((s, i) => <li key={i}>{s}</li>)}</ul></div>}{!!fb.gaps.length && <div><p className="t-label">What to revisit</p><ul>{fb.gaps.map((s, i) => <li key={i}>{s}</li>)}</ul></div>}{fb.variation && <p>{fb.variation.ok ? "Your sentence works." : `Try: ${fb.variation.corrected}`} {fb.variation.note}</p>}{fb.follow_up && <div className="study-note"><strong>Think about this</strong><p>{fb.follow_up}</p><Button kind="tertiary" onClick={() => { update({ history: [...state.history, { role: "tutor", content: fb.follow_up }] }); document.getElementById("tutor-question")?.focus(); }}>Answer below</Button></div>}</div>}
   </section><section className="panel stack gap-3"><h3 className="t-section">Ask about this sentence</h3><div className="study-conversation" aria-live="polite">{state.history.map((turn, i) => <article key={i} className={`study-turn study-turn--${turn.role}`}><p className="t-meta">{turn.role === "learner" ? "You" : "Tutor"}</p><p style={{ whiteSpace: "pre-wrap" }}>{turn.content}</p>{turn.role === "tutor" && i > 0 && state.history[i - 1]?.role === "learner" && <Button kind="tertiary" disabled={state.saved.includes(i) || !!busy} busy={busy === `save-${i}`} onClick={() => void request(`save-${i}`, async (signal) => { await saveAnswer(sentence, state.history[i - 1].content, turn.content); if (!signal.aborted) update({ saved: [...current.current.saved, i] }); })}>{state.saved.includes(i) ? "Practice card saved" : "Turn this answer into a practice card"}</Button>}</article>)}</div>
-    <label className="field-label" htmlFor="tutor-question">My question or follow-up answer</label><textarea className="textarea" id="tutor-question" rows={2} maxLength={1000} value={state.question} disabled={!!busy} onChange={(e) => update({ question: e.target.value })} placeholder="Why is this word here? Could I say it another way?" />
+    <label className="field-label" htmlFor="tutor-question">My question or follow-up answer</label><textarea className="textarea" id="tutor-question" rows={2} maxLength={1000} value={state.question} disabled={!!busy} onChange={(e) => update({ question: e.target.value })} name="tutor-question" autoComplete="off" placeholder="e.g. Why is this word here…" />
     <StudyRecorder id={`ask:${sentence.id}`} label="Ask by speaking (Chinese)" disabled={!!busy} onTake={spoken("question")} /><Button kind="primary" disabled={!state.question.trim() || !!busy} busy={busy === "ask"} onClick={() => void ask()}>Ask tutor</Button>
   </section>{error && <Banner tone="error" title="Couldn’t finish" live="assertive">{error} Your draft is kept. Try again.</Banner>}</div>;
 }

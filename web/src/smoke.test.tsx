@@ -60,6 +60,7 @@ beforeAll(async () => {
   installFakeBackend();
   (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = class {
     observe() {}
+    unobserve() {}
     disconnect() {}
   };
   Element.prototype.scrollIntoView = () => {};
@@ -491,8 +492,8 @@ describe("8. feedback and copy cleanups", () => {
         });
         const wordBtn = host.querySelector<HTMLElement>('[data-word="failli"]')!;
         await act(async () => wordBtn.click());
-        expect(host.querySelector(".overlay--sheet")).toBeTruthy();
-        const closeBtn = host.querySelector<HTMLElement>('.overlay--sheet button[aria-label="Close"]')!;
+        expect(document.querySelector(".overlay--sheet")).toBeTruthy();
+        const closeBtn = document.querySelector<HTMLElement>('.overlay--sheet button[aria-label="Close"]')!;
         await act(async () => closeBtn.click());
       }
       for (const w of [768, 1200]) {

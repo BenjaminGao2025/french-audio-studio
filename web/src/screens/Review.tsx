@@ -19,7 +19,7 @@ import { importanceFor } from "../lib/lookup";
 import { formatFriendlyPhonetic } from "../lib/phonetic";
 import { cx, nf, plural } from "../lib/format";
 import { announce, get, getCardLookups, go, introduceNewCard, sayFrench, set, useApp, type ReviewUI } from "../state/store";
-import { Banner, Button, Dialog, DisabledReason, Disclosure, FieldText, Importance, PageHead, Pill, Popover, Skeleton, Spinner, Tabs, useNarrow } from "../components/ui";
+import { Banner, Button, Dialog, DisabledReason, Disclosure, FieldText, Importance, PageHead, Pill, Skeleton, Spinner, Tabs, useNarrow, WordDock } from "../components/ui";
 import { FrText, tokenizeFrench, type FrPick, type FrSegment } from "../components/FrText";
 import { WordPanel } from "./WordPopup";
 import { MarkedLine } from "./Exercise";
@@ -116,6 +116,9 @@ function cardSpeech(card: ReviewCard): string {
   return card.sentenceFr;
 }
 
+/** Shown only when a card has no interval preview, so the grade buttons are never hollow. */
+const FALLBACK_INTERVALS: Record<number, number> = { 1: 60, 2: 6 * 3600, 3: 86400, 4: 4 * 86400 };
+
 const RATINGS: { value: 1 | 2 | 3 | 4; label: string }[] = [
   { value: 1, label: "Again" },
   { value: 2, label: "Hard" },
@@ -154,7 +157,7 @@ export function ReviewScreen({ sub }: { sub: string }) {
   const tab = sub === "session" ? "due" : sub === "library" ? "saved" : sub;
   return (
     <div className="page page--wide">
-      <PageHead title="Review" desc="Cards you saved come back when they’re due. Only answering cards here changes their review schedule." />
+      <PageHead title="Review" desc={sub === "session" ? undefined : "Cards you saved come back when they’re due. Only answering cards here changes their review schedule."} />
       <div className="stack gap-5">
         <Tabs label="Review sections" idBase="review" value={tab} tabs={TABS} onChange={(v) => go(`review/${v}`, { focus: false })} />
         <div id="review-panel" role="tabpanel" aria-labelledby={`review-tab-${tab}`}>
@@ -637,8 +640,15 @@ function ReviewSession() {
   const hereLine = englishGloss(meta.ctx_en);
   const showEnglish = Boolean(translationZh && translationEn);
 
+  const intervalText = (value: number) => {
+    const provided = intervals[String(value)];
+    const blank = Object.keys(intervals).length === 0;
+    const secs = provided == null ? (blank ? FALLBACK_INTERVALS[value] : undefined) : provided;
+    return secs == null ? "" : formatInterval(secs);
+  };
+
   return (
-    <>
+    <div className={cx("with-word-card", pick && !narrow && "is-open")}>
       <div className="exercise" data-mode={mode} data-card-id={card.id}>
         <div className="row row--between">
           <h2 id="rev-q" tabIndex={-1} className="t-section">Card {review.index + 1} of {cards.length}</h2>
@@ -648,21 +658,20 @@ function ReviewSession() {
         <div className="row">
           <Pill tone={card.group === "new" ? "info" : undefined}>{groupLabel}</Pill>
           <Pill>{MODE_LABEL[mode]}</Pill>
-          {card.group === "new" && <span className="t-support">First introduction · uses 1 of today’s new-card allowances</span>}
+          {card.group === "new" && <span className="t-support">First introduction. Uses 1 of today’s new-card allowances.</span>}
         </div>
         <hr className="divider" />
 
         {!revealed ? (
-          <>
+          <div className="rev-stage">
             {/* ---------------- FRONT, per mode ---------------- */}
             {mode === "listen" && (
               <div className="rev-listen stack gap-3">
                 <p className="t-support">Listen, then say what it means. Show the answer to check.</p>
                 <div className="btn-row">
-                  <Button kind="primary" className="rev-play-big" iconOnly icon={<Play aria-hidden />} aria-label="Play the sentence" onClick={() => sayFrench(sentenceFr)} />
-                  <Button kind="secondary" icon={<Volume2 aria-hidden />} onClick={() => sayFrench(sentenceFr, 0.75)}>Slow 0.75×</Button>
+                  <Button kind="secondary" className="rev-play-big" iconOnly icon={<Play aria-hidden />} aria-label="Play the sentence" onClick={() => sayFrench(sentenceFr)} />
+                  <Button kind="secondary" icon={<Volume2 aria-hidden />} onClick={() => sayFrench(sentenceFr, 0.75)}>Slow 0.75&nbsp;×</Button>
                 </div>
-                <p className="t-meta">Press R to replay · Space to show the answer</p>
               </div>
             )}
             {mode === "speak" && (
@@ -678,10 +687,9 @@ function ReviewSession() {
                 <FrText segments={tokenizeFrench(card.target)} className="t-fr-lg" onPick={onWordPick} />
                 <p className="t-support">What does it mean?</p>
                 <div className="btn-row">
-                  <Button kind="primary" className="rev-play-big" iconOnly icon={<Play aria-hidden />} aria-label="Play the word" onClick={() => sayFrench(card.target)} />
-                  <Button kind="secondary" icon={<Volume2 aria-hidden />} onClick={() => sayFrench(card.target, 0.75)}>Slow 0.75×</Button>
+                  <Button kind="secondary" className="rev-play-big" iconOnly icon={<Play aria-hidden />} aria-label="Play the word" onClick={() => sayFrench(card.target)} />
+                  <Button kind="secondary" icon={<Volume2 aria-hidden />} onClick={() => sayFrench(card.target, 0.75)}>Slow 0.75&nbsp;×</Button>
                 </div>
-                <p className="t-meta">Press R to replay · Space to show the answer</p>
               </div>
             )}
             {typed && (
@@ -709,6 +717,8 @@ function ReviewSession() {
                   <label htmlFor="rev-input" className="field-label">Your answer in French</label>
                   <textarea
                     id="rev-input"
+                    name="review-answer"
+                    autoComplete="off"
                     ref={inputRef}
                     className="textarea textarea--answer"
                     lang="fr"
@@ -731,17 +741,17 @@ function ReviewSession() {
                 <Button kind={typed ? "secondary" : "primary"} icon={<Eye aria-hidden />} onClick={() => reveal()}>Show answer</Button>
               </div>
             </div>
-            <p className="t-meta">Space / Enter shows the answer · R replays</p>
-          </>
+            <p className="key-hints"><span><kbd>Space</kbd> shows the answer</span><span><kbd>R</kbd> replays</span></p>
+          </div>
         ) : (
           <>
             {/* ---------------- BACK, after Show answer or Check ---------------- */}
             <div id="rev-result" tabIndex={-1} className="stack gap-4">
               <div className="rev-answer-row" data-sentence={sentenceFr}>
-                <FrText segments={backSegments} className="t-fr-lg" onPick={onWordPick} />
+                <FrText segments={backSegments} className={isWordCard ? "t-fr-lg" : "sentence-fr"} onPick={onWordPick} />
                 <div className="btn-row">
                   <Button kind="secondary" icon={<Play aria-hidden />} onClick={() => sayFrench(cardSpeech(card))}>Play</Button>
-                  <Button kind="secondary" icon={<Volume2 aria-hidden />} onClick={() => sayFrench(cardSpeech(card), 0.75)}>Slow 0.75×</Button>
+                  <Button kind="secondary" icon={<Volume2 aria-hidden />} onClick={() => sayFrench(cardSpeech(card), 0.75)}>Slow 0.75&nbsp;×</Button>
                 </div>
               </div>
               {(translationZh || translationEn) && (
@@ -757,9 +767,14 @@ function ReviewSession() {
                 </div>
               )}
               {isWordCard && (
-                <p className="rev-meta t-support" lang="fr">
-                  <strong>{card.target}</strong>{metaBits.length ? ` · ${metaBits.join(" · ")}` : ""}
-                </p>
+                <div className="rev-meta">
+                  <p className="t-strong" lang="fr">{card.target}</p>
+                  {metaBits.length > 0 && (
+                    <p className="meta-row">
+                      {metaBits.map((bit) => <span className="meta-chip" key={bit}>{bit}</span>)}
+                    </p>
+                  )}
+                </div>
               )}
               {(dictLine || (hereLine && hereLine !== dictLine) || meta.hook) && (
                 <div className="rev-snapshot stack gap-1">
@@ -791,8 +806,7 @@ function ReviewSession() {
             <div className="rev-actionbar">
             <div className="rev-ratings" role="group" aria-label="How well did you remember?">
               {RATINGS.map((r) => {
-                const secs = intervals[String(r.value)];
-                const text = secs == null ? "" : formatInterval(secs);
+                const text = intervalText(r.value);
                 return (
                   <button
                     key={r.value}
@@ -813,7 +827,7 @@ function ReviewSession() {
             <div className="btn-row">
               <Button kind="secondary" icon={<Archive aria-hidden />} onClick={() => { masterCard(card.id); next(); }}>Mark mastered</Button>
             </div>
-            <p className="t-meta">Press 1–4 to rate · Enter takes the suggestion{u.nextDue ? ` · Next review ${dueIn(u.nextDue)}` : ""}</p>
+            <p className="key-hints"><span><kbd>1</kbd>–<kbd>4</kbd> rates</span><span><kbd>Enter</kbd> takes the suggestion</span>{u.nextDue ? <span>Next review {dueIn(u.nextDue)}</span> : null}</p>
             </div>
           </>
         )}
@@ -824,16 +838,16 @@ function ReviewSession() {
       </div>
 
       {pick && !narrow && (
-        <Popover anchor={pick.anchor} onClose={() => setPick(null)} label={`Meaning of ${pick.text}`}>
+        <WordDock label={`Meaning of ${pick.text}`} onClose={() => setPick(null)}>
           <WordPanel key={`${pick.text}-${pick.wordIndex ?? ""}`} sentence={wpSentence} text={pick.text} wordIndex={pick.wordIndex} occurrence={pick.occurrence} onGrammar={() => setPick(null)} onClose={() => setPick(null)} />
-        </Popover>
+        </WordDock>
       )}
       {pick && narrow && (
         <Dialog sheet titleHidden title={`Meaning of “${pick.text}”`} onClose={() => setPick(null)}>
           <WordPanel key={`${pick.text}-${pick.wordIndex ?? ""}`} sentence={wpSentence} text={pick.text} wordIndex={pick.wordIndex} occurrence={pick.occurrence} onGrammar={() => setPick(null)} onClose={() => setPick(null)} inSheet />
         </Dialog>
       )}
-    </>
+    </div>
   );
 }
 
@@ -853,6 +867,7 @@ function SavedCards() {
   const [sel, setSel] = useState<Record<string, boolean>>({});
   const [savedSort, setSavedSort] = useState<{ key: "saved" | "due" | "importance"; dir: "asc" | "desc" }>({ key: "saved", dir: "desc" });
   const [page, setPage] = useState(0);
+  const narrow = useNarrow();
   const setF = (p: Partial<typeof f>) => set((s) => ({ libFilters: { ...s.libFilters, ...p } }));
 
   const q = f.q.trim().toLowerCase();
@@ -942,7 +957,7 @@ function SavedCards() {
       <p className="t-meta">Saved cards come back in Review. Favorite is only a bookmark.</p>
       <div className="filter-bar">
         <div style={{ flex: "1 1 220px" }}>
-          <FieldText label="Search" type="search" inputMode="search" value={f.q} onChange={(v) => setF({ q: v })} placeholder="French or English" lang="fr" />
+          <FieldText label="Search" name="saved-search" type="search" inputMode="search" value={f.q} onChange={(v) => setF({ q: v })} placeholder="e.g. j’ai failli…" lang="fr" />
         </div>
         <label className="field" style={{ minWidth: 170 }}>
           <span className="field-label">Mastered cards</span>
@@ -965,8 +980,10 @@ function SavedCards() {
         <label className="check check--box"><input type="checkbox" checked={f.favoritesOnly} onChange={(e) => setF({ favoritesOnly: e.target.checked })} /> Favorites only</label>
       </div>
       <div className="row row--between">
-        <p className="t-support" aria-live="polite">
-          Showing {plural(matchingSentences, "sentence")} · {plural(matchingCards, "card")}{(q || f.mastered !== "hide" || f.minImportance || f.favoritesOnly) ? ` of ${nf.format(savedTotal)} saved cards` : ""}
+        <p className="t-support meta-row" aria-live="polite">
+          <span>Showing {plural(matchingSentences, "sentence")}</span>
+          <span>{plural(matchingCards, "card")}</span>
+          {(q || f.mastered !== "hide" || f.minImportance || f.favoritesOnly) ? <span>of {nf.format(savedTotal)} saved cards</span> : null}
         </p>
         {!selecting ? (
           <Button kind="secondary" onClick={() => setSelecting(true)} disabledReason={!matchingCards ? "No cards to select." : undefined}>Select cards to practise</Button>
@@ -987,6 +1004,27 @@ function SavedCards() {
         </Banner>
       ) : (
         <>
+          {narrow ? (
+            <ul className="saved-cards">
+              {pageRows.map(({ c, s }) => {
+                const fav = Boolean(favorites[favoriteKey(c)]);
+                const speech = c.word || s?.fr || "";
+                const meaning = [c.meaning, s?.en].find((v) => v && !/\p{Script=Han}/u.test(v)) || "—";
+                return (
+                  <li key={c.id} className="saved-card" data-card-id={c.id}>
+                    <p className="saved-card-fr" lang="fr">{c.word || s?.fr || ""}</p>
+                    <p className="t-support">{meaning}</p>
+                    <p className="meta-row"><span className="meta-k">Due</span><span className="num">{compactDue(c.due)}</span><span className="meta-chip">{c.mastered ? "Mastered" : STATUS_LABEL[c.status]}</span></p>
+                    <div className="saved-action-btns">
+                      <Button kind="tertiary" iconOnly aria-label={`Play ${c.word || "sentence"}`} icon={<Play aria-hidden />} onClick={() => sayFrench(speech)} />
+                      <Button kind="tertiary" iconOnly aria-pressed={fav} aria-label={fav ? "Remove favorite" : "Favorite"} icon={fav ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />} onClick={() => void setFavorite(speech, !fav)} />
+                      <Button kind="tertiary" iconOnly aria-label={c.mastered ? "Restore" : "Mark mastered"} icon={<Archive aria-hidden />} onClick={() => (c.mastered ? void restoreMastered(c.id) : masterCard(c.id))} />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
           <div className="table-wrap saved-table-wrap">
             <table className="saved-table">
               <colgroup>
@@ -1047,6 +1085,7 @@ function SavedCards() {
               </tbody>
             </table>
           </div>
+          )}
           <div className="saved-pager">
             <Button kind="secondary" icon={<ChevronLeft aria-hidden />} disabledReason={curPage === 0 ? "You are on the first page." : undefined} onClick={() => setPage(curPage - 1)}>Prev</Button>
             <span className="t-support num" aria-live="polite">Page {curPage + 1} of {pageCount}</span>
@@ -1059,7 +1098,7 @@ function SavedCards() {
         <div className="bulk-bar" role="region" aria-label="Bulk practice">
           <p className="grow t-strong" aria-live="polite">
             Practise {plural(selectedIds.length, "selected card")} from {nf.format(savedTotal)} library cards
-            {selectedIds.length ? <span className="t-support"> · from {plural(selSentences, "sentence")}</span> : null}
+            {selectedIds.length ? <span className="t-support"> from {plural(selSentences, "sentence")}</span> : null}
           </p>
           <Button kind="secondary" onClick={() => { setSelecting(false); setSel({}); }}>Cancel</Button>
           <Button kind="primary" onClick={startBulk} disabledReason={!selectedIds.length ? "Select at least one card." : undefined}>Start practice</Button>

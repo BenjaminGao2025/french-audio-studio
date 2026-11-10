@@ -81,47 +81,16 @@ export function StudyInput() {
         actions={study.sentences.length > 0 && !busy ? <Button kind="tertiary" onClick={() => go("study")}>Back to current sentence</Button> : undefined}
       />
       <div className="stack gap-4">
-        <div className="study-home-tools">
-          <StudyReviewNotice />
-          <div className="btn-row">
-            <Button kind="secondary" onClick={() => go("study/personal")}>Practise my own words</Button>
-            <Button kind="tertiary" onClick={() => go("study/grammar")}>My grammar map</Button>
-          </div>
-        </div>
-        <Segmented
-          label="Input mode"
-          value={mode}
-          onChange={(m) => patchStudy({ mode: m })}
-          options={[
-            { value: "text", label: "Study French text" },
-            { value: "ideas", label: "Practise my own ideas" },
-          ]}
-        />
-        {last.record && !busy && (
-          <Banner
-            tone="info"
-            title="Pick up where you left off?"
-            actions={
-              <>
-                <Button kind="secondary" onClick={() => last.record && openAnalysisInStudy(last.record)}>Open last analysis</Button>
-                <Button kind="tertiary" onClick={last.dismiss}>Dismiss</Button>
-              </>
-            }
-          >
-            {fmtWhen(last.record.created_at)} · {plural(sentenceCount(last.record), "sentence")} saved.
-          </Banner>
-        )}
-        {(study.restored || forced === "restored") && draft.trim() && (
-          <Banner
-            tone="info"
-            title="Draft restored"
-            actions={<Button kind="tertiary" onClick={() => patchStudy({ restored: false })}>Dismiss</Button>}
-          >
-            We kept what you typed earlier in “{mode === "ideas" ? "Practise my own ideas" : "Study French text"}”. Each mode keeps its own draft.
-          </Banner>
-        )}
-
         <div className="panel stack gap-4 study-composer">
+          <Segmented
+            label="Input mode"
+            value={mode}
+            onChange={(m) => patchStudy({ mode: m })}
+            options={[
+              { value: "text", label: "Study French text" },
+              { value: "ideas", label: "Practise my own ideas" },
+            ]}
+          />
           <div className="field">
             <label htmlFor="study-input" className="field-label">
               {mode === "text" ? "French text" : "Your idea"}
@@ -133,10 +102,13 @@ export function StudyInput() {
             </p>
             <textarea
               id="study-input"
+              name="study-draft"
+              autoComplete="off"
               ref={taRef}
               className="textarea"
               lang={mode === "text" ? "fr" : "en"}
               rows={mode === "text" ? 12 : 8}
+              placeholder={mode === "text" ? "e.g. J’ai failli oublier…" : "e.g. I almost forgot the meeting…"}
               value={draft}
               aria-invalid={v === "over" || a.status === "invalid" ? true : undefined}
               aria-describedby={`study-help study-count${a.status === "invalid" ? " study-err" : ""}`}
@@ -192,6 +164,40 @@ export function StudyInput() {
             {reason && !busy && <DisabledReason>{reason}</DisabledReason>}
           </div>
         </div>
+
+        <div className="study-home-tools">
+          <StudyReviewNotice />
+          <div className="btn-row">
+            <Button kind="secondary" onClick={() => go("study/personal")}>Practise my own words</Button>
+            <Button kind="secondary" onClick={() => go("study/grammar")}>My grammar map</Button>
+          </div>
+        </div>
+        {last.record && !busy && (
+          <Banner
+            tone="info"
+            title="Pick up where you left off?"
+            actions={
+              <>
+                <Button kind="secondary" onClick={() => last.record && openAnalysisInStudy(last.record)}>Open last analysis</Button>
+                <Button kind="tertiary" onClick={last.dismiss}>Dismiss</Button>
+              </>
+            }
+          >
+            <span className="meta-row">
+              <span>{fmtWhen(last.record.created_at)}</span>
+              <span>{plural(sentenceCount(last.record), "sentence")} saved</span>
+            </span>
+          </Banner>
+        )}
+        {(study.restored || forced === "restored") && draft.trim() && (
+          <Banner
+            tone="info"
+            title="Draft restored"
+            actions={<Button kind="tertiary" onClick={() => patchStudy({ restored: false })}>Dismiss</Button>}
+          >
+            Your earlier text is still here, in “{mode === "ideas" ? "Practise my own ideas" : "Study French text"}”. Each mode keeps its own draft.
+          </Banner>
+        )}
 
         <section className="section" aria-labelledby="prl-h">
           <h2 id="prl-h" className="t-section">Practise without new text</h2>
@@ -291,7 +297,7 @@ function AnalysisStatus() {
   if (a.status === "nofrench")
     return (
       <Banner tone="warning" title="No usable French sentences found" live="polite">
-        We couldn’t find French sentences in this text. Check that it’s in French, or switch to “Practise my own ideas” to start from English.
+        No French sentences were found in this text. Check that it’s in French, or switch to “Practise my own ideas” to start from English.
       </Banner>
     );
   return null;
@@ -303,7 +309,7 @@ let photoFile: { file: File; url: string } | null = null;
 
 export function selectStudyPhoto(file: File) {
   if (!file.type.startsWith("image/")) throw new Error("Choose an image file.");
-  if (file.size > 25 * 1024 * 1024) throw new Error("Choose an image smaller than 25 MB.");
+  if (file.size > 25 * 1024 * 1024) throw new Error("Choose an image smaller than 25\u00a0MB.");
   if (photoFile) URL.revokeObjectURL(photoFile.url);
   photoFile = { file, url: URL.createObjectURL(file) };
   patchStudy({ ocr: { phase: "select", photoId: file.name, lines: [], partial: false } });
@@ -432,7 +438,7 @@ export function StudyPhoto() {
           </Banner>
         )}
         {ocr.phase === "failed" && (
-          <Banner tone="error" title="We couldn’t read this photo" live="assertive">
+          <Banner tone="error" title="This photo couldn’t be read" live="assertive">
             {error || "The text reader didn’t respond."} Your photo is kept; try again.
           </Banner>
         )}
@@ -443,7 +449,7 @@ export function StudyPhoto() {
             live="polite"
             actions={<Button kind="tertiary" onClick={() => go("study/new")}>Type text instead</Button>}
           >
-            We couldn’t find French in this photo. Try a sharper, closer photo.
+            No French was found in this photo. Try a sharper, closer photo.
           </Banner>
         )}
 
