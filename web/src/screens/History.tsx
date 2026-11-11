@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { flexRender } from "@tanstack/react-table";
 import { getCoreRowModel, useLegacyTable, type LegacyColumnDef } from "@tanstack/react-table/legacy";
-import { ChevronLeft, Trash2, Loader2 } from "lucide-react";
+import { Trash2, Loader2 } from "lucide-react";
 import {
   attemptKind,
   canReopen,
@@ -19,7 +19,7 @@ import { LANE_LABEL, loadDays, type DayTime, type Lane } from "../api/time";
 import { fmtDuration, plural } from "../lib/format";
 import { openAnalysisInStudy } from "../state/study";
 import { announce, clearAttemptHistory, go, patchStudy, set, useApp } from "../state/store";
-import { Dialog, DisabledReason, PageHead, Skeleton, Spinner, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui";
+import { Crumbs, Dialog, DisabledReason, PageHead, Skeleton, Spinner, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui";
 import { Button } from "../components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
 import { Badge } from "../components/ui/badge";
@@ -56,7 +56,7 @@ export function HistoryScreen() {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
       <PageHead
-        back={<Button type="button" variant="ghost" className="h-8 self-start px-2 text-sm md:-ml-3" onClick={() => go("progress")}>{<ChevronLeft aria-hidden />}Progress</Button>}
+        back={<Crumbs items={[{ label: "Progress", onClick: () => go("progress") }, { label: "History" }]} />}
         title="History"
       />
       <div className="flex flex-col gap-6">
@@ -111,7 +111,7 @@ function DataTable<T extends Record<string, any>>({ data, columns }: { data: T[]
 }
 
 const BackButton = ({ onBack }: { onBack: () => void }) => (
-  <Button type="button" variant="ghost" className="h-8 self-start px-2 text-sm md:-ml-3" onClick={onBack}>{<ChevronLeft aria-hidden />}Back to list</Button>
+  <Crumbs items={[{ label: "History", onClick: onBack }, { label: "Detail" }]} />
 );
 
 const preview = (text: string) => (text.length > 120 ? `${text.slice(0, 117).trimEnd()}…` : text);

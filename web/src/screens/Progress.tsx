@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronLeft, History as HistoryIcon, Trash2, Loader2 } from "lucide-react";
+import { History as HistoryIcon, Trash2, Loader2 } from "lucide-react";
 import { ApiError } from "../api/client";
 import {
   LANE_LABEL,
@@ -15,7 +15,7 @@ import {
 } from "../api/time";
 import { fmtDuration, nf, plural } from "../lib/format";
 import { announce, go } from "../state/store";
-import { Card, CardDescription, CardHeader, CardTitle, Checkbox, Input, PageHead, Progress, Skeleton, Spinner } from "../components/ui";
+import { Card, CardDescription, CardHeader, CardTitle, Checkbox, Crumbs, Input, PageHead, Progress, Skeleton, Spinner } from "../components/ui";
 import { Button } from "../components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
@@ -169,9 +169,7 @@ function Level({ g }: { g: GameState }) {
       <p>
         <span className="text-lg font-semibold tabular-nums">{nf.format(g.level)}</span> <span className="text-sm text-muted-foreground">of {nf.format(g.max_level)}</span>
       </p>
-      <div className="h-1 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${Math.round(g.progress * 100)} percent of the way to level ${g.level + 1}`}>
-        <div className="h-full bg-primary" style={{ width: `${g.progress * 100}%` }} />
-      </div>
+      <Progress value={g.progress * 100} aria-label={`${Math.round(g.progress * 100)} percent of the way to level ${g.level + 1}`} />
       <p className="text-sm text-muted-foreground tabular-nums">
         {g.next_level_xp === null ? "Top level reached." : `${nf.format(toNext)} XP to level ${nf.format(g.level + 1)}`} · {nf.format(g.xp)} XP in all · studied on {g.days_studied_7d} of the last 7 days
       </p>
@@ -335,7 +333,7 @@ function Devices() {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <PageHead
-        back={<Button type="button" variant="ghost" className="h-8 self-start px-2 text-sm md:-ml-3" onClick={() => go("progress")}>{<ChevronLeft aria-hidden />}Progress</Button>}
+        back={<Crumbs items={[{ label: "Progress", onClick: () => go("progress") }, { label: "Devices" }]} />}
         title="Devices and background listening"
       />
     </div>

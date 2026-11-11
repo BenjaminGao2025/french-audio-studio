@@ -56,7 +56,7 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: (next: string) => void
       <form className="flex flex-col gap-4" onSubmit={submit} noValidate>
         <CardHeader>
         <Brand />
-        <h1 className="text-xl font-semibold tracking-tight text-balance" tabIndex={-1} data-page-title>{isLogin ? "Sign in" : "Create an account"}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight" tabIndex={-1} data-page-title>{isLogin ? "Sign in" : "Create an account"}</h1>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
         <div className="grid gap-2"><Label htmlFor="email">Email</Label><Input id="email" value={email} onChange={(e) => { setEmail(e.target.value); setMissing(false); }} type="email" autoComplete="email" aria-describedby="email-err" aria-invalid={missing && !email.trim() ? true : undefined} />{missing && !email.trim() ? <p id="email-err" className="flex items-start gap-1.5 text-sm text-destructive"><AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden /><span>Enter your email.</span></p> : null}</div>

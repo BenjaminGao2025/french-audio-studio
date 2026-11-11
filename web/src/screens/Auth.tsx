@@ -3,6 +3,7 @@ import { loginUrl } from "../api/client";
 import { go, useApp } from "../state/store";
 import { PageHead } from "../components/ui";
 import { Button } from "../components/ui/button";
+import { Card, CardContent } from "../components/ui/card";
 
 const BENEFITS: Record<string, { title: string; text: string }> = {
   "study/personal": { title: "Personal speaking practice", text: "Save your own ideas, recordings and reflection in your practice archive." },
@@ -19,11 +20,13 @@ export function Gate({ dest }: { dest: string }) {
   const b = BENEFITS[dest] ?? BENEFITS.review;
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
-      <h1 className="text-xl font-semibold tracking-tight text-balance" tabIndex={-1} data-page-title>{b.title}</h1>
-      <p className="text-sm text-muted-foreground">Sign in to open this page.</p>
-      <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" variant="default" onClick={() => location.assign(loginUrl(route))}>{<LogIn aria-hidden />}Sign in</Button>
-      </div>
+      <PageHead title={b.title} />
+      <Card>
+        <CardContent className="flex flex-col items-start gap-4">
+          <p className="text-sm text-muted-foreground">Sign in to open this page.</p>
+          <Button type="button" variant="default" onClick={() => location.assign(loginUrl(route))}>{<LogIn aria-hidden />}Sign in</Button>
+        </CardContent>
+      </Card>
     </div>
   );
 }

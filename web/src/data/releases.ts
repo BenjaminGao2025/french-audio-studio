@@ -9,6 +9,7 @@ export const RELEASES = [
     date: "2026-11-11",
     changes: [
       "The review session is a card. Progress sits in the header. Grades share one even row. Mark mastered, slow playback, and pause are in the card menu.",
+      "Pages use a title, breadcrumbs, and cards. The word card opens over the sentence. Dictionary senses past the first two stay behind Show more.",
       "Empty states are a short title and at most one action. Instructional filler is gone.",
       "Sentence More is a labelled menu. On a phone the player is one row: previous, play, next, place, and more.",
       "Narrow pages keep a side gutter. The sentence player stays one row and moves speed, repeat, and play-all into More when the bar itself is narrow.",
