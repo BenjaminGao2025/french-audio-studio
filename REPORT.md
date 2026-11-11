@@ -7,7 +7,8 @@ shadcn/ui is the component system. The shell is the stock Sidebar (`SidebarProvi
 ## Commits
 
 - Parent: `cf4b1e9` (docs: record the 1.1.0 redesign commit SHA).
-- This pass: `design: stock shadcn components end to end (1.1.0)`. The SHA is filled in the follow-up docs commit on this branch.
+- Design commit: `9653b887825688da76853a6c8ac583043dd6b026`
+- https://github.com/BenjaminGao2025/french-audio-studio/commit/9653b887825688da76853a6c8ac583043dd6b026
 
 ## Audit
 
