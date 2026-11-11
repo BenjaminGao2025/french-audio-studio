@@ -766,3 +766,40 @@ if __name__ == "__main__":
     import sys
 
     _admin_cli(sys.argv[1:])
+
+
+WORD_NOTES_SCHEMA = """
+CREATE TABLE IF NOT EXISTS word_notes (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    word_key TEXT NOT NULL,
+    text TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_word_notes_user_word ON word_notes(user_id, word_key);
+"""
+
+
+def word_notes(user_id: int, word: str = "", *, text: str | None = None,
+               note_id: int | None = None, delete: bool = False):
+    from offline_dictionary import normalize
+
+    with connect() as conn:
+        ensure_schema(conn, "word_notes", lambda c: c.executescript(WORD_NOTES_SCHEMA))
+        if note_id is not None:
+            if delete:
+                return conn.execute("DELETE FROM word_notes WHERE id=? AND user_id=?", (note_id, user_id)).rowcount > 0
+            now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            changed = conn.execute("UPDATE word_notes SET text=?, updated_at=? WHERE id=? AND user_id=?",
+                                   (text, now, note_id, user_id)).rowcount
+            row = conn.execute("SELECT * FROM word_notes WHERE id=? AND user_id=?", (note_id, user_id)).fetchone() if changed else None
+            return dict(row) if row else None
+        key = normalize(word)
+        if text is not None:
+            now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            cur = conn.execute("INSERT INTO word_notes(user_id,word_key,text,created_at,updated_at) VALUES (?,?,?,?,?)",
+                               (user_id, key, text, now, now))
+            return dict(conn.execute("SELECT * FROM word_notes WHERE id=?", (cur.lastrowid,)).fetchone())
+        return [dict(row) for row in conn.execute(
+            "SELECT * FROM word_notes WHERE user_id=? AND word_key=? ORDER BY created_at, id", (user_id, key))]

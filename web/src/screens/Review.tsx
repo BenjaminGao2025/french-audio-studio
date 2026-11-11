@@ -23,6 +23,7 @@ import { Checkbox, DisabledReason, EntryCard, Importance, PageHead, Progress, Sk
 import { flexRender } from "@tanstack/react-table";
 import { getCoreRowModel, useLegacyTable, type LegacyColumnDef } from "@tanstack/react-table/legacy";
 import { FrText, tokenizeFrench, type FrPick, type FrSegment } from "../components/FrText";
+import { WordNotes } from "./WordNotes";
 import { WordOverlay, WordPanel } from "./WordPopup";
 import { MarkedLine } from "./Exercise";
 import { runItems } from "./Launcher";
@@ -740,6 +741,7 @@ function ReviewSession() {
                     {metaBits.length > 0 && <p className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground">{metaBits.map((bit) => <span key={bit}>{bit}</span>)}</p>}
                     {dictLine && <p className="text-sm text-muted-foreground"><span className="font-medium">Saved meaning: </span>{dictLine}</p>}
                     {hereLine && hereLine !== dictLine && <p className="text-sm text-muted-foreground"><span className="font-medium">In this sentence: </span>{hereLine}</p>}
+                    <WordNotes key={card.target} word={card.target} compact />
                     {meta.hook && <p className="text-sm text-muted-foreground">Memory hook: {meta.hook}</p>}
                   </section>
                   <Separator />
@@ -811,8 +813,8 @@ function ReviewSession() {
       </div>
 
       {pick && (
-        <WordOverlay label={`Meaning of ${pick.text}`} onClose={() => setPick(null)}>
-          <WordPanel key={`${pick.text}-${pick.wordIndex ?? ""}`} sentence={wpSentence} text={pick.text} wordIndex={pick.wordIndex} occurrence={pick.occurrence} onGrammar={() => setPick(null)} onClose={() => setPick(null)} inSheet />
+        <WordOverlay anchor={pick.anchor} label={`Meaning of ${pick.text}`} onClose={() => setPick(null)}>
+          <WordPanel key={`${pick.text}-${pick.wordIndex ?? ""}`} sentence={wpSentence} text={pick.text} wordIndex={pick.wordIndex} occurrence={pick.occurrence} onClose={() => setPick(null)} inSheet />
         </WordOverlay>
       )}
     </div>

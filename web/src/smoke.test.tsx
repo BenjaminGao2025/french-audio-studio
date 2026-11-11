@@ -269,6 +269,9 @@ describe("3. lookup importance comes from the server count", () => {
     expect(fake.lookups[lookupKey("failli")]).toBe(5);
     expect(fake.calls.filter((c) => c.path === "/api/srs/lookups")).toHaveLength(1);
     expect(document.body.textContent).toContain("Importance, 4 out of 5, based on 5 lookups.");
+    expect(document.body.textContent).not.toContain("Définition de ");
+    const french = Array.from(document.querySelectorAll<HTMLButtonElement>(".word-card button")).find(b => b.textContent === "French definitions")!;
+    await act(async () => french.click());
     expect(document.body.textContent).toContain("Définition de ");
   });
 });
@@ -497,7 +500,7 @@ describe("8. feedback and copy cleanups", () => {
     expect(fake.calls.filter((c) => c.path === "/api/dictation/attempts")).toHaveLength(2);
   });
 
-  it("responsive widths (320, 390, 768, desktop): word card is a bottom drawer below md and a right sheet from md up", async () => {
+  it("responsive widths (320, 390, 768, desktop): word card is a bottom drawer below md and a floating popover from md up", async () => {
     await act(async () => resetDemo());
     await act(async () => REGISTRY.find((r) => r.id === "SCR-STU-02")!.states.find((s) => s.key === "single")!.apply());
     const host = document.createElement("div");
@@ -530,10 +533,12 @@ describe("8. feedback and copy cleanups", () => {
         });
         const wordBtn = host.querySelector<HTMLElement>('[data-word="failli"]')!;
         await act(async () => wordBtn.click());
-        expect(document.querySelector("[data-slot=sheet-content] .word-card")).toBeTruthy();
+        expect(document.querySelector("[data-slot=popover-content] .word-card")).toBeTruthy();
         expect(document.querySelector(".word-dock, .popover")).toBeNull();
         expect(host.querySelector(".sentence-fr")).toBeTruthy();
-        await act(async () => wordBtn.click());
+        expect(document.querySelector("[data-slot=sheet-content]")).toBeNull();
+        const close = document.querySelector<HTMLButtonElement>('[data-slot=popover-content] button[aria-label="Close"]')!;
+        await act(async () => close.click());
       }
     } finally {
       await act(async () => root.unmount());

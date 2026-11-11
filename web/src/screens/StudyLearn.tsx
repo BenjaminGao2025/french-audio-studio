@@ -99,9 +99,8 @@ export function StudyLearn() {
   );
 
   return (
-    // The sheet renders at 24rem (base sm:max-w-sm wins over sm:max-w-md). Reserve that width and keep a 1rem gutter on both sides.
-    <div className={cn("w-full min-w-0", pick && "md:pr-96")}>
-    <div className={pageFrame(cn("study-workspace", pick && "md:px-4"), true)}>
+    <div className={cn("w-full min-w-0")}>
+    <div className={pageFrame("study-workspace", true)}>
       <h1 className="sr-only" tabIndex={-1} data-page-title>Study</h1>
       <div className="flex flex-col gap-4 min-w-0">
         {!!study.analysis.failedParts && <Alert variant="default"><AlertTitle>Some text could not be analysed</AlertTitle><AlertDescription>{study.analysis.failedParts} parts failed. Your original text is kept. Open New text to retry the missing parts.</AlertDescription></Alert>}
@@ -170,7 +169,7 @@ export function StudyLearn() {
           }} />
           <div id="learn-panel" role="tabpanel" aria-labelledby={`learn-tab-${study.tab}`}>
             {study.tab === "steps" && <StepsPanel key={s.id} sentence={s} onPick={onPick} />}
-            {study.tab === "grammar" && <GrammarPanel key={s.id} sentence={s} />}
+            {study.tab === "grammar" && <div id="sentence-grammar-panel"><GrammarPanel key={s.id} sentence={s} /></div>}
             {study.tab === "words" && <WordsPanel sentence={s} onPick={onPick} />}
             {study.tab === "sounds" && <SoundsPanel sentence={s} onPick={onPick} />}
             {study.tab === "shadowing" && <ShadowingPanel key={s.id} id={`shadow:${s.id}`} text={s.fr} onPick={onPick} />}
@@ -199,14 +198,14 @@ export function StudyLearn() {
         </div>
       </div>
       {pick && (
-        <WordOverlay label={`Meaning of ${pick.text}`} onClose={() => setPick(null)}>
+        <WordOverlay anchor={pick.el} label={`Meaning of ${pick.text}`} onClose={() => setPick(null)}>
           <WordPanel
             key={`${pick.text}-${pick.wordIndex ?? ""}`}
             sentence={s}
             text={pick.text}
             wordIndex={pick.wordIndex}
             occurrence={pick.occurrence}
-            onGrammar={() => { setPick(null); patchStudy({ tab: "grammar" }); }}
+            onGrammar={() => { setPick(null); patchStudy({ tab: "grammar" }); requestAnimationFrame(() => document.getElementById("sentence-grammar-panel")?.scrollIntoView({ behavior: "smooth", block: "start" })); }}
             onClose={() => setPick(null)}
             inSheet
           />

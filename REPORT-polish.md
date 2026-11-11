@@ -139,3 +139,68 @@ Keep the override in subsequent deploy/recreate commands. A restart alone cannot
 mount or environment variable, hence the service recreation. This task did not run any
 of these commands or touch production containers, Docker/Compose configuration, secrets,
 models, user data or output directories. No dump, database, preview file or PNG is committed.
+
+## TASK B+D (+ E) — floating word card, five modules, notes and nested lookup
+
+Implemented with Codex CLI, exact model id `gpt-6.1-sol`, on `design/polish-1.2`. Task A's existing `/api/lookup` and Task C's review result/answer controls are preserved.
+
+Desktop uses the stock shadcn/Radix Popover with FrText's selection anchor, viewport collision padding, bounded height and internal scrolling. Escape and outside click dismiss it. Headword focus, replay, save and close remain available. Removed the right Sheet and both selection-dependent Study padding changes; opening the card does not change reading/player width or French font size. Mobile retains the bottom Drawer with the same content.
+
+Five peer sections appear in order: **In this sentence** and **Dictionary** open initially; **Word origin**, **Ask AI**, and **Notes** collapsed initially. English dictionary senses come first; French monolingual senses have their own collapsed toggle. Related/component results and short source attribution reuse Task A. Origin calls existing `/api/etymology` with `language: "en"` only after expansion, with loading/retry states. Ask AI uses existing `/api/ask` with sentence context and displays the answer inline. Notes support multiple timestamped entries with add/edit/delete and retry on errors. Review's revealed Word/phrase section shows only a muted count and collapsed list; opening it refreshes the notes.
+
+Top save control is an outline/filled Bookmark, with `Save word` / `Saved` aria-label and stock Tooltip. Importance retains its server lookup-count calculation and stars, with a muted **Importance** label. The `SCR-WRD-02/fav` preview was checked for filled state.
+
+Study footer now says **See grammar in this sentence**: it closes the card, switches to Grammar and scrolls the grammar panel into view. This keeps the useful Study jump visible and functional. Review has no equivalent destination, so its dead footer action was removed; revealed Grammar notes remain available.
+
+Multi-word chunks remain one initial selection/card. Component text buttons, headword words, base forms, dictionary headings, French definitions and usage-note words drill into the same card with a stack, breadcrumb and Back. Each nested lookup uses its own dictionary/context, favorite, importance and notes. Stale dictionary/context responses are ignored when switching words. Selecting the phrase itself no longer repeats its phrase gloss under the in-context meaning.
+
+### Notes schema for Ben's approval (not deployed)
+
+Purely additive, lazy `CREATE TABLE IF NOT EXISTS` through `auth_db.ensure_schema`; no existing tables are changed. Exact SQL:
+
+```sql
+CREATE TABLE IF NOT EXISTS word_notes (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    word_key TEXT NOT NULL,
+    text TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_word_notes_user_word ON word_notes(user_id, word_key);
+```
+
+`word_key` uses `offline_dictionary.normalize()` (NFC, lowercase, apostrophe normalization and whitespace collapse). Timestamps are UTC ISO strings. Every query/mutation is scoped to the authenticated user. Other users' IDs return 404 on edit/delete. Text is plain text rendered by React.
+
+Endpoints (registered in the existing history router):
+
+- `GET /api/word-notes?word=...` → `{ notes: [...] }`, oldest first by creation time/id.
+- `POST /api/word-notes` with `{ word, text }` → created note, HTTP 201.
+- `PATCH /api/word-notes/{note_id}` with `{ text }` → updated note, or 404.
+- `DELETE /api/word-notes/{note_id}` → `{ success: true }`, or 404.
+
+All four require authentication. Note text is bounded to 1–10,000 characters; word is 1–200 characters. Returned note fields: `id`, `user_id`, `word_key`, `text`, `created_at`, `updated_at`. Frontend fakeBackend stubs list/create/edit/delete and Ask AI; its notes reset with the other fake data. Backend tests import the existing `testenv` temporary database fixture; no live database was opened.
+
+### Verification and screenshots
+
+- `cd web && npm test`: 377 tests, 17 files, all pass. Added tests cover chunk preservation/drill-down/Back/no duplicate gloss; filled bookmark; lazy origin failure/retry; multiple-note CRUD/timestamps; Ask AI sentence context; and visible Study grammar jump. Responsive smoke expectations now assert desktop Popover and mobile Drawer.
+- `cd web && npm run build`: passes (Vite's existing bundle-size advisory remains).
+- `PYTHONPATH=".:tests" python3 -m unittest tests.test_word_context tests.test_gloss_prompt tests.test_offline_dictionary tests.test_word_notes`: 44 tests pass, including notes auth, cross-user isolation, multiple notes, normalization, word filtering and add/edit/delete.
+- `bash /home/mgacai/polish-1.2-out/audit.sh`: all six raw control counts are 0.
+- Browser checks at 1440 and 390: desktop floating bounds, full-width reading before/after opening, filled saved bookmark, Escape dismissal, outside-click dismissal, mobile Drawer width 390, and Grammar panel visible after the jump. Screenshots inspected; tall expanded content scrolls internally.
+
+Local preview used only the confirmed-free `127.0.0.1:8027`, with the existing untracked review-card-v2 preview harness and fake data (including English/French dictionary and phrase fixtures). Preview stopped after screenshots. No harness files or PNGs committed. Existing `pl-before-*` retained. Ben's `ben-word-card.png` was inspected; no `ben-chunk-*` references were present.
+
+Screenshot directory: `/home/mgacai/polish-1.2-out/screenshots/`:
+
+- `pl-after-word-card-open-1440.png`
+- `pl-after-word-card-open-390.png`
+- `pl-after-word-card-expanded-1440.png`
+- `pl-after-word-card-expanded-390.png`
+- `pl-after-word-card-fr-expanded-1440.png`
+- `pl-after-word-card-phrase-1440.png`
+- `pl-after-word-card-chunk-1440.png`
+- `pl-after-word-card-nested-1440.png`
+- `pl-after-word-card-grammar-1440.png`
+
+Verification logs are under `/home/mgacai/polish-1.2-out/task-b-{web-tests,web-build,python-tests,audit}.log`.
