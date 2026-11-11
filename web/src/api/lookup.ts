@@ -1,4 +1,4 @@
-/* Word lookups: the AI dictionary entry (routers/tutor.py) and the per-user lookup count (routers/srs.py). */
+/* Word lookups: the offline dictionary entry (routers/tutor.py) and the per-user lookup count (routers/srs.py). */
 import { useSyncExternalStore } from "react";
 import { apiFetch } from "./client";
 import { lookupKey } from "../lib/lookup";
@@ -12,7 +12,13 @@ export interface DictionaryEntry {
   explanation_en: string;
   dictionary_source?: "wiktionnaire";
   dictionary_state?: "found" | "not_found";
+  match_type?: "exact" | "related" | "components";
+  related?: string;
+  components?: DictionaryEntry[];
+  entries_en?: NonNullable<DictionaryEntry["entries"]>;
+  entries_fr?: NonNullable<DictionaryEntry["entries"]>;
   entries?: {
+    language?: "en" | "fr";
     lemma: string;
     pos: string;
     phonetic: string;

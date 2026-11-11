@@ -194,9 +194,6 @@ export function WordPanel({
   const why = englishOnly(w?.why);
   const meaning = storedMeaning || usableMeaning(ctx?.meaning_en, text, sentence.en ?? "");
   const phraseMeaning = overlapping ? usableMeaning(overlapping.meaning_en, text, sentence.en ?? "") : "";
-  const dictEntries = dict?.dictionary_source === "wiktionnaire" ? dict.entries ?? [] : [];
-
-  const source = dictEntries[0];
 
   return (
     <div className="word-card flex flex-col gap-4 wrap-break-word" aria-busy={dictSt === "loading" || ctxSt === "loading"}>
@@ -254,18 +251,7 @@ export function WordPanel({
           {dictSt === "error" && (
             <Alert variant="destructive"><AlertTitle>Dictionary request failed</AlertTitle><AlertDescription>{englishOnly(dictErr) || "Please try again."}<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={loadDict}>Retry</Button></div></AlertDescription></Alert>
           )}
-          {dictSt === "ready" && (dictEntries.length ? (
-            <>
-              {dictEntries.map((entry, index) => (
-                <DictEntry key={`${entry.lemma}-${entry.pos}-${index}`} entry={entry} />
-              ))}
-              <p className="wp-attribution text-xs text-muted-foreground">
-                {source?.source_url ? <a href={source.source_url} target="_blank" rel="noopener noreferrer">{dict?.attribution || "Wiktionnaire"}</a> : dict?.attribution}
-                {dict?.license_url && <> <a href={dict.license_url} target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a></>}
-                {dict?.changes ? ` ${dict.changes}` : ""}
-              </p>
-            </>
-          ) : <p className="text-sm text-muted-foreground">No dictionary entry</p>)}
+          {dictSt === "ready" && dict && <DictionaryResult result={dict} />}
         </section>
       )}
 
@@ -294,6 +280,26 @@ export function WordPanel({
   );
 }
 
+function DictionaryResult({ result }: { result: DictionaryEntry }) {
+  if (result.match_type === "components") {
+    return <>{result.components?.map((part) => (
+      <div key={part.token} className="flex flex-col gap-2">
+        <p className="text-sm font-medium" lang="fr">{part.token}</p>
+        <DictionaryResult result={part} />
+      </div>
+    ))}</>;
+  }
+  const entries = result.entries ?? [];
+  if (!entries.length) return <p className="text-sm text-muted-foreground">“{result.token}” is not in the dictionary.</p>;
+  return <>
+    {result.match_type === "related" && <p className="text-sm text-muted-foreground">Related: {result.related}</p>}
+    {entries.map((entry, index) => <DictEntry key={`${entry.lemma}-${entry.pos}-${index}`} entry={entry} />)}
+    <p className="wp-attribution text-xs text-muted-foreground" title={[result.attribution, result.changes].filter(Boolean).join(" ")}>
+      <a href={entries[0].source_url} target="_blank" rel="noopener noreferrer">Source: Wiktionary (CC BY-SA)</a>
+    </p>
+  </>;
+}
+
 function DictEntry({ entry }: { entry: NonNullable<DictionaryEntry["entries"]>[number] }) {
   const [open, setOpen] = useState(false);
   const entryIpa = formatFriendlyPhonetic(entry.phonetic);
@@ -306,7 +312,7 @@ function DictEntry({ entry }: { entry: NonNullable<DictionaryEntry["entries"]>[n
         <span className="font-medium" lang="fr">{entry.lemma}</span>
         <span className="text-muted-foreground"> {entry.pos}{entryIpa ? ` ${entryIpa}` : ""}</span>
       </p>
-      <ol className="wp-senses list-decimal space-y-1 pl-5 text-sm" lang="fr">
+      <ol className="wp-senses list-decimal space-y-1 pl-5 text-sm" lang={entry.language ?? "fr"}>
         {shown.map((sense, i) => <li key={i}>{sense}</li>)}
       </ol>
       {rest.length > 0 && !open && (

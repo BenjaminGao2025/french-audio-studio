@@ -374,7 +374,7 @@ async def request_word_lookup(word: str, api_key: str = "", model: str = ai.DEFA
         return result
     return {
         "token": word, "lemma": word, "pos": "", "phonetic": "",
-        "explanation_cn": "", "explanation_en": "", "entries": [],
+        "explanation_cn": "", "explanation_en": "", "entries": [], "entries_en": [], "entries_fr": [],
         "dictionary_source": "wiktionnaire", "dictionary_state": "not_found",
         "source_language": "fr", "source_name": "Wiktionnaire",
     }

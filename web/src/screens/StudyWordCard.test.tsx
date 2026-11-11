@@ -6,7 +6,8 @@ import type { StudySentence } from "../data/fixtures";
 import { StudyLearn } from "../screens/StudyLearn";
 import { WordPanel } from "./WordPopup";
 import { fake, installFakeBackend } from "../test/fakeBackend";
-import { resetLookupCaches } from "../api/lookup";
+import { resetLookupCaches, type DictionaryEntry } from "../api/lookup";
+import * as lookupApi from "../api/lookup";
 import { get, resetDemo, set, updatePlayer } from "../state/store";
 import * as store from "../state/store";
 
@@ -114,6 +115,61 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(panel.textContent).not.toMatch(/\p{Script=Han}/u);
   });
 
+  it("renders English before French with a related label and short source attribution", async () => {
+    vi.spyOn(lookupApi, "lookupWord").mockResolvedValue({
+      token: "recorrection", lemma: "correction", pos: "noun", phonetic: "", explanation_cn: "", explanation_en: "",
+      match_type: "related", related: "correction", dictionary_state: "found", dictionary_source: "wiktionnaire",
+      entries: [
+        { lemma: "correction", pos: "noun", phonetic: "", language: "en", senses: ["correction (all senses)"], source_url: "https://en.wiktionary.org/wiki/correction#French", history_url: "" },
+        { lemma: "correction", pos: "noun", phonetic: "", language: "fr", senses: ["Action de corriger."], source_url: "https://fr.wiktionary.org/wiki/correction#fr", history_url: "" },
+      ], attribution: "Wiktionnaire contributors; extraction by Kaikki.", changes: "Bounded selected source senses.",
+    });
+    await act(async () => root.render(<WordPanel sentence={SENTENCE} text="recorrection" onGrammar={() => {}} onClose={() => {}} />));
+    const section = host.querySelector('[aria-label="Dictionary"]')!;
+    expect(section.textContent).toContain("Related: correction");
+    expect(Array.from(section.querySelectorAll(".wp-senses")).map((el) => [el.getAttribute("lang"), el.textContent])).toEqual([
+      ["en", "correction (all senses)"], ["fr", "Action de corriger."],
+    ]);
+    const attribution = section.querySelector(".wp-attribution")!;
+    expect(attribution.textContent).toBe("Source: Wiktionary (CC BY-SA)");
+    expect(attribution.getAttribute("title")).toContain("Wiktionnaire contributors");
+    expect(attribution.querySelector("a")?.href).toBe("https://en.wiktionary.org/wiki/correction#French");
+    expect(section.textContent).not.toContain("No dictionary entry");
+  });
+
+  it("renders per-word phrase hits, related labels and only the missing component's muted miss", async () => {
+    const component = (token: string, lemma: string, senses: string[]): DictionaryEntry => ({
+      token, lemma, pos: "noun", phonetic: "", explanation_cn: "", explanation_en: "",
+      entries: senses.length ? [{ lemma, pos: "noun", phonetic: "", language: "en", senses, source_url: `https://en.wiktionary.org/wiki/${lemma}#French`, history_url: "" }] : [],
+    });
+    vi.spyOn(lookupApi, "lookupWord").mockResolvedValue({
+      ...component("objectifs différents unknownzzz", "objectifs différents unknownzzz", []),
+      match_type: "components",
+      components: [component("objectifs", "objectif", ["objective, goal, aim"]),
+        { ...component("différents", "différent", ["different"]), match_type: "related", related: "différent" },
+        component("unknownzzz", "unknownzzz", [])],
+    });
+    await act(async () => root.render(<WordPanel sentence={SENTENCE} text="objectifs différents unknownzzz" onGrammar={() => {}} onClose={() => {}} />));
+    const section = host.querySelector('[aria-label="Dictionary"]')!;
+    expect(section.textContent).toContain("objectifs");
+    expect(section.textContent).toContain("objective, goal, aim");
+    expect(section.textContent).toContain("Related: différent");
+    expect(section.textContent).toContain("different");
+    expect(section.textContent).toContain("“unknownzzz” is not in the dictionary.");
+    expect(section.textContent?.match(/is not in the dictionary/g)).toHaveLength(1);
+    expect(section.textContent).not.toContain("No dictionary entry");
+  });
+
+  it("renders a muted explicit true miss", async () => {
+    vi.spyOn(lookupApi, "lookupWord").mockResolvedValue({
+      token: "unknownzzz", lemma: "unknownzzz", pos: "", phonetic: "", explanation_cn: "", explanation_en: "",
+      dictionary_state: "not_found", entries: [],
+    });
+    await act(async () => root.render(<WordPanel sentence={SENTENCE} text="unknownzzz" onGrammar={() => {}} onClose={() => {}} />));
+    const section = host.querySelector('[aria-label="Dictionary"]')!;
+    expect(section.querySelector("p.text-muted-foreground")?.textContent).toBe("“unknownzzz” is not in the dictionary.");
+  });
+
   it("clicking a word calls sayFrench(word) and opens the word card", async () => {
     const spy = vi.spyOn(store, "sayFrench");
     await act(async () => {
@@ -183,7 +239,7 @@ describe("Task B — Study word card, selection and steps", () => {
     const panel = document.querySelector(".word-card")!;
     expect(panel.textContent).toContain("Définition de madame.");
     expect(panel.querySelector('a[href="https://fr.wiktionary.org/wiki/madame#fr"]')).toBeTruthy();
-    expect(panel.textContent).toContain("CC BY-SA 4.0");
+    expect(panel.textContent).toContain("Source: Wiktionary (CC BY-SA)");
     expect(panel.textContent).not.toMatch(/\p{Script=Han}/u);
     expect(fake.calls.filter((call) => call.path === "/api/etymology")).toHaveLength(0);
     expect(panel.textContent).not.toContain("Roots & origin");
