@@ -310,6 +310,7 @@ const ENDINGS: [string, string, string][] = [
 ];
 
 export interface LibCard {
+  mode?: ReviewMode;
   id: string;
   sentenceId: string;
   kind: "Listen" | "Speak" | "Fill-in";
@@ -319,7 +320,7 @@ export interface LibCard {
   mastered: boolean;
   favorite: boolean;
   lookups: number;
-  /** Saved = member of the saved card library. Favorite is a separate bookmark. */
+  /** Deck membership. Legacy favorite fields are retained for old demo state only. */
   saved: boolean;
   /** ISO due date from the server (real library); demo fixtures leave it undefined. */
   due?: string;

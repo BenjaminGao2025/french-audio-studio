@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bookmark, BookmarkCheck, Play, Search, Archive, RotateCcw, Volume2, ChevronLeft, ChevronRight, Loader2, ChevronDown, MoreHorizontal, Check, X } from "lucide-react";
+import { Play, Search, Archive, RotateCcw, Volume2, ChevronLeft, ChevronRight, Loader2, ChevronDown, MoreHorizontal, Check, X } from "lucide-react";
 import {
   DEFAULT_SESSION_SIZE,
   planSession,
@@ -12,20 +12,19 @@ import {
   type StudySentence,
 } from "../data/fixtures";
 import { ApiError } from "../api/client";
-import { favoriteKey, libraryReady, loadLibrary, loadQueue, masterCard, rateCard, restoreMastered, setFavorite, toReviewCard as serverToReviewCard } from "../api/review";
+import { libraryReady, loadLibrary, loadQueue, masterCard, setCardArchived, rateCard, restoreMastered, toReviewCard as serverToReviewCard } from "../api/review";
 import { grade } from "../lib/grading";
 import { gradeFeedback, practiceFeedback } from "../lib/feedback";
 import { importanceFor } from "../lib/lookup";
-import { formatFriendlyPhonetic } from "../lib/phonetic";
 import { nf, plural } from "../lib/format";
 import { announce, get, getCardLookups, go, introduceNewCard, sayFrench, set, useApp, type ReviewUI } from "../state/store";
 import { Checkbox, DisabledReason, EntryCard, Importance, PageHead, Progress, Skeleton, Spinner, Stat, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, pageFrame, useNarrow } from "../components/ui";
 import { flexRender } from "@tanstack/react-table";
 import { getCoreRowModel, useLegacyTable, type LegacyColumnDef } from "@tanstack/react-table/legacy";
 import { FrText, tokenizeFrench, type FrPick, type FrSegment } from "../components/FrText";
-import { WordNotes } from "./WordNotes";
 import { WordOverlay, WordPanel } from "./WordPopup";
-import { MarkedLine } from "./Exercise";
+import { TypeAnswerDiff } from "../components/TypeAnswerDiff";
+import { WordDeckStar } from "../components/WordDeckStar";
 import { runItems } from "./Launcher";
 import { Button } from "../components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
@@ -38,7 +37,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Card, CardAction, CardContent, CardFooter, CardHeader } from "../components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../components/ui/dropdown-menu";
 import { Separator } from "../components/ui/separator";
-import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "../components/ui/accordion";
+import { toast } from "sonner";
 import { cn } from "cn";
 
 /** Design reference states set this so Due today shows their sample queue instead of loading the learner's. */
@@ -456,6 +455,12 @@ function ReviewSession() {
   const revealed = u.revealed || Boolean(u.result) || u.phase === "graded" || u.phase === "techfail";
   const typed = mode !== "recognize" && (mode === "cloze" || mode === "grammar" || card?.kind === "Recall");
   const isWordCard = mode === "cloze" || mode === "recognize" || mode === "grammar";
+  useEffect(() => {
+    if (typed && !revealed && review.phase === "active") inputRef.current?.focus();
+  }, [cardPos, typed, revealed, review.phase]);
+  const mounted = useRef(false);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const mastering = useRef(false);
   const markTarget = isWordCard ? card?.target ?? "" : "";
   const suggested: number | undefined = u.suggested ?? (u.result ? (u.result.correct ? (u.hinted || u.hint ? 2 : 3) : 1) : undefined);
   const groupLabel = card?.group === "new" ? "New" : card?.group === "due" ? "Due" : "Learning";
@@ -476,9 +481,9 @@ function ReviewSession() {
     const result = grade(card.target, u.draft);
     const hintUsed = Boolean(u.hinted || u.hint);
     const sugg: 1 | 2 | 3 = !result.correct ? 1 : hintUsed ? 2 : 3;
-    gradeFeedback(result.correct);
+    gradeFeedback(result.correct, { pronunciation: result.correct && typed });
     patch({ revealed: true, result, suggested: sugg, answer: u.draft, emptyError: false });
-    if (mode === "speak" || mode === "cloze" || mode === "grammar") sayFrench(cardSpeech(card));
+    if (result.correct && typed) sayFrench(card.target, 1, "fr-CA-JeanNeural");
     announce(result.correct ? "Correct. Pick how well you remembered." : "Not quite. Pick how well you remembered.");
   };
 
@@ -496,11 +501,49 @@ function ReviewSession() {
         reviewUi,
       };
     });
-    requestAnimationFrame(() => document.getElementById("rev-q")?.focus());
+    requestAnimationFrame(() => (document.getElementById("rev-input") ?? document.getElementById("rev-q"))?.focus());
+  };
+
+  const markCurrentMastered = async () => {
+    if (!card || mastering.current || u.rateBusy) return;
+    mastering.current = true;
+    try {
+      await setCardArchived(card.id, true);
+      next();
+      toast("Marked as mastered", {
+        duration: 6000,
+        action: { label: "Undo", onClick: () => {
+          void setCardArchived(card.id, false).then(() => {
+            if (mounted.current && get().review.sessionCards?.includes(card) && get().review.done[card.id]) {
+              set((s) => {
+                const sessionCards = [...(s.review.sessionCards ?? cards)];
+                const done = { ...s.review.done };
+                delete done[card.id];
+                // Preserve subsequent ratings while making the restored card current.
+                let index = s.review.phase === "complete" ? sessionCards.length : s.review.index;
+                // Remove its completed position before reinserting, so session totals stay stable.
+                const originalIndex = sessionCards.indexOf(card);
+                if (originalIndex >= 0) {
+                  sessionCards.splice(originalIndex, 1);
+                  if (originalIndex < index) index--;
+                }
+                sessionCards.splice(index, 0, card);
+                return { review: { ...s.review, phase: "active", index, sessionCards, done, completed: Math.max(0, s.review.completed - 1) } };
+              });
+            }
+            announce("Card restored.");
+          }).catch(() => announce("Couldn’t restore the card. Try again from Mastered.", true));
+        } },
+      });
+    } catch {
+      announce("Couldn’t mark the card mastered. Try again.", true);
+    } finally {
+      mastering.current = false;
+    }
   };
 
   const rate = (rating: 1 | 2 | 3 | 4) => {
-    if (!card || !revealed || u.rateBusy || u.rated) return;
+    if (!card || !revealed || u.rateBusy || u.rated || mastering.current) return;
     if (!typed) gradeFeedback(rating > 1);
     patch({ rateBusy: true, techfail: false });
     rateCard(card.id, rating, { answer: u.answer, durationMs: Date.now() - shownAt.current })
@@ -535,20 +578,21 @@ function ReviewSession() {
   // Keyboard shortcuts. A single listener reads a ref so the latest handlers are always used.
   const keys = useRef<{
     reveal: () => void; check: () => void; rate: (r: number) => void; replay: () => void;
-    revealed: boolean; suggested: number | undefined; active: boolean;
-  }>({ reveal: () => {}, check: () => {}, rate: () => {}, replay: () => {}, revealed: false, suggested: undefined, active: false });
+    master: () => void; revealed: boolean; suggested: number | undefined; active: boolean;
+  }>({ reveal: () => {}, check: () => {}, rate: () => {}, replay: () => {}, master: () => {}, revealed: false, suggested: undefined, active: false });
   keys.current = {
     reveal: () => reveal(), check, rate: (r: number) => rate(r as 1 | 2 | 3 | 4), replay,
-    revealed, suggested, active: Boolean(card) && review.phase !== "complete" && forced !== "complete",
+    master: () => { void markCurrentMastered(); }, revealed, suggested, active: Boolean(card) && review.phase !== "complete" && forced !== "complete",
   };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.isComposing || !keys.current.active) return;
+      if (e.isComposing || e.repeat || e.altKey || e.ctrlKey || e.metaKey || !keys.current.active) return;
       const t = e.target as HTMLElement | null;
       if (t?.closest?.("[role=dialog], [role=menu]")) return;
       if (e.key === "Enter" && t?.id === "rev-input") { e.preventDefault(); keys.current.check(); return; }
       const tag = t?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t?.isContentEditable) return;
+      if (e.key === "5" && !e.shiftKey && !window.matchMedia?.("(pointer: coarse)").matches) { e.preventDefault(); keys.current.master(); return; }
       const onControl = tag === "BUTTON" || tag === "A" || tag === "SUMMARY";
       if (!keys.current.revealed) {
         if (e.code === "Space" || e.key === "Enter") {
@@ -601,15 +645,6 @@ function ReviewSession() {
     raw: { sentence: sentenceFr, translation_en: translationEn, translation_zh: translationZh, build_up: [], words: [], grammar_points: [] },
   };
   const backSegments = markedSegments(sentenceFr, markTarget);
-  const friendlyIpa = formatFriendlyPhonetic(meta.ipa || "");
-  const metaBits = [friendlyIpa, meta.pos, meta.lemma && meta.lemma.toLowerCase() !== card.target.toLowerCase() ? `base form ${meta.lemma}` : ""].filter(Boolean);
-  const englishGloss = (value?: string) => {
-    const text = (value || "").trim();
-    if (!text || /\p{Script=Han}/u.test(text)) return "";
-    return text;
-  };
-  const dictLine = englishGloss(meta.dict_en) || (!meta.snap ? englishGloss(meta.meaning_en) : "");
-  const hereLine = englishGloss(meta.ctx_en);
   const showEnglish = Boolean(translationZh && translationEn);
 
   const intervalText = (value: number) => {
@@ -637,7 +672,7 @@ function ReviewSession() {
                   <Button type="button" variant="ghost" size="icon-sm" aria-label="Card actions"><MoreHorizontal aria-hidden /></Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-64">
-                  <DropdownMenuItem onSelect={() => { masterCard(card.id); next(); }}><Archive aria-hidden />Mark mastered</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => { void markCurrentMastered(); }}><Archive aria-hidden />Mark mastered</DropdownMenuItem>
                   <DropdownMenuItem onSelect={slow}><Volume2 aria-hidden />Slow 0.75×</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => go("review")}>Pause and return to Due today</DropdownMenuItem>
                 </DropdownMenuContent>
@@ -648,7 +683,7 @@ function ReviewSession() {
         {!revealed ? (
           <div className="flex flex-col gap-4">
             {mode === "listen" && (
-              <div className="flex min-h-20 items-center justify-center">
+              <div className="flex py-1 items-center justify-center">
                 <PlayButton onClick={replay} prominent />
               </div>
             )}
@@ -693,14 +728,14 @@ function ReviewSession() {
                     name="review-answer"
                     autoComplete="off"
                     ref={inputRef}
-                    className="focus-visible:outline-none! focus-visible:ring-1 focus-visible:ring-ring"
+                    className="focus-visible:outline-none! focus-visible:ring-1! focus-visible:ring-ring!"
                     lang="fr"
                     value={u.draft}
                     readOnly={u.rateBusy}
                     aria-invalid={u.emptyError || undefined}
                     aria-describedby={u.emptyError ? "rev-err" : undefined}
                     onChange={(e) => patch({ draft: e.target.value, emptyError: false })}
-                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); check(); } }}
+                    onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); check(); } }}
                     spellCheck={false}
                   />
                   {u.emptyError && <p id="rev-err" className="text-sm text-destructive" role="alert">Type an answer before checking. Nothing was recorded.</p>}
@@ -719,12 +754,8 @@ function ReviewSession() {
                         {u.result.correct ? <Check aria-hidden /> : <X aria-hidden />}
                         {u.result.correct ? "Correct" : "Incorrect"}
                       </Badge>
-                      <MarkedLine label="Your answer" words={u.result.answer} side="answer" />
                     </div>
-                    <div className="flex items-start gap-2">
-                      <Badge variant="secondary" aria-label="Correct answer"><Check aria-hidden /></Badge>
-                      <MarkedLine label="Correct answer" words={u.result.target} side="target" onPlay={() => sayFrench(card.target)} />
-                    </div>
+                    <TypeAnswerDiff typed={u.answer ?? u.draft} correct={card.target} />
                     {typed && !u.result.correct && <RetypePractice key={cardPos} target={card.target} />}
                   </section>
                   <Separator />
@@ -732,17 +763,9 @@ function ReviewSession() {
               )}
               {isWordCard && (
                 <>
-                  <section aria-labelledby="rev-word-heading" className="flex flex-col gap-2">
-                    <div className="flex items-center gap-2">
-                      <h2 id="rev-word-heading"><Button type="button" variant="ghost" size="sm" className="-ml-2" onClick={() => sayFrench(card.target)}>Word/phrase</Button></h2>
-                      <Button type="button" variant="ghost" size="icon-sm" aria-label={`Pronounce ${card.target}`} onClick={() => sayFrench(card.target)}><Volume2 aria-hidden /></Button>
-                    </div>
-                    <Button type="button" variant="link" className="h-auto justify-start self-start whitespace-normal p-0 text-left font-serif text-xl" lang="fr" onClick={() => sayFrench(card.target)}>{card.target}</Button>
-                    {metaBits.length > 0 && <p className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground">{metaBits.map((bit) => <span key={bit}>{bit}</span>)}</p>}
-                    {dictLine && <p className="text-sm text-muted-foreground"><span className="font-medium">Saved meaning: </span>{dictLine}</p>}
-                    {hereLine && hereLine !== dictLine && <p className="text-sm text-muted-foreground"><span className="font-medium">In this sentence: </span>{hereLine}</p>}
-                    <WordNotes key={card.target} word={card.target} compact />
-                    {meta.hook && <p className="text-sm text-muted-foreground">Memory hook: {meta.hook}</p>}
+                  <section aria-label="Word/phrase" className="flex flex-col gap-2">
+                    <h2 className="text-sm font-medium"><Button variant="ghost" size="sm" onClick={() => sayFrench(card.target)}>Word/phrase</Button></h2>
+                    <WordPanel key={card.id} compact sentence={{ ...wpSentence, raw: { ...wpSentence.raw!, words: [{ fr: card.target, ipa: meta.ipa || "", type: meta.pos || "", lemma: meta.lemma || card.target, meaning: meta.ctx_en || meta.meaning_en || meta.dict_en || "", meaning_zh: "", why: "", english_link: "", false_friend: false }] } }} text={card.target} wordIndex={0} onClose={() => {}} />
                   </section>
                   <Separator />
                 </>
@@ -755,19 +778,6 @@ function ReviewSession() {
                 {translationZh && <p className="text-sm text-muted-foreground" lang="zh">{translationZh}</p>}
                 {translationEn && <p className="text-sm text-muted-foreground">{translationEn}</p>}
               </div>
-              {grammar.length > 0 && (
-                <Accordion type="single" collapsible className="border-t"><AccordionItem value="grammar"><AccordionTrigger>{`Grammar notes (${grammar.length})`}</AccordionTrigger><AccordionContent>
-                  <ul className="flex flex-col gap-2">
-                    {grammar.map((g, i) => (
-                      <li key={i} className="flex flex-col gap-1">
-                        {g.title && <p className="font-medium">{g.title}</p>}
-                        {(g.explanation || g.body) && <p className="text-sm text-muted-foreground">{g.explanation || g.body}</p>}
-                        {g.hook && <p className="text-xs leading-4 text-muted-foreground">Memory hook: {g.hook}</p>}
-                      </li>
-                    ))}
-                  </ul>
-                </AccordionContent></AccordionItem></Accordion>
-              )}
             </div>
         )}
         {revealed && u.techfail && (
@@ -822,17 +832,20 @@ function ReviewSession() {
 }
 
 function RetypePractice({ target }: { target: string }) {
+  const input = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState("");
   const [count, setCount] = useState(0);
   const [result, setResult] = useState<ReturnType<typeof grade> | null>(null);
   const check = () => {
-    if (!draft.trim() || count >= 3) return;
+    if (!draft.trim()) return;
     const next = grade(target, draft);
     setResult(next.correct ? null : next);
     if (next.correct) {
       practiceFeedback();
-      setCount((n) => Math.min(3, n + 1));
+      sayFrench(target, 1, "fr-CA-JeanNeural");
+      setCount((n) => n + 1);
       setDraft("");
+      input.current?.focus();
     }
   };
   return (
@@ -842,16 +855,16 @@ function RetypePractice({ target }: { target: string }) {
         <span className="text-xs tabular-nums text-muted-foreground" role="status">{count}/3</span>
       </div>
       <div className="flex gap-2">
-        <Input id="rev-retype" value={draft} lang="fr" autoComplete="off" spellCheck={false} readOnly={count === 3}
-          className="focus-visible:outline-none! focus-visible:ring-1 focus-visible:ring-ring"
+        <Input id="rev-retype" value={draft} lang="fr" autoComplete="off" spellCheck={false} ref={input}
+          className="focus-visible:outline-none! focus-visible:ring-1! focus-visible:ring-ring!"
           onChange={(e) => { setDraft(e.target.value); setResult(null); }}
           onKeyDown={(e) => {
             e.stopPropagation();
             if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); check(); }
           }} />
-        <Button type="button" variant="outline" size="sm" disabled={count === 3 || !draft.trim()} onClick={check}>Check</Button>
+        <Button type="button" variant="outline" size="sm" disabled={!draft.trim()} onClick={check}>Check</Button>
       </div>
-      {result && <MarkedLine label="Try again" words={result.answer} side="answer" />}
+      {result && <TypeAnswerDiff typed={draft} correct={target} />}
     </div>
   );
 }
@@ -864,7 +877,6 @@ function SavedCards() {
   const sentences = useApp((s) => s.sentences);
   const cards = useApp((s) => s.cards);
   const lookups = useApp((s) => s.lookups);
-  const favorites = useApp((s) => s.favorites);
   const f = useApp((s) => s.libFilters);
   const forced = useApp((s) => s.ss["SCR-LIB-01"]);
   const lib = useLibrary();
@@ -879,11 +891,10 @@ function SavedCards() {
   const savedTotal = cards.length;
   const matchCard = (c: LibCard) => {
     const wordLookups = getCardLookups({ lookups }, c);
-    const fav = Boolean(favorites[favoriteKey(c)]);
     return (
       (f.mastered === "hide" ? !c.mastered : f.mastered === "only" ? c.mastered : true) &&
       (!f.minImportance || (wordLookups !== null && importanceFor(wordLookups) >= f.minImportance)) &&
-      (!f.favoritesOnly || fav)
+      true
     );
   };
   const savedRows = useMemo(() => {
@@ -899,7 +910,7 @@ function SavedCards() {
       .map((c) => ({ c, s: byS.get(c.sentenceId) }))
       .filter(({ c, s }) => !q || s?.fr.toLowerCase().includes(q) || s?.en.toLowerCase().includes(q) || c.word?.toLowerCase().includes(q))
       .sort((a, b) => dir * (value(a.c) - value(b.c)) || b.c.savedAt - a.c.savedAt);
-  }, [cards, sentences, lookups, favorites, f, q, savedSort]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cards, sentences, lookups, f, q, savedSort]); // eslint-disable-line react-hooks/exhaustive-deps
   const PAGE_SIZE = 50;
   const pageCount = Math.max(1, Math.ceil(savedRows.length / PAGE_SIZE));
   const curPage = Math.min(page, pageCount - 1);
@@ -913,7 +924,7 @@ function SavedCards() {
   const sortMark = (key: "saved" | "due" | "importance") => (savedSort.key !== key ? "↕" : savedSort.dir === "asc" ? "↑" : "↓");
   useEffect(() => setPage(0), [q, f.mastered, f.minImportance, f.favoritesOnly, savedSort.key, savedSort.dir]); // eslint-disable-line react-hooks/exhaustive-deps
   const matchingCards = savedRows.length;
-  const filtered = Boolean(q || f.mastered !== "hide" || f.minImportance || f.favoritesOnly);
+  const filtered = Boolean(q || f.mastered !== "hide" || f.minImportance);
   const sortButton = (key: "saved" | "due" | "importance", label: string) => (
     <Button type="button" variant="ghost" className="h-8 px-2 font-medium whitespace-nowrap" onClick={() => toggleSort(key)}>{label} <span aria-hidden className="text-muted-foreground">{sortMark(key)}</span></Button>
   );
@@ -980,12 +991,12 @@ function SavedCards() {
       header: () => <span className="sr-only">Actions</span>,
       cell: ({ row }) => {
         const { c, s } = row.original;
-        const fav = Boolean(favorites[favoriteKey(c)]);
+        const fav = c.kind === "Fill-in" && c.mode !== "grammar" && c.mode !== "recognize" && c.saved;
         const speech = c.word || s?.fr || "";
         return (
           <span className="flex gap-1">
             <Button type="button" variant="ghost" size="icon" aria-label={`Play ${c.word || "sentence"}`} onClick={() => sayFrench(speech)}>{<Play aria-hidden />}</Button>
-            <Button type="button" variant="ghost" size="icon" aria-pressed={fav} aria-label={fav ? "Remove favorite" : "Favorite"} onClick={() => void setFavorite(speech, !fav)}>{fav ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />}</Button>
+            {fav && s && <WordDeckStar word={speech} sentence={{ id: s.id, fr: s.fr, en: s.en, segments: [], steps: [], cards: [], grammar: null }} />}
             <Button type="button" variant="ghost" size="icon" aria-label={c.mastered ? "Restore" : "Mark mastered"} onClick={() => (c.mastered ? void restoreMastered(c.id) : masterCard(c.id))}>{<Archive aria-hidden />}</Button>
           </span>
         );
@@ -1043,7 +1054,7 @@ function SavedCards() {
             ]).map((o) => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}</SelectContent></Select>
           <span id="imp-filter-note" className="sr-only">Applies to Fill-in word cards only</span>
         </label>
-        <label className="flex items-center gap-3 py-2"><Checkbox checked={f.favoritesOnly} onCheckedChange={(v) => setF({ favoritesOnly: v === true })} /> Favorites only</label>
+
         <p className="pb-2 text-sm tabular-nums text-muted-foreground" aria-live="polite">
           {plural(matchingCards, "card")}
           {filtered ? ` of ${nf.format(savedTotal)}` : ""}
@@ -1062,7 +1073,7 @@ function SavedCards() {
           {narrow ? (
             <ul className="flex list-none flex-col gap-3">
               {savedTable.getRowModel().rows.map((row) => { const { c, s } = row.original;
-                const fav = Boolean(favorites[favoriteKey(c)]);
+                const fav = c.kind === "Fill-in" && c.mode !== "grammar" && c.mode !== "recognize" && c.saved;
                 const speech = c.word || s?.fr || "";
                 const meaning = [c.meaning, s?.en].find((v) => v && !/\p{Script=Han}/u.test(v)) || "—";
                 return (
@@ -1072,7 +1083,7 @@ function SavedCards() {
                     <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"><span className="text-xs font-medium text-muted-foreground">Due</span><span className="tabular-nums">{compactDue(c.due)}</span><span className="inline-flex items-baseline gap-1.5 text-sm">{c.mastered ? "Mastered" : STATUS_LABEL[c.status]}</span></p>
                     <div className="flex gap-1">
                       <Button type="button" variant="ghost" size="icon" aria-label={`Play ${c.word || "sentence"}`} onClick={() => sayFrench(speech)}>{<Play aria-hidden />}</Button>
-                      <Button type="button" variant="ghost" size="icon" aria-pressed={fav} aria-label={fav ? "Remove favorite" : "Favorite"} onClick={() => void setFavorite(speech, !fav)}>{fav ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />}</Button>
+                      {fav && s && <WordDeckStar word={speech} sentence={{ id: s.id, fr: s.fr, en: s.en, segments: [], steps: [], cards: [], grammar: null }} />}
                       <Button type="button" variant="ghost" size="icon" aria-label={c.mastered ? "Restore" : "Mark mastered"} onClick={() => (c.mastered ? void restoreMastered(c.id) : masterCard(c.id))}>{<Archive aria-hidden />}</Button>
                     </div>
                   </li>

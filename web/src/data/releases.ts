@@ -8,6 +8,16 @@ export const RELEASES = [
     version: APP_VERSION,
     date: "2026-11-11",
     changes: [
+      "Tap phonetics to hear pronunciation. Star a word to save it to your word deck.",
+      "Word cards and review evaluations open with sentence meaning and Dictionary expanded.",
+      "Typed answers show character differences. Type it again supports unlimited repetitions.",
+      "Study home has a balanced grid and compact Listen cards.",
+    ],
+  },
+  {
+    version: "1.2.0",
+    date: "2026-11-11",
+    changes: [
       "History is easy to reach from Study home and Progress.",
       "The word-card reading column keeps normal page padding.",
       "The Listen review card is a balanced card.",

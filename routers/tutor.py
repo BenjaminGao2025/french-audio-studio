@@ -400,6 +400,45 @@ class EtymologyRequest(BaseModel):
     language: Literal["zh", "en"] = "zh"
 
 
+class OriginPart(BaseModel):
+    form: str = Field(max_length=200)
+    gloss_zh: str = Field(default="", max_length=300)
+
+
+class OriginSource(BaseModel):
+    lang: str = Field(max_length=100)
+    form: str = Field(max_length=200)
+    from_form: str = Field(default="", max_length=200)
+
+
+class OriginDetail(BaseModel):
+    construction: list[OriginPart] = Field(default_factory=list, max_length=12)
+    source: list[OriginSource] = Field(default_factory=list, max_length=12)
+    sense_history_zh: str = Field(default="", max_length=2000)
+    memory_zh: str = Field(default="", max_length=1000)
+
+
+def _origin_response(raw: str) -> dict:
+    """Validate before caching; source-language citation forms remain untouched."""
+    clean = re.sub(r"<think>[\s\S]*?</think>", "", raw).strip()
+    clean = re.sub(r"^```(?:json)?\s*|\s*```$", "", clean)
+    if clean.startswith("{"):
+        detail = OriginDetail.model_validate_json(clean)
+        explanations = [p.gloss_zh for p in detail.construction] + [p.lang for p in detail.source] + [detail.sense_history_zh, detail.memory_zh]
+        if any(re.search(r"暂无法|请重试|请求失败|发生错误", x) for x in explanations) or not any(explanations) or any(x and not re.search(r"[\u4e00-\u9fff]", x) for x in explanations):
+            raise ValueError("Origin explanations must be Chinese")
+        text = "\n".join(filter(None, [
+            "构成：" + " + ".join(p.form + (f"（{p.gloss_zh}）" if p.gloss_zh else "") for p in detail.construction) if detail.construction else "",
+            "来源：" + "；".join(f"{p.lang} {p.form}" + (f" ← {p.from_form}" if p.from_form else "") for p in detail.source) if detail.source else "",
+            f"词义演变：{detail.sense_history_zh}" if detail.sense_history_zh else "",
+            f"记忆提示：{detail.memory_zh}" if detail.memory_zh else "",
+        ]))
+        return {**detail.model_dump(), "text": text, "lang": "zh", "schema_version": 2}
+    if not re.search(r"[\u4e00-\u9fff]", clean) or re.search(r"无法|请重试|出错|请求失败", clean):
+        raise ValueError("Empty, English or failed origin")
+    return {"text": clean, "lang": "zh", "schema_version": 2}
+
+
 @router.post("/api/etymology")
 async def etymology_word(
     request: EtymologyRequest,
@@ -411,10 +450,15 @@ async def etymology_word(
     if not word:
         raise HTTPException(status_code=400, detail={"message": "请提供待查询单词"})
     headword = (lemma or word).lower()
-    key = f"en:{headword}" if request.language == "en" else headword
+    # Versioned namespace lazily regenerates all legacy English/plain origins on open.
+    # The language field remains accepted for old clients; explanations now always use Chinese.
+    key = f"zh:v2:{headword}"
     cached = auth_db.get_etymology(key)
     if cached is not None:
-        return {"text": cached, "cached": True}
+        try:
+            return {**_origin_response(cached), "cached": True}
+        except (ValueError, TypeError):
+            pass
 
     api_key = ai.upstream_key(authorization)
     payload = {
@@ -423,15 +467,14 @@ async def etymology_word(
             {
                 "role": "system",
                 "content": (
-                    "You are a careful French etymology teacher. Explain the base word's formation, "
-                    "its origin if known, and one short memory cue in English only. Clearly distinguish "
-                    "real etymology from a memory association. State uncertainty and never invent origins. "
-                    "Use plain text, at most 80 words in 4 short lines."
-                    if request.language == "en" else
-                    "你是严谨的法语词源老师。用简体中文纯文本解释所给原形词的词根/构词、"
-                    "词源（如拉丁语来源，已知才写）和恰好一条简短记忆钩子。"
-                    "不确定时明确说不确定，不编造词源；区分真实词源和记忆联想。"
-                    "只解释原形词，便于同词族复用。总计约120个汉字以内，最多4短行，不用Markdown。"
+                    "你是严谨的法语词源老师。所有解释、释义及语言名称必须用简体中文，"
+                    "不要使用 compound、prefix、from Latin 等英文标签。法语、拉丁语、希腊语等引用形式保持原文，"
+                    "如 à、fin、ad、finem、finis，不要音译或翻译形式。只解释原形词，"
+                    "不确定时明确说明，不编造词源；记忆联想必须与真实词源区分。"
+                    '仅返回 JSON：{"construction":[{"form":"à","gloss_zh":"到"}],'
+                    '"source":[{"lang":"拉丁语","form":"ad","from_form":""}],'
+                    '"sense_history_zh":"简短的词义演变","memory_zh":"一条简短记忆联想"}。'
+                    "各字段按实际单词填写；未知或不适用的字段用空数组或空字符串。总解释不超过250汉字。"
                 ),
             },
             {"role": "user", "content": f"French base word: {headword}"},
@@ -442,14 +485,17 @@ async def etymology_word(
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     async with httpx.AsyncClient(timeout=30.0) as client:
         _, raw_text = await ai.post_chat(client, payload, headers)
-    text = re.sub(r"<think>[\s\S]*?</think>", "", raw_text).strip()
-    if not text:
+    try:
+        result = _origin_response(raw_text)
+    except (ValueError, TypeError):
         raise HTTPException(
             status_code=502,
             detail={"code": "etymology_failed", "message": "暂无法获取词源，请重试。"},
         )
-    auth_db.set_etymology(key, word, lemma, text)
-    return {"text": text, "cached": False}
+    # Store structured JSON in the existing text column; no database migration.
+    stored = json.dumps(result, ensure_ascii=False) if "construction" in result else result["text"]
+    auth_db.set_etymology(key, word, lemma, stored)
+    return {**result, "cached": False}
 
 
 class PhraseContextRequest(BaseModel):

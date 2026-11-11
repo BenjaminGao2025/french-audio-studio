@@ -702,7 +702,7 @@ def add_note(
         for target in targets:
             text = re.sub(r"\s+", " ", str(target.get("text") or "")).strip()
             mode = target.get("mode") or "cloze"
-            if mode == "cloze":
+            if mode == "cloze" and not target.get("exact_target", False):
                 if not target_in_sentence(clean_sentence, text):
                     mode = "recognize"  # a blank is impossible if the chunk is not in the sentence
                 elif is_function_word(text):

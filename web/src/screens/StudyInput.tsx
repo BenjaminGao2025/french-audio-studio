@@ -171,12 +171,12 @@ export function StudyInput() {
           </Card>
         )}
         <StudyReviewNotice />
-        <div className="grid gap-3 sm:grid-cols-2">
-          <EntryCard title="History" description="Analyses and practice attempts" onClick={() => go("progress/history?tab=attempts")} />
-          <EntryCard title="Practise my own words" description="Prepare, speak, and archive your own ideas" onClick={() => go("study/personal")} />
-          <EntryCard title="My grammar map" description="Patterns from the sentences you have saved" onClick={() => go("study/grammar")} />
-          <EntryCard title="Recall" description="Saved sentences, from memory" onClick={() => go("study/recall")} />
-          <EntryCard title="Dictation" description="Saved sentences, from audio" onClick={() => go("study/dictation")} />
+        <div className="grid gap-3 sm:grid-cols-6">
+          <div className="sm:col-span-2"><EntryCard title="History" description="Analyses and practice attempts" onClick={() => go("progress/history?tab=attempts")} /></div>
+          <div className="sm:col-span-2"><EntryCard title="Practise my own words" description="Prepare, speak, and archive your own ideas" onClick={() => go("study/personal")} /></div>
+          <div className="sm:col-span-2"><EntryCard title="My grammar map" description="Patterns from the sentences you have saved" onClick={() => go("study/grammar")} /></div>
+          <div className="sm:col-span-3"><EntryCard title="Recall" description="Saved sentences, from memory" onClick={() => go("study/recall")} /></div>
+          <div className="sm:col-span-3"><EntryCard title="Dictation" description="Saved sentences, from audio" onClick={() => go("study/dictation")} /></div>
         </div>
         {(study.restored || forced === "restored") && draft.trim() && (
           <Alert variant="default"><AlertTitle>Draft restored</AlertTitle><AlertDescription>Your earlier text is still here, in “{mode === "ideas" ? "My own ideas" : "French text"}”. Each mode keeps its own draft.<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="ghost" onClick={() => patchStudy({ restored: false })}>Dismiss</Button></div></AlertDescription></Alert>
@@ -277,6 +277,21 @@ export function StudyPhoto() {
     catch (e) { setError(e instanceof Error ? e.message : "Couldn’t open this image."); }
   };
 
+  const emptyPhotoRef = useRef<HTMLButtonElement>(null);
+  const removePhoto = () => {
+    runRef.current?.abort();
+    runRef.current = null;
+    if (photoFile) URL.revokeObjectURL(photoFile.url);
+    photoFile = null;
+    setPhoto(null);
+    setError("");
+    setPhotoStage("Preparing image");
+    if (inputRef.current) inputRef.current.value = "";
+    patchStudy({ ocr: { phase: "select", lines: [], partial: false } });
+    announce("Photo removed.");
+    requestAnimationFrame(() => emptyPhotoRef.current?.focus());
+  };
+
   const start = async () => {
     if (!photo) return;
     runRef.current?.abort();
@@ -344,15 +359,23 @@ export function StudyPhoto() {
           }}
         />
         {photo ? (
-          <div className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-3">
+          <div role="group" aria-label="Selected photo" tabIndex={0}
+            className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-3 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onKeyDown={(event) => {
+              if (event.target === event.currentTarget && (event.key === "Backspace" || event.key === "Delete")) {
+                event.preventDefault();
+                removePhoto();
+              }
+            }}>
             <img src={photo.url} alt="The photo you chose" style={{ maxWidth: "100%", maxHeight: 320, objectFit: "contain", borderRadius: 8, alignSelf: "flex-start" }} />
-            <div className="flex flex-wrap items-center gap-2 gap-2">
-              <span className="text-sm text-muted-foreground min-w-0 flex-1">{photo.file.name}</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="w-full min-w-0 break-all text-sm text-muted-foreground sm:w-auto sm:flex-1">{photo.file.name}</span>
+              <Button type="button" variant="ghost" size="sm" onClick={removePhoto}><X aria-hidden />Remove</Button>
               <Button type="button" variant="ghost" aria-disabled={(!!(busy)) || undefined} className={cn((!!(busy)) ? "opacity-50" : "", "h-8 px-2 text-sm")} onClick={(event) => { if (!!(busy)) { event.preventDefault(); return; } (() => inputRef.current?.click())(); }}>{<ImageIcon aria-hidden />}Choose another photo</Button>
             </div>
           </div>
         ) : (
-          <Button type="button" variant="outline" className="h-auto flex-col items-start gap-2 p-3 text-left" onClick={() => inputRef.current?.click()}><span className="grid aspect-4/3 w-full place-items-center rounded-md bg-muted text-xs text-muted-foreground" aria-hidden>
+          <Button ref={emptyPhotoRef} type="button" variant="outline" className="h-auto flex-col items-start gap-2 p-3 text-left" onClick={() => inputRef.current?.click()}><span className="grid aspect-4/3 w-full place-items-center rounded-md bg-muted text-xs text-muted-foreground" aria-hidden>
               <Camera width={28} height={28} />
             </span>
             Take or choose a photo</Button>

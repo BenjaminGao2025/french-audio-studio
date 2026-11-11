@@ -8,6 +8,8 @@ import { loadLibrary, resetReviewCache, toReviewCard } from "../api/review";
 import { resetLookupCaches } from "../api/lookup";
 import { fake, installFakeBackend } from "../test/fakeBackend";
 import * as store from "../state/store";
+import { toast } from "sonner";
+vi.mock("sonner", () => ({ toast: vi.fn() }));
 import * as feedback from "../lib/feedback";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -267,6 +269,7 @@ const enterInput = async (input: HTMLInputElement) => {
 describe("Task C — revealed result and optional repetitions", () => {
   it("Enter in the compact answer checks; three correct repetitions never grade", async () => {
     const sound = vi.spyOn(feedback, "practiceFeedback").mockImplementation(() => {});
+    const pronunciation = vi.spyOn(store, "sayFrench").mockImplementation(() => {});
     await mount(card({ id: fake.srs.cards[0].id }));
     const answer = await typeInput("#rev-input", "avon");
     expect(answer.tagName).toBe("INPUT");
@@ -275,15 +278,25 @@ describe("Task C — revealed result and optional repetitions", () => {
     expect(host.querySelector("#rev-result-heading")?.textContent).toBe("Result");
     const practice = await typeInput("#rev-retype", "avon");
     await enterInput(practice);
-    expect(host.textContent).toContain("Try again");
+    expect(host.querySelectorAll('[aria-label="Answer comparison"]')).toHaveLength(2);
+    expect(host.textContent).not.toMatch(/Different word: you wrote|Accent: you wrote/);
     expect(host.textContent).toContain("0/3");
-    for (let i = 1; i <= 3; i++) {
+    for (let i = 1; i <= 4; i++) {
       await typeInput("#rev-retype", "avons");
       await enterInput(practice);
       expect(host.textContent).toContain(`${i}/3`);
       expect(practice.value).toBe("");
     }
-    expect(sound).toHaveBeenCalledTimes(3);
+    expect(sound).toHaveBeenCalledTimes(4);
+    expect(pronunciation.mock.calls).toEqual(Array.from({ length: 4 }, () => ["avons", 1, "fr-CA-JeanNeural"]));
+    expect(practice.readOnly).toBe(false);
+    expect(practice.disabled).toBe(false);
+    expect(document.activeElement).toBe(practice);
+    for (const key of ["1", "5"]) await act(async () => { practice.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })); });
+    expect(fake.calls.filter(c => /\/(archive|review)$/.test(c.path))).toHaveLength(0);
+    await typeInput("#rev-retype", "avon");
+    await enterInput(practice);
+    expect(host.querySelectorAll('[aria-label="Answer comparison"]')).toHaveLength(2);
     expect(fake.calls.filter((c) => /\/review$/.test(c.path))).toHaveLength(0);
     expect(store.get().review.completed).toBe(0);
     // Grading is available even while the practice input still has focus.
@@ -293,11 +306,14 @@ describe("Task C — revealed result and optional repetitions", () => {
   });
 
   it("a correct Check has a check mark and no repetition input", async () => {
+    const pronunciation = vi.spyOn(store, "sayFrench").mockImplementation(() => {});
     await mount(card());
     await enterInput(await typeInput("#rev-input", "avons"));
+    expect(pronunciation.mock.calls).toEqual([["avons", 1, "fr-CA-JeanNeural"]]);
     expect(host.querySelector('[aria-label="Correct"]')).toBeTruthy();
     expect(host.querySelector("#rev-retype")).toBeNull();
-    expect(host.querySelector('[data-slot="accordion"]')).toBeTruthy();
+    expect(host.textContent).not.toContain("Grammar notes");
+    expect(store.get().review.sessionCards?.[0].grammar).toHaveLength(1);
     expect(host.querySelector('.rev-rate [data-slot="kbd"]')).toBeNull();
     expect(host.querySelector(".rev-ratings")?.textContent).not.toContain("Enter");
   });
@@ -307,12 +323,14 @@ describe("Task C — revealed result and optional repetitions", () => {
     await mount(card({ target: "tout de suite" }));
     await enterInput(await typeInput("#rev-input", "suite"));
     spy.mockClear();
-    const phraseButtons = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).filter((b) => b.textContent === "tout de suite");
-    expect(phraseButtons).toHaveLength(2);
-    for (const phrase of phraseButtons) await act(async () => phrase.click());
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Correct answer"]')!.click());
     await act(async () => button("Word/phrase").click());
-    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Pronounce tout de suite"]')!.click());
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Replay “tout de suite”"]')!.click());
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Pronounce “tout de suite”"]')!.click());
     expect(spy.mock.calls).toEqual(Array.from({ length: 4 }, () => ["tout de suite"]));
+    for (const title of ["In this sentence", "Dictionary"]) expect(host.querySelector(`[aria-label="${title}"] button`)?.getAttribute("aria-expanded")).toBe("true");
+    expect(host.querySelector("textarea")).toBeNull();
+    expect(fake.calls.filter(c => c.path === "/api/srs/lookups" && c.method === "POST")).toHaveLength(0);
   });
 
   it("grading before any repetitions and the Enter suggestion still work", async () => {
@@ -337,6 +355,26 @@ describe("Task C — revealed result and optional repetitions", () => {
 });
 
 describe("Task C — Saved as a table", () => {
+  it("the saved star removes only matching cloze cards and there is no bookmark filter", async () => {
+    fake.delay = 0;
+    const template = fake.srs.cards[0];
+    fake.srs.cards = [
+      { ...template, id: "star-word", mode: "cloze", target: "chat", archived: false },
+      { ...template, id: "keep-listen", mode: "listen", target: "", archived: false },
+      { ...template, id: "keep-speak", mode: "speak", target: "", archived: false },
+      { ...template, id: "keep-other-word", mode: "cloze", target: "chien", archived: false },
+    ];
+    await act(async () => { store.resetDemo(); await loadLibrary(true); root.render(<ReviewScreen sub="saved" />); });
+    await wait(50);
+    expect(host.textContent).not.toContain("Favorites only");
+    expect(host.querySelector('[aria-label="Favorite"]')).toBeNull();
+    const row = host.querySelector('[data-card-id="star-word"]')!;
+    await act(async () => row.querySelector<HTMLButtonElement>('[aria-label="Saved"]')!.click());
+    await wait(50);
+    expect(fake.calls.filter(c => c.method === "DELETE").map(c => c.path)).toEqual(["/api/srs/cards/star-word"]);
+    expect(store.get().cards.map(c => c.id)).toEqual(["keep-listen", "keep-speak", "keep-other-word"]);
+    expect(host.querySelector('[data-card-id="star-word"]')).toBeNull();
+  });
   it("shows at most 50 tbody rows plus a pager, and a sentence card's Importance cell is —", async () => {
     await act(async () => {
       store.resetDemo();
@@ -367,5 +405,59 @@ describe("Task C — Saved as a table", () => {
     expect(dueCell.textContent).toMatch(/^(now|overdue \d+ d|\d+ min|\d+ h|\d+ d|—)$/);
     expect(savedCell.textContent!.length).toBeLessThan(12);
     expect(table.textContent).not.toContain("in a minute");
+  });
+});
+
+
+describe("Review focus and mastered shortcut", () => {
+  it("focuses the first and next typing cards; input shortcuts never archive or rate, Enter checks", async () => {
+    fake.delay = 0;
+    const first = card({ id: fake.srs.cards[0].id });
+    const second = card({ id: fake.srs.cards[1].id });
+    await mount(first);
+    await act(async () => store.set(s => ({ review: { ...s.review, sessionCards: [first, second] } })));
+    const input = host.querySelector<HTMLInputElement>("#rev-input")!;
+    expect(document.activeElement).toBe(input);
+    await act(async () => store.go("review/session"));
+    await wait(40);
+    expect(document.activeElement).toBe(input);
+    for (const key of ["1", "5"]) await act(async () => { input.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })); });
+    expect(fake.calls.filter(c => /\/(archive|review)$/.test(c.path))).toHaveLength(0);
+    await enterInput(await typeInput("#rev-input", "avons"));
+    expect(host.querySelector('[aria-label="Correct"]')).toBeTruthy();
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-rating="3"]')!.click());
+    await wait(80);
+    expect(store.get().review.index).toBe(1);
+    expect(document.activeElement).toBe(host.querySelector("#rev-input"));
+  });
+
+  it("5 soft archives and advances; Undo restores the card as current", async () => {
+    fake.delay = 0;
+    const toastSpy = vi.mocked(toast);
+    toastSpy.mockClear();
+    const first = card({ id: fake.srs.cards[0].id });
+    const second = card({ id: fake.srs.cards[1].id });
+    await mount(first);
+    await act(async () => store.set(s => ({ review: { ...s.review, sessionCards: [first, second] } })));
+    await act(async () => { document.dispatchEvent(new KeyboardEvent("keydown", { key: "5", bubbles: true })); });
+    await wait(80);
+    expect(fake.calls.filter(c => /\/archive$/.test(c.path)).map(c => c.body)).toEqual([{ archived: true }]);
+    expect(host.querySelector("[data-card-id]")?.getAttribute("data-card-id")).toBe(second.id);
+    expect(toastSpy).toHaveBeenCalledWith("Marked as mastered", expect.objectContaining({ action: expect.objectContaining({ label: "Undo" }) }));
+    const action = toastSpy.mock.calls[0][1]!.action as unknown as { onClick: () => void };
+    await act(async () => action.onClick());
+    await wait(80);
+    expect(fake.calls.filter(c => /\/archive$/.test(c.path)).map(c => c.body)).toEqual([{ archived: true }, { archived: false }]);
+    expect(host.querySelector("[data-card-id]")?.getAttribute("data-card-id")).toBe(first.id);
+    expect(document.activeElement).toBe(host.querySelector("#rev-input"));
+  });
+
+  it.each(["listen", "speak"] as const)("5 completes the last %s card", async mode => {
+    fake.delay = 0;
+    await mount(card({ id: fake.srs.cards[0].id, mode, kind: mode === "listen" ? "Listen" : "Speak" }));
+    await act(async () => { document.dispatchEvent(new KeyboardEvent("keydown", { key: "5", bubbles: true })); });
+    await wait(80);
+    expect(store.get().review.phase).toBe("complete");
+    expect(host.textContent).toContain("Review complete");
   });
 });

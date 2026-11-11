@@ -114,6 +114,18 @@ class SrsStoreTests(unittest.TestCase):
         queue = srs.build_queue(self.user_id, tz_offset_minutes=420, now=evening_before)
         self.assertEqual(queue["cards"], [])
 
+    def test_word_star_preserves_exact_target_and_unlinks_only_that_word(self):
+        _, headers = _new_user()
+        client = TestClient(tts_service.app)
+        payload = {"sentence": "Je vais en France.", "modes": ["listen", "speak"], "targets": [{"text": "en", "exact_target": True}, {"text": "France", "exact_target": True}, {"text": "aller", "exact_target": True}]}
+        note = client.post("/api/srs/notes", headers=headers, json=payload).json()
+        self.assertEqual(sorted((c["mode"], c["target"]) for c in note["cards"]), [("cloze", "France"), ("cloze", "aller"), ("cloze", "en"), ("listen", ""), ("speak", "")])
+        star = next(c for c in note["cards"] if c["target"] == "en")
+        self.assertEqual(client.delete("/api/srs/cards/" + star["id"], headers=headers).status_code, 200)
+        remaining = client.get("/api/srs/cards", headers=headers).json()["cards"]
+        self.assertEqual(len(remaining), 4)
+        self.assertNotIn(star["id"], [c["id"] for c in remaining])
+
     def test_cloze_target_missing_from_sentence_becomes_recognize(self):
         note = srs.add_note(self.user_id, "Je prends le train.", targets=[{"text": "en"}, {"text": "train"}])
         modes = sorted((c["mode"], c["target"]) for c in note["cards"])

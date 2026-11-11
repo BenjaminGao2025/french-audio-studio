@@ -43,7 +43,7 @@ let oneShotSeq = 0;
  * the store's main `player` (so a word or a phrase selection never takes over sentence playback).
  * A new call stops the previous clip. Empty text is ignored and long text is capped.
  */
-export function speakOnce(text: string, rate = 1): void {
+export function speakOnce(text: string, rate = 1, voice?: string): void {
   const clean = text.trim().slice(0, 200);
   if (!clean) return;
   // jsdom (unit tests) exposes HTMLMediaElement but cannot actually play anything; skip it there.
@@ -58,7 +58,7 @@ export function speakOnce(text: string, rate = 1): void {
   ensureAudioSession().then(() => {
     if (id !== oneShotSeq || !oneShot) return; // a newer call superseded this one
     try {
-      oneShot.src = ttsUrl(clean);
+      oneShot.src = ttsUrl(clean, voice);
       oneShot.playbackRate = rate;
       const playing = oneShot.play() as Promise<void> | undefined;
       if (playing && typeof playing.catch === "function") playing.catch(() => undefined);

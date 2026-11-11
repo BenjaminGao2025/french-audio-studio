@@ -1,6 +1,7 @@
 /* Word lookups: the offline dictionary entry (routers/tutor.py) and the per-user lookup count (routers/srs.py). */
 import { useSyncExternalStore } from "react";
 import { apiFetch } from "./client";
+import { set } from "../state/store";
 import { lookupKey } from "../lib/lookup";
 
 export interface DictionaryEntry {
@@ -70,6 +71,7 @@ export async function recordLookup(word: string): Promise<LookupCount> {
   const res = await apiFetch<LookupCount>("/api/srs/lookups", { body: { word } });
   counts = { ...counts, [lookupKey(word)]: res.count };
   listeners.forEach((l) => l());
+  set(s => ({ lookups: { ...s.lookups, [lookupKey(word)]: { count: res.count, lastCounted: null } } }));
   return res;
 }
 
@@ -110,6 +112,12 @@ export interface PhraseContextResponse {
 }
 export interface EtymologyResponse {
   text: string;
+  lang?: "zh";
+  schema_version?: number;
+  construction?: { form: string; gloss_zh?: string }[];
+  source?: { lang: string; form: string; from_form?: string }[];
+  sense_history_zh?: string;
+  memory_zh?: string;
 }
 
 /** One promise per key for the page's lifetime; a failed or aborted request is forgotten so Retry asks again. */
@@ -142,7 +150,7 @@ export function phraseContext(sentence: string, translation_zh: string, signal?:
 /** Fetched only when the Roots & origin section is expanded. */
 export function etymology(word: string, lemma: string, signal?: AbortSignal): Promise<EtymologyResponse> {
   const key = JSON.stringify([word, lemma]);
-  return cached(etyCache, key, () => apiFetch<EtymologyResponse>("/api/etymology", { body: { word, lemma, language: "en" }, signal }));
+  return cached(etyCache, key, () => apiFetch<EtymologyResponse>("/api/etymology", { body: { word, lemma, language: "zh" }, signal }));
 }
 
 /** Test helper: forget cached dictionaries/contexts between renders. */

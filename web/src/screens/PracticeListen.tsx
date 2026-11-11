@@ -1,3 +1,4 @@
+import { Phonetic } from "../components/Phonetic";
 /* SCR-PRA-04 Guided listening on the learner's own sentences:
  * listen blind → rate yourself → see the text → relisten (slow, normal, normal) → answer one question. */
 import { Button } from "../components/ui/button";
@@ -209,7 +210,7 @@ function Transcript({ s }: { s: ListeningSession }) {
           {words.map((w, i) => (
             <li key={i}>
               <span lang="fr" className="font-medium">{w.w}</span>
-              {formatFriendlyPhonetic(w.ipa) && <span className="text-xs leading-4 text-muted-foreground"> {formatFriendlyPhonetic(w.ipa)}</span>}
+              {formatFriendlyPhonetic(w.ipa) && <Phonetic word={w.w} ipa={w.ipa} />}
               {w.en && w.en !== PLACEHOLDER_GLOSS && <span> — {w.en}</span>}
             </li>
           ))}

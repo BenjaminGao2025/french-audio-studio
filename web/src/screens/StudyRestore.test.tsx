@@ -2,7 +2,8 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { StudyInput, StudyPhoto } from "./StudyInput";
+import { StudyInput, StudyPhoto, selectStudyPhoto } from "./StudyInput";
+import * as studyApi from "../api/study";
 import { StudyPersonal } from "./StudyPersonal";
 import { StudyGrammar } from "./StudyGrammar";
 import { ExplainPanel, GrammarSave } from "./StudyTools";
@@ -77,6 +78,56 @@ describe("restored study flows", () => {
     expect(host.textContent).toMatch(/Cards\s*9/);
     expect(host.textContent).toMatch(/To revisit\s*5/);
     await click("Review today"); expect(get().route).toBe("review/due");
+  });
+  it.each(["Remove", "Backspace", "Delete"])("removes a selected photo with %s and releases its object URL", async (action) => {
+    selectStudyPhoto(new File(["image"], "chosen.png", { type: "image/png" }));
+    set(() => ({ route: "study/photo" }));
+    await act(async () => root.render(<StudyPhoto />));
+    expect(host.querySelector("img")?.getAttribute("src")).toBe("blob:test");
+    expect(host.textContent).toContain("chosen.png");
+    vi.mocked(URL.revokeObjectURL).mockClear();
+    if (action === "Remove") await click("Remove");
+    else {
+      const preview = host.querySelector<HTMLElement>('[aria-label="Selected photo"]')!;
+      preview.focus();
+      await act(async () => preview.dispatchEvent(new KeyboardEvent("keydown", { key: action, bubbles: true, cancelable: true })));
+    }
+    expect(host.querySelector("img")).toBeNull();
+    expect(button("Take or choose a photo")).toBeTruthy();
+    expect(get().route).toBe("study/photo");
+    expect(get().study.ocr).toEqual({ phase: "select", lines: [], partial: false });
+    expect(get().announce.msg).toBe("Photo removed.");
+    expect(URL.revokeObjectURL).toHaveBeenCalledExactlyOnceWith("blob:test");
+    expect(host.textContent).toContain("This app doesn’t keep it.");
+    // The module-level file is cleared too: a later visit stays empty.
+    await act(async () => root.render(null));
+    await act(async () => root.render(<StudyPhoto />));
+    expect(host.querySelector("img")).toBeNull();
+  });
+  it.each(["preparing", "uploading"])("ignores late OCR work after removing a photo while %s", async (stage) => {
+    let finish!: () => void;
+    const pending = new Promise<void>((resolve) => { finish = resolve; });
+    vi.spyOn(studyApi, "photoToDataUrl").mockImplementation(async () => {
+      if (stage === "preparing") await pending;
+      return "data:image/png;base64,dGVzdA==";
+    });
+    const extract = vi.spyOn(studyApi, "photoExtract").mockImplementation(async () => {
+      await pending;
+      return [{ fr: "Bonjour.", kind: "sentence", gloss: "Hello." }];
+    });
+    selectStudyPhoto(new File(["image"], "chosen.png", { type: "image/png" }));
+    await act(async () => root.render(<StudyPhoto />));
+    await click("Read text from photo");
+    expect(get().study.ocr.phase).toBe("processing");
+    await click("Remove");
+    if (stage === "uploading") expect(extract.mock.calls[0][1]?.aborted).toBe(true);
+    await act(async () => finish());
+    await settle();
+    if (stage === "preparing") expect(extract).not.toHaveBeenCalled();
+    expect(get().study.ocr).toEqual({ phase: "select", lines: [], partial: false });
+    expect(get().announce.msg).toBe("Photo removed.");
+    expect(button("Take or choose a photo")).toBeTruthy();
+    expect(host.textContent).not.toContain("Preparing and resizing");
   });
   it("keeps grammar-card save status separate for each point", async () => {
     respond = () => ({ notes: [{ sentence: sentence.fr, cards: [{ mode: "grammar", target: "Present tense" }] }] });

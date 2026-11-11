@@ -17,8 +17,9 @@ afterEach(() => {
 });
 
 describe("practice feedback", () => {
-  it("uses sound, spoken praise and animation by default", () => {
+  it("uses sound and animation with spoken praise off by default", () => {
     expect(loadFeedback()).toEqual(DEFAULT_FEEDBACK);
+    expect(DEFAULT_FEEDBACK.spoken).toBe(false);
     expect(DEFAULT_FEEDBACK.volume).toBeGreaterThan(0);
     expect(DEFAULT_FEEDBACK.volume).toBeLessThanOrEqual(1);
   });
@@ -27,6 +28,13 @@ describe("practice feedback", () => {
     saveFeedback({ sound: false, volume: 0.25, spoken: false, animation: false });
     resetFeedbackState();
     expect(loadFeedback()).toEqual({ sound: false, volume: 0.25, spoken: false, animation: false });
+  });
+
+  it("uses the default for an unset spoken field and preserves explicit true", () => {
+    localStorage.setItem(FEEDBACK_KEY, JSON.stringify({ sound: true }));
+    expect(loadFeedback().spoken).toBe(false);
+    localStorage.setItem(FEEDBACK_KEY, JSON.stringify({ spoken: true }));
+    expect(loadFeedback().spoken).toBe(true);
   });
 
   it("keeps a stored animation preference but forces it off for reduced motion", () => {
