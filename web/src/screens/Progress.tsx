@@ -15,7 +15,7 @@ import {
 } from "../api/time";
 import { fmtDuration, nf, plural } from "../lib/format";
 import { announce, go } from "../state/store";
-import { Card, CardDescription, CardHeader, CardTitle, Checkbox, Crumbs, Input, PageHead, Progress, Skeleton, Spinner } from "../components/ui";
+import { Card, CardDescription, CardHeader, CardTitle, Checkbox, Crumbs, Input, PageHead, Progress, Skeleton, Spinner, Stat } from "../components/ui";
 import { Button } from "../components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
@@ -107,12 +107,12 @@ function Goal({ s }: { s: StudySummary }) {
   const finish = s.projected_finish ? new Date(`${s.projected_finish}T12:00:00Z`) : null;
   return (
     <>
-      <section className="journey flex flex-col gap-2" aria-labelledby="goal-h">
+      <section className="journey flex flex-col gap-3" aria-labelledby="goal-h">
         <h2 id="goal-h" className="text-xs font-medium text-muted-foreground">1,000-hour journey</h2>
         <p className="text-lg font-semibold tabular-nums">{s.total_seconds < 60 ? "0 h" : fmtDuration(s.total_seconds / 60)}</p>
-        <dl className="flex flex-wrap gap-6">
-          <div className="flex flex-col gap-0.5"><dt className="text-sm text-muted-foreground">Goal</dt><dd className="text-sm font-medium tabular-nums">{nf.format(s.goal_hours)} h</dd></div>
-          <div className="flex flex-col gap-0.5"><dt className="text-sm text-muted-foreground">Done</dt><dd className="text-sm font-medium tabular-nums">{pct.toFixed(1)}%</dd></div>
+        <dl className="grid grid-cols-3 gap-4">
+          <Stat label="Goal" value={`${nf.format(s.goal_hours)} h`} />
+          <Stat label="Done" value={`${pct.toFixed(1)}%`} />
         </dl>
         <Progress value={pct} aria-label={`${pct.toFixed(1)} percent of the ${nf.format(s.goal_hours)}-hour goal`} />
         {hours >= s.goal_hours && <Alert variant="default"><AlertTitle>You’ve reached 1,000 hours</AlertTitle></Alert>}
@@ -121,19 +121,11 @@ function Goal({ s }: { s: StudySummary }) {
         )}
       </section>
 
-      <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        {[
-          ["Today", fmtDuration(s.today_seconds / 60), "Since 4:00"],
-          ["This week", fmtDuration(s.week_seconds / 60), "Since Monday"],
-          ["Remaining to 1,000 hours", s.remaining_seconds === 0 ? "0 h" : fmtDuration(s.remaining_seconds / 60), "Goal minus total"],
-          ["Weekly average", fmtDuration(s.average_week_seconds / 60), "Over the last 4 weeks"],
-        ].map(([k, v, sub]) => (
-          <div key={k} className="flex flex-col gap-0.5">
-            <dt className="text-sm text-muted-foreground">{k}</dt>
-            <dd className="text-lg font-semibold text-balance tabular-nums" style={{ margin: 0 }}>{v}</dd>
-            <dd className="text-xs leading-4 text-muted-foreground" style={{ margin: 0 }}>{sub}</dd>
-          </div>
-        ))}
+      <dl className="grid grid-cols-3 gap-4 sm:grid-cols-4">
+        <Stat label="Today" value={fmtDuration(s.today_seconds / 60)} hint="Since 4:00" />
+        <Stat label="This week" value={fmtDuration(s.week_seconds / 60)} hint="Since Monday" />
+        <Stat label="Remaining to 1,000 hours" value={s.remaining_seconds === 0 ? "0 h" : fmtDuration(s.remaining_seconds / 60)} hint="Goal minus total" />
+        <Stat label="Weekly average" value={fmtDuration(s.average_week_seconds / 60)} hint="Over the last 4 weeks" />
       </dl>
 
       <section className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-2" aria-labelledby="eta-h">

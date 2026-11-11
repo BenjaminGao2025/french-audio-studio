@@ -19,7 +19,7 @@ import { importanceFor } from "../lib/lookup";
 import { formatFriendlyPhonetic } from "../lib/phonetic";
 import { cx, nf, plural } from "../lib/format";
 import { announce, get, getCardLookups, go, introduceNewCard, sayFrench, set, useApp, type ReviewUI } from "../state/store";
-import { Checkbox, DisabledReason, EntryCard, Importance, PageHead, Progress, Skeleton, Spinner, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Textarea, useNarrow } from "../components/ui";
+import { Checkbox, DisabledReason, EntryCard, Importance, PageHead, Progress, Skeleton, Spinner, Stat, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Textarea, useNarrow } from "../components/ui";
 import { flexRender } from "@tanstack/react-table";
 import { getCoreRowModel, useLegacyTable, type LegacyColumnDef } from "@tanstack/react-table/legacy";
 import { FrText, tokenizeFrench, type FrPick, type FrSegment } from "../components/FrText";
@@ -171,7 +171,7 @@ export function ReviewScreen({ sub }: { sub: string }) {
   const tab = sub === "session" ? "due" : sub === "library" ? "saved" : sub;
   if (sub === "session") {
     return (
-      <div className="review-focus flex w-full flex-1 flex-col py-4 md:py-8">
+      <div className="review-focus flex w-full flex-1 flex-col pb-4 md:pb-8">
         <h1 className="sr-only" tabIndex={-1} data-page-title>Review</h1>
         <ReviewSession />
       </div>
@@ -320,54 +320,53 @@ function DueToday() {
 
       {(state === "active" || state === "offline") && (
         <Card>
-        <CardContent className="flex flex-col gap-6">
-          <div className="flex flex-col gap-2">
-            <h2 id="today-h" className="text-xs font-medium text-muted-foreground">Today’s session</h2>
-            <p className="text-lg font-semibold tabular-nums">{nf.format(state === "offline" ? 12 : total)}</p>
-            <p className="text-sm text-muted-foreground">cards</p>
-            <dl className="flex flex-wrap gap-6">
-              {state === "offline" ? (
-                <>
-                  <div><dt>Learning</dt><dd>8</dd></div>
-                  <div><dt>Due</dt><dd>1</dd></div>
-                  <div><dt>New</dt><dd>3</dd></div>
-                </>
-              ) : (
-                <>
-                  <div><dt>Learning</dt><dd>{learning}</dd></div>
-                  <div><dt>Due</dt><dd>{due}</dd></div>
-                  <div><dt>New</dt><dd>{newAssigned}</dd></div>
-                </>
-              )}
-            </dl>
-
+          <CardHeader>
+            <div className="flex min-w-0 flex-wrap items-baseline gap-y-1">
+              <h2 id="today-h" data-slot="card-title" className="w-full font-heading text-base leading-normal font-medium">Today’s session</h2>
+              <p className="text-3xl font-semibold tabular-nums leading-none">{nf.format(state === "offline" ? 12 : total)}</p>
+              <span className="ml-2 text-sm font-normal text-muted-foreground"> cards</span>
+            </div>
             {state !== "offline" && (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm text-muted-foreground">Cards per review session: <span className="tabular-nums">{sessionSize}</span></span>
-                <Button type="button" variant="ghost" aria-label="Change cards per review session in Settings" className="h-8 px-2 text-sm" onClick={() => go("settings")}>Change</Button>
-              </div>
+              <CardAction>
+                <Button type="button" variant="ghost" size="sm" aria-label="Change cards per review session in Settings" onClick={() => go("settings")}>Change</Button>
+              </CardAction>
             )}
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            {state !== "offline" && <span className="sr-only">Cards per review session: {sessionSize}</span>}
             {locked && review.removedNew > 0 && (
               <p className="text-sm text-muted-foreground" role="status">{plural(review.removedNew, "new card")} removed because you lowered today’s limit.</p>
             )}
-          </div>
-          <div className="flex flex-col gap-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-sm font-medium">Session progress</span>
-              <span className="text-sm text-muted-foreground tabular-nums">{review.completed} of {state === "offline" ? 12 : total} cards completed</span>
+            <dl className="grid grid-cols-3 gap-4">
+              {state === "offline" ? (
+                <>
+                  <Stat label="Learning" value="8" />
+                  <Stat label="Due" value="1" />
+                  <Stat label="New" value="3" />
+                </>
+              ) : (
+                <>
+                  <Stat label="Learning" value={learning} />
+                  <Stat label="Due" value={due} />
+                  <Stat label="New" value={newAssigned} />
+                </>
+              )}
+              <Stat label="Daily new-card limit" value={`${dailyNew} cards`} />
+              <Stat label="New cards introduced today" value={newUsed} />
+              <Stat className="col-span-3" label="Your whole library" value={libOk ? `${nf.format(sentences)} sentences · ${nf.format(savedCards)} cards` : "…"} />
+            </dl>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-xs text-muted-foreground">Session progress</span>
+                <span className="text-sm font-medium tabular-nums">{nf.format(review.completed)} / {nf.format(state === "offline" ? 12 : total)}</span>
+              </div>
+              <Progress value={(review.completed / Math.max(1, total)) * 100} aria-label="Session progress" />
             </div>
-            <Progress value={(review.completed / Math.max(1, total)) * 100} aria-label="Session progress" />
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="default" aria-disabled={(!!(total === 0 ? "No cards are assigned today." : undefined)) || undefined} className={cn((!!(total === 0 ? "No cards are assigned today." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(total === 0 ? "No cards are assigned today." : undefined)) { event.preventDefault(); return; } (start)(); }}>{review.phase === "active" ? "Continue review" : "Start review"}{(total === 0 ? "No cards are assigned today." : undefined) ? <span className="sr-only">{total === 0 ? "No cards are assigned today." : undefined}</span> : null}</Button>
-          </div>
-          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-            <div className="flex flex-col gap-0.5"><dt className="text-sm text-muted-foreground">Daily new-card limit</dt><dd className="text-lg font-semibold text-balance tabular-nums" style={{ margin: 0 }}>{dailyNew} cards</dd></div>
-            <div className="flex flex-col gap-0.5"><dt className="text-sm text-muted-foreground">New cards introduced today</dt><dd className="text-lg font-semibold text-balance tabular-nums" style={{ margin: 0 }}>{newUsed}</dd></div>
-            <div className="flex flex-col gap-0.5"><dt className="text-sm text-muted-foreground">Your whole library</dt><dd className="text-lg font-semibold text-balance tabular-nums" style={{ margin: 0 }}>{libOk ? <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"><span>{nf.format(sentences)} sentences</span><span>{nf.format(savedCards)} cards</span></span> : "…"}</dd></div>
-          </dl>
-          <span className="sr-only">Queue pool: {queue.length} cards</span>
-        </CardContent>
+            <span className="sr-only">Queue pool: {queue.length} cards</span>
+          </CardContent>
+          <CardFooter className="border-t">
+            <Button type="button" variant="default" aria-disabled={(!!(total === 0 ? "No cards are assigned today." : undefined)) || undefined} className={cn("w-full sm:w-auto", (!!(total === 0 ? "No cards are assigned today." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(total === 0 ? "No cards are assigned today." : undefined)) { event.preventDefault(); return; } (start)(); }}>{review.phase === "active" ? "Continue review" : "Start review"}{(total === 0 ? "No cards are assigned today." : undefined) ? <span className="sr-only">{total === 0 ? "No cards are assigned today." : undefined}</span> : null}</Button>
+          </CardFooter>
         </Card>
       )}
       {state !== "loading" && (

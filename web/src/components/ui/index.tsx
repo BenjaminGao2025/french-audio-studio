@@ -364,12 +364,13 @@ export function Importance({ count, lookups = "inline" }: { count: number; looku
   );
 }
 
-export function Stat({ label, value, sub }: { label: string; value: ReactNode; sub?: ReactNode }) {
+/** Label above a tabular value. The value stays the label's next sibling. */
+export function Stat({ label, value, hint, className }: { label: string; value: ReactNode; hint?: ReactNode; className?: string }) {
   return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="text-lg font-semibold tabular-nums">{value}</span>
-      {sub && <span className="text-xs text-muted-foreground">{sub}</span>}
+    <div className={cn("flex min-w-0 flex-col justify-end gap-1", className)}>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="text-lg font-semibold tabular-nums leading-tight">{value}</dd>
+      {hint ? <dd className="text-xs text-muted-foreground">{hint}</dd> : null}
     </div>
   );
 }

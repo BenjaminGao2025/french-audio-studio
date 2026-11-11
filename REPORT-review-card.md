@@ -91,3 +91,11 @@ Reviewer notes on the after shots.
 - Own words: Refresh is an outline `size="sm"` button in `CardAction`, lined up with the title. The empty archive no longer draws a border. Below `sm` the stepper is one row of numbers plus the current step name, and it scrolls inside the page if it needs to.
 
 Re-checked `rc-after-word-card-1440.png`, `rc-after-word-card-390.png`, `rc-after-own-words-1440.png`, and `rc-after-own-words-390.png`. At 1440 the sentence is x=296 w=768 and the sheet is x=1056 w=384, with no scrim. At 390 the sentence is x=40 w=310 and the drawer is x=0 w=390. Edge checks stayed at 0. Audit `className_uses` is 1315. Raw controls stay 0. Web tests 364 passed, build passed, Python 25 passed.
+
+### Page top spacing and stat cards
+
+- Page content top padding is on the shell content wrapper only: `pt-4 md:pt-6`. Under the `h-14` bar the page title sits at y=72 on 390 (16px gap) and y=80 on 1440 (24px gap). The same gap is on Review, Study, Progress, Settings, Practice, and the review session card. The session wrapper keeps bottom padding only, so the top gap is not doubled.
+- Review home “Today’s session” is one stock card. The header is the title, the session count at `text-3xl` with “cards” on the same baseline, and Change as a ghost `size="sm"` action. One `Stat` grid holds Learning, Due, New, the daily limit, new cards today, and the library on its own row. Progress reads `0 / 40` at the end of the row. Start review is in the footer and is full width below `sm`.
+- Study “Due today” uses the same card: title, Cards and To revisit, and “Review today’s cards” in the footer.
+- Progress Goal, Done, and the four time stats use the same `Stat` pattern. The four time stats are 3 columns below `sm` and 4 from `sm` up.
+- Re-checked review home, study home, progress, settings, and practice at 1440 and 390. The word-card pass in the same set stayed at sentence x=296 w=768 and sheet x=1056 w=384 at 1440, and sentence x=40 w=310 and drawer x=0 w=390 at 390. Every after shot logged EDGE-OK. Audit `className_uses` is 1292. Raw controls stay 0. Web tests 364 passed, build passed, Python 25 passed.
