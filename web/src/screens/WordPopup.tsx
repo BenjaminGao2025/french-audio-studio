@@ -18,7 +18,9 @@ import type { StudySentence } from "../data/fixtures";
 import { cx } from "../lib/format";
 import { lookupKey } from "../lib/lookup";
 import { announce, get, patchStudy, sayFrench, useApp } from "../state/store";
-import { Banner, Button, Importance, Skeleton, Spinner } from "../components/ui";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger, Importance, Skeleton, Spinner } from "../components/ui";
+import { Button } from "../components/ui/button";
+import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
 
 
 /** Server limits from word_context.py: a long free selection is spoken but not looked up. */
@@ -193,78 +195,78 @@ export function WordPanel({
   const dictEntries = dict?.dictionary_source === "wiktionnaire" ? dict.entries ?? [] : [];
 
   return (
-    <div className="word-card" aria-busy={dictSt === "loading" || ctxSt === "loading"}>
-      <header className="wp-head">
-        <div className="wp-title">
-          <span className="wp-headword t-page" lang="fr" data-autofocus tabIndex={-1}>{shown}</span>
-          <Button kind="tertiary" iconOnly aria-label={`Replay “${shown}”`} icon={<Volume2 aria-hidden />} onClick={() => sayFrench(shown)} />
-          {ipa && <span className="wp-ipa t-support">{ipa}</span>}
-          {!inSheet && <Button kind="tertiary" iconOnly className="wp-close" aria-label="Close word card" icon={<X aria-hidden />} onClick={onClose} />}
+    <div className="word-card flex flex-col gap-4 wrap-break-word" aria-busy={dictSt === "loading" || ctxSt === "loading"}>
+      <header className="flex flex-col gap-2 border-b pb-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="wp-headword font-serif text-2xl font-medium" lang="fr" data-autofocus tabIndex={-1}>{shown}</span>
+          <Button type="button" variant="ghost" size="icon" aria-label={`Replay “${shown}”`} onClick={() => sayFrench(shown)}>{<Volume2 aria-hidden />}</Button>
+          {ipa && <span className="wp-ipa text-sm text-muted-foreground">{ipa}</span>}
+          {!inSheet && <Button type="button" variant="ghost" size="icon" aria-label="Close word card" className="wp-close" onClick={onClose}>{<X aria-hidden />}</Button>}
         </div>
         {baseForm && !nested && (
-          <button type="button" className="text-link" onClick={useBaseForm}>Base form: <span lang="fr">{baseForm}</span></button>
+          <Button type="button" variant="ghost" className="h-auto justify-start px-0 text-primary underline-offset-4 hover:underline" onClick={useBaseForm}>Base form: <span lang="fr">{baseForm}</span></Button>
         )}
-        {nested && <Button kind="tertiary" icon={<ArrowLeft aria-hidden />} onClick={() => setNested(null)}>Back to {text}</Button>}
+        {nested && <Button type="button" variant="ghost" onClick={() => setNested(null)}>{<ArrowLeft aria-hidden />}Back to {text}</Button>}
       </header>
 
       {!nested && (
-        <section className="wp-meaning" aria-label="Meaning in this sentence">
-          <h3 className="t-label">Meaning in this sentence <span className="wp-ai">AI</span></h3>
+        <section className="flex flex-col gap-2" aria-label="Meaning in this sentence">
+          <h3 className="text-sm font-medium">Meaning in this sentence <span className="text-xs text-muted-foreground">AI</span></h3>
           {tooLong ? (
-            <p className="t-support">Select a word or a short phrase to see its meaning.</p>
+            <p className="text-sm font-medium">Select a word or a short phrase</p>
           ) : meaning ? (
-            <p className="wp-definition t-section" lang="en">{meaning}</p>
+            <p className="wp-definition font-medium" lang="en">{meaning}</p>
           ) : ctxSt === "loading" ? (
             <><Spinner label="Finding the meaning…" /><Skeleton lines={1} /></>
           ) : ctxSt === "error" ? (
-            <div className="stack gap-2"><p className="t-support">Couldn’t load the meaning in this sentence.</p><Button kind="secondary" onClick={loadCtx}>Retry</Button></div>
+            <div className="flex flex-col gap-2"><p className="text-sm text-muted-foreground">Couldn’t load the meaning in this sentence.</p><Button type="button" variant="outline" onClick={loadCtx}>Retry</Button></div>
           ) : (
-            <p className="t-support">No English meaning available for this sentence.</p>
+            <p className="text-sm font-medium">No meaning for this sentence</p>
           )}
           {phraseMeaning && (
-            <p className="t-support">
-              <span lang="fr" className="t-strong">{overlapping?.phrase || overlapping?.text}</span>
-              <span className="meta-chip">{phraseMeaning}</span>
+            <p className="text-sm text-muted-foreground">
+              <span lang="fr" className="font-medium">{overlapping?.phrase || overlapping?.text}</span>
+              <span className="inline-flex items-baseline gap-1.5 text-sm">{phraseMeaning}</span>
             </p>
           )}
         </section>
       )}
 
       {!tooLong && (
-        <section className="wp-dict" aria-label="Dictionary">
-          <h3 className="t-label">Dictionary</h3>
+        <section className="flex flex-col gap-2" aria-label="Dictionary">
+          <h3 className="text-sm font-medium">Dictionary</h3>
           {dictSt === "loading" && <Spinner label="Loading dictionary…" />}
           {dictSt === "error" && (
-            <Banner tone="error" title="Dictionary request failed" actions={<Button kind="secondary" onClick={loadDict}>Retry</Button>}>
-              {englishOnly(dictErr) || "Please try again."}
-            </Banner>
+            <Alert variant="destructive"><AlertTitle>Dictionary request failed</AlertTitle><AlertDescription>{englishOnly(dictErr) || "Please try again."}<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={loadDict}>Retry</Button></div></AlertDescription></Alert>
           )}
           {dictSt === "ready" && (dictEntries.length ? (
             <>
-              <p className="meta-row t-meta"><span>Wiktionnaire</span><span>French definitions</span></p>
+              <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-xs leading-4 text-muted-foreground"><span>Wiktionnaire</span><span>French definitions</span></p>
               {dictEntries.map((entry, index) => {
                 const entryIpa = formatFriendlyPhonetic(entry.phonetic);
                 const primary = entry.senses.slice(0, 4);
                 const rest = entry.senses.slice(4);
                 return (
                   <div className="wp-source-entry" key={`${entry.lemma}-${entry.pos}-${index}`}>
-                    <p className="t-strong">
+                    <p className="font-medium">
                       <span lang="fr">{entry.lemma}</span>
-                      <span className="t-support"> {entry.pos}{entryIpa ? ` ${entryIpa}` : ""}</span>
+                      <span className="text-sm text-muted-foreground"> {entry.pos}{entryIpa ? ` ${entryIpa}` : ""}</span>
                     </p>
                     <ol className="wp-senses" lang="fr">
                       {primary.map((sense, i) => <li key={i}>{sense}</li>)}
                     </ol>
                     {rest.length > 0 && (
-                      <details>
-                        <summary className="t-support">{rest.length} more senses</summary>
-                        <ol className="wp-senses" start={primary.length + 1} lang="fr">
+                      <Collapsible>
+                        <CollapsibleTrigger className="flex min-h-11 items-center text-sm text-muted-foreground">{rest.length} more senses</CollapsibleTrigger>
+                        <CollapsibleContent>
+                        <ol className="wp-senses list-decimal pl-5" start={primary.length + 1} lang="fr">
                           {rest.map((sense, i) => <li key={i}>{sense}</li>)}
                         </ol>
-                      </details>
+                        </CollapsibleContent>
+                      </Collapsible>
                     )}
-                    <p className="t-meta">
-                      <span className="meta-row">
+                    <p className="text-xs leading-4 text-muted-foreground">
+                      <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                         <a href={entry.source_url} target="_blank" rel="noopener noreferrer">Source entry</a>
                         <a href={entry.history_url} target="_blank" rel="noopener noreferrer">Contributors</a>
                       </span>
@@ -272,41 +274,39 @@ export function WordPanel({
                   </div>
                 );
               })}
-              <p className="wp-attribution t-meta">
+              <p className="wp-attribution text-xs leading-4 text-muted-foreground">
                 {dict?.attribution} <a href={dict?.license_url} target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a>
                 {dict?.changes && <span> {dict.changes}</span>}
               </p>
             </>
-          ) : <p className="t-support">No dictionary entry found. The meaning in this sentence is shown above.</p>)}
+          ) : <p className="text-sm font-medium">No dictionary entry</p>)}
         </section>
       )}
 
       {!nested && why && (
         <section className={cx("wp-collapsible", whyOpen && "wp-collapsible--open")}>
-          <button type="button" className="wp-toggle" aria-expanded={whyOpen} onClick={() => setWhyOpen(!whyOpen)}>
-            <span>Usage notes</span><ChevronDown aria-hidden width={16} height={16} />
-          </button>
-          {whyOpen && (
-            <div className="wp-collapsible-body">
-              <p className="t-support" lang="en">{why}</p>
-            </div>
-          )}
+          <Collapsible open={whyOpen} onOpenChange={setWhyOpen}>
+            <CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between text-sm font-medium">
+              <span>Usage notes</span><ChevronDown aria-hidden className="size-4" />
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <p className="pb-2 text-sm text-muted-foreground" lang="en">{why}</p>
+            </CollapsibleContent>
+          </Collapsible>
         </section>
       )}
 
       <footer className="wp-footer">
         <div className="wp-actions">
-          <Button kind="secondary" aria-pressed={fav} icon={fav ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />} onClick={() => void setFavorite(text, !fav)}>
-            {fav ? "Favorited" : "Favorite"}
-          </Button>
+          <Button type="button" variant="outline" aria-pressed={fav} onClick={() => void setFavorite(text, !fav)}>{fav ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />}{fav ? "Favorited" : "Favorite"}</Button>
           {count !== undefined && (
             <div className="wp-importance">
-              <span className="t-label">Importance</span>
+              <span className="text-sm font-medium">Importance</span>
               <Importance count={count} lookups="muted" />
             </div>
           )}
         </div>
-        {!nested && <button type="button" className="text-link" onClick={onGrammar}>Sentence grammar</button>}
+        {!nested && <Button type="button" variant="ghost" className="h-auto px-0 text-primary underline-offset-4 hover:underline" onClick={onGrammar}>Sentence grammar</Button>}
       </footer>
     </div>
   );

@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import { loadMe, useSession } from "./api/auth";
 import { loginUrl } from "./api/client";
-import { Banner, Button, Spinner } from "./components/ui";
+import { Spinner } from "./components/ui";
 import { LoginScreen, safeNext } from "./screens/Login";
 import { BASE, routeUrl } from "./state/store";
 import "./styles.css";
@@ -29,17 +29,17 @@ function AuthGate() {
   }
   if (status === "error")
     return (
-      <main className="login-page" id="main">
-        <div className="panel stack gap-4 login-card">
-          <Banner tone="error" title="Couldn’t reach the server" live="assertive">Your sign-in is kept. Check your connection and try again.</Banner>
-          <div className="btn-row">
-            <Button kind="primary" onClick={() => void loadMe()}>Try again</Button>
+      <main className="flex min-h-dvh items-center justify-center bg-background p-4" id="main">
+        <div className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-4 w-full max-w-sm">
+          <Alert variant="destructive" role="alert"><AlertTitle>Couldn’t reach the server</AlertTitle><AlertDescription>Your sign-in is kept. Check your connection and try again.</AlertDescription></Alert>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="default" onClick={() => void loadMe()}>Try again</Button>
           </div>
         </div>
       </main>
     );
   return (
-    <main className="login-page" id="main">
+    <main className="flex min-h-dvh items-center justify-center bg-background p-4" id="main">
       <Spinner label="Loading…" />
     </main>
   );
@@ -50,3 +50,6 @@ createRoot(document.getElementById("root")!).render(
     <AuthGate />
   </StrictMode>,
 );
+
+import { Button } from "./components/ui/button";
+import { Alert, AlertTitle, AlertDescription } from "./components/ui/alert";

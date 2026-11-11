@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronRight, Download, Pause, Play, RotateCcw, Trash2 } from "lucide-react";
+import { ChevronRight, Download, Pause, Play, RotateCcw, Trash2, Loader2 } from "lucide-react";
 import { ApiError } from "../api/client";
 import {
   createEpisode,
@@ -19,8 +19,14 @@ import {
 import { audioJumped } from "../api/time";
 import { fmtClock } from "../lib/format";
 import { announce, go, retryPlayback, startPlayback, stopPlayback, updatePlayer, useApp } from "../state/store";
-import { Banner, Button, Dialog, PageHead, Pill, Skeleton, Spinner } from "../components/ui";
+import { Dialog, Input, PageHead, Skeleton, Spinner } from "../components/ui";
+import { Slider } from "../components/ui/slider";
 import { BackTo } from "./Practice";
+import { Button } from "../components/ui/button";
+import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
+import { Badge } from "../components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { cn } from "cn";
 
 const errText = (e: unknown) => (e instanceof ApiError ? e.message : "");
 
@@ -78,38 +84,33 @@ export function EpisodeList() {
   const pos = (e: ServerEpisode) => positions[e.id] ?? 0;
   const cont = list.find((e) => e.status === "ready" && pos(e) > 5 && pos(e) < (e.duration ?? 0) - 5);
   return (
-    <div className="page">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <PageHead
         back={<BackTo label="Practice" to="practice" />}
         title="Episodes"
-        desc="Longer listening made from the sentences you studied, with new stories at your level. Pause and come back any time."
       />
-      <div className="stack gap-5">
+      <div className="flex flex-col gap-6">
         {state === "loading" && <><Spinner label="Loading episodes…" /><Skeleton lines={4} /></>}
         {state === "error" && (
-          <Banner tone="error" title="Episodes didn’t load" live="assertive" actions={<Button kind="secondary" onClick={reload}>Retry</Button>}>
-            {error || "The server didn’t respond."} Your episodes and listening positions are safe.
-          </Banner>
+          <Alert variant="destructive" role="alert"><AlertTitle>Episodes didn’t load</AlertTitle><AlertDescription>{error || "The server didn’t respond."} Your episodes and listening positions are safe.<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={reload}>Retry</Button></div></AlertDescription></Alert>
         )}
         {state === "ok" && data && (
           <>
             {cont && (
-              <section className="panel stack gap-3" aria-labelledby="cont-h">
-                <h2 id="cont-h" className="t-label">Continue listening</h2>
-                <p lang="fr" className="t-section">{episodeTitle(cont)}</p>
-                <p className="t-support num">Stopped at {fmtClock(pos(cont))} of {fmtClock(cont.duration ?? 0)}</p>
-                <div className="btn-row">
-                  <Button kind="primary" icon={<Play aria-hidden />} onClick={() => go(`practice/episodes/${cont.id}`)}>Continue</Button>
+              <section className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-3" aria-labelledby="cont-h">
+                <h2 id="cont-h" className="text-sm font-medium">Continue listening</h2>
+                <p lang="fr" className="text-lg font-semibold text-balance">{episodeTitle(cont)}</p>
+                <p className="text-sm text-muted-foreground tabular-nums">Stopped at {fmtClock(pos(cont))} of {fmtClock(cont.duration ?? 0)}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button type="button" variant="default" onClick={() => go(`practice/episodes/${cont.id}`)}>{<Play aria-hidden />}Continue</Button>
                 </div>
               </section>
             )}
             <NewEpisode data={data} busy={generating} onCreated={reload} />
             {list.length === 0 ? (
-              <Banner tone="neutral" title="No episodes yet">
-                Make your first one above. It uses the sentences you saved and analysed, so study a few texts first for a better episode.
-              </Banner>
+              <Alert variant="default"><AlertTitle>No episodes yet</AlertTitle></Alert>
             ) : (
-              <ul className="list">
+              <ul className="divide-y overflow-hidden rounded-lg border">
                 {list.map((e) => (
                   <li key={e.id}>
                     <EpisodeRow e={e} position={pos(e)} onChanged={reload} />
@@ -117,7 +118,7 @@ export function EpisodeList() {
                 ))}
               </ul>
             )}
-            <p className="t-meta">Episode time counts toward 1,000 hours while the audio plays, also with the screen locked. Listening on the go counts at half weight for your level.</p>
+
           </>
         )}
       </div>
@@ -127,42 +128,42 @@ export function EpisodeList() {
 
 function EpisodeRow({ e, position, onChanged }: { e: ServerEpisode; position: number; onChanged: () => void }) {
   const [busy, setBusy] = useState(false);
-  const meta = [levelOf(e), e.status === "ready" ? `${minutesOf(e)} min` : e.settings?.minutes ? `${e.settings.minutes} min requested` : ""].filter(Boolean).join(" · ");
+  const minutes = e.status === "ready" ? `${minutesOf(e)} min` : e.settings?.minutes ? `${e.settings.minutes} min requested` : "";
   if (e.status === "ready") {
     const d = e.duration ?? 0;
     const status = position >= d - 5 && d > 0 ? "Finished" : position > 5 ? `Continue at ${fmtClock(position)}` : "Not started";
     return (
-      <button className="list-btn" onClick={() => go(`practice/episodes/${e.id}`)}>
-        <span className="grow stack gap-1">
-          <span className="row"><span lang="fr" className="t-strong">{episodeTitle(e)}</span>{levelOf(e) && <Pill>{levelOf(e)}</Pill>}</span>
-          {e.settings?.request && <span className="t-support">{e.settings.request}</span>}
-          <span className="t-meta num">{meta} · {status}</span>
+      <Button type="button" variant="ghost" className="h-auto w-full justify-start gap-3 whitespace-normal px-4 py-3 text-left" onClick={() => go(`practice/episodes/${e.id}`)}><span className="min-w-0 flex-1 flex flex-col gap-1">
+          <span className="font-serif text-xl leading-snug" lang="fr">{episodeTitle(e)}</span>
+          {e.settings?.request && <span className="text-sm text-muted-foreground">{e.settings.request}</span>}
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            {levelOf(e) && <span className="inline-flex items-baseline gap-1.5 text-sm">{levelOf(e)}</span>}
+            {minutes && <span className="inline-flex items-baseline gap-1.5 text-sm tabular-nums">{minutes}</span>}
+            <span className="inline-flex items-baseline gap-1.5 text-sm">{status}</span>
+          </span>
         </span>
-        <ChevronRight aria-hidden className="chev" />
-      </button>
+        <ChevronRight aria-hidden /></Button>
     );
   }
   return (
-    <div className="list-row" style={{ alignItems: "flex-start" }}>
-      <span className="grow stack gap-1">
-        <span className="row">
-          <span className="t-strong">{episodeTitle(e)}</span>
-          {e.status === "generating" ? <Pill tone="info">Being made…</Pill> : <Pill tone="error">Failed</Pill>}
+    <div className="flex flex-wrap items-center gap-3 px-4 py-3" style={{ alignItems: "flex-start" }}>
+      <span className="min-w-0 flex-1 flex flex-col gap-1">
+        <span className="flex flex-wrap items-center gap-2">
+          <span className="font-medium">{episodeTitle(e)}</span>
+          {e.status === "generating" ? <Badge variant="secondary">Being made…</Badge> : <Badge variant="destructive">Failed</Badge>}
         </span>
-        {e.status === "generating" ? (
-          <span className="t-support">This takes a few minutes. You can leave this page; it keeps going.</span>
-        ) : (
-          <span className="t-support">{e.error || "The episode couldn’t be made."}</span>
+        {e.status === "generating" ? null : (
+          <span className="text-sm text-muted-foreground">{e.error || "The episode couldn’t be made."}</span>
         )}
-        {meta && <span className="t-meta num">{meta}</span>}
+        {(levelOf(e) || minutes) && (
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            {levelOf(e) && <span className="inline-flex items-baseline gap-1.5 text-sm">{levelOf(e)}</span>}
+            {minutes && <span className="inline-flex items-baseline gap-1.5 text-sm tabular-nums">{minutes}</span>}
+          </span>
+        )}
       </span>
       {e.status === "failed" && (
-        <Button
-          kind="tertiary"
-          className="btn--sm-text"
-          icon={<Trash2 aria-hidden />}
-          busy={busy}
-          onClick={() => {
+        <Button type="button" variant="ghost" aria-disabled={(!!(busy)) || undefined} aria-busy={busy || undefined} className={cn((!!(busy)) ? "opacity-50" : "", "h-8 px-2 text-sm")} onClick={(event) => { if (!!(busy)) { event.preventDefault(); return; } (() => {
             setBusy(true);
             deleteEpisode(e.id)
               .then(() => {
@@ -171,10 +172,7 @@ function EpisodeRow({ e, position, onChanged }: { e: ServerEpisode; position: nu
               })
               .catch(() => announce("Couldn’t remove the episode.", true))
               .finally(() => setBusy(false));
-          }}
-        >
-          Remove
-        </Button>
+          })(); }}>{busy ? <Loader2 className="animate-spin" aria-hidden /> : (<Trash2 aria-hidden />)}Remove</Button>
       )}
     </div>
   );
@@ -201,35 +199,27 @@ function NewEpisode({ data, busy, onCreated }: { data: EpisodeListData; busy: bo
       });
   };
   return (
-    <section className="panel stack gap-3" aria-labelledby="new-ep-h">
-      <h2 id="new-ep-h" className="t-label">Make a new episode</h2>
-      <div className="filter-bar">
-        <label className="field" style={{ width: 160 }}>
-          <span className="field-label">Level</span>
-          <select className="select" value={level} onChange={(e) => setLevel(e.target.value as EpisodeLevel)}>
-            {data.levels.map((l) => (
-              <option key={l} value={l}>{l}{l === data.recommended_level ? " (suggested)" : ""}</option>
-            ))}
-          </select>
+    <section className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-3" aria-labelledby="new-ep-h">
+      <h2 id="new-ep-h" className="text-sm font-medium">Make a new episode</h2>
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="grid gap-2" style={{ width: 160 }}>
+          <span className="text-sm font-medium">Level</span>
+          <Select value={level} onValueChange={(v) => setLevel(v as EpisodeLevel)}><SelectTrigger aria-label={"Level"} className="w-full"><SelectValue /></SelectTrigger><SelectContent>{(data.levels.map((l) => ({ value: l, label: `${l}${l === data.recommended_level ? " (suggested)" : ""}` }))).map((o) => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}</SelectContent></Select>
         </label>
-        <label className="field" style={{ width: 140 }}>
-          <span className="field-label">Length</span>
-          <select className="select" value={minutes} onChange={(e) => setMinutes(Number(e.target.value))}>
-            {data.lengths.map((m) => <option key={m} value={m}>{m} min</option>)}
-          </select>
+        <label className="grid gap-2" style={{ width: 140 }}>
+          <span className="text-sm font-medium">Length</span>
+          <Select value={String(minutes)} onValueChange={(v) => setMinutes(Number(v))}><SelectTrigger aria-label={"Length"} className="w-full"><SelectValue /></SelectTrigger><SelectContent>{(data.lengths.map((m) => ({ value: String(m), label: `${m} min` }))).map((o) => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}</SelectContent></Select>
         </label>
       </div>
-      <label className="field">
-        <span className="field-label">Topic or request (optional)</span>
-        <input className="input" maxLength={500} value={request} placeholder="e.g. a job interview, the weather, a story set in Montréal" onChange={(e) => setRequest(e.target.value)} />
+      <label className="grid gap-2">
+        <span className="text-sm font-medium">Topic or request (optional)</span>
+        <Input maxLength={500} value={request} placeholder="Topic" onChange={(e) => setRequest(e.target.value)} />
       </label>
       {phase === "failed" && (
-        <Banner tone="error" title="The episode wasn’t started" live="assertive">{error || "The server didn’t respond."}</Banner>
+        <Alert variant="destructive" role="alert"><AlertTitle>The episode wasn’t started</AlertTitle><AlertDescription>{error || "The server didn’t respond."}</AlertDescription></Alert>
       )}
-      <div className="btn-row">
-        <Button kind="primary" busy={phase === "sending"} onClick={submit} disabledReason={busy ? "An episode is already being made. Wait for it to finish." : undefined}>
-          Make episode
-        </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="button" variant="default" aria-disabled={(!!(phase === "sending") || !!(busy ? "An episode is already being made. Wait for it to finish." : undefined)) || undefined} aria-busy={phase === "sending" || undefined} className={cn((!!(phase === "sending") || !!(busy ? "An episode is already being made. Wait for it to finish." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(phase === "sending") || !!(busy ? "An episode is already being made. Wait for it to finish." : undefined)) { event.preventDefault(); return; } (submit)(); }}>{phase === "sending" ? <Loader2 className="animate-spin" aria-hidden /> : null}Make episode{(busy ? "An episode is already being made. Wait for it to finish." : undefined) ? <span className="sr-only">{busy ? "An episode is already being made. Wait for it to finish." : undefined}</span> : null}</Button>
       </div>
     </section>
   );
@@ -241,7 +231,7 @@ export function EpisodePlayer({ id }: { id: string }) {
   const e = data?.episodes.find((x) => x.id === id);
   if (state === "loading")
     return (
-      <div className="page">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
         <PageHead back={<BackTo label="Episodes" to="practice/episodes" />} title="Episode" />
         <Spinner label="Loading the episode…" />
         <Skeleton lines={4} />
@@ -249,14 +239,12 @@ export function EpisodePlayer({ id }: { id: string }) {
     );
   if (state === "error" || !e || e.status !== "ready")
     return (
-      <div className="page">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
         <PageHead back={<BackTo label="Episodes" to="practice/episodes" />} title={e ? episodeTitle(e) : "Episode"} />
         {state === "error" ? (
-          <Banner tone="error" title="The episode didn’t load" live="assertive" actions={<Button kind="secondary" onClick={reload}>Retry</Button>}>{error || "The server didn’t respond."}</Banner>
+          <Alert variant="destructive" role="alert"><AlertTitle>The episode didn’t load</AlertTitle><AlertDescription>{error || "The server didn’t respond."}<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={reload}>Retry</Button></div></AlertDescription></Alert>
         ) : (
-          <Banner tone="warning" title={e ? "This episode isn’t ready" : "This episode isn’t in your list"} actions={<Button kind="secondary" onClick={() => go("practice/episodes")}>All episodes</Button>}>
-            {e?.status === "generating" ? "It’s still being made." : e?.status === "failed" ? e.error || "It couldn’t be made." : "It may have been replaced or removed."}
-          </Banner>
+          <Alert variant="default"><AlertTitle>{e ? "This episode isn’t ready" : "This episode isn’t in your list"}</AlertTitle><AlertDescription>{e?.status === "generating" ? "It’s still being made." : e?.status === "failed" ? e.error || "It couldn’t be made." : "It may have been replaced or removed."}<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={() => go("practice/episodes")}>All episodes</Button></div></AlertDescription></Alert>
         )}
       </div>
     );
@@ -317,38 +305,23 @@ function Player({ e }: { e: ServerEpisode }) {
   const current = cues ? cues.reduce((acc, c, i) => (c.at <= position ? i : acc), -1) : -1;
 
   return (
-    <div className="page">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <PageHead
         back={<BackTo label="Episodes" to="practice/episodes" />}
         eyebrow={`Episode${levelOf(e) ? ` · ${levelOf(e)}` : ""} · ${minutesOf(e)} min`}
         title={title}
         desc={e.settings?.request || undefined}
       />
-      <div className="stack gap-5">
+      <div className="flex flex-col gap-6">
         {restore === "ask" && !mine && (
-          <Banner
-            tone="info"
-            title={`Continue from ${fmtClock(start0)}?`}
-            actions={
-              <>
-                <Button kind="primary" onClick={() => { setRestore("done"); play(start0); }}>Continue from {fmtClock(start0)}</Button>
-                <Button kind="secondary" onClick={() => { setRestore("done"); play(0); }}>Start from the beginning</Button>
-              </>
-            }
-          >
-            Your listening position on this device was restored.
-          </Banner>
+          <Alert variant="default"><AlertTitle>{`Continue from ${fmtClock(start0)}?`}</AlertTitle><AlertDescription>Your listening position on this device was restored.<div className="mt-3 flex flex-wrap items-center gap-2"><>
+                <Button type="button" variant="default" onClick={() => { setRestore("done"); play(start0); }}>Continue from {fmtClock(start0)}</Button>
+                <Button type="button" variant="outline" onClick={() => { setRestore("done"); play(0); }}>Start from the beginning</Button>
+              </></div></AlertDescription></Alert>
         )}
-        <section className="player" aria-label={`Episode player: ${title}`}>
-          <div className="player-main">
-            <Button
-              kind={restore === "ask" && !mine ? "secondary" : "primary"}
-              className="play-btn"
-              iconOnly
-              aria-label={`${mine?.status === "playing" ? "Pause" : mine?.status === "error" ? "Retry" : "Play"} episode ${title}`}
-              busy={mine?.status === "loading"}
-              icon={mine?.status === "playing" || mine?.status === "buffering" ? <Pause aria-hidden /> : mine?.status === "error" ? <RotateCcw aria-hidden /> : <Play aria-hidden />}
-              onClick={() => {
+        <section className="flex flex-col gap-2" aria-label={`Episode player: ${title}`}>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant={restore === "ask" && !mine ? "outline" : "default"} size="icon" aria-disabled={(!!(mine?.status === "loading")) || undefined} aria-busy={mine?.status === "loading" || undefined} aria-label={`${mine?.status === "playing" ? "Pause" : mine?.status === "error" ? "Retry" : "Play"} episode ${title}`} className={cn((!!(mine?.status === "loading")) ? "opacity-50" : "", "")} onClick={(event) => { if (!!(mine?.status === "loading")) { event.preventDefault(); return; } (() => {
                 if (!mine) {
                   setRestore("done");
                   return play(start0 >= duration - 5 ? 0 : start0);
@@ -356,76 +329,62 @@ function Player({ e }: { e: ServerEpisode }) {
                 if (mine.status === "playing" || mine.status === "buffering") return updatePlayer({ status: "paused" });
                 if (mine.status === "error") return retryPlayback();
                 updatePlayer({ status: "playing", position: mine.status === "ended" ? 0 : mine.position });
-              }}
-            />
-            <div className="grow stack gap-1" style={{ minWidth: 180 }}>
-              <span className="t-strong">{statusText}</span>
-              <span className="t-support num">{fmtClock(position)} / {fmtClock(duration)}</span>
-              <input
-                type="range"
+              })(); }}>{mine?.status === "loading" ? <Loader2 className="animate-spin" aria-hidden /> : (mine?.status === "playing" || mine?.status === "buffering" ? <Pause aria-hidden /> : mine?.status === "error" ? <RotateCcw aria-hidden /> : <Play aria-hidden />)}</Button>
+            <div className="min-w-0 flex-1 flex flex-col gap-1" style={{ minWidth: 180 }}>
+              <span className="font-medium">{statusText}</span>
+              <span className="text-sm text-muted-foreground tabular-nums">{fmtClock(position)} / {fmtClock(duration)}</span>
+              <Slider
                 min={0}
                 max={Math.max(1, Math.round(duration))}
                 step={1}
-                value={Math.round(position)}
+                value={[Math.round(position)]}
                 aria-label="Position in the episode"
                 aria-valuetext={`${fmtClock(position)} of ${fmtClock(duration)}`}
-                onChange={(ev) => seek(Number(ev.target.value))}
-                style={{ width: "100%", accentColor: "var(--primary)" }}
+                onValueChange={([v]) => seek(v)}
               />
             </div>
-            <div className="row gap-2">
-              <Button kind="tertiary" className="btn--sm-text" onClick={() => seek(position - 15)} aria-label="Back 15 seconds">−15 s</Button>
-              <Button kind="tertiary" className="btn--sm-text" onClick={() => seek(position + 15)} aria-label="Forward 15 seconds">+15 s</Button>
+            <div className="flex flex-wrap items-center gap-2 gap-2">
+              <Button type="button" variant="ghost" aria-label="Back 15 seconds" className="h-8 px-2 text-sm" onClick={() => seek(position - 15)}>−15 s</Button>
+              <Button type="button" variant="ghost" aria-label="Forward 15 seconds" className="h-8 px-2 text-sm" onClick={() => seek(position + 15)}>+15 s</Button>
             </div>
-            <label className="row gap-2">
-              <span className="t-support">Speed</span>
-              <select className="select" style={{ width: 92 }} value={mine?.speed ?? 1} disabled={!mine} onChange={(ev) => updatePlayer({ speed: Number(ev.target.value) })}>
-                {[0.75, 1, 1.25, 1.5, 2].map((v) => <option key={v} value={v}>{v}×</option>)}
-              </select>
+            <label className="flex flex-wrap items-center gap-2 gap-2">
+              <span className="text-sm text-muted-foreground">Speed</span>
+              <Select value={String(mine?.speed ?? 1)} onValueChange={(v) => updatePlayer({ speed: Number(v) })} disabled={!mine}><SelectTrigger aria-label={"Speed"} className={cn("w-full", "w-[5.5rem]")}><SelectValue /></SelectTrigger><SelectContent>{([0.75, 1, 1.25, 1.5, 2].map((v) => ({ value: String(v), label: `${v}×` }))).map((o) => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}</SelectContent></Select>
             </label>
-            {mine && <Button kind="tertiary" onClick={stopPlayback}>Stop</Button>}
+            {mine && <Button type="button" variant="ghost" onClick={stopPlayback}>Stop</Button>}
           </div>
           {mine?.status === "error" && (
-            <Banner tone="error" title="The episode couldn’t play" live="assertive" actions={<Button kind="secondary" onClick={retryPlayback}>Retry</Button>}>
-              Check your connection. Your position is kept.
-            </Banner>
+            <Alert variant="destructive" role="alert"><AlertTitle>The episode couldn’t play</AlertTitle><AlertDescription>Check your connection. Your position is kept.<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={retryPlayback}>Retry</Button></div></AlertDescription></Alert>
           )}
-          <p className="t-support num">
+          <p className="text-sm text-muted-foreground tabular-nums">
             Played this time: {fmtClock(mine?.countedSeconds ?? 0)}. Episodes count as listening on the go: the time the audio really plays (at 2×, 10 minutes of audio is 5 minutes).
           </p>
         </section>
 
-        <section className="stack gap-3" aria-labelledby="tr-h">
-          <h2 id="tr-h" className="t-section">Transcript</h2>
+        <section className="flex flex-col gap-3" aria-labelledby="tr-h">
+          <h2 id="tr-h" className="text-lg font-semibold text-balance">Transcript</h2>
           {cueState === "loading" && <Skeleton lines={3} />}
-          {cueState === "error" && <Banner tone="warning" title="The transcript didn’t load">The audio still works.</Banner>}
+          {cueState === "error" && <Alert variant="default"><AlertTitle>The transcript didn’t load</AlertTitle><AlertDescription>The audio still works.</AlertDescription></Alert>}
           {cueState === "ok" && cues && (
-            <ol className="list">
+            <ol className="divide-y overflow-hidden rounded-lg border">
               {cues.map((c, i) => (
                 <li key={`${c.at}-${i}`}>
-                  <button
-                    className="list-btn"
-                    onClick={() => seek(c.at)}
-                    aria-current={i === current ? "true" : undefined}
-                    style={i === current ? { background: "var(--primary-weak)" } : undefined}
-                  >
-                    <span className="t-meta num" style={{ width: 52, flexShrink: 0 }}>{fmtClock(c.at)}</span>
-                    <span className="grow stack">
+                  <Button type="button" variant="ghost" aria-current={i === current ? "true" : undefined} className="h-auto w-full justify-start gap-3 whitespace-normal px-4 py-3 text-left" onClick={() => seek(c.at)}><span className="text-xs leading-4 text-muted-foreground tabular-nums" style={{ width: 52, flexShrink: 0 }}>{fmtClock(c.at)}</span>
+                    <span className="min-w-0 flex-1 flex flex-col">
                       <span lang="fr">{c.text}</span>
-                      {c.sub && <span className="t-support">{c.sub}</span>}
-                    </span>
-                  </button>
+                      {c.sub && <span className="text-sm text-muted-foreground">{c.sub}</span>}
+                    </span></Button>
                 </li>
               ))}
             </ol>
           )}
         </section>
 
-        <section className="btn-row" aria-label="Episode files">
-          <a className="btn btn--secondary" href={episodeFileUrl(e.id, "mp3")} download><Download aria-hidden /> MP3</a>
-          <a className="btn btn--tertiary" href={episodeFileUrl(e.id, "lrc")} download>Lyrics (LRC)</a>
-          <a className="btn btn--tertiary" href={episodeFileUrl(e.id, "srt")} download>Subtitles (SRT)</a>
-          <Button kind="tertiary" icon={<Trash2 aria-hidden />} style={{ color: "var(--error)" }} onClick={() => setConfirmDelete(true)}>Delete episode</Button>
+        <section className="flex flex-wrap items-center gap-2" aria-label="Episode files">
+          <Button variant="outline" asChild><a href={episodeFileUrl(e.id, "mp3")} download><Download aria-hidden /> MP3</a></Button>
+          <Button variant="ghost" asChild><a href={episodeFileUrl(e.id, "lrc")} download>Lyrics (LRC)</a></Button>
+          <Button variant="ghost" asChild><a href={episodeFileUrl(e.id, "srt")} download>Subtitles (SRT)</a></Button>
+          <Button type="button" variant="ghost" style={{ color: "var(--error)" }} onClick={() => setConfirmDelete(true)}>{<Trash2 aria-hidden />}Delete episode</Button>
         </section>
         {confirmDelete && (
           <Dialog
@@ -434,11 +393,8 @@ function Player({ e }: { e: ServerEpisode }) {
             dismissible={!deleting}
             footer={
               <>
-                <Button kind="secondary" onClick={() => setConfirmDelete(false)} disabled={deleting} data-autofocus>Cancel</Button>
-                <Button
-                  kind="destructive"
-                  busy={deleting}
-                  onClick={() => {
+                <Button type="button" variant="outline" aria-disabled={(!!(deleting)) || undefined} data-autofocus className={cn((!!(deleting)) ? "opacity-50" : "")} onClick={(event) => { if (!!(deleting)) { event.preventDefault(); return; } (() => setConfirmDelete(false))(); }}>Cancel</Button>
+                <Button type="button" variant="destructive" aria-disabled={(!!(deleting)) || undefined} aria-busy={deleting || undefined} className={cn((!!(deleting)) ? "opacity-50" : "")} onClick={(event) => { if (!!(deleting)) { event.preventDefault(); return; } (() => {
                     setDeleting(true);
                     if (mine) stopPlayback();
                     deleteEpisode(e.id)
@@ -451,10 +407,7 @@ function Player({ e }: { e: ServerEpisode }) {
                         setDeleting(false);
                         announce("Couldn’t delete the episode. It’s still in your list.", true);
                       });
-                  }}
-                >
-                  Delete episode
-                </Button>
+                  })(); }}>{deleting ? <Loader2 className="animate-spin" aria-hidden /> : null}Delete episode</Button>
               </>
             }
           >

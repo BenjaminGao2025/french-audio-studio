@@ -1,15 +1,18 @@
 /* Feedback blocks shared by Write and Speak: round 1 (hints only) and round 2 (corrections). */
+import { Button } from "../components/ui/button";
+import { Badge } from "../components/ui/badge";
+import { cn } from "cn";
 import { useState } from "react";
-import { Check, Plus, Sparkles, X } from "lucide-react";
+import { Check, Plus, X, Loader2 } from "lucide-react";
 import type { Feedback2 } from "../api/practice";
 import { saveNote } from "../api/srs";
 import { announce } from "../state/store";
-import { Button, Pill } from "../components/ui";
+
 
 export function AiLabel() {
   return (
-    <span className="ai-label">
-      <Sparkles aria-hidden width={12} height={12} /> AI feedback · Not an official assessment · No score or level
+    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+      AI feedback · Not an official assessment · No score or level
     </span>
   );
 }
@@ -17,17 +20,17 @@ export function AiLabel() {
 export function Checklist({ items }: { items?: { point: string; covered: boolean; note: string }[] }) {
   if (!items?.length) return null;
   return (
-    <div className="stack gap-2">
-      <p className="t-strong">Task checklist</p>
-      <ul className="list">
+    <div className="flex flex-col gap-2">
+      <p className="font-medium">Task checklist</p>
+      <ul className="divide-y overflow-hidden rounded-lg border">
         {items.map((c, i) => (
-          <li key={i} className="list-row row--top">
-            <Pill tone={c.covered ? "success" : "warning"} icon={c.covered ? <Check aria-hidden width={12} height={12} /> : <X aria-hidden width={12} height={12} />}>
+          <li key={i} className="flex flex-wrap items-center gap-3 px-4 py-3 items-start">
+            <Badge variant={c.covered ? "secondary" : "outline"}>{c.covered ? <Check aria-hidden width={12} height={12} /> : <X aria-hidden width={12} height={12} />}
               {c.covered ? "Covered" : "Missing"}
-            </Pill>
-            <span className="grow stack">
+            </Badge>
+            <span className="min-w-0 flex-1 flex flex-col">
               <span>{c.point}</span>
-              {c.note && <span className="t-support">{c.note}</span>}
+              {c.note && <span className="text-sm text-muted-foreground">{c.note}</span>}
             </span>
           </li>
         ))}
@@ -38,16 +41,16 @@ export function Checklist({ items }: { items?: { point: string; covered: boolean
 
 /** Round 1 never gives the fix: the learner finds it from the hint. */
 export function ErrorHints({ errors }: { errors?: { span: string; type: string; hint: string }[] }) {
-  if (!errors?.length) return <p className="t-support">No specific errors were flagged.</p>;
+  if (!errors?.length) return <p className="text-sm text-muted-foreground">No specific errors were flagged.</p>;
   return (
-    <div className="stack gap-2">
-      <p className="t-strong">Find and fix ({errors.length})</p>
-      <ol className="stack gap-2" style={{ paddingLeft: 20 }}>
+    <div className="flex flex-col gap-2">
+      <p className="font-medium">Find and fix ({errors.length})</p>
+      <ol className="flex flex-col gap-2" style={{ paddingLeft: 20 }}>
         {errors.map((e, i) => (
           <li key={i}>
-            <span lang="fr" className="t-strong">“{e.span}”</span> <span className="t-meta">· {e.type}</span>
+            <span lang="fr" className="font-medium">“{e.span}”</span> <span className="text-xs leading-4 text-muted-foreground">· {e.type}</span>
             <br />
-            <span className="t-support">{e.hint}</span>
+            <span className="text-sm text-muted-foreground">{e.hint}</span>
           </li>
         ))}
       </ol>
@@ -58,17 +61,17 @@ export function ErrorHints({ errors }: { errors?: { span: string; type: string; 
 export function Round2({ fb, correctedLabel }: { fb: Feedback2; correctedLabel: string }) {
   const corrected = fb.corrected_text || fb.corrected_transcript || "";
   return (
-    <div className="stack gap-4">
+    <div className="flex flex-col gap-4">
       {!!fb.fixed_errors?.length && (
-        <div className="stack gap-2">
-          <p className="t-strong">Your fixes</p>
-          <ul className="list">
+        <div className="flex flex-col gap-2">
+          <p className="font-medium">Your fixes</p>
+          <ul className="divide-y overflow-hidden rounded-lg border">
             {fb.fixed_errors.map((e, i) => (
-              <li key={i} className="list-row row--top">
-                <Pill tone={e.fixed ? "success" : "warning"}>{e.fixed ? "Fixed" : "Not yet"}</Pill>
-                <span className="grow stack">
+              <li key={i} className="flex flex-wrap items-center gap-3 px-4 py-3 items-start">
+                <Badge variant={e.fixed ? "secondary" : "outline"}>{e.fixed ? "Fixed" : "Not yet"}</Badge>
+                <span className="min-w-0 flex-1 flex flex-col">
                   <span lang="fr">{e.span}</span>
-                  {e.comment && <span className="t-support">{e.comment}</span>}
+                  {e.comment && <span className="text-sm text-muted-foreground">{e.comment}</span>}
                 </span>
               </li>
             ))}
@@ -76,29 +79,29 @@ export function Round2({ fb, correctedLabel }: { fb: Feedback2; correctedLabel: 
         </div>
       )}
       {!!fb.remaining_errors?.length && (
-        <div className="stack gap-2">
-          <p className="t-strong">Still to fix</p>
-          <ul className="stack gap-2" style={{ paddingLeft: 20 }}>
+        <div className="flex flex-col gap-2">
+          <p className="font-medium">Still to fix</p>
+          <ul className="flex flex-col gap-2" style={{ paddingLeft: 20 }}>
             {fb.remaining_errors.map((e, i) => (
               <li key={i}>
-                <span lang="fr">“{e.span}”</span> → <span lang="fr" className="t-strong">{e.correction}</span>
-                <span className="t-meta"> · {e.type}</span>
-                {e.hint && <><br /><span className="t-support">{e.hint}</span></>}
+                <span lang="fr">“{e.span}”</span> → <span lang="fr" className="font-medium">{e.correction}</span>
+                <span className="text-xs leading-4 text-muted-foreground"> · {e.type}</span>
+                {e.hint && <><br /><span className="text-sm text-muted-foreground">{e.hint}</span></>}
               </li>
             ))}
           </ul>
         </div>
       )}
       {corrected && (
-        <div className="stack gap-1">
-          <span className="def-label">{correctedLabel}</span>
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-medium text-muted-foreground">{correctedLabel}</span>
           <p lang="fr" style={{ whiteSpace: "pre-wrap" }}>{corrected}</p>
         </div>
       )}
       {!!fb.sentences?.length && (
-        <div className="stack gap-2">
-          <p className="t-strong">Sentences worth keeping</p>
-          <ul className="list">
+        <div className="flex flex-col gap-2">
+          <p className="font-medium">Sentences worth keeping</p>
+          <ul className="divide-y overflow-hidden rounded-lg border">
             {fb.sentences.map((s, i) => (
               <SentenceRow key={i} s={s} />
             ))}
@@ -106,13 +109,13 @@ export function Round2({ fb, correctedLabel }: { fb: Feedback2; correctedLabel: 
         </div>
       )}
       {!!fb.structures?.length && (
-        <div className="stack gap-2">
-          <p className="t-strong">Structures to reuse</p>
-          <ul className="stack gap-2" style={{ paddingLeft: 20 }}>
+        <div className="flex flex-col gap-2">
+          <p className="font-medium">Structures to reuse</p>
+          <ul className="flex flex-col gap-2" style={{ paddingLeft: 20 }}>
             {fb.structures.map((s, i) => (
               <li key={i}>
-                <span lang="fr" className="t-strong">{s.french}</span> — {s.english}
-                {s.usage && <><br /><span className="t-support">{s.usage}</span></>}
+                <span lang="fr" className="font-medium">{s.french}</span> — {s.english}
+                {s.usage && <><br /><span className="text-sm text-muted-foreground">{s.usage}</span></>}
               </li>
             ))}
           </ul>
@@ -144,17 +147,17 @@ function SentenceRow({ s }: { s: { original: string; corrected: string; explanat
     }
   };
   return (
-    <li className="list-row row--top">
-      <span className="grow stack gap-1">
-        {s.original && s.original !== s.corrected && <span lang="fr" className="t-support" style={{ textDecoration: "line-through" }}>{s.original}</span>}
-        <span lang="fr" className="t-strong">{s.corrected}</span>
-        {s.explanation && <span className="t-support">{s.explanation}</span>}
-        {state === "failed" && <span className="field-error" role="alert">Couldn’t add it. Try again.</span>}
+    <li className="flex flex-wrap items-center gap-3 px-4 py-3 items-start">
+      <span className="min-w-0 flex-1 flex flex-col gap-1">
+        {s.original && s.original !== s.corrected && <span lang="fr" className="text-sm text-muted-foreground" style={{ textDecoration: "line-through" }}>{s.original}</span>}
+        <span lang="fr" className="font-medium">{s.corrected}</span>
+        {s.explanation && <span className="text-sm text-muted-foreground">{s.explanation}</span>}
+        {state === "failed" && <span className="text-sm text-destructive" role="alert">Couldn’t add it. Try again.</span>}
       </span>
       {state === "saved" ? (
-        <Pill tone="success" icon={<Check aria-hidden width={12} height={12} />}>In Review</Pill>
+        <Badge variant="secondary">{<Check aria-hidden width={12} height={12} />}In Review</Badge>
       ) : (
-        <Button kind="secondary" icon={<Plus aria-hidden />} busy={state === "saving"} onClick={() => void add()}>Add to review</Button>
+        <Button type="button" variant="outline" aria-disabled={(!!(state === "saving")) || undefined} aria-busy={state === "saving" || undefined} className={cn((!!(state === "saving")) ? "opacity-50" : "")} onClick={(event) => { if (!!(state === "saving")) { event.preventDefault(); return; } (() => void add())(); }}>{state === "saving" ? <Loader2 className="animate-spin" aria-hidden /> : (<Plus aria-hidden />)}Add to review</Button>
       )}
     </li>
   );

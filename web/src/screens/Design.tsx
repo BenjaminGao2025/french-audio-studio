@@ -1,8 +1,13 @@
-import { Bookmark, BookmarkCheck } from "lucide-react";
+import { Bookmark, BookmarkCheck, Loader2, AlertCircle } from "lucide-react";
 import { grade } from "../lib/grading";
 import { countLookup, importanceFor, lookupKey, type LookupCounter } from "../lib/lookup";
-import { Banner, Button, DemoNote, FieldText, Importance, PageHead, Pill } from "../components/ui";
+import { Importance, PageHead } from "../components/ui";
 import { REGISTRY } from "./registry";
+import { Button } from "../components/ui/button";
+import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
+import { Badge } from "../components/ui/badge";
+import { Label } from "../components/ui/label";
+import { Input } from "../components/ui/input";
 
 function lum(hex: string) {
   const c = hex.replace("#", "").match(/.{2}/g)!.map((x) => parseInt(x, 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
@@ -72,13 +77,13 @@ export function DesignReference() {
     ["Lookup keys keep failli ≠ faillir", lookupKey("failli") !== lookupKey("faillir")],
   ];
   return (
-    <div className="page page--wide">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
       <PageHead title="Design reference" eyebrow="SCR-DSN-01 · for reviewers" desc="Tokens, component roles, accessibility specifications, adopted defaults and screen coverage for this prototype. Part of the same project as the app." />
-      <div className="stack gap-7">
-        <section className="stack gap-3" aria-labelledby="dsn-color">
-          <h2 id="dsn-color" className="t-section">Colour and contrast</h2>
-          <p className="t-support">Ratios are calculated live from the token values. Normal text needs 4.5:1; controls and state indicators need 3:1.</p>
-          <div className="table-wrap">
+      <div className="flex flex-col gap-12">
+        <section className="flex flex-col gap-3" aria-labelledby="dsn-color">
+          <h2 id="dsn-color" className="text-lg font-semibold text-balance">Colour and contrast</h2>
+          <p className="text-sm text-muted-foreground">Ratios are calculated live from the token values. Normal text needs 4.5:1; controls and state indicators need 3:1.</p>
+          <div className="w-full overflow-x-auto">
             <table className="matrix">
               <caption className="sr-only">Colour pairings and contrast ratios</caption>
               <thead><tr><th scope="col">Pairing</th><th scope="col">Sample</th><th scope="col">Ratio</th><th scope="col">Requirement</th></tr></thead>
@@ -87,10 +92,10 @@ export function DesignReference() {
                   const r = contrast(fg, bg);
                   return (
                     <tr key={name}>
-                      <th scope="row" style={{ fontWeight: 500 }}>{name}<br /><span className="code muted">{fg} on {bg}</span></th>
+                      <th scope="row" style={{ fontWeight: 500 }}>{name}<br /><span className="code text-muted-foreground">{fg} on {bg}</span></th>
                       <td><span style={{ background: bg, color: fg, padding: "4px 10px", borderRadius: 6, border: "1px solid #E3DACB", fontWeight: 500 }}>Aa Ég œ</span></td>
-                      <td className="num">{r.toFixed(2)}:1</td>
-                      <td>{need ? <Pill tone={r >= need ? "success" : "error"}>{r >= need ? `Pass ≥ ${need}:1` : `Fails ${need}:1`}</Pill> : <Pill>Decorative, no requirement</Pill>}</td>
+                      <td className="tabular-nums">{r.toFixed(2)}:1</td>
+                      <td>{need ? <Badge variant={r >= need ? "secondary" : "destructive"}>{r >= need ? `Pass ≥ ${need}:1` : `Fails ${need}:1`}</Badge> : <Badge variant="outline">Decorative, no requirement</Badge>}</td>
                     </tr>
                   );
                 })}
@@ -99,84 +104,84 @@ export function DesignReference() {
           </div>
         </section>
 
-        <section className="stack gap-3" aria-labelledby="dsn-type">
-          <h2 id="dsn-type" className="t-section">Type</h2>
-          <p className="t-support">System sans-serif. French renders accents, curly apostrophes and œ: <span lang="fr" className="t-strong" style={{ color: "var(--text)" }}>« Où est l’œuvre ? Ça s’écrit déjà. »</span></p>
-          <ul className="list">
+        <section className="flex flex-col gap-3" aria-labelledby="dsn-type">
+          <h2 id="dsn-type" className="text-lg font-semibold text-balance">Type</h2>
+          <p className="text-sm text-muted-foreground">System sans-serif. French renders accents, curly apostrophes and œ: <span lang="fr" className="font-medium" style={{ color: "var(--text)" }}>« Où est l’œuvre ? Ça s’écrit déjà. »</span></p>
+          <ul className="divide-y overflow-hidden rounded-lg border">
             {TYPE.map(([name, spec, cls]) => (
-              <li key={name} className="list-row"><span className={cls} style={{ flex: 1 }}>{name}</span><span className="code muted">{spec}</span></li>
+              <li key={name} className="flex flex-wrap items-center gap-3 px-4 py-3"><span className={cls} style={{ flex: 1 }}>{name}</span><span className="code text-muted-foreground">{spec}</span></li>
             ))}
           </ul>
         </section>
 
-        <section className="grid-3" aria-label="Spacing, radius and elevation">
-          <div className="stack gap-2">
-            <h2 className="t-section">Spacing</h2>
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" aria-label="Spacing, radius and elevation">
+          <div className="flex flex-col gap-2">
+            <h2 className="text-lg font-semibold text-balance">Spacing</h2>
             {[4, 8, 12, 16, 24, 32, 48, 64].map((s) => (
-              <div key={s} className="row"><span className="code" style={{ width: 36 }}>{s}</span><span style={{ width: s, height: 12, background: "var(--primary)", borderRadius: 2 }} /></div>
+              <div key={s} className="flex flex-wrap items-center gap-2"><span className="code" style={{ width: 36 }}>{s}</span><span style={{ width: s, height: 12, background: "var(--primary)", borderRadius: 2 }} /></div>
             ))}
           </div>
-          <div className="stack gap-2">
-            <h2 className="t-section">Radius</h2>
+          <div className="flex flex-col gap-2">
+            <h2 className="text-lg font-semibold text-balance">Radius</h2>
             {[["Controls", 8], ["Panels", 12], ["Mobile sheets", 16]].map(([k, r]) => (
-              <div key={k} className="row"><span style={{ width: 44, height: 32, border: "2px solid var(--border-strong)", borderRadius: r as number }} /><span>{k} · {r} px</span></div>
+              <div key={k} className="flex flex-wrap items-center gap-2"><span style={{ width: 44, height: 32, border: "2px solid var(--border-strong)", borderRadius: r as number }} /><span>{k} · {r} px</span></div>
             ))}
-            <p className="t-support">Pills only for small status labels.</p>
+            <p className="text-sm text-muted-foreground">Pills only for small status labels.</p>
           </div>
-          <div className="stack gap-2">
-            <h2 className="t-section">Elevation</h2>
-            <div className="panel">Ordinary content · none</div>
-            <div className="panel" style={{ boxShadow: "var(--shadow-pop)" }}>Anchored popover · subtle</div>
-            <div className="panel" style={{ boxShadow: "var(--shadow-modal)" }}>Modal overlay · strong</div>
+          <div className="flex flex-col gap-2">
+            <h2 className="text-lg font-semibold text-balance">Elevation</h2>
+            <div className="rounded-lg border bg-card p-4 text-card-foreground">Ordinary content · none</div>
+            <div className="rounded-lg border bg-card p-4 text-card-foreground" style={{ boxShadow: "var(--shadow-pop)" }}>Anchored popover · subtle</div>
+            <div className="rounded-lg border bg-card p-4 text-card-foreground" style={{ boxShadow: "var(--shadow-modal)" }}>Modal overlay · strong</div>
           </div>
         </section>
 
-        <section className="stack gap-3" aria-labelledby="dsn-btn">
-          <h2 id="dsn-btn" className="t-section">Button roles</h2>
-          <p className="t-support">Exactly four roles. Each screen or dialog has at most one Primary action. Show answer and Try again are never Primary next to Check, Next or Done.</p>
-          <div className="btn-row">
-            <Button kind="primary">Primary</Button>
-            <Button kind="secondary">Secondary</Button>
-            <Button kind="tertiary">Tertiary</Button>
-            <Button kind="destructive">Destructive</Button>
+        <section className="flex flex-col gap-3" aria-labelledby="dsn-btn">
+          <h2 id="dsn-btn" className="text-lg font-semibold text-balance">Button roles</h2>
+          <p className="text-sm text-muted-foreground">Exactly four roles. Each screen or dialog has at most one Primary action. Show answer and Try again are never Primary next to Check, Next or Done.</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="default">Primary</Button>
+            <Button type="button" variant="outline">Secondary</Button>
+            <Button type="button" variant="ghost">Tertiary</Button>
+            <Button type="button" variant="destructive">Destructive</Button>
           </div>
-          <div className="btn-row">
-            <Button kind="primary" disabledReason="Example disabled reason.">Primary disabled</Button>
-            <Button kind="primary" busy>Busy</Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="default" aria-disabled className="opacity-50" onClick={(event) => event.preventDefault()}>Primary disabled<span className="sr-only">Example disabled reason.</span></Button>
+            <Button type="button" variant="default" aria-disabled aria-busy className="opacity-50" onClick={(event) => event.preventDefault()}><Loader2 className="animate-spin" aria-hidden />Busy</Button>
           </div>
-          <p className="t-support">Disabled buttons stay focusable and announce their reason. Minimum target 44 × 44 px.</p>
+          <p className="text-sm text-muted-foreground">Disabled buttons stay focusable and announce their reason. Minimum target 44 × 44 px.</p>
         </section>
 
-        <section className="stack gap-3" aria-labelledby="dsn-comp">
-          <h2 id="dsn-comp" className="t-section">Components</h2>
-          <div className="grid-2">
-            <div className="stack gap-2">
-              <Banner tone="success" title="Success">Text plus icon, never colour alone.</Banner>
-              <Banner tone="error" title="Error">Announced assertively; always offers a recovery.</Banner>
-              <Banner tone="warning" title="Warning">Offline, partial or limited states.</Banner>
-              <Banner tone="info" title="Info">Neutral guidance and pending sync.</Banner>
+        <section className="flex flex-col gap-3" aria-labelledby="dsn-comp">
+          <h2 id="dsn-comp" className="text-lg font-semibold text-balance">Components</h2>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <Alert variant="default"><AlertTitle>Success</AlertTitle><AlertDescription>Text plus icon, never colour alone.</AlertDescription></Alert>
+              <Alert variant="destructive"><AlertTitle>Error</AlertTitle><AlertDescription>Announced assertively; always offers a recovery.</AlertDescription></Alert>
+              <Alert variant="default"><AlertTitle>Warning</AlertTitle><AlertDescription>Offline, partial or limited states.</AlertDescription></Alert>
+              <Alert variant="default"><AlertTitle>Info</AlertTitle><AlertDescription>Neutral guidance and pending sync.</AlertDescription></Alert>
             </div>
-            <div className="stack gap-3">
-              <FieldText label="Field label" help="Help text sits between label and input." value="" onChange={() => {}} />
-              <FieldText label="Field with error" value="250" onChange={() => {}} error="Enter a whole number from 0 to 200." />
-              <div className="row"><Pill>Neutral</Pill><Pill tone="success">Success</Pill><Pill tone="warning">Warning</Pill><Pill tone="error">Error</Pill><Pill tone="demo">Demo</Pill></div>
-              <DemoNote>Simulated capability label</DemoNote>
+            <div className="flex flex-col gap-3">
+              <div className="grid gap-2"><Label htmlFor="field-label">Field label</Label><p id="field-label-help" className="text-sm text-muted-foreground">Help text sits between label and input.</p><Input id="field-label" value="" onChange={() => {}} autoComplete="off" aria-describedby="field-label-help" /></div>
+              <div className="grid gap-2"><Label htmlFor="field-with-error">Field with error</Label><Input id="field-with-error" value="250" onChange={() => {}} autoComplete="off" aria-describedby="field-with-error-err" aria-invalid={true} /><p id="field-with-error-err" className="flex items-start gap-1.5 text-sm text-destructive"><AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden /><span>Enter a whole number from 0 to 200.</span></p></div>
+              <div className="flex flex-wrap items-center gap-2"><Badge variant="outline">Neutral</Badge><Badge variant="secondary">Success</Badge><Badge variant="outline">Warning</Badge><Badge variant="destructive">Error</Badge><Badge variant="outline">Demo</Badge></div>
+              <Badge variant="outline">Simulated capability label</Badge>
             </div>
           </div>
-          <div className="panel stack gap-2">
-            <p className="t-strong">Favorite vs importance — two separate controls</p>
-            <div className="row gap-4">
-              <Button kind="tertiary" aria-pressed={false} icon={<Bookmark aria-hidden />}>Favorite</Button>
-              <Button kind="tertiary" aria-pressed icon={<BookmarkCheck aria-hidden />}>Favorited</Button>
+          <div className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-2">
+            <p className="font-medium">Favorite vs importance — two separate controls</p>
+            <div className="flex flex-wrap items-center gap-2 gap-4">
+              <Button type="button" variant="ghost" aria-pressed={false}>{<Bookmark aria-hidden />}Favorite</Button>
+              <Button type="button" variant="ghost" aria-pressed>{<BookmarkCheck aria-hidden />}Favorited</Button>
             </div>
             {[0, 4, 5, 6, 9, 10].map((n) => <Importance key={n} count={n} />)}
-            <p className="t-support">Importance is read-only: 0–4 lookups → {importanceFor(4)}/5, 5–9 → {importanceFor(5)}/5, 10+ → {importanceFor(10)}/5. Favorite never changes it.</p>
+            <p className="text-sm text-muted-foreground">Importance is read-only: 0–4 lookups → {importanceFor(4)}/5, 5–9 → {importanceFor(5)}/5, 10+ → {importanceFor(10)}/5. Favorite never changes it.</p>
           </div>
         </section>
 
-        <section className="stack gap-3" aria-labelledby="dsn-a11y">
-          <h2 id="dsn-a11y" className="t-section">Accessibility specifications</h2>
-          <ul className="stack gap-2" style={{ paddingLeft: 20 }}>
+        <section className="flex flex-col gap-3" aria-labelledby="dsn-a11y">
+          <h2 id="dsn-a11y" className="text-lg font-semibold text-balance">Accessibility specifications</h2>
+          <ul className="flex flex-col gap-2" style={{ paddingLeft: 20 }}>
             <li>Focus ring: 2 px #8A5A2B with a 2 px offset, on real controls.</li>
             <li>Skip link first; then navigation, page heading, instructions, input, primary action, secondary actions.</li>
             <li>Submitting moves focus to the result summary; nothing auto-advances.</li>
@@ -190,27 +195,27 @@ export function DesignReference() {
           </ul>
         </section>
 
-        <section className="grid-2" aria-label="Adopted defaults and rule checks">
-          <div className="stack gap-3">
-            <h2 className="t-section">Adopted defaults</h2>
-            <p className="t-support">Prototype or product defaults, not quotations from the user.</p>
-            <ul className="stack gap-2" style={{ paddingLeft: 20 }}>{DEFAULTS.map((d) => <li key={d}>{d}</li>)}</ul>
+        <section className="grid gap-4 md:grid-cols-2" aria-label="Adopted defaults and rule checks">
+          <div className="flex flex-col gap-3">
+            <h2 className="text-lg font-semibold text-balance">Adopted defaults</h2>
+            <p className="text-sm text-muted-foreground">Prototype or product defaults, not quotations from the user.</p>
+            <ul className="flex flex-col gap-2" style={{ paddingLeft: 20 }}>{DEFAULTS.map((d) => <li key={d}>{d}</li>)}</ul>
           </div>
-          <div className="stack gap-3">
-            <h2 className="t-section">Live rule checks</h2>
-            <p className="t-support">Lookup events at 0, 4, 4.999, 5.000, 6, 9, 11 s → counts {seq.map(([, n]) => n).join(", ")}.</p>
-            <ul className="list">
+          <div className="flex flex-col gap-3">
+            <h2 className="text-lg font-semibold text-balance">Live rule checks</h2>
+            <p className="text-sm text-muted-foreground">Lookup events at 0, 4, 4.999, 5.000, 6, 9, 11 s → counts {seq.map(([, n]) => n).join(", ")}.</p>
+            <ul className="divide-y overflow-hidden rounded-lg border">
               {checks.map(([k, ok]) => (
-                <li key={k} className="list-row"><span className="grow" lang="fr">{k}</span><Pill tone={ok ? "success" : "error"}>{ok ? "Holds" : "Fails"}</Pill></li>
+                <li key={k} className="flex flex-wrap items-center gap-3 px-4 py-3"><span className="min-w-0 flex-1" lang="fr">{k}</span><Badge variant={ok ? "secondary" : "destructive"}>{ok ? "Holds" : "Fails"}</Badge></li>
               ))}
             </ul>
           </div>
         </section>
 
-        <section className="stack gap-3" aria-labelledby="dsn-cov">
-          <h2 id="dsn-cov" className="t-section">Coverage inventory</h2>
-          <p className="t-support">{REGISTRY.length} stable screen IDs · {REGISTRY.reduce((n, r) => n + r.states.length, 0)} navigable states. IDs stay the same across responsive variants; states use suffixes such as SCR-REC-01/techfail.</p>
-          <div className="table-wrap">
+        <section className="flex flex-col gap-3" aria-labelledby="dsn-cov">
+          <h2 id="dsn-cov" className="text-lg font-semibold text-balance">Coverage inventory</h2>
+          <p className="text-sm text-muted-foreground">{REGISTRY.length} stable screen IDs · {REGISTRY.reduce((n, r) => n + r.states.length, 0)} navigable states. IDs stay the same across responsive variants; states use suffixes such as SCR-REC-01/techfail.</p>
+          <div className="w-full overflow-x-auto">
             <table className="matrix">
               <caption className="sr-only">Screen coverage</caption>
               <thead><tr><th scope="col">Screen ID</th><th scope="col">Screen</th><th scope="col">States (select to open)</th></tr></thead>
@@ -218,13 +223,11 @@ export function DesignReference() {
                 {REGISTRY.map((r) => (
                   <tr key={r.id}>
                     <th scope="row" className="code">{r.id}</th>
-                    <td>{r.title}<br /><span className="t-meta">{r.area}</span></td>
+                    <td>{r.title}<br /><span className="text-xs leading-4 text-muted-foreground">{r.area}</span></td>
                     <td>
                       <div className="dn-states">
                         {r.states.map((s) => (
-                          <button key={s.key} type="button" className="dn-state" aria-label={`Open ${r.id}/${s.key}: ${s.label}`} onClick={() => s.apply()}>
-                            <span className="code">/{s.key}</span>&nbsp;{s.label}
-                          </button>
+                          <Button type="button" variant="ghost" key={s.key} aria-label={`Open ${r.id}/${s.key}: ${s.label}`} className="h-8 px-2" onClick={() => s.apply()}><span className="font-mono text-xs">/{s.key}</span>&nbsp;{s.label}</Button>
                         ))}
                       </div>
                     </td>

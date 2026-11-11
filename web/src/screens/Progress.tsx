@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronLeft, Flame, History as HistoryIcon, Info, Trash2 } from "lucide-react";
+import { ChevronLeft, History as HistoryIcon, Trash2, Loader2 } from "lucide-react";
 import { ApiError } from "../api/client";
 import {
   LANE_LABEL,
@@ -15,7 +15,11 @@ import {
 } from "../api/time";
 import { fmtDuration, nf, plural } from "../lib/format";
 import { announce, go } from "../state/store";
-import { Banner, Button, PageHead, Pill, Skeleton, Spinner } from "../components/ui";
+import { Card, CardDescription, CardHeader, CardTitle, Checkbox, Input, PageHead, Progress, Skeleton, Spinner } from "../components/ui";
+import { Button } from "../components/ui/button";
+import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { cn } from "cn";
 
 export function ProgressScreen({ sub }: { sub?: string }) {
   if (sub === "devices") return <Devices />;
@@ -66,13 +70,12 @@ function Overview() {
   const { summary, game, setGame, state, error, reload } = useProgress();
 
   return (
-    <div className="page">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <PageHead
         title="Progress"
-        desc="Your study time toward 1,000 hours, the road to NCLC 7 in all four skills."
-        actions={<Button kind="tertiary" icon={<HistoryIcon aria-hidden />} onClick={() => go("progress/history?tab=time")}>History</Button>}
+        actions={<Button type="button" variant="ghost" onClick={() => go("progress/history?tab=time")}>{<HistoryIcon aria-hidden />}History</Button>}
       />
-      <div className="stack gap-6">
+      <div className="flex flex-col gap-8">
         {state === "loading" && (
           <>
             <Spinner label="Loading your progress…" />
@@ -80,9 +83,7 @@ function Overview() {
           </>
         )}
         {state === "error" && (
-          <Banner tone="error" title="Your progress didn’t load" live="assertive" actions={<Button kind="secondary" onClick={reload}>Retry</Button>}>
-            {error || "The server didn’t respond."} Your study time is safe.
-          </Banner>
+          <Alert variant="destructive" role="alert"><AlertTitle>Your progress didn’t load</AlertTitle><AlertDescription>{error || "The server didn’t respond."} Your study time is safe.<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={reload}>Retry</Button></div></AlertDescription></Alert>
         )}
         {state === "ok" && summary && game && (
           <>
@@ -94,21 +95,7 @@ function Overview() {
           </>
         )}
 
-        <section className="stack gap-3" aria-labelledby="rules-h">
-          <h2 id="rules-h" className="t-section">What counts</h2>
-          <ul className="stack gap-2" style={{ paddingLeft: 20 }}>
-            <li>Study and Review count while you use them (the page is visible and you did something in the last 2 minutes). Leaving a page open doesn’t count.</li>
-            <li>Audio counts while it really plays, also with the screen locked: 10 minutes of audio at 2× counts as 5 minutes.</li>
-            <li>A second is only counted once, even when audio plays while you study.</li>
-            <li>Study away from the app (a class, a book) can be logged by hand below.</li>
-            <li>Days roll over at 4:00 and weeks start on Monday (Vancouver time).</li>
-            <li>Your level is one per hour of study (60 XP); listening on the go counts at half weight there, and correct review answers add a little XP.</li>
-          </ul>
-          <p className="row t-support">
-            <Info aria-hidden width={16} height={16} />
-            <Button kind="tertiary" className="btn--sm-text" onClick={() => go("progress/devices")}>Devices and background listening</Button>
-          </p>
-        </section>
+        <Button type="button" variant="ghost" className="h-8 self-start px-2 text-sm" onClick={() => go("progress/devices")}>Devices and background listening</Button>
       </div>
     </div>
   );
@@ -120,52 +107,45 @@ function Goal({ s }: { s: StudySummary }) {
   const finish = s.projected_finish ? new Date(`${s.projected_finish}T12:00:00Z`) : null;
   return (
     <>
-      <section className="stack gap-4" aria-labelledby="goal-h">
-        <h2 id="goal-h" className="sr-only">Goal</h2>
-        <div className="stack gap-1">
-          <span className="t-support">Total study time</span>
-          <span className="t-figure">{s.total_seconds < 60 ? "0 h" : fmtDuration(s.total_seconds / 60)}</span>
-          <span className="t-support">of {nf.format(s.goal_hours)} hours · {pct.toFixed(1)}%</span>
-        </div>
-        <div className="goal-bar" role="img" aria-label={`${pct.toFixed(1)} percent of the ${nf.format(s.goal_hours)}-hour goal`}>
-          <div style={{ width: `${pct}%` }} />
-        </div>
-        {hours >= s.goal_hours && <Banner tone="success" title="You’ve reached 1,000 hours">Your total keeps counting — it isn’t reset.</Banner>}
+      <section className="journey flex flex-col gap-2" aria-labelledby="goal-h">
+        <h2 id="goal-h" className="text-xs font-medium text-muted-foreground">1,000-hour journey</h2>
+        <p className="text-lg font-semibold tabular-nums">{s.total_seconds < 60 ? "0 h" : fmtDuration(s.total_seconds / 60)}</p>
+        <dl className="flex flex-wrap gap-6">
+          <div className="flex flex-col gap-0.5"><dt className="text-sm text-muted-foreground">Goal</dt><dd className="text-sm font-medium tabular-nums">{nf.format(s.goal_hours)} h</dd></div>
+          <div className="flex flex-col gap-0.5"><dt className="text-sm text-muted-foreground">Done</dt><dd className="text-sm font-medium tabular-nums">{pct.toFixed(1)}%</dd></div>
+        </dl>
+        <Progress value={pct} aria-label={`${pct.toFixed(1)} percent of the ${nf.format(s.goal_hours)}-hour goal`} />
+        {hours >= s.goal_hours && <Alert variant="default"><AlertTitle>You’ve reached 1,000 hours</AlertTitle></Alert>}
         {s.total_seconds === 0 && (
-          <Banner tone="neutral" title="No study time yet" actions={<Button kind="secondary" onClick={() => go("study/new")}>Start studying</Button>}>
-            Analyse a text, review your cards or play an episode, and your time appears here.
-          </Banner>
+          <Alert variant="default"><AlertTitle>No study time yet</AlertTitle><AlertDescription><div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={() => go("study/new")}>Start studying</Button></div></AlertDescription></Alert>
         )}
       </section>
 
-      <dl className="figure-grid">
+      <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         {[
           ["Today", fmtDuration(s.today_seconds / 60), "Since 4:00"],
           ["This week", fmtDuration(s.week_seconds / 60), "Since Monday"],
           ["Remaining to 1,000 hours", s.remaining_seconds === 0 ? "0 h" : fmtDuration(s.remaining_seconds / 60), "Goal minus total"],
           ["Weekly average", fmtDuration(s.average_week_seconds / 60), "Over the last 4 weeks"],
         ].map(([k, v, sub]) => (
-          <div key={k} className="stat">
-            <dt className="t-support">{k}</dt>
-            <dd className="t-section num" style={{ margin: 0 }}>{v}</dd>
-            <dd className="t-meta" style={{ margin: 0 }}>{sub}</dd>
+          <div key={k} className="flex flex-col gap-0.5">
+            <dt className="text-sm text-muted-foreground">{k}</dt>
+            <dd className="text-lg font-semibold text-balance tabular-nums" style={{ margin: 0 }}>{v}</dd>
+            <dd className="text-xs leading-4 text-muted-foreground" style={{ margin: 0 }}>{sub}</dd>
           </div>
         ))}
       </dl>
 
-      <section className="panel stack gap-2" aria-labelledby="eta-h">
-        <h2 id="eta-h" className="t-label">Estimated finish</h2>
+      <section className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-2" aria-labelledby="eta-h">
+        <h2 id="eta-h" className="text-sm font-medium">Estimated finish</h2>
         {s.remaining_seconds === 0 ? (
           <p>Goal reached. No estimate needed.</p>
         ) : finish && finish.getUTCFullYear() > new Date().getUTCFullYear() + 20 ? (
-          <p>More than 20 years away at your pace of the last 4 weeks. The estimate moves closer as your weekly time grows.</p>
+          <p>More than 20 years away</p>
         ) : finish ? (
-          <>
-            <p className="t-section">Around {finish.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" })}</p>
-            <p className="t-support">At your pace of the last 4 weeks. An estimate, not a promise.</p>
-          </>
+          <p className="text-lg font-semibold text-balance">Around {finish.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" })}</p>
         ) : (
-          <p>No estimate yet — there’s no study time in the last 4 weeks to base a pace on.</p>
+          <p>No estimate yet</p>
         )}
       </section>
     </>
@@ -175,28 +155,31 @@ function Goal({ s }: { s: StudySummary }) {
 function Level({ g }: { g: GameState }) {
   const toNext = g.next_level_xp === null ? 0 : g.next_level_xp - g.xp;
   return (
-    <section className="panel stack gap-3" aria-labelledby="lvl-h">
-      <div className="row" style={{ justifyContent: "space-between" }}>
-        <h2 id="lvl-h" className="t-label">Level</h2>
-        {g.streak_days > 0 && (
-          <Pill tone="success" icon={<Flame aria-hidden width={14} height={14} />}>
-            {plural(g.streak_days, "weekday")} in a row
-          </Pill>
-        )}
-      </div>
+    <>
+    {g.streak_days > 0 && (
+      <Card size="sm">
+        <CardHeader>
+          <CardTitle>Streak</CardTitle>
+          <CardDescription>{plural(g.streak_days, "weekday")} in a row</CardDescription>
+        </CardHeader>
+      </Card>
+    )}
+    <section className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-3" aria-labelledby="lvl-h">
+      <h2 id="lvl-h" className="text-sm font-medium">Level</h2>
       <p>
-        <span className="t-figure num">{nf.format(g.level)}</span> <span className="t-support">of {nf.format(g.max_level)} · level {nf.format(g.max_level)} = 1,000 hours = your NCLC 7 goal</span>
+        <span className="text-lg font-semibold tabular-nums">{nf.format(g.level)}</span> <span className="text-sm text-muted-foreground">of {nf.format(g.max_level)}</span>
       </p>
-      <div className="progress-track" role="img" aria-label={`${Math.round(g.progress * 100)} percent of the way to level ${g.level + 1}`}>
-        <div className="progress-fill" style={{ width: `${g.progress * 100}%` }} />
+      <div className="h-1 overflow-hidden rounded-full bg-muted" role="img" aria-label={`${Math.round(g.progress * 100)} percent of the way to level ${g.level + 1}`}>
+        <div className="h-full bg-primary" style={{ width: `${g.progress * 100}%` }} />
       </div>
-      <p className="t-support num">
+      <p className="text-sm text-muted-foreground tabular-nums">
         {g.next_level_xp === null ? "Top level reached." : `${nf.format(toNext)} XP to level ${nf.format(g.level + 1)}`} · {nf.format(g.xp)} XP in all · studied on {g.days_studied_7d} of the last 7 days
       </p>
       {(g.today.kills > 0 || g.today.best_combo > 1) && (
-        <p className="t-support num">Today’s review: {plural(g.today.kills, "correct answer")} · best run {g.today.best_combo}</p>
+        <p className="text-sm text-muted-foreground tabular-nums">Today’s review: {plural(g.today.kills, "correct answer")} · best run {g.today.best_combo}</p>
       )}
     </section>
+    </>
   );
 }
 
@@ -205,31 +188,28 @@ function Today({ g, onChange }: { g: GameState; onChange: (g: GameState) => void
   const t = g.today;
   const pct = t.target ? Math.min(100, (t.minutes / t.target) * 100) : 100;
   return (
-    <section className="stack gap-3" aria-labelledby="today-h">
-      <h2 id="today-h" className="t-section">Today</h2>
+    <section className="flex flex-col gap-3" aria-labelledby="today-h">
+      <h2 id="today-h" className="text-lg font-semibold text-balance">Today</h2>
       {t.family_day ? (
-        <p>Family day: no target today, and your streak is kept.</p>
+        <p className="tabular-nums">{fmtDuration(t.minutes)} today</p>
       ) : t.target ? (
         <>
-          <p className="num">
-            <span className="t-strong">{fmtDuration(t.minutes)}</span> of today’s {fmtDuration(t.target)}
+          <p className="tabular-nums">
+            <span className="font-medium">{fmtDuration(t.minutes)}</span> of today’s {fmtDuration(t.target)}
             {t.minutes >= t.target ? " — done for today." : "."}
           </p>
-          <div className="goal-bar" role="img" aria-label={`${Math.round(pct)} percent of today’s target`}>
-            <div style={{ width: `${pct}%` }} />
-          </div>
+          <Progress value={pct} aria-label={`${Math.round(pct)} percent of today’s target`} />
         </>
       ) : (
-        <p className="num">{fmtDuration(t.minutes)} today. No target today{t.weekend ? " (weekend)" : ""}.</p>
+        <p className="tabular-nums">{fmtDuration(t.minutes)} today. No target today{t.weekend ? " (weekend)" : ""}.</p>
       )}
-      <label className="check">
-        <input
-          type="checkbox"
+      <label className="flex items-start gap-3 py-2">
+        <Checkbox
           checked={t.family_day}
           disabled={busy}
-          onChange={(e) => {
+          onCheckedChange={(checked) => {
             setBusy(true);
-            setFamilyDay(e.target.checked)
+            setFamilyDay(checked === true)
               .then((next) => {
                 onChange(next);
                 announce(next.today.family_day ? "Family day on: no target today." : "Family day off.");
@@ -238,10 +218,7 @@ function Today({ g, onChange }: { g: GameState; onChange: (g: GameState) => void
               .finally(() => setBusy(false));
           }}
         />
-        <span className="stack">
-          <span>Family day</span>
-          <span className="t-support">Family comes first: today’s target becomes 0 and the streak is kept.</span>
-        </span>
+        <span>Family day</span>
       </label>
     </section>
   );
@@ -251,27 +228,27 @@ function Week({ g }: { g: GameState }) {
   const w = g.week;
   const rows = LANES.filter((l) => (w.lane_targets[l] ?? 0) > 0 || (w.by_lane[l] ?? 0) > 0);
   return (
-    <section className="stack gap-3" aria-labelledby="week-h">
-      <h2 id="week-h" className="t-section">{w.number > 0 ? `Week ${w.number}` : "This week"}</h2>
-      <p className="t-support num">
-        {fmtDuration(w.minutes)} of {fmtDuration(w.target)} planned{w.maintenance ? " (maintenance weeks: a lighter plan)" : ""}. Listening on the go counts half here.
+    <section className="flex flex-col gap-3" aria-labelledby="week-h">
+      <h2 id="week-h" className="text-lg font-semibold text-balance">{w.number > 0 ? `Week ${w.number}` : "This week"}</h2>
+      <p className="text-sm text-muted-foreground tabular-nums">
+        {fmtDuration(w.minutes)} of {fmtDuration(w.target)}
       </p>
       {rows.length === 0 ? (
-        <p className="t-support">Nothing yet this week.</p>
+        <p className="text-sm text-muted-foreground">Nothing yet this week.</p>
       ) : (
-        <ul className="stack gap-3" style={{ listStyle: "none", padding: 0, margin: 0 }}>
+        <ul className="flex flex-col gap-3" style={{ listStyle: "none", padding: 0, margin: 0 }}>
           {rows.map((l) => {
             const done = w.by_lane[l] ?? 0;
             const target = w.lane_targets[l] ?? 0;
             return (
-              <li key={l} className="stack gap-1">
-                <span className="row" style={{ justifyContent: "space-between" }}>
+              <li key={l} className="flex flex-col gap-1">
+                <span className="flex flex-wrap items-center gap-2" style={{ justifyContent: "space-between" }}>
                   <span>{LANE_LABEL[l]}</span>
-                  <span className="t-support num">{fmtDuration(done)}{target ? ` / ${fmtDuration(target)}` : ""}</span>
+                  <span className="text-sm text-muted-foreground tabular-nums">{fmtDuration(done)}{target ? ` / ${fmtDuration(target)}` : ""}</span>
                 </span>
                 {target > 0 && (
-                  <div className="progress-track" aria-hidden>
-                    <div className="progress-fill" style={{ width: `${Math.min(100, (done / target) * 100)}%` }} />
+                  <div className="h-1 overflow-hidden rounded-full bg-muted" aria-hidden>
+                    <div className="h-full bg-primary" style={{ width: `${Math.min(100, (done / target) * 100)}%` }} />
                   </div>
                 )}
               </li>
@@ -280,7 +257,7 @@ function Week({ g }: { g: GameState }) {
         </ul>
       )}
       {w.focus_skill?.target > 0 && w.focus_skill.minutes < w.focus_skill.target && (
-        <p className="t-support">Furthest behind this week: {SKILL_NAME[w.focus_skill.skill] ?? w.focus_skill.skill}.</p>
+        <p className="text-sm text-muted-foreground">Furthest behind this week: {SKILL_NAME[w.focus_skill.skill] ?? w.focus_skill.skill}.</p>
       )}
     </section>
   );
@@ -297,32 +274,26 @@ function LogTime({ g, onChange }: { g: GameState; onChange: (g: GameState) => vo
   const n = Number(minutes);
   const valid = Number.isInteger(n) && n >= 1 && n <= 300;
   return (
-    <section className="stack gap-3" aria-labelledby="log-h">
-      <h2 id="log-h" className="t-section">Log study away from the app</h2>
-      <div className="filter-bar">
-        <label className="field" style={{ width: 200 }}>
-          <span className="field-label">What</span>
-          <select className="select" value={lane} onChange={(e) => setLane(e.target.value as Lane)}>
-            {LANES.map((l) => <option key={l} value={l}>{LANE_LABEL[l]}</option>)}
-          </select>
+    <section className="flex flex-col gap-3" aria-labelledby="log-h">
+      <h2 id="log-h" className="text-lg font-semibold text-balance">Log study away from the app</h2>
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="grid gap-2" style={{ width: 200 }}>
+          <span className="text-sm font-medium">What</span>
+          <Select value={lane} onValueChange={(v) => setLane(v as Lane)}><SelectTrigger aria-label={"What"} className="w-full"><SelectValue /></SelectTrigger><SelectContent>{(LANES.map((l) => ({ value: l, label: LANE_LABEL[l] }))).map((o) => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}</SelectContent></Select>
         </label>
-        <label className="field" style={{ width: 120 }}>
-          <span className="field-label">Minutes</span>
-          <input className="input" inputMode="numeric" value={minutes} aria-invalid={minutes !== "" && !valid} onChange={(e) => setMinutes(e.target.value.replace(/\D/g, ""))} />
+        <label className="grid gap-2" style={{ width: 120 }}>
+          <span className="text-sm font-medium">Minutes</span>
+          <Input inputMode="numeric" value={minutes} aria-invalid={minutes !== "" && !valid} onChange={(e) => setMinutes(e.target.value.replace(/\D/g, ""))} />
         </label>
-        <label className="field grow" style={{ minWidth: 180 }}>
-          <span className="field-label">Note (optional)</span>
-          <input className="input" maxLength={200} value={note} placeholder="e.g. class with my teacher" onChange={(e) => setNote(e.target.value)} />
+        <label className="grid gap-2 min-w-0 flex-1" style={{ minWidth: 180 }}>
+          <span className="text-sm font-medium">Note (optional)</span>
+          <Input maxLength={200} value={note} placeholder="Note" onChange={(e) => setNote(e.target.value)} />
         </label>
       </div>
-      {minutes !== "" && !valid && <p className="t-support" style={{ color: "var(--error)" }}>Enter 1 to 300 minutes.</p>}
-      {error && <Banner tone="error" title="Not logged" live="assertive">{error}</Banner>}
-      <div className="btn-row">
-        <Button
-          kind="secondary"
-          busy={busy}
-          disabledReason={!valid ? "Enter the minutes first." : undefined}
-          onClick={() => {
+      {minutes !== "" && !valid && <p className="text-sm text-muted-foreground" style={{ color: "var(--error)" }}>Enter 1 to 300 minutes.</p>}
+      {error && <Alert variant="destructive" role="alert"><AlertTitle>Not logged</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="button" variant="outline" aria-disabled={(!!(busy) || !!(!valid ? "Enter the minutes first." : undefined)) || undefined} aria-busy={busy || undefined} className={cn((!!(busy) || !!(!valid ? "Enter the minutes first." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(busy) || !!(!valid ? "Enter the minutes first." : undefined)) { event.preventDefault(); return; } (() => {
             setBusy(true);
             setError("");
             logTime(lane, n, note.trim())
@@ -334,35 +305,23 @@ function LogTime({ g, onChange }: { g: GameState; onChange: (g: GameState) => vo
               })
               .catch((e) => setError(errText(e) || "The server didn’t respond. Nothing was logged."))
               .finally(() => setBusy(false));
-          }}
-        >
-          Log time
-        </Button>
+          })(); }}>{busy ? <Loader2 className="animate-spin" aria-hidden /> : null}Log time{(!valid ? "Enter the minutes first." : undefined) ? <span className="sr-only">{!valid ? "Enter the minutes first." : undefined}</span> : null}</Button>
       </div>
       {g.today.logs.length > 0 && (
-        <ul className="list">
+        <ul className="divide-y overflow-hidden rounded-lg border">
           {g.today.logs.map((l) => (
-            <li key={l.id} className="list-row">
-              <span className="grow">
+            <li key={l.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+              <span className="min-w-0 flex-1">
                 {LANE_LABEL[l.lane] ?? l.lane} · {fmtDuration(l.minutes)}
-                {l.note && <span className="t-support"> · {l.note}</span>}
+                {l.note && <span className="text-sm text-muted-foreground"> · {l.note}</span>}
               </span>
-              <Button
-                kind="tertiary"
-                className="btn--sm-text"
-                icon={<Trash2 aria-hidden />}
-                aria-label={`Remove ${l.minutes} minutes of ${LANE_LABEL[l.lane] ?? l.lane}`}
-                onClick={() =>
+              <Button type="button" variant="ghost" aria-label={`Remove ${l.minutes} minutes of ${LANE_LABEL[l.lane] ?? l.lane}`} className="h-8 px-2 text-sm" onClick={() =>
                   deleteLog(l.id)
                     .then((next) => {
                       onChange(next);
                       announce("Log removed.");
                     })
-                    .catch(() => announce("Couldn’t remove the log.", true))
-                }
-              >
-                Remove
-              </Button>
+                    .catch(() => announce("Couldn’t remove the log.", true))}>{<Trash2 aria-hidden />}Remove</Button>
             </li>
           ))}
         </ul>
@@ -374,21 +333,11 @@ function LogTime({ g, onChange }: { g: GameState; onChange: (g: GameState) => vo
 /* SCR-PRO-02 */
 function Devices() {
   return (
-    <div className="page">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <PageHead
-        back={<Button kind="tertiary" className="btn--sm-text" icon={<ChevronLeft aria-hidden />} onClick={() => go("progress")} style={{ alignSelf: "flex-start", marginLeft: -12 }}>Progress</Button>}
+        back={<Button type="button" variant="ghost" className="h-8 self-start px-2 text-sm md:-ml-3" onClick={() => go("progress")}>{<ChevronLeft aria-hidden />}Progress</Button>}
         title="Devices and background listening"
-        desc="What this web app can count on each kind of device."
       />
-      <div className="stack gap-4">
-        <ul className="stack gap-2" style={{ paddingLeft: 20 }}>
-          <li>Audio time is read from how far the audio really moved, so it still counts when the browser pauses the page in the background, as long as the audio keeps playing.</li>
-          <li>Whether audio keeps playing with the screen locked depends on the phone and the browser. If the audio stops, the time stops too.</li>
-          <li>Time is sent to the server about every 30 seconds and when you leave the page. If the connection drops, it is kept on this device and sent later.</li>
-          <li>Time from several devices adds up; nothing is counted twice on one device.</li>
-        </ul>
-        <p className="note"><Info aria-hidden /> Not tested on every device. If a locked phone doesn’t count, check History → Study time the next day.</p>
-      </div>
     </div>
   );
 }

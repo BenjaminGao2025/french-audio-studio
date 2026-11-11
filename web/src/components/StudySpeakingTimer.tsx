@@ -3,7 +3,10 @@ import { apiFetch } from "../api/client";
 import { fmtClock } from "../lib/format";
 import { useApp } from "../state/store";
 import { EXCLUSIVE_AUDIO, takeAudioFocus } from "./StudyRecorder";
-import { Button } from "./ui";
+import { Button } from "./ui/button";
+import { cn } from "cn";
+import { Loader2 } from "lucide-react";
+
 
 /** Counts microphone activity only during an explicitly started, visible practice session. */
 export function StudySpeakingTimer({ journalId, disabled }: { journalId: string; disabled: boolean }) {
@@ -64,5 +67,5 @@ export function StudySpeakingTimer({ journalId, disabled }: { journalId: string;
       if (run === generation.current) { setAsking(false); setError(e instanceof Error ? e.message : "Couldn’t start microphone activity timing."); }
     }
   };
-  return <div className="stack gap-2"><div className="btn-row"><Button kind={active ? "primary" : "secondary"} busy={asking} disabled={disabled} onClick={() => active ? stop() : void start()}>{active ? "Stop speaking practice" : "Practise aloud with timer"}</Button><span className="t-meta" role="status">Speaking activity · {fmtClock(seconds)}</span></div><p className="t-meta">Uses microphone activity to estimate speaking time. Stops when you leave, hide the page, or play audio. Background noise can affect the estimate.</p>{error && <p className="field-error" role="alert">{error}</p>}</div>;
+  return <div className="flex flex-col gap-2"><div className="flex flex-wrap items-center gap-2"><Button type="button" variant={active ? "default" : "outline"} aria-disabled={(!!(disabled) || !!(asking)) || undefined} aria-busy={asking || undefined} className={cn((!!(disabled) || !!(asking)) ? "opacity-50" : "")} onClick={(event) => { if (!!(disabled) || !!(asking)) { event.preventDefault(); return; } (() => active ? stop() : void start())(); }}>{asking ? <Loader2 className="animate-spin" aria-hidden /> : null}{active ? "Stop speaking practice" : "Practise aloud with timer"}</Button><span className="text-xs leading-4 text-muted-foreground" role="status">Speaking activity · {fmtClock(seconds)}</span></div>{error && <p className="text-sm text-destructive" role="alert">{error}</p>}</div>;
 }

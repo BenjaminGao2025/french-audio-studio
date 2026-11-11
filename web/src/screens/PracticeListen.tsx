@@ -1,7 +1,11 @@
 /* SCR-PRA-04 Guided listening on the learner's own sentences:
  * listen blind → rate yourself → see the text → relisten (slow, normal, normal) → answer one question. */
+import { Button } from "../components/ui/button";
+import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
+import { Badge } from "../components/ui/badge";
+import { cn } from "cn";
 import { useEffect, useRef, useState } from "react";
-import { Pause, Play } from "lucide-react";
+import { Pause, Play, Loader2 } from "lucide-react";
 import {
   type ListeningSession,
   getListening,
@@ -16,7 +20,7 @@ import { ApiError } from "../api/client";
 import { fmtClock } from "../lib/format";
 import { formatFriendlyPhonetic } from "../lib/phonetic";
 import { announce, get, go, retryPlayback, set, startPlayback, updatePlayer, useApp } from "../state/store";
-import { Banner, Button, PageHead, Pill, Spinner } from "../components/ui";
+import { PageHead, RadioGroup, RadioGroupItem, Spinner } from "../components/ui";
 import { BackTo } from "./Practice";
 
 const SELF = ["Almost nothing", "Some of it", "Most or all of it"] as const;
@@ -72,26 +76,23 @@ export function Listen() {
     }
   };
 
-  const head = <PageHead back={<BackTo label="Practice" to="practice" />} title="Listen" eyebrow="Guided listening · your own sentences" desc="Listen first without the text, say how much you understood, then read along and listen again." />;
+  const head = <PageHead back={<BackTo label="Practice" to="practice" />} title="Listen" eyebrow="Guided listening" />;
 
   if (!s) {
     return (
-      <div className="page">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
         {head}
-        <div className="stack gap-4">
+        <div className="flex flex-col gap-4">
           {state === "loading" && <Spinner label="Preparing a clip from your sentences…" />}
           {state === "empty" && (
-            <Banner tone="info" title="Nothing to listen to yet" actions={<Button kind="primary" onClick={() => go("study")}>Go to Study</Button>}>
-              Listening clips are made from sentences you have studied. Analyse a French text in Study and save a sentence first.
-            </Banner>
+            <Alert variant="default"><AlertTitle>Nothing to listen to yet</AlertTitle><AlertDescription><div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="default" onClick={() => go("study")}>Go to Study</Button></div></AlertDescription></Alert>
           )}
-          {state === "error" && <Banner tone="error" title="Couldn’t start a session" live="assertive">{error}</Banner>}
+          {state === "error" && <Alert variant="destructive" role="alert"><AlertTitle>Couldn’t start a session</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
           {state !== "loading" && (
-            <div className="btn-row">
-              <Button kind="primary" onClick={() => void begin()}>{state === "error" ? "Retry" : "Start listening"}</Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="default" onClick={() => void begin()}>{state === "error" ? "Retry" : "Start listening"}</Button>
             </div>
           )}
-          <p className="t-support">Each clip is one of your saved or studied sentences, read by a French voice. The speed moves up as you get questions right.</p>
         </div>
       </div>
     );
@@ -102,44 +103,39 @@ export function Listen() {
   const q = s.material.question;
   const step = answered ? 5 : done >= 3 ? 4 : s.revealed ? 3 : s.blind_self !== null ? 2 : 1;
   return (
-    <div className="page">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       {head}
-      <div className="stack gap-5">
-        <p className="row gap-2">
-          <Pill>Step {Math.min(step, 4)} of 4</Pill>
-          <span className="t-support">{["", "Listen without the text", "Read the text", "Listen again", "Answer the question", "Done"][step]}</span>
+      <div className="flex flex-col gap-6">
+        <p className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline">Step {Math.min(step, 4)} of 4</Badge>
+          <span className="text-sm text-muted-foreground">{["", "Listen without the text", "Read the text", "Listen again", "Answer the question", "Done"][step]}</span>
         </p>
 
         {step === 1 && (
-          <div className="stack gap-4">
+          <div className="flex flex-col gap-4">
             <ClipButton label="Play the clip" src={s.audio_url_normal} speed={1} onStart={() => setPlays((n) => n + 1)} />
-            <fieldset className="stack gap-2" style={{ border: 0, padding: 0, margin: 0 }} disabled={busy}>
-              <legend className="t-strong" style={{ marginBottom: 8 }}>How much did you understand?</legend>
+            <fieldset className="flex flex-col gap-2 border-0 p-0" disabled={busy}>
+              <legend className="mb-2 font-medium">How much did you understand?</legend>
+              <RadioGroup value={choice === null ? "" : String(choice)} onValueChange={(v) => setChoice(Number(v))} className="gap-2">
               {SELF.map((label, i) => (
-                <label key={label} className="option">
-                  <input type="radio" name="listen-self" checked={choice === i} onChange={() => setChoice(i)} />
+                <label key={label} className="flex items-center gap-3">
+                  <RadioGroupItem value={String(i)} />
                   <span>{label}</span>
                 </label>
               ))}
+              </RadioGroup>
             </fieldset>
-            <div className="btn-row">
-              <Button
-                kind="primary"
-                busy={busy}
-                disabledReason={!plays ? "Play the clip at least once." : choice === null ? "Choose how much you understood." : undefined}
-                onClick={() => void act(() => listenBlind(s.id, choice as 0 | 1 | 2, plays), "Saved.")}
-              >
-                Continue
-              </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="default" aria-disabled={(!!(busy) || !!(!plays ? "Play the clip at least once." : choice === null ? "Choose how much you understood." : undefined)) || undefined} aria-busy={busy || undefined} className={cn((!!(busy) || !!(!plays ? "Play the clip at least once." : choice === null ? "Choose how much you understood." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(busy) || !!(!plays ? "Play the clip at least once." : choice === null ? "Choose how much you understood." : undefined)) { event.preventDefault(); return; } (() => void act(() => listenBlind(s.id, choice as 0 | 1 | 2, plays), "Saved."))(); }}>{busy ? <Loader2 className="animate-spin" aria-hidden /> : null}Continue{(!plays ? "Play the clip at least once." : choice === null ? "Choose how much you understood." : undefined) ? <span className="sr-only">{!plays ? "Play the clip at least once." : choice === null ? "Choose how much you understood." : undefined}</span> : null}</Button>
             </div>
           </div>
         )}
 
         {step === 2 && (
-          <div className="stack gap-3">
-            <p className="t-support">You said you understood: <span className="t-strong">{SELF[s.blind_self ?? 0].toLowerCase()}</span>.</p>
-            <div className="btn-row">
-              <Button kind="primary" busy={busy} onClick={() => void act(() => listenReveal(s.id), "Text shown.")}>Show the text</Button>
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-muted-foreground">You said you understood: <span className="font-medium">{SELF[s.blind_self ?? 0].toLowerCase()}</span>.</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="default" aria-disabled={(!!(busy)) || undefined} aria-busy={busy || undefined} className={cn((!!(busy)) ? "opacity-50" : "")} onClick={(event) => { if (!!(busy)) { event.preventDefault(); return; } (() => void act(() => listenReveal(s.id), "Text shown."))(); }}>{busy ? <Loader2 className="animate-spin" aria-hidden /> : null}Show the text</Button>
             </div>
             {busy && <Spinner label="Preparing the text and word notes…" />}
           </div>
@@ -148,8 +144,8 @@ export function Listen() {
         {step >= 3 && <Transcript s={s} />}
 
         {step === 3 && (
-          <div className="stack gap-3">
-            <p className="t-strong">Listen again while reading · {done} of 3</p>
+          <div className="flex flex-col gap-3">
+            <p className="font-medium">Listen again while reading · {done} of 3</p>
             <ClipButton
               key={done}
               label={`Play · ${RELISTEN[done]}`}
@@ -157,45 +153,45 @@ export function Listen() {
               speed={1}
               onEnded={() => void act(() => listenRelisten(s.id, done), done === 2 ? "Question unlocked." : undefined)}
             />
-            <p className="t-meta">The question unlocks after you’ve listened all the way through three times: once slow, then twice at normal speed.</p>
+
           </div>
         )}
 
         {step >= 4 && q.options.length > 0 && (
-          <fieldset className="stack gap-2" style={{ border: 0, padding: 0, margin: 0 }} disabled={answered || busy}>
-            <legend lang="fr" className="t-strong" style={{ marginBottom: 8 }}>{q.prompt}</legend>
+          <fieldset className="flex flex-col gap-2 border-0 p-0" disabled={answered || busy}>
+            <legend lang="fr" className="mb-2 font-medium">{q.prompt}</legend>
+            <RadioGroup value={choice === null ? "" : String(choice)} onValueChange={(v) => setChoice(Number(v))} className="gap-2">
             {q.options.map((o, i) => {
               const mine = answered ? s.answer_index === i : choice === i;
               const right = answered && q.answer_index === i;
               return (
-                <label key={i} className="option">
-                  <input type="radio" name="listen-q" checked={mine} onChange={() => setChoice(i)} />
+                <label key={i} className="flex items-center gap-3">
+                  <RadioGroupItem value={String(i)} />
                   <span lang="fr">{o}{right ? " — correct answer" : ""}{answered && mine && !right ? " — your answer" : ""}</span>
                 </label>
               );
             })}
+            </RadioGroup>
           </fieldset>
         )}
 
         {step === 4 && (
-          <div className="btn-row">
-            <Button kind="primary" busy={busy} disabledReason={choice === null ? "Choose an answer first." : undefined} onClick={() => void act(() => listenCheck(s.id, choice!), "Answer checked.")}>Check</Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="default" aria-disabled={(!!(busy) || !!(choice === null ? "Choose an answer first." : undefined)) || undefined} aria-busy={busy || undefined} className={cn((!!(busy) || !!(choice === null ? "Choose an answer first." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(busy) || !!(choice === null ? "Choose an answer first." : undefined)) { event.preventDefault(); return; } (() => void act(() => listenCheck(s.id, choice!), "Answer checked."))(); }}>{busy ? <Loader2 className="animate-spin" aria-hidden /> : null}Check{(choice === null ? "Choose an answer first." : undefined) ? <span className="sr-only">{choice === null ? "Choose an answer first." : undefined}</span> : null}</Button>
           </div>
         )}
 
         {answered && (
-          <div className="stack gap-3">
-            <Banner tone={s.result!.correct ? "success" : "error"} title={s.result!.correct ? "Correct" : "Not this time"} live="polite">
-              {q.explanation && <span lang="fr">{q.explanation}</span>}
-            </Banner>
-            <div className="btn-row">
-              <Button kind="primary" onClick={() => void begin()}>Next clip</Button>
-              <Button kind="secondary" onClick={() => go("practice")}>Back to Practice</Button>
+          <div className="flex flex-col gap-3">
+            <Alert variant={s.result!.correct ? "default" : "destructive"} role="status"><AlertTitle>{s.result!.correct ? "Correct" : "Not this time"}</AlertTitle><AlertDescription>{q.explanation && <span lang="fr">{q.explanation}</span>}</AlertDescription></Alert>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="default" onClick={() => void begin()}>Next clip</Button>
+              <Button type="button" variant="outline" onClick={() => go("practice")}>Back to Practice</Button>
             </div>
           </div>
         )}
 
-        {error && <Banner tone="error" title="That didn’t work" live="assertive">{error}</Banner>}
+        {error && <Alert variant="destructive" role="alert"><AlertTitle>That didn’t work</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
       </div>
     </div>
   );
@@ -205,15 +201,15 @@ function Transcript({ s }: { s: ListeningSession }) {
   const m = s.material;
   const words = m.words.filter((w) => w.ipa || (w.en && w.en !== PLACEHOLDER_GLOSS)).slice(0, 12);
   return (
-    <section className="panel stack gap-3" aria-label="Text of the clip">
-      <p lang="fr" className="t-fr-lg">{m.text}</p>
-      {(m.translation_en || m.breakdown) && <p className="t-support">{m.translation_en || m.breakdown}</p>}
+    <section className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-3" aria-label="Text of the clip">
+      <p lang="fr" className="font-serif text-2xl leading-snug wrap-break-word">{m.text}</p>
+      {(m.translation_en || m.breakdown) && <p className="text-sm text-muted-foreground">{m.translation_en || m.breakdown}</p>}
       {words.length > 0 && (
-        <ul className="stack gap-1" style={{ paddingLeft: 20 }}>
+        <ul className="flex flex-col gap-1" style={{ paddingLeft: 20 }}>
           {words.map((w, i) => (
             <li key={i}>
-              <span lang="fr" className="t-strong">{w.w}</span>
-              {formatFriendlyPhonetic(w.ipa) && <span className="t-meta"> {formatFriendlyPhonetic(w.ipa)}</span>}
+              <span lang="fr" className="font-medium">{w.w}</span>
+              {formatFriendlyPhonetic(w.ipa) && <span className="text-xs leading-4 text-muted-foreground"> {formatFriendlyPhonetic(w.ipa)}</span>}
               {w.en && w.en !== PLACEHOLDER_GLOSS && <span> — {w.en}</span>}
             </li>
           ))}
@@ -254,14 +250,12 @@ function ClipButton({ label, src, speed, onStart, onEnded }: { label: string; sr
   };
 
   return (
-    <div className="stack gap-2">
-      <div className="btn-row">
-        <Button kind="secondary" icon={mine?.status === "playing" ? <Pause aria-hidden /> : <Play aria-hidden />} busy={mine?.status === "loading"} onClick={click}>
-          {mine?.status === "playing" ? "Pause" : mine?.status === "ended" ? "Play again" : label}
-        </Button>
-        {mine && <span className="t-support num">{fmtClock(mine.position)} / {fmtClock(mine.duration)}</span>}
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="button" variant="outline" aria-disabled={(!!(mine?.status === "loading")) || undefined} aria-busy={mine?.status === "loading" || undefined} className={cn((!!(mine?.status === "loading")) ? "opacity-50" : "")} onClick={(event) => { if (!!(mine?.status === "loading")) { event.preventDefault(); return; } (click)(); }}>{mine?.status === "loading" ? <Loader2 className="animate-spin" aria-hidden /> : (mine?.status === "playing" ? <Pause aria-hidden /> : <Play aria-hidden />)}{mine?.status === "playing" ? "Pause" : mine?.status === "ended" ? "Play again" : label}</Button>
+        {mine && <span className="text-sm text-muted-foreground tabular-nums">{fmtClock(mine.position)} / {fmtClock(mine.duration)}</span>}
       </div>
-      {mine?.status === "error" && <Banner tone="error" title="The clip couldn’t play" live="assertive" actions={<Button kind="secondary" onClick={retry}>Retry</Button>}>Your progress is kept.</Banner>}
+      {mine?.status === "error" && <Alert variant="destructive" role="alert"><AlertTitle>The clip couldn’t play</AlertTitle><AlertDescription>Your progress is kept.<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={retry}>Retry</Button></div></AlertDescription></Alert>}
     </div>
   );
 }

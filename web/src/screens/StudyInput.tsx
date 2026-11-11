@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Camera, ChevronLeft, Image as ImageIcon, Mic2, PenLine, Trash2, X, Headphones } from "lucide-react";
+import { ArrowDown, ArrowUp, Camera, ChevronLeft, Image as ImageIcon, Mic2, PenLine, Trash2, X, Headphones, Loader2 } from "lucide-react";
 import { StudyReviewNotice } from "../components/StudyReviewNotice";
 import { ApiError } from "../api/client";
 import { photoExtract, photoToDataUrl } from "../api/study";
@@ -8,7 +8,11 @@ import { EXAMPLE_TEXT, IDEAS_EXAMPLE, OCR_LIMIT } from "../data/fixtures";
 import { nf, plural } from "../lib/format";
 import { LIMITS, STAGES, cancelAnalysis, openAnalysisInStudy, runAnalysis, validate } from "../state/study";
 import { announce, get, go, patchStudy, useApp } from "../state/store";
-import { Banner, Button, Dialog, DisabledReason, PageHead, Segmented, Spinner } from "../components/ui";
+import { Checkbox, Collapsible, CollapsibleContent, CollapsibleTrigger, Dialog, DisabledReason, Input, PageHead, Spinner, Textarea } from "../components/ui";
+import { Button } from "../components/ui/button";
+import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
+import { ToggleGroup, ToggleGroupItem } from "../components/ui/toggle-group";
+import { cn } from "cn";
 
 /* After a reload nothing is open in Study: offer the newest saved analysis once per visit. */
 let lastOffer: { status: "idle" | "loading" | "done"; record?: StudyRecord; dismissed?: boolean } = { status: "idle" };
@@ -65,53 +69,42 @@ export function StudyInput() {
     patchStudy({ drafts: { ...study.drafts, [mode]: val }, analysis: a.status === "invalid" ? { ...a, status: "idle" } : a });
   };
   const reason =
-    v === "empty"
-      ? "Enter some text first. Empty or space-only text can’t be analysed."
-      : v === "over"
-        ? `Shorten the text to ${nf.format(limit)} characters or fewer.`
-        : busy
-          ? "Analysis is in progress."
-          : undefined;
+    v === "over"
+      ? `Shorten the text to ${nf.format(limit)} characters or fewer.`
+      : busy
+        ? "Analysis is in progress."
+        : undefined;
 
   return (
-    <div className="page page--wide study-home">
-      <PageHead
-        title="Study"
-        desc="Paste French, or an idea you want to say."
-        actions={study.sentences.length > 0 && !busy ? <Button kind="tertiary" onClick={() => go("study")}>Back to current sentence</Button> : undefined}
-      />
-      <div className="stack gap-4">
-        <div className="panel stack gap-4 study-composer">
-          <Segmented
-            label="Input mode"
-            value={mode}
-            onChange={(m) => patchStudy({ mode: m })}
-            options={[
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 study-home">
+      <header className="mb-6 flex flex-col gap-2">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h1 className="text-xl font-semibold tracking-tight text-balance" tabIndex={-1} data-page-title>Study</h1>
+          {study.sentences.length > 0 && !busy && <Button type="button" variant="ghost" onClick={() => go("study")}>Back to current sentence</Button>}
+        </div>
+      </header>
+      <div className="flex flex-col gap-4">
+        <section className="flex flex-col gap-4 rounded-xl border bg-card p-4" aria-labelledby="start-h">
+          <h2 id="start-h" className="text-lg font-semibold text-balance">Start</h2>
+          <ToggleGroup type="single" variant="outline" value={mode} onValueChange={(next) => { if (next === "text" || next === "ideas") patchStudy({ mode: next }); }} aria-label="Input mode" className="flex w-full">{([
               { value: "text", label: "Study French text" },
               { value: "ideas", label: "Practise my own ideas" },
-            ]}
-          />
-          <div className="field">
-            <label htmlFor="study-input" className="field-label">
+            ]).map((o) => (<ToggleGroupItem key={o.value} value={o.value} className="flex-1">{o.label}</ToggleGroupItem>))}</ToggleGroup>
+          <div className="grid gap-2">
+            <label htmlFor="study-input" className="text-sm font-medium">
               {mode === "text" ? "French text" : "Your idea"}
             </label>
-            <p id="study-help" className="field-help">
-              {mode === "text"
-                ? `Up to ${nf.format(limit)} characters. Paste or drop a screenshot to import it.`
-                : `One idea, in English or simple French. Up to ${limit} characters.`}
-            </p>
-            <textarea
+            <Textarea
               id="study-input"
               name="study-draft"
               autoComplete="off"
               ref={taRef}
-              className="textarea"
               lang={mode === "text" ? "fr" : "en"}
-              rows={mode === "text" ? 12 : 8}
+              rows={mode === "text" ? 7 : 5}
               placeholder={mode === "text" ? "e.g. J’ai failli oublier…" : "e.g. I almost forgot the meeting…"}
               value={draft}
               aria-invalid={v === "over" || a.status === "invalid" ? true : undefined}
-              aria-describedby={`study-help study-count${a.status === "invalid" ? " study-err" : ""}`}
+              aria-describedby={`study-count${a.status === "invalid" ? " study-err" : ""}`}
               onPaste={(e) => {
                 const file = Array.from(e.clipboardData.files).find((f) => f.type.startsWith("image/"));
                 if (file) { e.preventDefault(); importPhoto(file); }
@@ -126,102 +119,66 @@ export function StudyInput() {
               onChange={(e) => setDraft(e.target.value)}
               disabled={busy}
             />
-            <div className="row row--between">
-              <span id="study-count" className={v === "over" ? "counter counter--over" : "counter"}>
-                {nf.format(draft.length)} / {nf.format(limit)} characters{v === "over" ? ` · ${nf.format(draft.length - limit)} over the limit` : ""}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span id="study-count" className={v === "over" ? "text-sm font-medium tabular-nums text-destructive" : "text-sm tabular-nums text-muted-foreground"}>
+                {nf.format(draft.length)} / {nf.format(limit)}
               </span>
-              <span className="btn-row">
-                <Button kind="tertiary" onClick={() => setDraft(mode === "text" ? EXAMPLE_TEXT : IDEAS_EXAMPLE)} disabled={busy}>
-                  Use example
-                </Button>
-                <Button kind="tertiary" onClick={() => setConfirmClear(true)} disabledReason={!draft ? "Nothing to clear." : busy ? "Analysis is in progress." : undefined}>
-                  Clear
-                </Button>
+              <span className="flex flex-wrap items-center gap-2">
+                <Button type="button" variant="ghost" aria-disabled={(!!(busy)) || undefined} className={cn((!!(busy)) ? "opacity-50" : "")} onClick={(event) => { if (!!(busy)) { event.preventDefault(); return; } (() => setDraft(mode === "text" ? EXAMPLE_TEXT : IDEAS_EXAMPLE))(); }}>Use example</Button>
+                <Button type="button" variant="ghost" aria-disabled={(!!(!draft ? "Nothing to clear." : busy ? "Analysis is in progress." : undefined)) || undefined} className={cn((!!(!draft ? "Nothing to clear." : busy ? "Analysis is in progress." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(!draft ? "Nothing to clear." : busy ? "Analysis is in progress." : undefined)) { event.preventDefault(); return; } (() => setConfirmClear(true))(); }}>Clear{(!draft ? "Nothing to clear." : busy ? "Analysis is in progress." : undefined) ? <span className="sr-only">{!draft ? "Nothing to clear." : busy ? "Analysis is in progress." : undefined}</span> : null}</Button>
               </span>
             </div>
             {a.status === "invalid" && (
-              <p id="study-err" className="field-error" role="alert">
+              <p id="study-err" className="text-sm text-destructive" role="alert">
                 This text has no letters. Enter French words or sentences to analyse.
               </p>
             )}
-            {v === "over" && <p className="field-error">This is longer than {nf.format(limit)} characters. Remove some text to continue.</p>}
+            {v === "over" && <p className="text-sm text-destructive">This is longer than {nf.format(limit)} characters. Remove some text to continue.</p>}
           </div>
 
-          {photoError && <Banner tone="error" title="Couldn’t import image">{photoError}</Banner>}
+          {photoError && <Alert variant="destructive"><AlertTitle>Couldn’t import image</AlertTitle><AlertDescription>{photoError}</AlertDescription></Alert>}
           <AnalysisStatus />
 
-          <div className="sticky-actions" style={{ background: "var(--surface)" }}>
-            <div className="btn-row">
-              <Button kind="primary" onClick={() => runAnalysis(source)} disabledReason={reason} busy={busy}>
-                {busy ? "Analysing…" : mode === "text" ? "Analyse text" : "Create French example"}
-              </Button>
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="default" aria-disabled={(!!(v === "empty") || !!(busy) || !!(reason)) || undefined} aria-busy={busy || undefined} className={cn((!!(v === "empty") || !!(busy) || !!(reason)) ? "opacity-50" : "")} onClick={(event) => { if (!!(v === "empty") || !!(busy) || !!(reason)) { event.preventDefault(); return; } (() => runAnalysis(source))(); }}>{busy ? <Loader2 className="animate-spin" aria-hidden /> : null}{busy ? "Analysing…" : mode === "text" ? "Analyse text" : "Create French example"}{(reason) ? <span className="sr-only">{reason}</span> : null}</Button>
               {mode === "text" && (
-                <Button kind="secondary" icon={<Camera aria-hidden />} onClick={() => { patchStudy({ ocr: { ...study.ocr, phase: study.ocr.phase === "results" ? "results" : "select" } }); go("study/photo"); }} disabled={busy}>
-                  Import from photo
-                </Button>
+                <Button type="button" variant="outline" aria-disabled={(!!(busy)) || undefined} className={cn((!!(busy)) ? "opacity-50" : "")} onClick={(event) => { if (!!(busy)) { event.preventDefault(); return; } (() => { patchStudy({ ocr: { ...study.ocr, phase: study.ocr.phase === "results" ? "results" : "select" } }); go("study/photo"); })(); }}>{<Camera aria-hidden />}Import from photo</Button>
               )}
             </div>
-            {reason && !busy && <DisabledReason>{reason}</DisabledReason>}
+            {v === "over" && !busy && <DisabledReason>{reason}</DisabledReason>}
           </div>
-        </div>
-
-        <div className="study-home-tools">
-          <StudyReviewNotice />
-          <div className="btn-row">
-            <Button kind="secondary" onClick={() => go("study/personal")}>Practise my own words</Button>
-            <Button kind="secondary" onClick={() => go("study/grammar")}>My grammar map</Button>
-          </div>
-        </div>
-        {last.record && !busy && (
-          <Banner
-            tone="info"
-            title="Pick up where you left off?"
-            actions={
-              <>
-                <Button kind="secondary" onClick={() => last.record && openAnalysisInStudy(last.record)}>Open last analysis</Button>
-                <Button kind="tertiary" onClick={last.dismiss}>Dismiss</Button>
-              </>
-            }
-          >
-            <span className="meta-row">
-              <span>{fmtWhen(last.record.created_at)}</span>
-              <span>{plural(sentenceCount(last.record), "sentence")} saved</span>
-            </span>
-          </Banner>
-        )}
-        {(study.restored || forced === "restored") && draft.trim() && (
-          <Banner
-            tone="info"
-            title="Draft restored"
-            actions={<Button kind="tertiary" onClick={() => patchStudy({ restored: false })}>Dismiss</Button>}
-          >
-            Your earlier text is still here, in “{mode === "ideas" ? "Practise my own ideas" : "Study French text"}”. Each mode keeps its own draft.
-          </Banner>
-        )}
-
-        <section className="section" aria-labelledby="prl-h">
-          <h2 id="prl-h" className="t-section">Practise without new text</h2>
-          <ul className="list study-side-actions">
-            <li>
-              <button className="list-btn" onClick={() => go("study/recall")}>
-                <span className="dest-icon"><PenLine aria-hidden /></span>
-                <span className="grow stack">
-                  <span className="t-strong">Recall</span>
-                  <span className="t-support">See the English meaning, type the French.</span>
-                </span>
-              </button>
-            </li>
-            <li>
-              <button className="list-btn" onClick={() => go("study/dictation")}>
-                <span className="dest-icon"><Headphones aria-hidden /></span>
-                <span className="grow stack">
-                  <span className="t-strong">Dictation</span>
-                  <span className="t-support">Listen to practice audio, type what you hear.</span>
-                </span>
-              </button>
-            </li>
-          </ul>
         </section>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          {last.record && !busy && (
+            <section className="flex flex-col items-start gap-2 rounded-xl border bg-card p-4" aria-label="Continue">
+              <p className="text-xs font-medium text-muted-foreground">Continue</p>
+              <p className="font-medium">{plural(sentenceCount(last.record), "sentence")} saved</p>
+              <p className="inline-flex items-baseline gap-1.5 text-sm">{fmtWhen(last.record.created_at)}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" variant="outline" onClick={() => last.record && openAnalysisInStudy(last.record)}>Continue</Button>
+                <Button type="button" variant="ghost" onClick={last.dismiss}>Dismiss</Button>
+              </div>
+            </section>
+          )}
+          <StudyReviewNotice />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="ghost" onClick={() => go("study/personal")}>Practise my own words</Button>
+          <Button type="button" variant="ghost" onClick={() => go("study/grammar")}>My grammar map</Button>
+        </div>
+        {(study.restored || forced === "restored") && draft.trim() && (
+          <Alert variant="default"><AlertTitle>Draft restored</AlertTitle><AlertDescription>Your earlier text is still here, in “{mode === "ideas" ? "Practise my own ideas" : "Study French text"}”. Each mode keeps its own draft.<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="ghost" onClick={() => patchStudy({ restored: false })}>Dismiss</Button></div></AlertDescription></Alert>
+        )}
+
+        <Collapsible className="rounded-lg border px-4">
+          <CollapsibleTrigger id="prl-h" className="flex min-h-11 w-full items-center text-sm font-medium">Practise without new text</CollapsibleTrigger>
+          <CollapsibleContent className="flex flex-wrap items-center gap-2 pb-4">
+            <Button type="button" variant="outline" onClick={() => go("study/recall")}>{<PenLine aria-hidden />}Recall</Button>
+            <Button type="button" variant="outline" onClick={() => go("study/dictation")}>{<Headphones aria-hidden />}Dictation</Button>
+          </CollapsibleContent>
+        </Collapsible>
       </div>
 
       {confirmClear && (
@@ -230,19 +187,13 @@ export function StudyInput() {
           onClose={() => setConfirmClear(false)}
           footer={
             <>
-              <Button kind="secondary" onClick={() => setConfirmClear(false)} data-autofocus>Cancel</Button>
-              <Button
-                kind="destructive"
-                icon={<Trash2 aria-hidden />}
-                onClick={() => {
+              <Button type="button" variant="outline" data-autofocus onClick={() => setConfirmClear(false)}>Cancel</Button>
+              <Button type="button" variant="destructive" onClick={() => {
                   patchStudy({ drafts: { ...get().study.drafts, [mode]: "" }, restored: false });
                   setConfirmClear(false);
                   announce("Draft cleared.");
                   taRef.current?.focus();
-                }}
-              >
-                Clear draft
-              </Button>
+                }}>{<Trash2 aria-hidden />}Clear draft</Button>
             </>
           }
         >
@@ -260,12 +211,10 @@ function AnalysisStatus() {
   const mode = useApp((s) => s.study.mode);
   if (a.status === "running" || a.status === "long")
     return (
-      <div className="stack gap-3" aria-live="polite">
-        <div className="row row--between">
+      <div className="flex flex-col gap-3" aria-live="polite">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <Spinner label={`Analysing · ${STAGES[a.stage]}`} />
-          <Button kind="secondary" icon={<X aria-hidden />} onClick={cancelAnalysis}>
-            Cancel
-          </Button>
+          <Button type="button" variant="outline" onClick={cancelAnalysis}>{<X aria-hidden />}Cancel</Button>
         </div>
         <ol className="stage-list" aria-label="Analysis stages">
           {STAGES.map((st, i) => (
@@ -276,29 +225,21 @@ function AnalysisStatus() {
           ))}
         </ol>
         {a.status === "long" && (
-          <Banner tone="info" title="This is taking longer than usual">
-            Long texts are analysed a few sentences at a time. You can keep waiting or cancel — your text stays here either way.
-          </Banner>
+          <Alert variant="default"><AlertTitle>This is taking longer than usual</AlertTitle><AlertDescription>Long texts are analysed a few sentences at a time. You can keep waiting or cancel — your text stays here either way.</AlertDescription></Alert>
         )}
       </div>
     );
   if (a.status === "cancelled")
     return (
-      <Banner tone="neutral" title="Analysis cancelled" live="polite">
-        Your text is kept. A cancelled result will never replace newer content.
-      </Banner>
+      <Alert variant="default" role="status"><AlertTitle>Analysis cancelled</AlertTitle><AlertDescription>Your text is kept. A cancelled result will never replace newer content.</AlertDescription></Alert>
     );
   if (a.status === "failed")
     return (
-      <Banner tone="error" title="Analysis did not finish" live="assertive" actions={<Button kind="secondary" onClick={() => runAnalysis(mode === "ideas" ? "My own idea" : "Pasted text")}>Retry</Button>}>
-        {a.error ?? "The analysis service didn’t respond."} Your text is kept exactly as you typed it.
-      </Banner>
+      <Alert variant="destructive" role="alert"><AlertTitle>Analysis did not finish</AlertTitle><AlertDescription>{a.error ?? "The analysis service didn’t respond."} Your text is kept exactly as you typed it.<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={() => runAnalysis(mode === "ideas" ? "My own idea" : "Pasted text")}>Retry</Button></div></AlertDescription></Alert>
     );
   if (a.status === "nofrench")
     return (
-      <Banner tone="warning" title="No usable French sentences found" live="polite">
-        No French sentences were found in this text. Check that it’s in French, or switch to “Practise my own ideas” to start from English.
-      </Banner>
+      <Alert variant="default" role="status"><AlertTitle>No usable French sentences found</AlertTitle><AlertDescription>No French sentences were found in this text. Check that it’s in French, or switch to “Practise my own ideas” to start from English.</AlertDescription></Alert>
     );
   return null;
 }
@@ -377,22 +318,19 @@ export function StudyPhoto() {
   };
 
   const back = (
-    <Button kind="tertiary" className="btn--sm-text" icon={<ChevronLeft aria-hidden />} onClick={() => go("study/new")} style={{ alignSelf: "flex-start", marginLeft: -12 }}>
-      Back to text input
-    </Button>
+    <Button type="button" variant="ghost" className="h-8 self-start px-2 text-sm md:-ml-3" onClick={() => go("study/new")}>{<ChevronLeft aria-hidden />}Back to text input</Button>
   );
 
   if (ocr.phase === "results") return <OcrResults back={back} photoTitle={photo?.file.name ?? "your photo"} />;
 
   const busy = ocr.phase === "processing";
   return (
-    <div className="page">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <PageHead
         back={back}
         title="Import from photo"
-        desc="Take or choose a photo of French text — a page, a sign, your notes. We find the French sentences; you check them before studying."
       />
-      <div className="stack gap-5">
+      <div className="flex flex-col gap-6">
         <input
           ref={inputRef}
           type="file"
@@ -406,64 +344,46 @@ export function StudyPhoto() {
           }}
         />
         {photo ? (
-          <div className="panel stack gap-3">
+          <div className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-3">
             <img src={photo.url} alt="The photo you chose" style={{ maxWidth: "100%", maxHeight: 320, objectFit: "contain", borderRadius: 8, alignSelf: "flex-start" }} />
-            <div className="row gap-2">
-              <span className="t-support grow">{photo.file.name}</span>
-              <Button kind="tertiary" className="btn--sm-text" icon={<ImageIcon aria-hidden />} disabled={busy} onClick={() => inputRef.current?.click()}>
-                Choose another photo
-              </Button>
+            <div className="flex flex-wrap items-center gap-2 gap-2">
+              <span className="text-sm text-muted-foreground min-w-0 flex-1">{photo.file.name}</span>
+              <Button type="button" variant="ghost" aria-disabled={(!!(busy)) || undefined} className={cn((!!(busy)) ? "opacity-50" : "", "h-8 px-2 text-sm")} onClick={(event) => { if (!!(busy)) { event.preventDefault(); return; } (() => inputRef.current?.click())(); }}>{<ImageIcon aria-hidden />}Choose another photo</Button>
             </div>
           </div>
         ) : (
-          <button type="button" className="photo-card" onClick={() => inputRef.current?.click()}>
-            <span className="photo-thumb" aria-hidden>
+          <Button type="button" variant="outline" className="h-auto flex-col items-start gap-2 p-3 text-left" onClick={() => inputRef.current?.click()}><span className="grid aspect-4/3 w-full place-items-center rounded-md bg-muted text-xs text-muted-foreground" aria-hidden>
               <Camera width={28} height={28} />
             </span>
-            <span className="t-strong">Take or choose a photo</span>
-            <span className="t-support">JPEG or PNG recommended. Other image formats depend on your browser. Large photos are resized before upload.</span>
-          </button>
+            Take or choose a photo</Button>
         )}
 
         {busy && (
-          <div className="row row--between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <Spinner label={`${photoStage}…`} />
-            <Button kind="secondary" icon={<X aria-hidden />} onClick={cancel}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={cancel}>{<X aria-hidden />}Cancel</Button>
           </div>
         )}
-        {error && ocr.phase !== "failed" && <p className="field-error" role="alert">{error}</p>}
+        {error && ocr.phase !== "failed" && <p className="text-sm text-destructive" role="alert">{error}</p>}
         {ocr.phase === "cancelled" && (
-          <Banner tone="neutral" title="Import cancelled" live="polite">
-            Nothing was lost. Your photo is still selected — read it again, or choose another one.
-          </Banner>
+          <Alert variant="default" role="status"><AlertTitle>Import cancelled</AlertTitle><AlertDescription>Nothing was lost. Your photo is still selected — read it again, or choose another one.</AlertDescription></Alert>
         )}
         {ocr.phase === "failed" && (
-          <Banner tone="error" title="This photo couldn’t be read" live="assertive">
-            {error || "The text reader didn’t respond."} Your photo is kept; try again.
-          </Banner>
+          <Alert variant="destructive" role="alert"><AlertTitle>This photo couldn’t be read</AlertTitle><AlertDescription>{error || "The text reader didn’t respond."} Your photo is kept; try again.</AlertDescription></Alert>
         )}
         {ocr.phase === "none" && (
-          <Banner
-            tone="warning"
-            title="No French text found"
-            live="polite"
-            actions={<Button kind="tertiary" onClick={() => go("study/new")}>Type text instead</Button>}
-          >
-            No French was found in this photo. Try a sharper, closer photo.
-          </Banner>
+          <Alert variant="default" role="status"><AlertTitle>No French text found</AlertTitle><AlertDescription>No French was found in this photo. Try a sharper, closer photo.<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="ghost" onClick={() => go("study/new")}>Type text instead</Button></div></AlertDescription></Alert>
         )}
 
         {!busy && (
-          <div className="stack gap-2">
-            <div className="btn-row">
-              <Button kind="primary" onClick={start} disabledReason={!photo ? "Choose a photo first." : undefined}>
-                {ocr.phase === "failed" || ocr.phase === "cancelled" ? "Try again" : "Read text from photo"}
-              </Button>
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="default" aria-disabled={(!!(!photo ? "Choose a photo first." : undefined)) || undefined} className={cn((!!(!photo ? "Choose a photo first." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(!photo ? "Choose a photo first." : undefined)) { event.preventDefault(); return; } (start)(); }}>{ocr.phase === "failed" || ocr.phase === "cancelled" ? "Try again" : "Read text from photo"}{(!photo ? "Choose a photo first." : undefined) ? <span className="sr-only">{!photo ? "Choose a photo first." : undefined}</span> : null}</Button>
             </div>
-            {!photo && <DisabledReason>Choose a photo first.</DisabledReason>}
+
           </div>
         )}
-        <p className="note"><Mic2 aria-hidden /> The photo is sent to the AI text reader only to find its words. This app doesn’t keep it.</p>
+        <p className="flex items-start gap-2 text-sm text-muted-foreground"><Mic2 aria-hidden /> The photo is sent to the AI text reader only to find its words. This app doesn’t keep it.</p>
       </div>
     </div>
   );
@@ -489,77 +409,57 @@ function OcrResults({ back, photoTitle }: { back: React.ReactNode; photoTitle: s
   const reason = !selected.length ? "Select at least one sentence." : textOver ? "Shorten the selected text to 15,000 characters or fewer." : over ? `Select ${OCR_LIMIT} or fewer sentences. Deselect ${selected.length - OCR_LIMIT} to continue.` : undefined;
 
   return (
-    <div className="page">
-      <PageHead back={back} title="Check the text we found" desc={`From ${photoTitle}. Fix any mistakes, choose the sentences to study, and put them in order.`} />
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+      <PageHead back={back} title="Check the text we found" desc={photoTitle} />
       <h2 id="ocr-results-h" tabIndex={-1} className="sr-only">Recognised sentences</h2>
-      <div className="stack gap-4">
+      <div className="flex flex-col gap-4">
         {(ocr.partial || forced === "partial") && (
-          <Banner tone="warning" title="Only part of the photo could be read">
-            We found {plural(lines.length, "sentence")}. Some text may be missing. You can continue with what was found or add text by hand later.
-          </Banner>
+          <Alert variant="default"><AlertTitle>Only part of the photo could be read</AlertTitle><AlertDescription>We found {plural(lines.length, "sentence")}. Some text may be missing. You can continue with what was found or add text by hand later.</AlertDescription></Alert>
         )}
         {over && (
-          <Banner tone="warning" title={`You can study up to ${OCR_LIMIT} sentences at a time`} live="polite">
-            {selected.length} are selected. Deselect {selected.length - OCR_LIMIT} to continue — removed items stay out of this import only.
-          </Banner>
+          <Alert variant="default" role="status"><AlertTitle>{`You can study up to ${OCR_LIMIT} sentences at a time`}</AlertTitle><AlertDescription>{selected.length} are selected. Deselect {selected.length - OCR_LIMIT} to continue — removed items stay out of this import only.</AlertDescription></Alert>
         )}
-        <p className="t-strong" aria-live="polite">
+        <p className="font-medium" aria-live="polite">
           {selected.length} of {plural(lines.length, "sentence")} selected
         </p>
         {lines.length === 0 ? (
-          <Banner tone="neutral" title="No sentences left in this import" actions={<Button kind="secondary" onClick={() => patchStudy({ ocr: { ...ocr, phase: "select" } })}>Choose another photo</Button>}>
-            You removed every sentence from this import.
-          </Banner>
+          <Alert variant="default"><AlertTitle>No sentences left in this import</AlertTitle><AlertDescription>You removed every sentence from this import.<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={() => patchStudy({ ocr: { ...ocr, phase: "select" } })}>Choose another photo</Button></div></AlertDescription></Alert>
         ) : (
-          <ol className="list" aria-label="Recognised sentences">
+          <ol className="divide-y overflow-hidden rounded-lg border" aria-label="Recognised sentences">
             {lines.map((l, i) => (
-              <li key={l.id} className="ocr-item">
-                <input
-                  type="checkbox"
+              <li key={l.id} className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 p-4">
+                <Checkbox
                   id={`ocr-sel-${l.id}`}
+                  className="mt-8"
                   checked={l.selected}
-                  onChange={(e) => patchLines(lines.map((x) => (x.id === l.id ? { ...x, selected: e.target.checked } : x)))}
-                  style={{ width: 22, height: 22, marginTop: 34, accentColor: "var(--primary)" }}
+                  onCheckedChange={(checked) => patchLines(lines.map((x) => (x.id === l.id ? { ...x, selected: checked === true } : x)))}
                   aria-label={`Include sentence ${i + 1}`}
                 />
-                <div className="stack gap-2">
-                  <label htmlFor={`ocr-text-${l.id}`} className="t-label">
+                <div className="flex flex-col gap-2">
+                  <label htmlFor={`ocr-text-${l.id}`} className="text-sm font-medium">
                     Sentence {i + 1}
                   </label>
-                  <input
+                  <Input
                     id={`ocr-text-${l.id}`}
-                    className="input"
                     lang="fr"
                     value={l.text}
                     aria-describedby={l.low ? `ocr-low-${l.id}` : undefined}
                     onChange={(e) => patchLines(lines.map((x) => (x.id === l.id ? { ...x, text: e.target.value, low: undefined } : x)))}
                   />
-                  {l.accentFrom && <p className="t-support">Accents corrected from: <span lang="fr">{l.accentFrom}</span>. Check the spelling before continuing.</p>}
+                  {l.accentFrom && <p className="text-sm text-muted-foreground">Accents corrected from: <span lang="fr">{l.accentFrom}</span>. Check the spelling before continuing.</p>}
                   {l.low && (
-                    <p id={`ocr-low-${l.id}`} className="t-support" style={{ color: "var(--warning)" }}>
-                      Low confidence: <span className="low-conf" lang="fr">{l.low.join(", ")}</span> — please check {l.low.length > 1 ? "these words" : "this word"}.
+                    <p id={`ocr-low-${l.id}`} className="text-sm text-muted-foreground" style={{ color: "var(--warning)" }}>
+                      Low confidence: <span className="underline decoration-wavy underline-offset-4" lang="fr">{l.low.join(", ")}</span> — please check {l.low.length > 1 ? "these words" : "this word"}.
                     </p>
                   )}
                   <div className="ocr-tools">
-                    <Button id={`ocr-move-${l.id}-up`} kind="tertiary" className="btn--sm-text" icon={<ArrowUp aria-hidden />} aria-label={`Move sentence ${i + 1} up`} disabledReason={i === 0 ? "Already first." : undefined} onClick={() => move(i, -1)}>
-                      Up
-                    </Button>
-                    <Button id={`ocr-move-${l.id}-down`} kind="tertiary" className="btn--sm-text" icon={<ArrowDown aria-hidden />} aria-label={`Move sentence ${i + 1} down`} disabledReason={i === lines.length - 1 ? "Already last." : undefined} onClick={() => move(i, 1)}>
-                      Down
-                    </Button>
-                    <Button
-                      kind="tertiary"
-                      className="btn--sm-text"
-                      icon={<Trash2 aria-hidden />}
-                      aria-label={`Remove sentence ${i + 1} from this import`}
-                      onClick={() => {
+                    <Button type="button" variant="ghost" aria-disabled={(!!(i === 0 ? "Already first." : undefined)) || undefined} id={`ocr-move-${l.id}-up`} aria-label={`Move sentence ${i + 1} up`} className={cn((!!(i === 0 ? "Already first." : undefined)) ? "opacity-50" : "", "h-8 px-2 text-sm")} onClick={(event) => { if (!!(i === 0 ? "Already first." : undefined)) { event.preventDefault(); return; } (() => move(i, -1))(); }}>{<ArrowUp aria-hidden />}Up{(i === 0 ? "Already first." : undefined) ? <span className="sr-only">{i === 0 ? "Already first." : undefined}</span> : null}</Button>
+                    <Button type="button" variant="ghost" aria-disabled={(!!(i === lines.length - 1 ? "Already last." : undefined)) || undefined} id={`ocr-move-${l.id}-down`} aria-label={`Move sentence ${i + 1} down`} className={cn((!!(i === lines.length - 1 ? "Already last." : undefined)) ? "opacity-50" : "", "h-8 px-2 text-sm")} onClick={(event) => { if (!!(i === lines.length - 1 ? "Already last." : undefined)) { event.preventDefault(); return; } (() => move(i, 1))(); }}>{<ArrowDown aria-hidden />}Down{(i === lines.length - 1 ? "Already last." : undefined) ? <span className="sr-only">{i === lines.length - 1 ? "Already last." : undefined}</span> : null}</Button>
+                    <Button type="button" variant="ghost" aria-label={`Remove sentence ${i + 1} from this import`} className="h-8 px-2 text-sm" onClick={() => {
                         setRemoved({ line: l, index: i });
                         patchLines(lines.filter((x) => x.id !== l.id));
                         announce(`Sentence ${i + 1} removed from this import.`);
-                      }}
-                    >
-                      Remove from this import
-                    </Button>
+                      }}>{<Trash2 aria-hidden />}Remove from this import</Button>
                   </div>
                 </div>
               </li>
@@ -567,38 +467,24 @@ function OcrResults({ back, photoTitle }: { back: React.ReactNode; photoTitle: s
           </ol>
         )}
         {removed && (
-          <p className="row t-support" role="status">
+          <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground" role="status">
             Removed one sentence from this import.
-            <Button
-              kind="tertiary"
-              className="btn--sm-text"
-              onClick={() => {
+            <Button type="button" variant="ghost" className="h-8 px-2 text-sm" onClick={() => {
                 const next = [...get().study.ocr.lines];
                 next.splice(removed.index, 0, removed.line);
                 patchLines(next);
                 setRemoved(null);
-              }}
-            >
-              Put it back
-            </Button>
+              }}>Put it back</Button>
           </p>
         )}
-        <div className="sticky-actions">
-          <div className="btn-row">
-            <Button
-              kind="primary"
-              disabledReason={reason}
-              onClick={() => {
+        <div className="sticky bottom-0 z-10 bg-background py-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="default" aria-disabled={(!!(reason)) || undefined} className={cn((!!(reason)) ? "opacity-50" : "")} onClick={(event) => { if (!!(reason)) { event.preventDefault(); return; } (() => {
                 patchStudy({ mode: "text", drafts: { ...get().study.drafts, text: selected.map((l) => l.text.trim()).join("\n") } });
                 go("study/new", { focus: false });
                 runAnalysis("Photo import");
-              }}
-            >
-              Continue with {plural(selected.length, "selected sentence")}
-            </Button>
-            <Button kind="secondary" onClick={() => patchStudy({ ocr: { ...ocr, phase: "select" } })}>
-              Choose another photo
-            </Button>
+              })(); }}>Continue with {plural(selected.length, "selected sentence")}{(reason) ? <span className="sr-only">{reason}</span> : null}</Button>
+            <Button type="button" variant="outline" onClick={() => patchStudy({ ocr: { ...ocr, phase: "select" } })}>Choose another photo</Button>
           </div>
           {reason && <DisabledReason>{reason}</DisabledReason>}
         </div>

@@ -34,6 +34,21 @@ import {
 } from "./state/store";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+if (typeof window.matchMedia !== "function") {
+  window.matchMedia = (query: string) =>
+    ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener() {},
+      removeListener() {},
+      addEventListener() {},
+      removeEventListener() {},
+      dispatchEvent() {
+        return false;
+      },
+    }) as MediaQueryList;
+}
 const wait = (ms: number) => act(() => new Promise((r) => setTimeout(r, ms)));
 const TARGET = "J’ai oublié mon rendez-vous";
 
@@ -375,20 +390,23 @@ describe("6. independent 6-second Undo window per mastery action", () => {
   });
 });
 
-describe("7. self-explaining Review quota numbers and frozen session cards", () => {
-  it("explains 31 assigned vs 9 unassigned allowances, shows 2-of-5 from a real 5-card sentence, and freezes session cards once started", async () => {
+describe("7. Review quota numbers and frozen session cards", () => {
+  it("shows the planned new-card count and freezes session cards once started", async () => {
     await act(async () => resetDemo());
     await act(async () => go("review"));
     await wait(700);
     const main = document.getElementById("main")!;
-    expect(main.textContent).toContain(
-      "31 new cards this session. 9 of today’s 40 allowances aren’t used because your session holds 40 cards and 9 go to learning and due reviews. Raise Cards per review session in Settings to fit more.",
-    );
-    expect(main.textContent).toContain("Next new card:");
+    expect(statValue("Learning")).toBe("8");
+    expect(statValue("Due")).toBe("1");
+    expect(statValue("New")).toBe("31");
+    expect(main.textContent).toContain("Cards per review session: 40");
+    expect(main.textContent).not.toContain("How new cards are introduced");
 
     await act(async () => REGISTRY.find((r) => r.id === "SCR-QUO-01")!.states.find((s) => s.key === "two-left")!.apply());
     await wait(100);
-    expect(main.textContent).toContain("Today: 2 of 40 new-card allowances remain");
+    expect(statValue("New")).toBe("2");
+    expect(statValue("New cards introduced today")).toBe("38");
+    expect(statValue("Daily new-card limit")).toBe("40 cards");
 
     // Start a session from default state, then lower the daily limit mid-session: only not-yet-shown new cards go
     await act(async () => resetDemo());
@@ -440,13 +458,13 @@ describe("8. feedback and copy cleanups", () => {
     fake.studyRecords = [studyRecord("r1", ["Le plat du jour est excellent.", "Nous avons pris un café."])];
     await act(async () => go("progress/history?tab=attempts"));
     await wait(200);
-    await act(async () => buttonWith("Nous avons pris un café près de la gare.").click());
+    await act(async () => openHistoryRow("Nous avons pris un café près de la gare.").click());
     await act(async () => buttonWith("Find saved card").click());
     expect(get().libFilters.q).toBe("Nous avons pris un café près de la gare.");
 
     await act(async () => go("progress/history?tab=analyses"));
     await wait(200);
-    await act(async () => buttonWith("Le plat du jour").click());
+    await act(async () => openHistoryRow("Le plat du jour").click());
     await act(async () => buttonWith("Open this analysis in Study").click());
     expect(get().study.sentences.map((x) => x.fr)).toEqual(["Le plat du jour est excellent.", "Nous avons pris un café."]);
     expect(get().route).toBe("study");
@@ -519,6 +537,10 @@ describe("8. feedback and copy cleanups", () => {
 /* ---------------- round 3: session size, quota, mid-session changes ---------------- */
 
 const mainText = () => document.getElementById("main")!.textContent!;
+const statValue = (label: string) => {
+  const dt = Array.from(document.querySelectorAll("dt")).find((el) => el.textContent === label);
+  return dt?.nextElementSibling?.textContent?.replace(/\s+/g, " ").trim() ?? "";
+};
 const findButton = (text: string) => Array.from(document.querySelectorAll("button")).find((b) => b.textContent === text);
 function fieldByLabel(label: string): HTMLInputElement {
   const l = Array.from(document.querySelectorAll("label")).find((x) => x.textContent === label)!;
@@ -585,36 +607,37 @@ describe("10. Cards per review session setting and its states", () => {
   });
 });
 
-describe("11. quota copy names the limit that decided the new-card count", () => {
-  it("session size, daily allowance and library each get their own plain-words explanation", async () => {
+describe("11. quota numbers name the limit that decided the new-card count", () => {
+  it("session size, daily allowance and library each show up in the session stats", async () => {
     await act(async () => resetDemo());
     await act(async () => go("review"));
     await wait(700);
     expect(mainText()).toContain("Cards per review session: 40");
-    expect(mainText()).toContain(
-      "31 new cards this session. 9 of today’s 40 allowances aren’t used because your session holds 40 cards and 9 go to learning and due reviews. Raise Cards per review session in Settings to fit more.",
-    );
+    expect(statValue("New")).toBe("31");
+    expect(statValue("Daily new-card limit")).toBe("40 cards");
     // "Change" leads to the setting
     await act(async () => Array.from(document.querySelectorAll("#main button")).find((b) => b.textContent === "Change")!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
     expect(get().route).toBe("settings");
 
     await act(async () => quotaState("daily-binds"));
     await wait(700);
-    expect(mainText()).toContain("20 new cards — all of today’s allowance.");
+    expect(statValue("New")).toBe("20");
+    expect(statValue("Daily new-card limit")).toBe("20 cards");
 
     await act(async () => quotaState("library-binds"));
     await wait(700);
-    expect(mainText()).toContain("Only 5 new cards are waiting in your library.");
+    expect(statValue("New")).toBe("5");
     expect(get().review.sessionCards).toBeNull();
 
     await act(async () => quotaState("overflow"));
     await wait(700);
-    expect(mainText()).toContain("so no new cards are added. 3 cards wait for the next session.");
-    expect(mainText()).toContain("10 cards");
+    expect(statValue("New")).toBe("0");
+    expect(document.getElementById("today-h")!.nextElementSibling!.textContent).toBe("10");
 
     await act(async () => quotaState("min"));
     await wait(700);
-    expect(mainText()).toContain("1 new card this session. 39 of today’s 40 allowances aren’t used because your session holds 10 cards and 9 go to learning and due reviews.");
+    expect(statValue("New")).toBe("1");
+    expect(mainText()).toContain("Cards per review session: 10");
   });
 
   it("offers Start another session when allowances remain, planned from what is left", async () => {
@@ -691,7 +714,7 @@ describe("12. changing limits mid-session", () => {
     expect(get().review.sessionCards).toHaveLength(40);
     await act(async () => go("review"));
     await wait(700);
-    expect(mainText()).toContain("This session is locked at 40 cards.");
+    expect(get().review.sessionCards).toHaveLength(40);
     expect(mainText()).toContain("Cards per review session: 10");
     await act(async () => go("settings"));
     await wait(50);
@@ -761,7 +784,7 @@ describe("14. History, Progress and Episodes on the server", () => {
     fake.studyRecords = [{ ...studyRecord("r1", []), sentences: undefined, sentenceCount: 3, text: "Texte ancien." }];
     await act(async () => go("progress/history?tab=analyses"));
     await wait(200);
-    await act(async () => buttonWith("Texte ancien.").click());
+    await act(async () => openHistoryRow("Texte ancien.").click());
     expect(document.getElementById("main")!.textContent).toContain("can’t be opened");
     await act(async () => buttonWith("Put the text in Study").click());
     expect(get().study.drafts.text).toBe("Texte ancien.");
@@ -784,8 +807,9 @@ describe("14. History, Progress and Episodes on the server", () => {
     fake.studyRecords = [studyRecord("r1", ["Il fait beau.", "On sort ?"])];
     await act(async () => go("study/new"));
     await wait(200);
-    expect(document.getElementById("main")!.textContent).toContain("Pick up where you left off?");
-    await act(async () => buttonWith("Open last analysis").click());
+    expect(document.getElementById("main")!.textContent).toContain("Continue");
+    expect(document.getElementById("main")!.textContent).toContain("2 sentences saved");
+    await act(async () => buttonWith("Continue").click());
     expect(get().study.sentences).toHaveLength(2);
     expect(get().route).toBe("study");
   });
@@ -902,7 +926,7 @@ describe("15. Practice, Settings and the exam placeholder on the server", () => 
     };
     await act(async () => buttonWith("Play the clip").click());
     await end();
-    await act(async () => (Array.from(main().querySelectorAll("label")).find((l) => l.textContent === "Most or all of it")!.querySelector("input") as HTMLInputElement).click());
+    await act(async () => (Array.from(main().querySelectorAll("label")).find((l) => l.textContent === "Most or all of it")!.querySelector("button, input") as HTMLElement).click());
     await act(async () => buttonWith("Continue").click());
     await wait(150);
     await act(async () => buttonWith("Show the text").click());
@@ -916,7 +940,7 @@ describe("15. Practice, Settings and the exam placeholder on the server", () => 
     const stages = fake.calls.filter((c) => c.path.endsWith("/relisten")).map((c) => (c.body as { stage: string }).stage);
     expect(stages).toEqual(["slow20", "normal", "normal"]);
     expect(main().textContent).toContain("Où vont-ils ?");
-    await act(async () => (Array.from(main().querySelectorAll("label")).find((l) => l.textContent?.startsWith("Au marché"))!.querySelector("input") as HTMLInputElement).click());
+    await act(async () => (Array.from(main().querySelectorAll("label")).find((l) => l.textContent?.startsWith("Au marché"))!.querySelector("button, input") as HTMLElement).click());
     await act(async () => buttonWith("Check").click());
     await wait(150);
     expect(main().textContent).toContain("Correct");
@@ -982,6 +1006,12 @@ describe("15. Practice, Settings and the exam placeholder on the server", () => 
   });
 });
 
+function openHistoryRow(snippet: string): HTMLButtonElement {
+  const row = Array.from(document.querySelectorAll("#main tr")).find((tr) => tr.textContent?.includes(snippet));
+  const btn = row && Array.from(row.querySelectorAll("button")).find((b) => b.textContent?.trim() === "Open");
+  if (!btn) throw new Error(`No Open button in a row containing "${snippet}"`);
+  return btn;
+}
 function buttonWith(text: string): HTMLButtonElement {
   const b = Array.from(document.querySelectorAll<HTMLButtonElement>("#main button, [role=dialog] button")).find((x) => x.textContent?.includes(text));
   if (!b) throw new Error(`No button with "${text}"`);

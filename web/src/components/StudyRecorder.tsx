@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Mic, Square } from "lucide-react";
+import { Mic, Square, Loader2 } from "lucide-react";
 import { stopPlayback, useApp } from "../state/store";
 import { fmtClock } from "../lib/format";
-import { Banner, Button } from "./ui";
+import { Button } from "./ui/button";
+import { Alert, AlertTitle, AlertDescription } from "./ui/alert";
+import { cn } from "cn";
+
 
 export const EXCLUSIVE_AUDIO = "french-study-audio";
 export function takeAudioFocus(origin?: HTMLMediaElement | null) {
@@ -105,13 +108,13 @@ export function StudyRecorder({ id, label, actionLabel = "Check recording", onTa
       setError(e instanceof DOMException && e.name === "NotAllowedError" ? "Allow microphone access in your browser’s site settings, then try again." : e instanceof Error ? e.message : "Couldn’t start the microphone.");
     }
   };
-  return <div className="study-recorder stack gap-3" role="group" aria-label={label}>
-    <div className="btn-row">
-      {phase === "recording" ? <Button kind="primary" icon={<Square aria-hidden />} onClick={stop}>Stop · {fmtClock(seconds)}</Button> :
-        <Button kind="secondary" icon={<Mic aria-hidden />} busy={phase === "asking"} disabled={disabled || phase === "busy"} onClick={() => void start()}>{take ? "Record again" : label}</Button>}
-      {take && phase !== "recording" && <Button kind="primary" busy={phase === "busy"} disabled={take.saved || disabled} onClick={() => void submit()}>{take.saved ? (autoSubmit ? "Checked" : "Saved") : error ? "Retry recording" : actionLabel}</Button>}
+  return <div className="study-recorder flex flex-col gap-3" role="group" aria-label={label}>
+    <div className="flex flex-wrap items-center gap-2">
+      {phase === "recording" ? <Button type="button" variant="default" onClick={stop}>{<Square aria-hidden />}Stop · {fmtClock(seconds)}</Button> :
+        <Button type="button" variant="outline" aria-disabled={(!!(disabled || phase === "busy") || !!(phase === "asking")) || undefined} aria-busy={phase === "asking" || undefined} className={cn((!!(disabled || phase === "busy") || !!(phase === "asking")) ? "opacity-50" : "")} onClick={(event) => { if (!!(disabled || phase === "busy") || !!(phase === "asking")) { event.preventDefault(); return; } (() => void start())(); }}>{phase === "asking" ? <Loader2 className="animate-spin" aria-hidden /> : (<Mic aria-hidden />)}{take ? "Record again" : label}</Button>}
+      {take && phase !== "recording" && <Button type="button" variant="default" aria-disabled={(!!(take.saved || disabled) || !!(phase === "busy")) || undefined} aria-busy={phase === "busy" || undefined} className={cn((!!(take.saved || disabled) || !!(phase === "busy")) ? "opacity-50" : "")} onClick={(event) => { if (!!(take.saved || disabled) || !!(phase === "busy")) { event.preventDefault(); return; } (() => void submit())(); }}>{phase === "busy" ? <Loader2 className="animate-spin" aria-hidden /> : null}{take.saved ? (autoSubmit ? "Checked" : "Saved") : error ? "Retry recording" : actionLabel}</Button>}
     </div>
-    {take && phase !== "recording" && <div className="stack gap-2"><span className="t-meta">My recording</span><audio ref={player} controls src={take.url} onPlay={() => { takeAudioFocus(player.current); }} /></div>}
-    {error && <Banner tone="error" title="Recording needs attention" live="assertive">{error} Your last recording is kept so you can retry.</Banner>}
+    {take && phase !== "recording" && <div className="flex flex-col gap-2"><span className="text-xs leading-4 text-muted-foreground">My recording</span><audio ref={player} controls src={take.url} onPlay={() => { takeAudioFocus(player.current); }} /></div>}
+    {error && <Alert variant="destructive" role="alert"><AlertTitle>Recording needs attention</AlertTitle><AlertDescription>{error} Your last recording is kept so you can retry.</AlertDescription></Alert>}
   </div>;
 }

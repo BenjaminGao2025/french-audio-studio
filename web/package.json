@@ -1,7 +1,7 @@
 {
   "name": "french-audio-studio-web",
   "private": true,
-  "version": "1.0.6",
+  "version": "1.1.0",
   "description": "French Audio Studio web app (1000H French). React SPA served by FastAPI under /app/.",
   "type": "module",
   "scripts": {
@@ -14,6 +14,7 @@
     "@fontsource-variable/inter": "^5.3.0",
     "@fontsource-variable/source-serif-4": "^5.3.1",
     "@tailwindcss/vite": "^4.3.5",
+    "@tanstack/react-table": "^9.3.1",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.5.2",
     "lucide-react": "^0.575.0",

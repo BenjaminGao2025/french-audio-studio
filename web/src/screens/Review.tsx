@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bookmark, BookmarkCheck, Eye, Play, Search, CloudOff, Archive, RotateCcw, Volume2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Bookmark, BookmarkCheck, Eye, Play, Search, Archive, RotateCcw, Volume2, ChevronLeft, ChevronRight, Loader2, ChevronDown } from "lucide-react";
 import {
   DEFAULT_SESSION_SIZE,
   planSession,
@@ -19,12 +19,22 @@ import { importanceFor } from "../lib/lookup";
 import { formatFriendlyPhonetic } from "../lib/phonetic";
 import { cx, nf, plural } from "../lib/format";
 import { announce, get, getCardLookups, go, introduceNewCard, sayFrench, set, useApp, type ReviewUI } from "../state/store";
-import { Banner, Button, Dialog, DisabledReason, Disclosure, FieldText, Importance, PageHead, Pill, Skeleton, Spinner, Tabs, useNarrow, WordDock } from "../components/ui";
+import { Checkbox, Dialog, DisabledReason, Importance, PageHead, Progress, Skeleton, Spinner, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Textarea, WordDock, useNarrow } from "../components/ui";
+import { flexRender } from "@tanstack/react-table";
+import { getCoreRowModel, useLegacyTable, type LegacyColumnDef } from "@tanstack/react-table/legacy";
 import { FrText, tokenizeFrench, type FrPick, type FrSegment } from "../components/FrText";
 import { WordPanel } from "./WordPopup";
 import { MarkedLine } from "./Exercise";
 import { runItems } from "./Launcher";
-import { DailyLimitField } from "./Settings";
+import { Button } from "../components/ui/button";
+import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
+import { Badge } from "../components/ui/badge";
+import { Label } from "../components/ui/label";
+import { Input } from "../components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "../components/ui/collapsible";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { cn } from "cn";
 
 /** Design reference states set this so Due today shows their sample queue instead of loading the learner's. */
 export const SAMPLE_QUEUE = "sample-queue";
@@ -155,13 +165,21 @@ const TABS = [
 
 export function ReviewScreen({ sub }: { sub: string }) {
   const tab = sub === "session" ? "due" : sub === "library" ? "saved" : sub;
+  if (sub === "session") {
+    return (
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 review-focus">
+        <h1 className="sr-only" tabIndex={-1} data-page-title>Review</h1>
+        <ReviewSession />
+      </div>
+    );
+  }
   return (
-    <div className="page page--wide">
-      <PageHead title="Review" desc={sub === "session" ? undefined : "Cards you saved come back when they’re due. Only answering cards here changes their review schedule."} />
-      <div className="stack gap-5">
-        <Tabs label="Review sections" idBase="review" value={tab} tabs={TABS} onChange={(v) => go(`review/${v}`, { focus: false })} />
+    <div className={cx("mx-auto flex w-full max-w-3xl flex-col gap-6", tab === "saved" && "max-w-6xl!")}>
+      <PageHead title="Review" />
+      <div className="flex flex-col gap-6">
+        <Tabs value={tab} onValueChange={(next) => ((v) => go(`review/${v}`, { focus: false }))(next)}><TabsList aria-label={"Review sections"} className="h-auto max-w-full flex-wrap justify-start">{(TABS).map((t) => (<TabsTrigger key={t.value} id={`review-tab-${t.value}`} value={t.value}>{t.label}</TabsTrigger>))}</TabsList></Tabs>
         <div id="review-panel" role="tabpanel" aria-labelledby={`review-tab-${tab}`}>
-          {sub === "session" ? <ReviewSession /> : tab === "due" ? <DueToday /> : tab === "saved" ? <SavedCards /> : <MasteredList />}
+          {tab === "due" ? <DueToday /> : tab === "saved" ? <SavedCards /> : <MasteredList />}
         </div>
       </div>
     </div>
@@ -204,26 +222,6 @@ function startNextSession() {
     };
   });
   go("review/session");
-}
-
-/** Plain-words explanation of which limit decided how many new cards a session gets. */
-export function quotaCopy(p: SessionPlan, sessionSize: number, dailyNew: number, newUsed: number): string {
-  const fixed = p.learning + p.due;
-  if (p.waiting > 0)
-    return `Your ${nf.format(fixed + p.waiting)} learning and due review cards are more than a session of ${sessionSize}, so no new cards are added. ${plural(p.waiting, "card")} wait for the next session.`;
-  if (p.binding === "session") {
-    const unused = p.remainingAllowances - p.newCount;
-    const scope = newUsed === 0 ? `today’s ${dailyNew} allowances` : `your ${p.remainingAllowances} remaining allowances`;
-    return `${plural(p.newCount, "new card")} this session. ${unused} of ${scope} ${unused === 1 ? "isn’t" : "aren’t"} used because your session holds ${sessionSize} cards and ${fixed} go to learning and due reviews. Raise Cards per review session in Settings to fit more.`;
-  }
-  if (p.binding === "daily") {
-    if (p.remainingAllowances === 0) return `No new cards this session — all ${dailyNew} of today’s allowances are used.`;
-    return newUsed === 0
-      ? `${plural(p.newCount, "new card")} — all of today’s allowance.`
-      : `${plural(p.newCount, "new card")} — all of the ${p.remainingAllowances} allowances left today.`;
-  }
-  if (p.newAvailable === 0) return "No new cards are waiting for today.";
-  return `Only ${p.newAvailable} new ${p.newAvailable === 1 ? "card is" : "cards are"} waiting in your library.`;
 }
 
 function DueToday() {
@@ -272,12 +270,6 @@ function DueToday() {
   const total = activeCards.length;
   const plan = usePlan();
   const locked = review.phase === "active" && review.sessionCards !== null;
-  // A locked session keeps its cards; the quota line then describes the lock instead of re-planning it.
-  const quotaLine = locked
-    ? `This session is locked at ${total} cards. Changing Cards per review session or the daily limit applies from your next session; lowering the daily limit only stops new cards that haven’t been shown yet.`
-    : plan.cards.length
-      ? `${review.phase === "complete" ? "Next session: " : ""}${quotaCopy(plan, sessionSize, dailyNew, newUsed)}`
-      : null;
 
   const start = () => {
     set((s) => {
@@ -296,142 +288,83 @@ function DueToday() {
   };
 
   return (
-    <div className="stack gap-6">
+    <div className="flex flex-col gap-8">
       {state === "loading" && (
-        <div className="stack gap-3">
+        <div className="flex flex-col gap-3">
           <Spinner label="Loading today’s cards…" />
           <Skeleton lines={3} />
         </div>
       )}
       {state === "error" && (
-        <Banner tone="error" title="Today’s cards didn’t load" live="assertive" actions={<Button kind="secondary" onClick={() => setN(n + 1)}>Retry</Button>}>
-          Your cards and progress are safe. {loadError || "The server didn’t respond."}
-        </Banner>
+        <Alert variant="destructive" role="alert"><AlertTitle>Today’s cards didn’t load</AlertTitle><AlertDescription>Your cards and progress are safe. {loadError || "The server didn’t respond."}<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={() => setN(n + 1)}>Retry</Button></div></AlertDescription></Alert>
       )}
       {state === "nocards" && (
-        <Banner tone="neutral" title="You haven’t saved any cards yet" actions={<Button kind="primary" onClick={() => go("study")}>Go to Study</Button>}>
-          In Study, choose “Add to review” on a sentence to save its cards here.
-        </Banner>
+        <Alert variant="default"><AlertTitle>You haven’t saved any cards yet</AlertTitle><AlertDescription><div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="default" onClick={() => go("study")}>Go to Study</Button></div></AlertDescription></Alert>
       )}
       {state === "nodue" && (
-        <Banner tone="neutral" title="No cards are due right now">
-          {libOk ? `Your library has ${plural(savedCards, "saved card")}, but none` : "None of your cards"} are due today and no new cards are assigned. Come back tomorrow, or practise with Recall or Dictation.
-        </Banner>
+        <Alert variant="default"><AlertTitle>No cards are due right now</AlertTitle></Alert>
       )}
       {state === "complete" && (
-        <Banner
-          tone="success"
-          title={plan.cards.length ? "This session is complete" : "Today’s review is complete"}
-          actions={
-            <>
-              {plan.cards.length > 0 && <Button kind="primary" onClick={startNextSession}>Start another session ({plan.cards.length} cards)</Button>}
-              <Button kind="secondary" onClick={() => go("review/saved")}>Open saved cards</Button>
-            </>
-          }
-        >
-          {nf.format(review.completed)} of {nf.format(total)} cards in this session completed.{" "}
-          {plan.cards.length ? "Due cards or new-card allowances remain today." : "Tomorrow’s cards will appear here."}
-        </Banner>
+        <Alert variant="default"><AlertTitle>{plan.cards.length ? "This session is complete" : "Today’s review is complete"}</AlertTitle><AlertDescription>{nf.format(review.completed)} of {nf.format(total)} cards completed.<div className="mt-3 flex flex-wrap items-center gap-2"><>
+              {plan.cards.length > 0 && <Button type="button" variant="default" onClick={startNextSession}>Start another session ({plan.cards.length} cards)</Button>}
+              <Button type="button" variant="outline" onClick={() => go("review/saved")}>Open saved cards</Button>
+            </></div></AlertDescription></Alert>
       )}
       {state === "offline" && (
-        <Banner tone="warning" title="You’re offline (simulated)">
-          You can continue the 12 cards already assigned to this device. New cards need a connection before they can be assigned.
-        </Banner>
+        <Alert variant="default"><AlertTitle>You’re offline (simulated)</AlertTitle><AlertDescription>You can continue the 12 cards already assigned to this device. New cards need a connection before they can be assigned.</AlertDescription></Alert>
       )}
 
       {(state === "active" || state === "offline") && (
-        <section className="stack gap-5" aria-labelledby="today-h">
-          <div className="stack gap-2">
-            <h2 id="today-h" className="t-section">Today’s session</h2>
-            <p className="t-figure">{nf.format(state === "offline" ? 12 : total)} cards</p>
-            <p className="t-support">
-              {state === "offline" ? "Assigned to this device: 8 learning · 1 due review · 3 new" : `${learning} learning cards · ${due} due review card · ${newAssigned} new cards`}
-            </p>
-            {state !== "offline" && quotaLine && (
-              <p className="t-support" data-quota-explanation>
-                <span className="t-strong">New cards:</span> {quotaLine}
-              </p>
-            )}
+        <section className="flex flex-col gap-6" aria-labelledby="today-h">
+          <div className="flex flex-col gap-2">
+            <h2 id="today-h" className="text-xs font-medium text-muted-foreground">Today’s session</h2>
+            <p className="text-lg font-semibold tabular-nums">{nf.format(state === "offline" ? 12 : total)}</p>
+            <p className="text-sm text-muted-foreground">cards</p>
+            <dl className="flex flex-wrap gap-6">
+              {state === "offline" ? (
+                <>
+                  <div><dt>Learning</dt><dd>8</dd></div>
+                  <div><dt>Due</dt><dd>1</dd></div>
+                  <div><dt>New</dt><dd>3</dd></div>
+                </>
+              ) : (
+                <>
+                  <div><dt>Learning</dt><dd>{learning}</dd></div>
+                  <div><dt>Due</dt><dd>{due}</dd></div>
+                  <div><dt>New</dt><dd>{newAssigned}</dd></div>
+                </>
+              )}
+            </dl>
+
             {state !== "offline" && (
-              <div className="row gap-2">
-                <span className="t-support">Cards per review session: <span className="num">{sessionSize}</span></span>
-                <Button kind="tertiary" className="btn--sm-text" aria-label="Change cards per review session in Settings" onClick={() => go("settings")}>Change</Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm text-muted-foreground">Cards per review session: <span className="tabular-nums">{sessionSize}</span></span>
+                <Button type="button" variant="ghost" aria-label="Change cards per review session in Settings" className="h-8 px-2 text-sm" onClick={() => go("settings")}>Change</Button>
               </div>
             )}
             {locked && review.removedNew > 0 && (
-              <p className="t-support" role="status">{plural(review.removedNew, "new card")} removed because you lowered today’s limit.</p>
+              <p className="text-sm text-muted-foreground" role="status">{plural(review.removedNew, "new card")} removed because you lowered today’s limit.</p>
             )}
           </div>
-          <div className="stack gap-2">
-            <div className="row row--between">
-              <span className="t-label">Session progress</span>
-              <span className="t-support num">{review.completed} of {state === "offline" ? 12 : total} cards completed</span>
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-sm font-medium">Session progress</span>
+              <span className="text-sm text-muted-foreground tabular-nums">{review.completed} of {state === "offline" ? 12 : total} cards completed</span>
             </div>
-            <div className="goal-bar" aria-hidden><div style={{ width: `${(review.completed / Math.max(1, total)) * 100}%` }} /></div>
+            <Progress value={(review.completed / Math.max(1, total)) * 100} aria-label="Session progress" />
           </div>
-          <div className="btn-row">
-            <Button kind="primary" onClick={start} disabledReason={total === 0 ? "No cards are assigned today." : undefined}>
-              {review.phase === "active" ? "Continue review" : "Start review"}
-            </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="default" aria-disabled={(!!(total === 0 ? "No cards are assigned today." : undefined)) || undefined} className={cn((!!(total === 0 ? "No cards are assigned today." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(total === 0 ? "No cards are assigned today." : undefined)) { event.preventDefault(); return; } (start)(); }}>{review.phase === "active" ? "Continue review" : "Start review"}{(total === 0 ? "No cards are assigned today." : undefined) ? <span className="sr-only">{total === 0 ? "No cards are assigned today." : undefined}</span> : null}</Button>
           </div>
-          <dl className="stat-grid">
-            <div className="stat"><dt className="t-support">Daily new-card limit</dt><dd className="t-section num" style={{ margin: 0 }}>{dailyNew} cards</dd></div>
-            <div className="stat"><dt className="t-support">New cards introduced today</dt><dd className="t-section num" style={{ margin: 0 }}>{newUsed}</dd></div>
-            <div className="stat"><dt className="t-support">Your whole library</dt><dd className="t-section num" style={{ margin: 0 }}>{libOk ? `${nf.format(sentences)} sentences · ${nf.format(savedCards)} cards` : "…"}</dd></div>
+          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            <div className="flex flex-col gap-0.5"><dt className="text-sm text-muted-foreground">Daily new-card limit</dt><dd className="text-lg font-semibold text-balance tabular-nums" style={{ margin: 0 }}>{dailyNew} cards</dd></div>
+            <div className="flex flex-col gap-0.5"><dt className="text-sm text-muted-foreground">New cards introduced today</dt><dd className="text-lg font-semibold text-balance tabular-nums" style={{ margin: 0 }}>{newUsed}</dd></div>
+            <div className="flex flex-col gap-0.5"><dt className="text-sm text-muted-foreground">Your whole library</dt><dd className="text-lg font-semibold text-balance tabular-nums" style={{ margin: 0 }}>{libOk ? <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"><span>{nf.format(sentences)} sentences</span><span>{nf.format(savedCards)} cards</span></span> : "…"}</dd></div>
           </dl>
           <span className="sr-only">Queue pool: {queue.length} cards</span>
         </section>
       )}
-
-      {state !== "loading" && state !== "error" && <QuotaExplainer quotaLine={state === "active" || state === "offline" ? null : quotaLine} />}
     </div>
-  );
-}
-
-function QuotaExplainer({ quotaLine }: { quotaLine: string | null }) {
-  const dailyNew = useApp((s) => s.dailyNew);
-  const newUsed = useApp((s) => s.newUsed);
-  const offline = useApp((s) => s.offline);
-  const queue = useApp((s) => s.queue);
-  const introduced = useApp((s) => s.review.introduced);
-  const done = useApp((s) => s.review.done);
-
-  const remaining = Math.max(0, dailyNew - newUsed);
-  // The server already put today's new cards in introduction order.
-  const nextNew = queue.find((c) => c.group === "new" && !introduced[c.id] && !done[c.id]);
-
-  return (
-    <section className="stack gap-4" aria-labelledby="quota-h">
-      <hr className="divider" />
-      <h2 id="quota-h" className="t-section">How new cards are introduced</h2>
-      <ul className="stack gap-2" style={{ paddingLeft: 20 }}>
-        <li>Only a new card’s first appearance in Review uses one of today’s allowances.</li>
-        <li>Saving cards, due reviews, Recall, Dictation, marking mastered and Undo don’t use or refund an allowance.</li>
-        <li>New cards are introduced by importance first, then in the order you saved them.</li>
-        <li>A sentence brings at most one card a day; its other cards follow on later days.</li>
-      </ul>
-      <div className="panel stack gap-2" aria-live="polite">
-        <p className="t-strong">Today: {remaining} of {dailyNew} new-card allowances remain</p>
-        {quotaLine && <p className="t-support">{quotaLine}</p>}
-        {dailyNew < newUsed ? (
-          <p>
-            You’ve already introduced {newUsed} new cards today. Your limit is now {dailyNew}, which is lower, so those {newUsed} cards stay in your reviews and no more new cards are introduced today.
-          </p>
-        ) : remaining === 0 ? (
-          <p>No more new cards today. Due reviews continue as usual.</p>
-        ) : nextNew ? (
-          <p>
-            Next new card: {nextNew.kind} · <span lang="fr">{nextNew.kind === "Fill-in" ? nextNew.target : nextNew.sentenceFr}</span>
-          </p>
-        ) : null}
-        {offline && (
-          <p className="row" style={{ color: "var(--warning)" }}>
-            <CloudOff aria-hidden width={16} height={16} /> New allowances need a connection to be assigned. Cards already on this device can continue.
-          </p>
-        )}
-      </div>
-      <DailyLimitField compact />
-    </section>
   );
 }
 
@@ -604,15 +537,13 @@ function ReviewSession() {
 
   if (review.phase === "complete" || forced === "complete" || !card) {
     return (
-      <div className="stack gap-4">
-        <Banner tone="success" title="Review complete" live="polite">
-          {review.completed} of {cards.length} cards in this session completed. Each review updated that card’s schedule.
-        </Banner>
-        {review.removedNew > 0 && <p className="t-support">{plural(review.removedNew, "new card")} removed because you lowered today’s limit.</p>}
-        <div className="btn-row">
-          {plan.cards.length > 0 && <Button kind="primary" onClick={startNextSession}>Start another session ({plan.cards.length} cards)</Button>}
-          <Button kind={plan.cards.length ? "secondary" : "primary"} onClick={() => go("review")}>Done — back to Due today</Button>
-          <Button kind="secondary" onClick={() => go("review/saved")}>Open saved cards</Button>
+      <div className="flex flex-col gap-4">
+        <Alert variant="default" role="status"><AlertTitle>Review complete</AlertTitle><AlertDescription>{review.completed} of {cards.length} cards in this session completed. Each review updated that card’s schedule.</AlertDescription></Alert>
+        {review.removedNew > 0 && <p className="text-sm text-muted-foreground">{plural(review.removedNew, "new card")} removed because you lowered today’s limit.</p>}
+        <div className="flex flex-wrap items-center gap-2">
+          {plan.cards.length > 0 && <Button type="button" variant="default" onClick={startNextSession}>Start another session ({plan.cards.length} cards)</Button>}
+          <Button type="button" variant={plan.cards.length ? "outline" : "default"} onClick={() => go("review")}>Done — back to Due today</Button>
+          <Button type="button" variant="outline" onClick={() => go("review/saved")}>Open saved cards</Button>
         </div>
       </div>
     );
@@ -648,79 +579,78 @@ function ReviewSession() {
   };
 
   return (
-    <div className={cx("with-word-card", pick && !narrow && "is-open")}>
-      <div className="exercise" data-mode={mode} data-card-id={card.id}>
-        <div className="row row--between">
-          <h2 id="rev-q" tabIndex={-1} className="t-section">Card {review.index + 1} of {cards.length}</h2>
-          <span className="t-support num">{review.completed} completed</span>
+    <div className={cx("grid items-start gap-6", pick && !narrow && "lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]")}>
+      <div className="flex flex-col gap-6" data-mode={mode} data-card-id={card.id}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p id="rev-q" tabIndex={-1} className="text-xs leading-4 text-muted-foreground tabular-nums">Card {review.index + 1} of {cards.length}</p>
+          <span className="text-sm text-muted-foreground tabular-nums">{review.completed} completed</span>
         </div>
-        {review.removedNew > 0 && <p className="t-support" role="status">{plural(review.removedNew, "new card")} removed because you lowered today’s limit.</p>}
-        <div className="row">
-          <Pill tone={card.group === "new" ? "info" : undefined}>{groupLabel}</Pill>
-          <Pill>{MODE_LABEL[mode]}</Pill>
-          {card.group === "new" && <span className="t-support">First introduction. Uses 1 of today’s new-card allowances.</span>}
+        {review.removedNew > 0 && <p className="text-sm text-muted-foreground" role="status">{plural(review.removedNew, "new card")} removed because you lowered today’s limit.</p>}
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant={card.group === "new" ? "secondary" : "outline"}>{groupLabel}</Badge>
+          <Badge variant="outline">{MODE_LABEL[mode]}</Badge>
         </div>
-        <hr className="divider" />
+        <hr className="border-t" />
 
         {!revealed ? (
-          <div className="rev-stage">
+          <div className="flex flex-col gap-4">
             {/* ---------------- FRONT, per mode ---------------- */}
             {mode === "listen" && (
-              <div className="rev-listen stack gap-3">
-                <p className="t-support">Listen, then say what it means. Show the answer to check.</p>
-                <div className="btn-row">
-                  <Button kind="secondary" className="rev-play-big" iconOnly icon={<Play aria-hidden />} aria-label="Play the sentence" onClick={() => sayFrench(sentenceFr)} />
-                  <Button kind="secondary" icon={<Volume2 aria-hidden />} onClick={() => sayFrench(sentenceFr, 0.75)}>Slow 0.75&nbsp;×</Button>
+              <div className="rev-listen flex flex-col gap-3">
+                <p className="rev-lead">Listen, then say what it means.</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button type="button" variant="outline" size="icon" aria-label="Play the sentence" className="" onClick={() => sayFrench(sentenceFr)}>{<Play aria-hidden />}</Button>
+                  <Button type="button" variant="outline" onClick={() => sayFrench(sentenceFr, 0.75)}>{<Volume2 aria-hidden />}Slow 0.75&nbsp;×</Button>
                 </div>
               </div>
             )}
             {mode === "speak" && (
-              <div className="stack gap-3">
-                <p className="t-support">Say this in French out loud, then show the answer.</p>
+              <div className="flex flex-col gap-3">
+                <p className="rev-lead">Say this in French out loud.</p>
                 <p className="rev-prompt-zh" lang={translationZh ? "zh" : undefined}>{translationZh || translationEn || "No translation yet."}</p>
-                {showEnglish && <Disclosure summary="Show English"><p className="t-support">{translationEn}</p></Disclosure>}
-                <Disclosure summary="Show initials"><p className="rev-initials" lang="fr">{initialsHint(sentenceFr)}</p></Disclosure>
+                {showEnglish && <Collapsible className="border-t"><CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between gap-2 py-2 text-left text-sm font-medium"><span>Show English</span><ChevronDown className="size-4 shrink-0" aria-hidden /></CollapsibleTrigger><CollapsibleContent className="pb-3 text-sm"><p className="text-sm text-muted-foreground">{translationEn}</p></CollapsibleContent></Collapsible>}
+                <Collapsible className="border-t"><CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between gap-2 py-2 text-left text-sm font-medium"><span>Show initials</span><ChevronDown className="size-4 shrink-0" aria-hidden /></CollapsibleTrigger><CollapsibleContent className="pb-3 text-sm"><p className="rev-initials" lang="fr">{initialsHint(sentenceFr)}</p></CollapsibleContent></Collapsible>
               </div>
             )}
             {mode === "recognize" && (
-              <div className="stack gap-3">
-                <FrText segments={tokenizeFrench(card.target)} className="t-fr-lg" onPick={onWordPick} />
-                <p className="t-support">What does it mean?</p>
-                <div className="btn-row">
-                  <Button kind="secondary" className="rev-play-big" iconOnly icon={<Play aria-hidden />} aria-label="Play the word" onClick={() => sayFrench(card.target)} />
-                  <Button kind="secondary" icon={<Volume2 aria-hidden />} onClick={() => sayFrench(card.target, 0.75)}>Slow 0.75&nbsp;×</Button>
+              <div className="flex flex-col gap-3">
+                <FrText segments={tokenizeFrench(card.target)} className="font-serif text-2xl leading-snug wrap-break-word" onPick={onWordPick} />
+                <p className="rev-lead">What does it mean?</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button type="button" variant="outline" size="icon" aria-label="Play the word" className="" onClick={() => sayFrench(card.target)}>{<Play aria-hidden />}</Button>
+                  <Button type="button" variant="outline" onClick={() => sayFrench(card.target, 0.75)}>{<Volume2 aria-hidden />}Slow 0.75&nbsp;×</Button>
                 </div>
               </div>
             )}
             {typed && (
-              <div className="stack gap-3">
-                {mode === "grammar" && meta.rule && <Pill>{meta.rule}</Pill>}
+              <div className="flex flex-col gap-3">
+                {mode === "grammar" && meta.rule && <Badge variant="outline">{meta.rule}</Badge>}
                 {card.kind === "Recall" ? (
-                  <p className="prompt-en">{card.prompt}</p>
+                  <p className="text-lg font-medium">{card.prompt}</p>
                 ) : (
-                  <FrText segments={tokenizeFrench(mode === "grammar" ? (meta.prompt_fr || card.prompt) : card.prompt)} className="t-fr-lg" onPick={onWordPick} />
+                  <FrText segments={tokenizeFrench(mode === "grammar" ? (meta.prompt_fr || card.prompt) : card.prompt)} className="font-serif text-2xl leading-snug wrap-break-word" onPick={onWordPick} />
                 )}
                 {(mode === "grammar" ? meta.full_en : (translationZh || translationEn)) && (
-                  <p className="t-support" lang={translationZh && mode !== "grammar" ? "zh" : undefined}>
+                  <p className="text-sm text-muted-foreground" lang={translationZh && mode !== "grammar" ? "zh" : undefined}>
                     {mode === "grammar" ? meta.full_en : (translationZh || translationEn)}
                   </p>
                 )}
-                {card.kind === "Fill-in" && (meta.meaning_zh || meta.meaning_en) && <p className="t-support">Blank means: {meta.meaning_zh || meta.meaning_en}</p>}
-                {mode === "grammar" && meta.hint && <p className="t-support">Hint: {meta.hint}</p>}
-                <Disclosure summary="Show initials"><p className="rev-initials" lang="fr">{initialsHint(card.target)}</p></Disclosure>
+                {card.kind === "Fill-in" && (meta.meaning_zh || meta.meaning_en) && <p className="text-sm text-muted-foreground">Blank means: {meta.meaning_zh || meta.meaning_en}</p>}
+                {mode === "grammar" && meta.hint && <p className="text-sm text-muted-foreground">Hint: {meta.hint}</p>}
+                <Collapsible className="border-t"><CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between gap-2 py-2 text-left text-sm font-medium"><span>Show initials</span><ChevronDown className="size-4 shrink-0" aria-hidden /></CollapsibleTrigger><CollapsibleContent className="pb-3 text-sm"><p className="rev-initials" lang="fr">{initialsHint(card.target)}</p></CollapsibleContent></Collapsible>
               </div>
             )}
 
             {typed && (
-              <div className="stack gap-3">
-                <div className="field">
-                  <label htmlFor="rev-input" className="field-label">Your answer in French</label>
-                  <textarea
+              <div className="flex flex-col gap-3">
+                <div className="grid gap-2">
+                  <label htmlFor="rev-input" className="text-sm font-medium">Your answer in French</label>
+                  <Textarea
                     id="rev-input"
                     name="review-answer"
                     autoComplete="off"
                     ref={inputRef}
-                    className="textarea textarea--answer"
+                    className="min-h-24"
                     lang="fr"
                     rows={2}
                     value={u.draft}
@@ -731,109 +661,98 @@ function ReviewSession() {
                     onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); check(); } }}
                     spellCheck={false}
                   />
-                  {u.emptyError && <p id="rev-err" className="field-error" role="alert">Type an answer before checking. Nothing was recorded.</p>}
+                  {u.emptyError && <p id="rev-err" className="text-sm text-destructive" role="alert">Type an answer before checking. Nothing was recorded.</p>}
                 </div>
               </div>
             )}
-            <div className="sticky-actions">
-              <div className="btn-row">
-                {typed && <Button kind="primary" onClick={check}>Check</Button>}
-                <Button kind={typed ? "secondary" : "primary"} icon={<Eye aria-hidden />} onClick={() => reveal()}>Show answer</Button>
+            <div className="sticky bottom-0 z-10 bg-background py-3">
+              <div className="flex flex-wrap items-center gap-2">
+                {typed && <Button type="button" variant="default" onClick={check}>Check</Button>}
+                <Button type="button" variant={typed ? "outline" : "default"} onClick={() => reveal()}>{<Eye aria-hidden />}Show answer</Button>
               </div>
             </div>
-            <p className="key-hints"><span><kbd>Space</kbd> shows the answer</span><span><kbd>R</kbd> replays</span></p>
+            <p className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground"><span><kbd>Space</kbd> shows the answer</span><span><kbd>R</kbd> replays</span></p>
           </div>
         ) : (
           <>
             {/* ---------------- BACK, after Show answer or Check ---------------- */}
-            <div id="rev-result" tabIndex={-1} className="stack gap-4">
+            <div id="rev-result" tabIndex={-1} className="flex flex-col gap-4">
               <div className="rev-answer-row" data-sentence={sentenceFr}>
                 <FrText segments={backSegments} className={isWordCard ? "t-fr-lg" : "sentence-fr"} onPick={onWordPick} />
-                <div className="btn-row">
-                  <Button kind="secondary" icon={<Play aria-hidden />} onClick={() => sayFrench(cardSpeech(card))}>Play</Button>
-                  <Button kind="secondary" icon={<Volume2 aria-hidden />} onClick={() => sayFrench(cardSpeech(card), 0.75)}>Slow 0.75&nbsp;×</Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button type="button" variant="outline" onClick={() => sayFrench(cardSpeech(card))}>{<Play aria-hidden />}Play</Button>
+                  <Button type="button" variant="outline" onClick={() => sayFrench(cardSpeech(card), 0.75)}>{<Volume2 aria-hidden />}Slow 0.75&nbsp;×</Button>
                 </div>
               </div>
               {(translationZh || translationEn) && (
                 <div className="rev-translations">
-                  {translationZh && <p className="t-support" lang="zh">{translationZh}</p>}
-                  {translationEn && <p className="t-support">{translationEn}</p>}
+                  {translationZh && <p className="text-sm text-muted-foreground" lang="zh">{translationZh}</p>}
+                  {translationEn && <p className="text-sm text-muted-foreground">{translationEn}</p>}
                 </div>
               )}
               {u.result && (
-                <div className="compare">
+                <div className="flex flex-col gap-4">
                   <MarkedLine label="Your answer" words={u.result.answer} side="answer" />
                   <MarkedLine label="Correct answer" words={u.result.target} side="target" onPick={onWordPick} />
                 </div>
               )}
               {isWordCard && (
                 <div className="rev-meta">
-                  <p className="t-strong" lang="fr">{card.target}</p>
+                  <p className="font-medium" lang="fr">{card.target}</p>
                   {metaBits.length > 0 && (
-                    <p className="meta-row">
-                      {metaBits.map((bit) => <span className="meta-chip" key={bit}>{bit}</span>)}
+                    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                      {metaBits.map((bit) => <span className="inline-flex items-baseline gap-1.5 text-sm" key={bit}>{bit}</span>)}
                     </p>
                   )}
                 </div>
               )}
               {(dictLine || (hereLine && hereLine !== dictLine) || meta.hook) && (
-                <div className="rev-snapshot stack gap-1">
-                  {dictLine && <p className="t-body"><span className="def-label">Saved meaning: </span>{dictLine}</p>}
-                  {hereLine && hereLine !== dictLine && <p className="t-support"><span className="def-label">In this sentence: </span>{hereLine}</p>}
-                  {meta.hook && <p className="t-support">Memory hook: {meta.hook}</p>}
+                <div className="rev-snapshot flex flex-col gap-1">
+                  {dictLine && <p className="text-base"><span className="text-sm font-medium text-muted-foreground">Saved meaning: </span>{dictLine}</p>}
+                  {hereLine && hereLine !== dictLine && <p className="text-sm text-muted-foreground"><span className="text-sm font-medium text-muted-foreground">In this sentence: </span>{hereLine}</p>}
+                  {meta.hook && <p className="text-sm text-muted-foreground">Memory hook: {meta.hook}</p>}
                 </div>
               )}
               {grammar.length > 0 && (
-                <Disclosure summary={`Grammar notes (${grammar.length})`}>
-                  <ul className="stack gap-2">
+                <Collapsible className="border-t"><CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between gap-2 py-2 text-left text-sm font-medium"><span>{`Grammar notes (${grammar.length})`}</span><ChevronDown className="size-4 shrink-0" aria-hidden /></CollapsibleTrigger><CollapsibleContent className="pb-3 text-sm">
+                  <ul className="flex flex-col gap-2">
                     {grammar.map((g, i) => (
-                      <li key={i} className="stack gap-1">
-                        {g.title && <p className="t-strong">{g.title}</p>}
-                        {(g.explanation || g.body) && <p className="t-support">{g.explanation || g.body}</p>}
-                        {g.hook && <p className="t-meta">Memory hook: {g.hook}</p>}
+                      <li key={i} className="flex flex-col gap-1">
+                        {g.title && <p className="font-medium">{g.title}</p>}
+                        {(g.explanation || g.body) && <p className="text-sm text-muted-foreground">{g.explanation || g.body}</p>}
+                        {g.hook && <p className="text-xs leading-4 text-muted-foreground">Memory hook: {g.hook}</p>}
                       </li>
                     ))}
                   </ul>
-                </Disclosure>
+                </CollapsibleContent></Collapsible>
               )}
             </div>
 
             {u.techfail && (
-              <Banner tone="error" title="Saving your rating failed" live="assertive" actions={<Button kind="secondary" onClick={() => rate((suggested ?? 3) as 1 | 2 | 3 | 4)}>Retry</Button>}>
-                This is not a wrong answer. Your answer is kept and nothing was recorded.
-              </Banner>
+              <Alert variant="destructive" role="alert"><AlertTitle>Saving your rating failed</AlertTitle><AlertDescription>This is not a wrong answer. Your answer is kept and nothing was recorded.<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={() => rate((suggested ?? 3) as 1 | 2 | 3 | 4)}>Retry</Button></div></AlertDescription></Alert>
             )}
             <div className="rev-actionbar">
             <div className="rev-ratings" role="group" aria-label="How well did you remember?">
               {RATINGS.map((r) => {
                 const text = intervalText(r.value);
                 return (
-                  <button
-                    key={r.value}
-                    type="button"
-                    className={cx("rev-rate", suggested === r.value && "rev-rate--suggested")}
-                    data-rating={r.value}
-                    disabled={u.rateBusy || u.rated}
-                    onClick={() => rate(r.value)}
-                  >
-                    <span className="rev-rate-name">{r.label}</span>
-                    <span className="rev-rate-interval num">{text}</span>
-                    <kbd>{r.value}</kbd>
-                  </button>
+                  <Button type="button" variant="outline" aria-disabled={(!!(u.rateBusy || u.rated)) || undefined} key={r.value} data-rating={r.value} className={cn((!!(u.rateBusy || u.rated)) ? "opacity-50" : "", cx("rev-rate h-auto flex-col gap-0 px-3 py-2", suggested === r.value && "rev-rate--suggested"))} onClick={(event) => { if (!!(u.rateBusy || u.rated)) { event.preventDefault(); return; } (() => rate(r.value))(); }}><span className="rev-rate-name">{r.label}</span>
+                    <span className="rev-rate-interval tabular-nums">{text}</span>
+                    <kbd className="text-xs text-muted-foreground">{r.value}</kbd></Button>
                 );
               })}
             </div>
             {u.rateBusy && <Spinner label="Saving your rating…" />}
-            <div className="btn-row">
-              <Button kind="secondary" icon={<Archive aria-hidden />} onClick={() => { masterCard(card.id); next(); }}>Mark mastered</Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="outline" onClick={() => { masterCard(card.id); next(); }}>{<Archive aria-hidden />}Mark mastered</Button>
             </div>
-            <p className="key-hints"><span><kbd>1</kbd>–<kbd>4</kbd> rates</span><span><kbd>Enter</kbd> takes the suggestion</span>{u.nextDue ? <span>Next review {dueIn(u.nextDue)}</span> : null}</p>
+            <p className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground"><span><kbd>1</kbd>–<kbd>4</kbd> rates</span><span><kbd>Enter</kbd> takes the suggestion</span>{u.nextDue ? <span>Next review {dueIn(u.nextDue)}</span> : null}</p>
             </div>
           </>
         )}
 
-        <div className="btn-row">
-          <Button kind="tertiary" className="btn--sm-text" onClick={() => go("review")}>Pause and return to Due today</Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" variant="ghost" className="h-8 px-2 text-sm" onClick={() => go("review")}>Pause and return to Due today</Button>
         </div>
       </div>
 
@@ -908,13 +827,9 @@ function SavedCards() {
   const sortMark = (key: "saved" | "due" | "importance") => (savedSort.key !== key ? "↕" : savedSort.dir === "asc" ? "↑" : "↓");
   useEffect(() => setPage(0), [q, f.mastered, f.minImportance, f.favoritesOnly, savedSort.key, savedSort.dir]); // eslint-disable-line react-hooks/exhaustive-deps
   const matchingCards = savedRows.length;
-  const matchingSentences = new Set(savedRows.map(({ c }) => c.sentenceId)).size;
-  const sortHeader = (key: "saved" | "due" | "importance", label: string, hide = false) => (
-    <th scope="col" className={hide ? "saved-col-hide" : undefined} aria-sort={ariaSort(key)}>
-      <button type="button" className="saved-sort" onClick={() => toggleSort(key)}>
-        {label} <span aria-hidden className="saved-sort-mark">{sortMark(key)}</span>
-      </button>
-    </th>
+  const filtered = Boolean(q || f.mastered !== "hide" || f.minImportance || f.favoritesOnly);
+  const sortButton = (key: "saved" | "due" | "importance", label: string) => (
+    <Button type="button" variant="ghost" className="h-8 px-2 font-medium whitespace-nowrap" onClick={() => toggleSort(key)}>{label} <span aria-hidden className="text-muted-foreground">{sortMark(key)}</span></Button>
   );
   const forcedBulk = useApp((s) => s.ss["SCR-LIB-02"]);
   useEffect(() => {
@@ -925,18 +840,84 @@ function SavedCards() {
   const selectedIds = Object.keys(sel).filter((k) => sel[k]);
   const selSentences = new Set(cards.filter((c) => sel[c.id]).map((c) => c.sentenceId)).size;
 
+  const savedColumns: LegacyColumnDef<{ c: LibCard; s?: LibSentence }>[] = [
+    ...(selecting
+      ? [{
+          id: "select",
+          header: () => <span className="sr-only">Select</span>,
+          cell: ({ row }) => {
+            const c = row.original.c;
+            return c.saved ? (
+              <Checkbox
+                aria-label={`Select ${c.kind} card${c.word ? ` for ${c.word}` : ""}`}
+                checked={!!sel[c.id]}
+                onCheckedChange={(v) => setSel({ ...sel, [c.id]: v === true })}
+              />
+            ) : null;
+          },
+        } satisfies LegacyColumnDef<{ c: LibCard; s?: LibSentence }>]
+      : []),
+    {
+      id: "french",
+      header: "French",
+      cell: ({ row }) => {
+        const { c, s } = row.original;
+        return c.word ? <strong lang="fr">{c.word}</strong> : <span lang="fr" className="saved-sentence">{s?.fr ?? ""}</span>;
+      },
+    },
+    { id: "type", header: "Type", cell: ({ row }) => row.original.c.kind },
+    {
+      id: "meaning",
+      header: "Meaning",
+      cell: ({ row }) => {
+        const { c, s } = row.original;
+        return [c.meaning, s?.en].find((v) => v && !/\p{Script=Han}/u.test(v)) || "—";
+      },
+    },
+    {
+      id: "status",
+      header: "Status",
+      cell: ({ row }) => (row.original.c.mastered ? "Mastered" : STATUS_LABEL[row.original.c.status]),
+    },
+    { id: "due", header: () => sortButton("due", "Due"), cell: ({ row }) => <span className="tabular-nums">{compactDue(row.original.c.due)}</span> },
+    {
+      id: "importance",
+      header: () => sortButton("importance", "Importance"),
+      cell: ({ row }) => {
+        const wordLookups = getCardLookups({ lookups }, row.original.c);
+        return wordLookups !== null ? <Importance count={wordLookups} lookups="muted" /> : "—";
+      },
+    },
+    { id: "saved", header: () => sortButton("saved", "Saved"), cell: ({ row }) => <span className="tabular-nums">{shortSavedDate(row.original.c.savedAt)}</span> },
+    {
+      id: "actions",
+      header: () => <span className="sr-only">Actions</span>,
+      cell: ({ row }) => {
+        const { c, s } = row.original;
+        const fav = Boolean(favorites[favoriteKey(c)]);
+        const speech = c.word || s?.fr || "";
+        return (
+          <span className="flex gap-1">
+            <Button type="button" variant="ghost" size="icon" aria-label={`Play ${c.word || "sentence"}`} onClick={() => sayFrench(speech)}>{<Play aria-hidden />}</Button>
+            <Button type="button" variant="ghost" size="icon" aria-pressed={fav} aria-label={fav ? "Remove favorite" : "Favorite"} onClick={() => void setFavorite(speech, !fav)}>{fav ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />}</Button>
+            <Button type="button" variant="ghost" size="icon" aria-label={c.mastered ? "Restore" : "Mark mastered"} onClick={() => (c.mastered ? void restoreMastered(c.id) : masterCard(c.id))}>{<Archive aria-hidden />}</Button>
+          </span>
+        );
+      },
+    },
+  ];
+  const savedTable = useLegacyTable({ data: pageRows, columns: savedColumns, getCoreRowModel: getCoreRowModel() });
+
   if (forced === "loading" || lib.state === "loading")
     return (
-      <div className="stack gap-3">
+      <div className="flex flex-col gap-3">
         <Spinner label="Loading your library…" />
         <Skeleton lines={5} />
       </div>
     );
   if (lib.state === "error")
     return (
-      <Banner tone="error" title="Your library didn’t load" live="assertive" actions={<Button kind="secondary" onClick={lib.retry}>Retry</Button>}>
-        Your cards are safe. {lib.error || "The server didn’t respond."}
-      </Banner>
+      <Alert variant="destructive" role="alert"><AlertTitle>Your library didn’t load</AlertTitle><AlertDescription>Your cards are safe. {lib.error || "The server didn’t respond."}<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={lib.retry}>Retry</Button></div></AlertDescription></Alert>
     );
 
   const startBulk = () => {
@@ -953,155 +934,117 @@ function SavedCards() {
   };
 
   return (
-    <div className="stack gap-5">
-      <p className="t-meta">Saved cards come back in Review. Favorite is only a bookmark.</p>
-      <div className="filter-bar">
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-end gap-3">
         <div style={{ flex: "1 1 220px" }}>
-          <FieldText label="Search" name="saved-search" type="search" inputMode="search" value={f.q} onChange={(v) => setF({ q: v })} placeholder="e.g. j’ai failli…" lang="fr" />
+          <div className="grid gap-2"><Label htmlFor="search-saved-search">Search</Label><Input id="search-saved-search" value={f.q} onChange={(e) => setF({ q: e.target.value })} type="search" inputMode="search" lang="fr" placeholder="e.g. j’ai failli…" name="saved-search" autoComplete="off" /></div>
         </div>
-        <label className="field" style={{ minWidth: 170 }}>
-          <span className="field-label">Mastered cards</span>
-          <select className="select" value={f.mastered} onChange={(e) => setF({ mastered: e.target.value as typeof f.mastered })}>
-            <option value="hide">Hide mastered</option>
-            <option value="show">Include mastered</option>
-            <option value="only">Only mastered</option>
-          </select>
+        <label className="grid gap-2" style={{ minWidth: 170 }}>
+          <span className="text-sm font-medium">Mastered cards</span>
+          <Select value={f.mastered} onValueChange={(v) => setF({ mastered: v as typeof f.mastered })}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent>{([
+              { value: "hide", label: "Hide mastered" },
+              { value: "show", label: "Include mastered" },
+              { value: "only", label: "Only mastered" },
+            ]).map((o) => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}</SelectContent></Select>
         </label>
-        <label className="field" style={{ minWidth: 210 }}>
-          <span className="field-label" title="Applies to Fill-in word cards only">Importance</span>
-          <select className="select" aria-describedby="imp-filter-note" value={f.minImportance} onChange={(e) => setF({ minImportance: Number(e.target.value) as typeof f.minImportance })}>
-            <option value={0}>Any</option>
-            <option value={3}>3 or more</option>
-            <option value={4}>4 or more</option>
-            <option value={5}>5 only</option>
-          </select>
+        <label className="grid gap-2" style={{ minWidth: 210 }}>
+          <span className="text-sm font-medium" title="Applies to Fill-in word cards only">Importance</span>
+          <Select value={String(f.minImportance)} onValueChange={(v) => setF({ minImportance: Number(v) as typeof f.minImportance })}><SelectTrigger aria-describedby={"imp-filter-note"} className="w-full"><SelectValue /></SelectTrigger><SelectContent>{([
+              { value: "0", label: "Any" },
+              { value: "3", label: "3 or more" },
+              { value: "4", label: "4 or more" },
+              { value: "5", label: "5 only" },
+            ]).map((o) => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}</SelectContent></Select>
           <span id="imp-filter-note" className="sr-only">Applies to Fill-in word cards only</span>
         </label>
-        <label className="check check--box"><input type="checkbox" checked={f.favoritesOnly} onChange={(e) => setF({ favoritesOnly: e.target.checked })} /> Favorites only</label>
-      </div>
-      <div className="row row--between">
-        <p className="t-support meta-row" aria-live="polite">
-          <span>Showing {plural(matchingSentences, "sentence")}</span>
-          <span>{plural(matchingCards, "card")}</span>
-          {(q || f.mastered !== "hide" || f.minImportance || f.favoritesOnly) ? <span>of {nf.format(savedTotal)} saved cards</span> : null}
+        <label className="flex items-center gap-3 py-2"><Checkbox checked={f.favoritesOnly} onCheckedChange={(v) => setF({ favoritesOnly: v === true })} /> Favorites only</label>
+        <p className="pb-2 text-sm tabular-nums text-muted-foreground" aria-live="polite">
+          {plural(matchingCards, "card")}
+          {filtered ? ` of ${nf.format(savedTotal)}` : ""}
         </p>
         {!selecting ? (
-          <Button kind="secondary" onClick={() => setSelecting(true)} disabledReason={!matchingCards ? "No cards to select." : undefined}>Select cards to practise</Button>
+          <Button type="button" variant="outline" aria-disabled={(!!(!matchingCards ? "No cards to select." : undefined)) || undefined} className={cn((!!(!matchingCards ? "No cards to select." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(!matchingCards ? "No cards to select." : undefined)) { event.preventDefault(); return; } (() => setSelecting(true))(); }}>Select cards to practise{(!matchingCards ? "No cards to select." : undefined) ? <span className="sr-only">{!matchingCards ? "No cards to select." : undefined}</span> : null}</Button>
         ) : (
-          <Button kind="tertiary" onClick={() => setSel(Object.fromEntries(savedRows.map(({ c }) => c).filter((c) => c.saved).map((c) => [c.id, true])))}>
-            Select all {plural(savedRows.map(({ c }) => c).filter((c) => c.saved).length, "matching saved card")}
-          </Button>
+          <Button type="button" variant="ghost" onClick={() => setSel(Object.fromEntries(savedRows.map(({ c }) => c).filter((c) => c.saved).map((c) => [c.id, true])))}>Select all {plural(savedRows.map(({ c }) => c).filter((c) => c.saved).length, "matching saved card")}</Button>
         )}
       </div>
 
       {matchingCards === 0 ? (
-        <Banner
-          tone="neutral"
-          title="No cards match these filters"
-          actions={<Button kind="secondary" onClick={() => setF({ q: "", savedOnly: false, mastered: "hide", minImportance: 0, favoritesOnly: false })}>Clear filters</Button>}
-        >
-          Your library still has {nf.format(savedTotal)} saved cards. Try fewer filters or a different search.
-        </Banner>
+        <Alert variant="default"><AlertTitle>No cards match these filters</AlertTitle><AlertDescription><div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={() => setF({ q: "", savedOnly: false, mastered: "hide", minImportance: 0, favoritesOnly: false })}>Clear filters</Button></div></AlertDescription></Alert>
       ) : (
         <>
           {narrow ? (
-            <ul className="saved-cards">
-              {pageRows.map(({ c, s }) => {
+            <ul className="flex list-none flex-col gap-3">
+              {savedTable.getRowModel().rows.map((row) => { const { c, s } = row.original;
                 const fav = Boolean(favorites[favoriteKey(c)]);
                 const speech = c.word || s?.fr || "";
                 const meaning = [c.meaning, s?.en].find((v) => v && !/\p{Script=Han}/u.test(v)) || "—";
                 return (
-                  <li key={c.id} className="saved-card" data-card-id={c.id}>
-                    <p className="saved-card-fr" lang="fr">{c.word || s?.fr || ""}</p>
-                    <p className="t-support">{meaning}</p>
-                    <p className="meta-row"><span className="meta-k">Due</span><span className="num">{compactDue(c.due)}</span><span className="meta-chip">{c.mastered ? "Mastered" : STATUS_LABEL[c.status]}</span></p>
-                    <div className="saved-action-btns">
-                      <Button kind="tertiary" iconOnly aria-label={`Play ${c.word || "sentence"}`} icon={<Play aria-hidden />} onClick={() => sayFrench(speech)} />
-                      <Button kind="tertiary" iconOnly aria-pressed={fav} aria-label={fav ? "Remove favorite" : "Favorite"} icon={fav ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />} onClick={() => void setFavorite(speech, !fav)} />
-                      <Button kind="tertiary" iconOnly aria-label={c.mastered ? "Restore" : "Mark mastered"} icon={<Archive aria-hidden />} onClick={() => (c.mastered ? void restoreMastered(c.id) : masterCard(c.id))} />
+                  <li key={c.id} className="flex flex-col gap-2 rounded-lg border bg-card p-4" data-card-id={c.id}>
+                    <p className="saved-card-fr font-serif text-xl leading-snug wrap-break-word" lang="fr">{c.word || s?.fr || ""}</p>
+                    <p className="text-sm text-muted-foreground">{meaning}</p>
+                    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"><span className="text-xs font-medium text-muted-foreground">Due</span><span className="tabular-nums">{compactDue(c.due)}</span><span className="inline-flex items-baseline gap-1.5 text-sm">{c.mastered ? "Mastered" : STATUS_LABEL[c.status]}</span></p>
+                    <div className="flex gap-1">
+                      <Button type="button" variant="ghost" size="icon" aria-label={`Play ${c.word || "sentence"}`} onClick={() => sayFrench(speech)}>{<Play aria-hidden />}</Button>
+                      <Button type="button" variant="ghost" size="icon" aria-pressed={fav} aria-label={fav ? "Remove favorite" : "Favorite"} onClick={() => void setFavorite(speech, !fav)}>{fav ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />}</Button>
+                      <Button type="button" variant="ghost" size="icon" aria-label={c.mastered ? "Restore" : "Mark mastered"} onClick={() => (c.mastered ? void restoreMastered(c.id) : masterCard(c.id))}>{<Archive aria-hidden />}</Button>
                     </div>
                   </li>
                 );
               })}
             </ul>
           ) : (
-          <div className="table-wrap saved-table-wrap">
-            <table className="saved-table">
-              <colgroup>
-                {selecting && <col className="saved-col-hide saved-col-check" />}
-                <col className="saved-col-french" />
-                <col className="saved-col-hide saved-col-type" />
-                <col className="saved-col-hide saved-col-meaning" />
-                <col className="saved-col-hide saved-col-status" />
-                <col className="saved-col-due" />
-                <col className="saved-col-hide saved-col-imp" />
-                <col className="saved-col-hide saved-col-saved" />
-                <col className="saved-col-actions" />
-              </colgroup>
-              <thead>
-                <tr>
-                  {selecting && <th scope="col" className="saved-col-hide"><span className="sr-only">Select</span></th>}
-                  <th scope="col">French</th>
-                  <th scope="col" className="saved-col-hide">Type</th>
-                  <th scope="col" className="saved-col-hide">Meaning</th>
-                  <th scope="col" className="saved-col-hide">Status</th>
-                  {sortHeader("due", "Due")}
-                  {sortHeader("importance", "Importance", true)}
-                  {sortHeader("saved", "Saved", true)}
-                  <th scope="col"><span className="sr-only">Actions</span></th>
-                </tr>
-              </thead>
-              <tbody>
-                {pageRows.map(({ c, s }) => {
-                  const wordLookups = getCardLookups({ lookups }, c);
-                  const fav = Boolean(favorites[favoriteKey(c)]);
-                  const speech = c.word || s?.fr || "";
-                  return (
-                    <tr key={c.id} data-card-id={c.id} data-saved={c.savedAt}>
-                      {selecting && (
-                        <td className="saved-col-hide">
-                          {c.saved && <input type="checkbox" aria-label={`Select ${c.kind} card${c.word ? ` for ${c.word}` : ""}`} checked={!!sel[c.id]} onChange={(e) => setSel({ ...sel, [c.id]: e.target.checked })} />}
-                        </td>
-                      )}
-                      <td className="saved-french" title={c.word || s?.fr || ""}>
-                        <span className="saved-cell">{c.word ? <strong lang="fr">{c.word}</strong> : <span lang="fr" className="saved-sentence">{s?.fr ?? ""}</span>}</span>
-                      </td>
-                      <td className="saved-col-hide"><span className="saved-cell">{c.kind}</span></td>
-                      <td className="saved-col-hide saved-meaning" title={[c.meaning, s?.en].find((v) => v && !/\p{Script=Han}/u.test(v)) || ""}><span className="saved-cell">{[c.meaning, s?.en].find((v) => v && !/\p{Script=Han}/u.test(v)) || "—"}</span></td>
-                      <td className="saved-col-hide"><span className="saved-cell">{c.mastered ? "Mastered" : STATUS_LABEL[c.status]}</span></td>
-                      <td className="num"><span className="saved-cell">{compactDue(c.due)}</span></td>
-                      <td className="saved-col-hide" data-col="imp"><span className="saved-cell">{wordLookups !== null ? <span className="saved-imp"><Importance count={wordLookups} /></span> : "—"}</span></td>
-                      <td className="saved-col-hide num"><span className="saved-cell">{shortSavedDate(c.savedAt)}</span></td>
-                      <td className="saved-actions">
-                        <span className="saved-action-btns">
-                          <Button kind="tertiary" iconOnly aria-label={`Play ${c.word || "sentence"}`} icon={<Play aria-hidden />} onClick={() => sayFrench(speech)} />
-                          <Button kind="tertiary" iconOnly aria-pressed={fav} aria-label={fav ? "Remove favorite" : "Favorite"} icon={fav ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />} onClick={() => void setFavorite(speech, !fav)} />
-                          <Button kind="tertiary" iconOnly aria-label={c.mastered ? "Restore" : "Mark mastered"} icon={<Archive aria-hidden />} onClick={() => (c.mastered ? void restoreMastered(c.id) : masterCard(c.id))} />
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="w-full">
+            <Table className="saved-table">
+              <TableHeader>
+                {savedTable.getHeaderGroups().map((group) => (
+                  <TableRow key={group.id}>
+                    {group.headers.map((header) => (
+                      <TableHead
+                        key={header.id}
+                        className="whitespace-nowrap"
+                        aria-sort={header.column.id === "due" || header.column.id === "importance" || header.column.id === "saved" ? ariaSort(header.column.id as "due" | "importance" | "saved") : undefined}
+                      >
+                        {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableHeader>
+              <TableBody>
+                {savedTable.getRowModel().rows.map((row) => (
+                  <TableRow key={row.id} data-card-id={row.original.c.id} data-saved={row.original.c.savedAt}>
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell
+                        key={cell.id}
+                        data-col={cell.column.id === "importance" ? "imp" : undefined}
+                        className={cell.column.id === "french" ? "saved-french min-w-48 whitespace-normal align-top font-serif wrap-break-word" : cell.column.id === "meaning" ? "max-w-md whitespace-normal align-top wrap-break-word" : "whitespace-nowrap align-middle"}
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
           )}
-          <div className="saved-pager">
-            <Button kind="secondary" icon={<ChevronLeft aria-hidden />} disabledReason={curPage === 0 ? "You are on the first page." : undefined} onClick={() => setPage(curPage - 1)}>Prev</Button>
-            <span className="t-support num" aria-live="polite">Page {curPage + 1} of {pageCount}</span>
-            <Button kind="secondary" iconAfter={<ChevronRight aria-hidden />} disabledReason={curPage >= pageCount - 1 ? "You are on the last page." : undefined} onClick={() => setPage(curPage + 1)}>Next</Button>
-            <span className="t-support num">Rows {rowFrom}–{rowTo} of {savedRows.length}</span>
+          <div className="saved-pager mt-3 flex flex-wrap items-center gap-3">
+            <Button type="button" variant="outline" aria-disabled={(!!(curPage === 0 ? "You are on the first page." : undefined)) || undefined} className={cn((!!(curPage === 0 ? "You are on the first page." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(curPage === 0 ? "You are on the first page." : undefined)) { event.preventDefault(); return; } (() => setPage(curPage - 1))(); }}>{<ChevronLeft aria-hidden />}Prev{(curPage === 0 ? "You are on the first page." : undefined) ? <span className="sr-only">{curPage === 0 ? "You are on the first page." : undefined}</span> : null}</Button>
+            <span className="text-sm text-muted-foreground tabular-nums" aria-live="polite">Page {curPage + 1} of {pageCount}</span>
+            <Button type="button" variant="outline" aria-disabled={(!!(curPage >= pageCount - 1 ? "You are on the last page." : undefined)) || undefined} className={cn((!!(curPage >= pageCount - 1 ? "You are on the last page." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(curPage >= pageCount - 1 ? "You are on the last page." : undefined)) { event.preventDefault(); return; } (() => setPage(curPage + 1))(); }}>Next{<ChevronRight aria-hidden />}{(curPage >= pageCount - 1 ? "You are on the last page." : undefined) ? <span className="sr-only">{curPage >= pageCount - 1 ? "You are on the last page." : undefined}</span> : null}</Button>
+            <span className="text-sm text-muted-foreground tabular-nums">Rows {rowFrom}–{rowTo} of {savedRows.length}</span>
           </div>
         </>
       )}
       {selecting && (
-        <div className="bulk-bar" role="region" aria-label="Bulk practice">
-          <p className="grow t-strong" aria-live="polite">
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card p-3" role="region" aria-label="Bulk practice">
+          <p className="min-w-0 flex-1 font-medium" aria-live="polite">
             Practise {plural(selectedIds.length, "selected card")} from {nf.format(savedTotal)} library cards
-            {selectedIds.length ? <span className="t-support"> from {plural(selSentences, "sentence")}</span> : null}
+            {selectedIds.length ? <span className="text-sm text-muted-foreground"> from {plural(selSentences, "sentence")}</span> : null}
           </p>
-          <Button kind="secondary" onClick={() => { setSelecting(false); setSel({}); }}>Cancel</Button>
-          <Button kind="primary" onClick={startBulk} disabledReason={!selectedIds.length ? "Select at least one card." : undefined}>Start practice</Button>
+          <Button type="button" variant="outline" onClick={() => { setSelecting(false); setSel({}); }}>Cancel</Button>
+          <Button type="button" variant="default" aria-disabled={(!!(!selectedIds.length ? "Select at least one card." : undefined)) || undefined} className={cn((!!(!selectedIds.length ? "Select at least one card." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(!selectedIds.length ? "Select at least one card." : undefined)) { event.preventDefault(); return; } (startBulk)(); }}>Start practice{(!selectedIds.length ? "Select at least one card." : undefined) ? <span className="sr-only">{!selectedIds.length ? "Select at least one card." : undefined}</span> : null}</Button>
           {!selectedIds.length && <DisabledReason>Select at least one card.</DisabledReason>}
         </div>
       )}
@@ -1138,59 +1081,54 @@ function MasteredList() {
   };
   if (lib.state === "loading" && forced !== "empty")
     return (
-      <div className="stack gap-3">
+      <div className="flex flex-col gap-3">
         <Spinner label="Loading mastered cards…" />
         <Skeleton lines={4} />
       </div>
     );
   if (lib.state === "error" && forced !== "empty")
     return (
-      <Banner tone="error" title="Mastered cards didn’t load" live="assertive" actions={<Button kind="secondary" onClick={lib.retry}>Retry</Button>}>
-        {lib.error || "The server didn’t respond."}
-      </Banner>
+      <Alert variant="destructive" role="alert"><AlertTitle>Mastered cards didn’t load</AlertTitle><AlertDescription>{lib.error || "The server didn’t respond."}<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={lib.retry}>Retry</Button></div></AlertDescription></Alert>
     );
   if (!mastered.length)
     return (
-      <Banner tone="neutral" title="No mastered cards">
-        Cards you mark as mastered are hidden from your default review and listed here. Nothing is ever deleted.
-      </Banner>
+      <Alert variant="default"><AlertTitle>No mastered cards</AlertTitle></Alert>
     );
   return (
-    <div className="stack gap-4">
-      <p className="t-support">Mastered cards are hidden from your default review. Restore one to bring it back. Nothing here is deleted.</p>
+    <div className="flex flex-col gap-4">
       <div style={{ maxWidth: 420 }}>
-        <FieldText label="Search mastered cards" type="search" value={q} onChange={setQ} lang="fr" />
+        <div className="grid gap-2"><Label htmlFor={"search-mastered-cards"}>Search mastered cards</Label><Input id="search-mastered-cards" value={q} onChange={(e) => setQ(e.target.value)} type="search" lang="fr" autoComplete="off" /></div>
       </div>
-      <p className="t-support" aria-live="polite">Showing {shown.length} of {plural(mastered.length, "mastered card")}</p>
+      <p className="text-sm text-muted-foreground" aria-live="polite">Showing {shown.length} of {plural(mastered.length, "mastered card")}</p>
       {shown.length === 0 ? (
-        <Banner tone="neutral" title="No mastered cards match your search" actions={<Button kind="secondary" onClick={() => setQ("")}>Clear search</Button>} />
+        <Alert variant="default"><AlertTitle>No mastered cards match your search</AlertTitle><AlertDescription><div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={() => setQ("")}>Clear search</Button></div></AlertDescription></Alert>
       ) : (
-        <ul className="list">
+        <ul className="divide-y overflow-hidden rounded-lg border">
           {shown.slice(0, 30).map((c) => {
             const s = sentences.find((x) => x.id === c.sentenceId)!;
             const st = pending[c.id];
             return (
-              <li key={c.id} className="list-row">
-                <div className="grow stack" style={{ minWidth: 200 }}>
+              <li key={c.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                <div className="min-w-0 flex-1 flex flex-col" style={{ minWidth: 200 }}>
                   <span lang="fr">{s.fr}</span>
-                  <span className="t-support">{c.kind} card{c.word ? ` · ${c.word}` : ""}</span>
+                  <span className="text-sm text-muted-foreground">{c.kind} card{c.word ? ` · ${c.word}` : ""}</span>
                 </div>
                 {st === "done" ? (
-                  <Pill tone="success">Restored</Pill>
+                  <Badge variant="secondary">Restored</Badge>
                 ) : st === "error" ? (
                   <>
-                    <span className="t-support" style={{ color: "var(--error)" }}>Restore failed</span>
-                    <Button kind="secondary" icon={<RotateCcw aria-hidden />} onClick={() => restore(c.id)}>Retry</Button>
+                    <span className="text-sm text-muted-foreground" style={{ color: "var(--error)" }}>Restore failed</span>
+                    <Button type="button" variant="outline" onClick={() => restore(c.id)}>{<RotateCcw aria-hidden />}Retry</Button>
                   </>
                 ) : (
-                  <Button kind="secondary" busy={st === "pending"} onClick={() => restore(c.id)}>{st === "pending" ? "Restoring…" : "Restore"}</Button>
+                  <Button type="button" variant="outline" aria-disabled={(!!(st === "pending")) || undefined} aria-busy={st === "pending" || undefined} className={cn((!!(st === "pending")) ? "opacity-50" : "")} onClick={(event) => { if (!!(st === "pending")) { event.preventDefault(); return; } (() => restore(c.id))(); }}>{st === "pending" ? <Loader2 className="animate-spin" aria-hidden /> : null}{st === "pending" ? "Restoring…" : "Restore"}</Button>
                 )}
               </li>
             );
           })}
         </ul>
       )}
-      {shown.length > 30 && <p className="note"><Search aria-hidden /> Showing the first 30. Search to find others.</p>}
+      {shown.length > 30 && <p className="flex items-start gap-2 text-sm text-muted-foreground"><Search aria-hidden /> Showing the first 30. Search to find others.</p>}
     </div>
   );
 }
