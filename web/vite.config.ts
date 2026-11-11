@@ -1,10 +1,16 @@
-import { defineConfig } from "vite";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
+
+const root = path.dirname(fileURLToPath(import.meta.url));
 
 // Served by FastAPI under /app/ (routers/app_shell.py); the Docker build copies dist/ to static/app.
 export default defineConfig({
   base: "/app/",
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
+  resolve: { alias: { "@": path.resolve(root, "./src") } },
   build: { outDir: "dist", emptyOutDir: true, assetsDir: "assets" },
   server: {
     host: true,

@@ -119,6 +119,7 @@ export function Shell({ children }: { children: ReactNode }) {
                   className="nav-item"
                   aria-current={active ? "page" : undefined}
                   onClick={(e) => {
+                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
                     e.preventDefault();
                     go(n.key);
                   }}
@@ -131,7 +132,6 @@ export function Shell({ children }: { children: ReactNode }) {
           })}
         </ul>
         <div className="nav-foot">
-          <p className="t-meta">Everything you do is saved to your account. Exam practice is planned.</p>
           <VersionInfo />
         </div>
       </nav>
@@ -178,7 +178,7 @@ function Header() {
           aria-haspopup="menu"
           onClick={() => set((s) => ({ menuOpen: !s.menuOpen }))}
         >
-          <span className="brand-mark" style={{ background: "#475569", borderRadius: "50%" }} aria-hidden>
+          <span className="brand-mark" style={{ background: "var(--text)", borderRadius: "50%" }} aria-hidden>
             {initials(email)}
           </span>
         </button>

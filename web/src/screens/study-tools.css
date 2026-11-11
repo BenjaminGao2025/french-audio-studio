@@ -24,7 +24,7 @@
 .study-score { border-top: 1px solid var(--divider); padding-top: 16px; }
 .study-score-metrics { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; }
 .study-score-metrics > strong { font-size: 36px; font-weight: 650; }
-.study-score-metrics small { font-size: 14px; font-weight: 400; color: var(--muted); }
+.study-score-metrics small { font-size: 14px; font-weight: 400; color: var(--muted-foreground); }
 .study-score-metrics > span { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
 .study-score-metrics b { font-size: 20px; }
 .study-score-words { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -32,7 +32,7 @@
 .shadow-correct { background: #e4f1e8; color: #215a36; }
 .shadow-close { background: #fff2ce; color: #735113; }
 .shadow-missed { background: #fae8e6; color: #903a34; text-decoration: underline; }
-.study-blank { border: 1px dashed #87a596; background: #eaf1ed; color: #31664b; border-radius: 6px; padding: 0 16px; cursor: pointer; font: inherit; min-height: 40px; }
+.study-blank { border: 1px dashed #87a596; background: #eaf1ed; color: #31664b; border-radius: 6px; padding: 0 16px; cursor: pointer; font: inherit; min-height: 44px; }
 .study-feedback { padding: 18px; background: var(--canvas); border-radius: 12px; }
 .study-conversation { display: flex; flex-direction: column; gap: 12px; }
 .study-turn { padding: 16px; border-radius: 12px; line-height: 1.7; overflow-wrap: anywhere; }
@@ -40,17 +40,16 @@
 .study-turn--tutor { border: 1px solid var(--divider); margin-right: 12px; }
 .study-turn .t-meta { margin-bottom: 6px; }
 .personal-stages { display: flex; gap: 8px; padding: 0; list-style: none; flex-wrap: wrap; }
-.personal-stages li { padding: 7px 12px; background: var(--surface); border-radius: 20px; font-size: 12px; color: var(--muted); }
+.personal-stages li { padding: 7px 12px; background: var(--surface); border-radius: 20px; font-size: 12px; color: var(--muted-foreground); }
 .personal-stages li[aria-current="step"] { background: #e9f1ed; color: #225d48; font-weight: 650; }
 .personal-parts { display: flex; flex-wrap: wrap; gap: 6px; }
 .personal-recordings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .personal-recordings > section { min-width: 0; }
 .personal-source { white-space: pre-wrap; overflow-wrap: anywhere; }
-.personal-practice details > summary, #learn-panel details > summary { cursor: pointer; padding: 10px 0; min-height: 40px; font-weight: 550; }
+.personal-practice details > summary, #learn-panel details > summary { cursor: pointer; padding: 10px 0; min-height: 44px; font-weight: 550; }
 .grammar-points { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .grammar-points button { text-align: left; justify-content: flex-start; white-space: normal; }
-@media (max-width: 600px) {
-  .study-path > button { flex: 1 1 calc(50% - var(--s2)); }
+@container app (max-width: 640px) {
   .study-word-grid, .personal-recordings, .grammar-points { grid-template-columns: 1fr; }
   .study-shadow { padding: 14px; }
   .study-score-metrics { gap: 16px; }

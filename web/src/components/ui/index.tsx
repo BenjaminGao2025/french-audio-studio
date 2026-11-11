@@ -12,8 +12,11 @@ import {
 } from "react";
 import { AlertCircle, CheckCircle2, ChevronDown, Info, Loader2, Star, TriangleAlert, X, FlaskConical } from "lucide-react";
 import { createPortal } from "react-dom";
-import { cx } from "../lib/format";
-import { importanceFor, importanceLabel } from "../lib/lookup";
+import { cx } from "../../lib/format";
+import { importanceFor, importanceLabel } from "../../lib/lookup";
+import { Button as ShadButton } from "./button";
+import { Tabs as ShadTabs, TabsList, TabsTrigger } from "./tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./tooltip";
 
 /* ---------- App width (container-based responsive logic) ---------- */
 export const WidthContext = createContext(1200);
@@ -33,36 +36,48 @@ interface BtnProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "role">
   block?: boolean;
   iconOnly?: boolean;
 }
+const BUTTON_VARIANT = { primary: "default", secondary: "outline", tertiary: "ghost", destructive: "destructive" } as const;
+
 export function Button({ kind = "secondary", icon, iconAfter, busy, disabledReason, block, iconOnly, className, children, onClick, disabled, ...rest }: BtnProps) {
   const reasonId = useId();
   const off = disabled || !!disabledReason || busy;
-  return (
-    <>
-      <button
-        type="button"
-        {...rest}
-        className={cx("btn", `btn--${kind}`, block && "btn--block", iconOnly && "btn--icon", className)}
-        aria-disabled={off || undefined}
-        aria-busy={busy || undefined}
-        aria-describedby={disabledReason ? reasonId : rest["aria-describedby"]}
-        onClick={(e) => {
-          if (off) {
-            e.preventDefault();
-            return;
-          }
-          onClick?.(e);
-        }}
-      >
-        {busy ? <Loader2 className="spin" aria-hidden /> : icon}
-        {children}
-        {iconAfter}
-      </button>
+  const label = typeof rest["aria-label"] === "string" ? rest["aria-label"] : undefined;
+  const control = (
+    <ShadButton
+      type="button"
+      variant={BUTTON_VARIANT[kind]}
+      size={iconOnly ? "icon" : "default"}
+      {...rest}
+      className={cx("h-11 min-h-11 w-fit max-w-full gap-2 px-4 text-base", block && "w-full", iconOnly && "size-11 min-w-11 p-0", off && "cursor-not-allowed opacity-70", className)}
+      aria-disabled={off || undefined}
+      aria-busy={busy || undefined}
+      aria-describedby={disabledReason ? reasonId : rest["aria-describedby"]}
+      onClick={(e) => {
+        if (off) {
+          e.preventDefault();
+          return;
+        }
+        onClick?.(e);
+      }}
+    >
+      {busy ? <Loader2 className="spin" aria-hidden /> : icon}
+      {children}
+      {iconAfter}
       {disabledReason && (
         <span id={reasonId} className="sr-only">
           {disabledReason}
         </span>
       )}
-    </>
+    </ShadButton>
+  );
+  if (!iconOnly || !label) return control;
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>{control}</TooltipTrigger>
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
@@ -187,6 +202,8 @@ export function FieldText({
   width,
   placeholder,
   autoComplete,
+  name,
+  spellCheck,
 }: {
   label: string;
   help?: ReactNode;
@@ -202,6 +219,8 @@ export function FieldText({
   width?: number;
   placeholder?: string;
   autoComplete?: string;
+  name?: string;
+  spellCheck?: boolean;
 }) {
   const auto = useId();
   const id = idProp ?? auto;
@@ -223,8 +242,10 @@ export function FieldText({
         inputMode={inputMode}
         lang={lang}
         value={value}
+        name={name}
         placeholder={placeholder}
-        autoComplete={autoComplete}
+        autoComplete={autoComplete ?? "off"}
+        spellCheck={spellCheck}
         aria-invalid={error ? true : undefined}
         aria-describedby={cx(help ? `${id}-help` : undefined, error ? `${id}-err` : undefined) || undefined}
         onChange={(e) => onChange(e.target.value)}
@@ -298,36 +319,16 @@ export function Tabs<T extends string>({
   onChange: (v: T) => void;
   idBase: string;
 }) {
-  const refs = useRef<(HTMLButtonElement | null)[]>([]);
   return (
-    <div role="tablist" aria-label={label} className="tabs">
-      {tabs.map((t, i) => (
-        <button
-          key={t.value}
-          ref={(el) => {
-            refs.current[i] = el;
-          }}
-          id={`${idBase}-tab-${t.value}`}
-          role="tab"
-          type="button"
-          className="tab"
-          aria-selected={t.value === value}
-          aria-controls={`${idBase}-panel`}
-          tabIndex={t.value === value ? 0 : -1}
-          onClick={() => onChange(t.value)}
-          onKeyDown={(e) => {
-            const d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
-            if (!d) return;
-            e.preventDefault();
-            const n = (i + d + tabs.length) % tabs.length;
-            refs.current[n]?.focus();
-            onChange(tabs[n].value);
-          }}
-        >
-          {t.label}
-        </button>
-      ))}
-    </div>
+    <ShadTabs value={value} onValueChange={(next) => onChange(next as T)}>
+      <TabsList variant="line" aria-label={label} className="tabs-scroll">
+        {tabs.map((t) => (
+          <TabsTrigger key={t.value} id={`${idBase}-tab-${t.value}`} value={t.value} className="tab-trigger">
+            {t.label}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </ShadTabs>
   );
 }
 
@@ -378,7 +379,13 @@ export function Dialog({
     const first = el.querySelector<HTMLElement>("[data-autofocus]") ?? el.querySelector<HTMLElement>(FOCUSABLE);
     first?.focus();
   }, []);
-  return (
+  useEffect(() => {
+    const shell = document.querySelector<HTMLElement>(".shell");
+    if (!shell) return;
+    shell.setAttribute("inert", "");
+    return () => shell.removeAttribute("inert");
+  }, []);
+  const node = (
     <div
       className={cx("overlay", sheet && "overlay--sheet")}
       onMouseDown={(e) => {
@@ -424,6 +431,43 @@ export function Dialog({
         {footer && <div className="btn-row btn-row--end">{footer}</div>}
       </div>
     </div>
+  );
+  const root = typeof document !== "undefined" ? document.getElementById("app-root") : null;
+  return root ? createPortal(node, root) : node;
+}
+
+/** Desktop word card: a sticky column, so it never covers the player or the tabs. */
+export function WordDock({ label, onClose, children }: { label: string; onClose: () => void; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useRestoreFocus();
+  useEffect(() => {
+    const auto = ref.current?.querySelector<HTMLElement>("[data-autofocus]");
+    (auto ?? ref.current)?.focus();
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (ref.current?.contains(t)) return;
+      if ((t as HTMLElement).closest?.(".fr-word, .fr-text")) return;
+      onClose();
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [onClose]);
+  return (
+    <aside
+      ref={ref}
+      role="dialog"
+      aria-label={label}
+      tabIndex={-1}
+      className="popover word-dock"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          onClose();
+        }
+      }}
+    >
+      {children}
+    </aside>
   );
 }
 
@@ -524,9 +568,8 @@ export function Importance({ count, lookups = "inline" }: { count: number; looku
       </span>
       <span className="t-support">
         <span className="sr-only">{importanceLabel(count)}</span>
-        <span aria-hidden>
-          {lookups === "muted" ? times : `Importance ${n}/5 · ${times}`}
-        </span>
+        <span aria-hidden>{lookups === "muted" ? times : `Importance ${n}/5`}</span>
+        {lookups !== "muted" && <span className="t-meta">{times}</span>}
       </span>
     </p>
   );

@@ -224,7 +224,7 @@ export function WordPanel({
           {phraseMeaning && (
             <p className="t-support">
               <span lang="fr" className="t-strong">{overlapping?.phrase || overlapping?.text}</span>
-              {" · "}{phraseMeaning}
+              <span className="meta-chip">{phraseMeaning}</span>
             </p>
           )}
         </section>
@@ -241,7 +241,7 @@ export function WordPanel({
           )}
           {dictSt === "ready" && (dictEntries.length ? (
             <>
-              <p className="t-meta">Wiktionnaire · French definitions</p>
+              <p className="meta-row t-meta"><span>Wiktionnaire</span><span>French definitions</span></p>
               {dictEntries.map((entry, index) => {
                 const entryIpa = formatFriendlyPhonetic(entry.phonetic);
                 const primary = entry.senses.slice(0, 4);
@@ -250,7 +250,7 @@ export function WordPanel({
                   <div className="wp-source-entry" key={`${entry.lemma}-${entry.pos}-${index}`}>
                     <p className="t-strong">
                       <span lang="fr">{entry.lemma}</span>
-                      <span className="t-support"> · {entry.pos}{entryIpa ? ` · ${entryIpa}` : ""}</span>
+                      <span className="t-support"> {entry.pos}{entryIpa ? ` ${entryIpa}` : ""}</span>
                     </p>
                     <ol className="wp-senses" lang="fr">
                       {primary.map((sense, i) => <li key={i}>{sense}</li>)}
@@ -264,9 +264,10 @@ export function WordPanel({
                       </details>
                     )}
                     <p className="t-meta">
-                      <a href={entry.source_url} target="_blank" rel="noopener noreferrer">Source entry</a>
-                      {" · "}
-                      <a href={entry.history_url} target="_blank" rel="noopener noreferrer">Contributors</a>
+                      <span className="meta-row">
+                        <a href={entry.source_url} target="_blank" rel="noopener noreferrer">Source entry</a>
+                        <a href={entry.history_url} target="_blank" rel="noopener noreferrer">Contributors</a>
+                      </span>
                     </p>
                   </div>
                 );

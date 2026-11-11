@@ -7,6 +7,11 @@ import { VersionInfo } from "./VersionInfo";
 import { WidthContext } from "./ui";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+(globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
 
 describe("version and update history", () => {
   it.each([390, 1200])("opens and closes the update history at width %i", async (width) => {

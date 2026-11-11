@@ -19,7 +19,7 @@ import {
   updatePlayer,
   useApp,
 } from "../state/store";
-import { Banner, Button, Dialog, PageHead, Popover, Skeleton, Spinner, useNarrow } from "../components/ui";
+import { Banner, Button, Dialog, PageHead, Popover, Skeleton, Spinner, useNarrow, WordDock } from "../components/ui";
 import { FrText, stepSegments, type FrPick } from "../components/FrText";
 import { WordPanel } from "./WordPopup";
 import { Exercise } from "./Exercise";
@@ -90,7 +90,7 @@ export function StudyLearn() {
     <div className="page page--wide">
       <PageHead
         title="Study"
-        eyebrow={`${study.analysis.source} · ${plural(total, "sentence")}`}
+        eyebrow={<span className="meta-row"><span>{study.analysis.source}</span><span>{plural(total, "sentence")}</span></span>}
         actions={
           <>
             <Button kind="tertiary" icon={<HistoryIcon aria-hidden />} onClick={() => go("progress/history?tab=analyses")}>
@@ -103,6 +103,7 @@ export function StudyLearn() {
         }
       />
 
+      <div className={cx("with-word-card", pick && !narrow && "is-open")}>
       <div className="stack gap-5">
         {!!study.analysis.failedParts && <Banner tone="warning" title="Some text could not be analysed">{study.analysis.failedParts} parts failed. Your original text is kept. Open New text to retry the missing parts.</Banner>}
         {!practising && s.raw?.accent_fixed_from && <Banner tone="info" title="Accents corrected">Original: <span lang="fr">{s.raw.accent_fixed_from}</span>. The sentence below uses corrected French accents.</Banner>}
@@ -142,11 +143,12 @@ export function StudyLearn() {
           </div>
         )}
 
-        {!practising && <section className="panel stack gap-4" aria-labelledby="current-sentence-heading">
+        {!practising && <section className="sentence-hero" aria-labelledby="current-sentence-heading">
           <div className="row row--between">
-            <h2 id="current-sentence-heading" tabIndex={-1} className="t-label">
-              {total > 1 ? `Sentence ${study.index + 1} of ${total}` : "Your sentence"}
+            <h2 id="current-sentence-heading" tabIndex={-1} className="sr-only">
+              {total > 1 ? `Sentence ${study.index + 1} of ${total}` : "Current sentence"}
             </h2>
+            {total > 1 && <p className="t-meta">Sentence {study.index + 1} of {total}</p>}
             {total > 1 && (
               <div className="btn-row">
                 <Button kind="secondary" iconOnly icon={<ChevronLeft aria-hidden />} aria-label="Previous sentence" disabledReason={study.index === 0 ? "This is the first sentence." : undefined} onClick={() => goSentence(study.index - 1)} />
@@ -155,20 +157,16 @@ export function StudyLearn() {
             )}
           </div>
 
-          {!practising && (
-            <div ref={sentRef} style={{ position: "relative" }}>
-              <FrText segments={s.segments} className="sentence-fr" onPick={onPick} />
-              <p className="t-body muted" style={{ marginTop: 8 }}>{s.en}</p>
-            </div>
-          )}
+          <div ref={sentRef}>
+            <FrText segments={s.segments} className="sentence-fr" onPick={onPick} />
+            <p className="sentence-en">{s.en}</p>
+          </div>
 
           <StudyPlayer practising={practising} />
 
-          {!practising && (
-            <div className="btn-row">
-              <AddToReview sentence={s} />
-            </div>
-          )}
+          <div className="btn-row">
+            <AddToReview sentence={s} />
+          </div>
         </section>}
 
         <div className="stack gap-4">
@@ -208,9 +206,8 @@ export function StudyLearn() {
           </div>
         </div>
       </div>
-
       {pick && !narrow && (
-        <Popover anchor={pick.el} onClose={() => setPick(null)} label={`Meaning of ${pick.text}`}>
+        <WordDock label={`Meaning of ${pick.text}`} onClose={() => setPick(null)}>
           <WordPanel
             key={`${pick.text}-${pick.wordIndex ?? ""}`}
             sentence={s}
@@ -220,8 +217,9 @@ export function StudyLearn() {
             onGrammar={() => { setPick(null); patchStudy({ tab: "grammar" }); }}
             onClose={() => setPick(null)}
           />
-        </Popover>
+        </WordDock>
       )}
+      </div>
       {pick && narrow && (
         <Dialog sheet titleHidden title={`Meaning of “${pick.text}”`} onClose={() => setPick(null)}>
           <WordPanel
@@ -294,7 +292,7 @@ function StudyPlayer({ practising }: { practising: boolean }) {
     <div className="player" role="group" aria-label="Sentence player">
       <div className="player-main">
         <Button
-          kind="primary"
+          kind="secondary"
           className="play-btn"
           iconOnly
           busy={loading}
@@ -305,7 +303,8 @@ function StudyPlayer({ practising }: { practising: boolean }) {
         <div className="grow stack gap-1" style={{ minWidth: 160 }}>
           <span className="t-strong">{label}</span>
           <span className="t-support num" aria-live="off">
-            {statusText} · {fmtClock(mine?.position ?? 0)} / {fmtClock(mine?.duration ?? dur(wanted))}
+            <span>{statusText}</span>{" "}
+            <span>{fmtClock(mine?.position ?? 0)} / {fmtClock(mine?.duration ?? dur(wanted))}</span>
           </span>
           <div className="progress-track" aria-hidden>
             <div className="progress-fill" style={{ width: `${mine ? Math.min(100, (mine.position / mine.duration) * 100) : 0}%` }} />
@@ -320,7 +319,7 @@ function StudyPlayer({ practising }: { practising: boolean }) {
             onChange={(e) => (mine ? updatePlayer({ speed: Number(e.target.value) }) : set((st) => ({ settings: { ...st.settings, speed: Number(e.target.value) } })))}
           >
             {[0.75, 1, 1.25, 1.5, 2].map((v) => (
-              <option key={v} value={v}>{v}×</option>
+              <option key={v} value={v}>{`${v}\u00a0×`}</option>
             ))}
           </select>
         </label>
@@ -384,16 +383,14 @@ function StepsPanel({ sentence, onPick }: { sentence: StudySentence; onPick: (p:
 
   return (
     <div className="stack gap-3">
-      <div className="row row--between">
-        <p className="t-support">
-          Build the sentence a piece at a time. Each step marks what is <mark className="added">new</mark>.
-        </p>
+      <p className="t-support">
+        Build the sentence a piece at a time. Each step marks what is <mark className="added">new</mark>.
+      </p>
+      <div className="study-step-tools btn-row">
+        <Button kind={blind ? "primary" : "secondary"} aria-pressed={blind} onClick={() => { setBlind(!blind); setRevealed([]); }}>{blind ? "Show all words" : "Test me"}</Button>
         <Button kind="secondary" icon={allStepsPlaying ? <Pause aria-hidden /> : <Play aria-hidden />} onClick={playAllSteps}>
           {allStepsPlaying ? "Pause all steps" : "Play all steps"}
         </Button>
-      </div>
-      <div className="study-step-tools btn-row">
-        <Button kind={blind ? "primary" : "secondary"} aria-pressed={blind} onClick={() => { setBlind(!blind); setRevealed([]); }}>{blind ? "Show all words" : "Test me · hide new words"}</Button>
         {blind && <Button kind="tertiary" onClick={() => setRevealed(revealed.length ? [] : sentence.steps.map((_, i) => i))}>{revealed.length ? "Hide again" : "Reveal all"}</Button>}
       </div>
       {blind && <p className="t-support">Say the missing part from memory, then reveal it or record yourself.</p>}
@@ -412,8 +409,7 @@ function StepsPanel({ sentence, onPick }: { sentence: StudySentence; onPick: (p:
             >
               <span className="step-num" aria-hidden>{i + 1}</span>
               <div className="stack gap-2">
-                <span className="step-badge">Step {i + 1}</span>
-                {blind && !revealed.includes(i) ? <p className="step-fr" lang="fr">{st.parts.map((part, j) => part.added || i === 0 ? <button type="button" key={j} className="study-blank" aria-label={`Reveal new words in step ${i + 1}`} onClick={(e) => { e.stopPropagation(); setRevealed([...revealed, i]); }}>•••</button> : <span key={j}>{part.t}</span>)}</p> : <FrText segments={stepSegments(st.parts)} className="step-fr" onPick={onPick} />}
+                {blind && !revealed.includes(i) ? <p className="step-fr" lang="fr">{st.parts.map((part, j) => part.added || i === 0 ? <button type="button" key={j} className="study-blank" aria-label={`Reveal new words in step ${i + 1}`} onClick={(e) => { e.stopPropagation(); setRevealed([...revealed, i]); }}>…</button> : <span key={j}>{part.t}</span>)}</p> : <FrText segments={stepSegments(st.parts)} className="step-fr" onPick={onPick} />}
                 <p className="t-support">{st.en}</p>
                 {(!blind || revealed.includes(i)) && <p className="t-body">
                   <span className="t-strong">{/[.!?…]$/.test(st.addedLabel) ? st.addedLabel : `${st.addedLabel}.`}</span>
@@ -449,8 +445,9 @@ function StepsPanel({ sentence, onPick }: { sentence: StudySentence; onPick: (p:
 function GrammarPanel({ sentence }: { sentence: StudySentence }) {
   const forced = useApp((s) => s.ss["SCR-GRA-01"]);
   const index = useApp((s) => s.study.index);
-  // The notes arrive with the analysis, so there is nothing to load.
-  const state = forced && forced !== "auto" ? forced : sentence.grammar ? "content" : "none";
+  const [retried, setRetried] = useState(false);
+  // The notes arrive with the analysis, so Retry only re-reads what is already here.
+  const state = retried ? (sentence.grammar ? "content" : "none") : forced && forced !== "auto" ? forced : sentence.grammar ? "content" : "none";
   const notes = sentence.grammar ?? [];
   return (
     <div className="stack gap-4" aria-busy={state === "loading"}>
@@ -468,7 +465,7 @@ function GrammarPanel({ sentence }: { sentence: StudySentence }) {
         </Banner>
       )}
       {state === "error" && (
-        <Banner tone="error" title="Grammar notes didn’t load" live="assertive">
+        <Banner tone="error" title="Grammar notes didn’t load" live="assertive" actions={<Button kind="secondary" onClick={() => setRetried(true)}>Retry</Button>}>
           Your place in the sentence is kept.
         </Banner>
       )}

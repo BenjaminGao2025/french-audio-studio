@@ -8,6 +8,16 @@ export const RELEASES = [
     version: APP_VERSION,
     date: "2026-11-10",
     changes: [
+      "Study, Review and Settings now use a calm reading theme: warm paper, olive actions, and a serif face for French sentences.",
+      "French sentences are the large line on the workspace and in review. Player controls sit in a quiet toolbar.",
+      "Saved cards wrap on a desktop table and become a card list on a phone. Word cards sit beside the sentence instead of covering the player.",
+      "Practice feedback is a vertical list with a visible volume number. Grade buttons show an interval and a distinct weight.",
+    ],
+  },
+  {
+    version: "1.0.5",
+    date: "2026-11-10",
+    changes: [
       "IPA is back to the friendly style, like [prɔpɔze], with brackets and no syllable dots.",
       "Word cards are a small panel next to the word: meaning in this sentence, dictionary shown, clear Favorite and Importance.",
       "A calmer, consistent layout across Study, Review and Saved; Due today only appears on the Study home.",
