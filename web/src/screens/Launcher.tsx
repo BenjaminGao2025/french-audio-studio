@@ -74,7 +74,7 @@ export function Launcher({ kind }: { kind: "Recall" | "Dictation" }) {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <PageHead
-        back={<Button type="button" variant="ghost" style={{ alignSelf: "flex-start", marginLeft: -12 }} className="h-8 px-2 text-sm" onClick={() => go("study")}>{<ChevronLeft aria-hidden />}Study</Button>}
+        back={<Button type="button" variant="ghost" className="h-8 self-start px-2 text-sm md:-ml-3" onClick={() => go("study")}>{<ChevronLeft aria-hidden />}Study</Button>}
         title={kind}
       />
       <div className="flex flex-col gap-6">
@@ -154,7 +154,7 @@ export function RunScreen() {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
       <h1 className="sr-only" tabIndex={-1} data-page-title>{kind}</h1>
-      <Button type="button" variant="ghost" style={{ alignSelf: "flex-start", marginLeft: -12 }} className="h-8 px-2 text-sm" onClick={() => go(kind === "Recall" ? "study/recall" : "study/dictation")}>{<ChevronLeft aria-hidden />}Change source</Button>
+      <Button type="button" variant="ghost" className="h-8 self-start px-2 text-sm md:-ml-3" onClick={() => go(kind === "Recall" ? "study/recall" : "study/dictation")}>{<ChevronLeft aria-hidden />}Change source</Button>
       <Exercise sessionKey={key} kind={kind} source={sess?.source ?? meta!.source} items={sess?.items ?? meta!.items} onDone={() => go("study")} />
     </div>
   );

@@ -214,7 +214,7 @@ export function Shell({ children }: { children: ReactNode }) {
               <Alert variant="default"><AlertTitle>Demo data — not connected yet</AlertTitle><AlertDescription>You are signed in for real, but this screen still shows sample data. Nothing you do here is saved to your account yet.</AlertDescription></Alert>
             </div>
           )}
-          <div className="flex flex-1 flex-col">{children}</div>
+          <div className="flex min-w-0 flex-1 flex-col px-4 md:px-0">{children}</div>
           <GlobalPlayer />
         </SidebarInset>
         <Toaster />

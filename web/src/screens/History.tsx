@@ -56,7 +56,7 @@ export function HistoryScreen() {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
       <PageHead
-        back={<Button type="button" variant="ghost" style={{ alignSelf: "flex-start", marginLeft: -12 }} className="h-8 px-2 text-sm" onClick={() => go("progress")}>{<ChevronLeft aria-hidden />}Progress</Button>}
+        back={<Button type="button" variant="ghost" className="h-8 self-start px-2 text-sm md:-ml-3" onClick={() => go("progress")}>{<ChevronLeft aria-hidden />}Progress</Button>}
         title="History"
       />
       <div className="flex flex-col gap-6">
@@ -111,7 +111,7 @@ function DataTable<T extends Record<string, any>>({ data, columns }: { data: T[]
 }
 
 const BackButton = ({ onBack }: { onBack: () => void }) => (
-  <Button type="button" variant="ghost" style={{ alignSelf: "flex-start", marginLeft: -12 }} className="h-8 px-2 text-sm" onClick={onBack}>{<ChevronLeft aria-hidden />}Back to list</Button>
+  <Button type="button" variant="ghost" className="h-8 self-start px-2 text-sm md:-ml-3" onClick={onBack}>{<ChevronLeft aria-hidden />}Back to list</Button>
 );
 
 const preview = (text: string) => (text.length > 120 ? `${text.slice(0, 117).trimEnd()}…` : text);
@@ -365,7 +365,7 @@ function ClearAction({ kind, count, onCleared }: { kind: "analyses" | "attempts"
       {done && count === 0 && (
         <Alert variant="default" role="status"><AlertTitle>Cleared</AlertTitle></Alert>
       )}
-      <Button type="button" variant="ghost" aria-disabled={(!!(count === 0 ? "There’s nothing to clear." : undefined)) || undefined} style={{ alignSelf: "flex-start", marginLeft: -12, color: count ? "var(--error)" : undefined }} className={cn((!!(count === 0 ? "There’s nothing to clear." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(count === 0 ? "There’s nothing to clear." : undefined)) { event.preventDefault(); return; } (() => { setPhase("confirm"); setOpen(true); })(); }}>{<Trash2 aria-hidden />}{label}{(count === 0 ? "There’s nothing to clear." : undefined) ? <span className="sr-only">{count === 0 ? "There’s nothing to clear." : undefined}</span> : null}</Button>
+      <Button type="button" variant="ghost" aria-disabled={(!!(count === 0 ? "There’s nothing to clear." : undefined)) || undefined} style={{ color: count ? "var(--error)" : undefined }} className={cn("self-start md:-ml-3", (!!(count === 0 ? "There’s nothing to clear." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(count === 0 ? "There’s nothing to clear." : undefined)) { event.preventDefault(); return; } (() => { setPhase("confirm"); setOpen(true); })(); }}>{<Trash2 aria-hidden />}{label}{(count === 0 ? "There’s nothing to clear." : undefined) ? <span className="sr-only">{count === 0 ? "There’s nothing to clear." : undefined}</span> : null}</Button>
       {count === 0 && <DisabledReason>There’s nothing to clear.</DisabledReason>}
       {open && (
         <Dialog

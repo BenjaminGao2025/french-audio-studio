@@ -571,7 +571,7 @@ function Result({
             <span className="text-sm font-medium text-muted-foreground">Answer</span>
             <FrText text={target} className="font-serif text-2xl leading-snug wrap-break-word" onPick={onPick} />
             <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" variant="ghost" style={{ marginLeft: -12 }} onClick={() => startPlayback({ kind: "exercise", label: "Practice audio", route }, Math.max(1, target.length / 13), { texts: [target] })}>{<Play aria-hidden />}Play answer</Button>
+              <Button type="button" variant="ghost" className="md:-ml-3" onClick={() => startPlayback({ kind: "exercise", label: "Practice audio", route }, Math.max(1, target.length / 13), { texts: [target] })}>{<Play aria-hidden />}Play answer</Button>
             </div>
           </div>
         ) : (

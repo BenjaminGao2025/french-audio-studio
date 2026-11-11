@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bookmark, BookmarkCheck, Eye, Play, Search, CloudOff, Archive, RotateCcw, Volume2, ChevronLeft, ChevronRight, Loader2, ChevronDown } from "lucide-react";
+import { Bookmark, BookmarkCheck, Eye, Play, Search, Archive, RotateCcw, Volume2, ChevronLeft, ChevronRight, Loader2, ChevronDown } from "lucide-react";
 import {
   DEFAULT_SESSION_SIZE,
   planSession,
@@ -26,7 +26,6 @@ import { FrText, tokenizeFrench, type FrPick, type FrSegment } from "../componen
 import { WordPanel } from "./WordPopup";
 import { MarkedLine } from "./Exercise";
 import { runItems } from "./Launcher";
-import { DailyLimitField } from "./Settings";
 import { Button } from "../components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
 import { Badge } from "../components/ui/badge";
@@ -225,26 +224,6 @@ function startNextSession() {
   go("review/session");
 }
 
-/** Plain-words explanation of which limit decided how many new cards a session gets. */
-export function quotaCopy(p: SessionPlan, sessionSize: number, dailyNew: number, newUsed: number): string {
-  const fixed = p.learning + p.due;
-  if (p.waiting > 0)
-    return `Your ${nf.format(fixed + p.waiting)} learning and due review cards are more than a session of ${sessionSize}, so no new cards are added. ${plural(p.waiting, "card")} wait for the next session.`;
-  if (p.binding === "session") {
-    const unused = p.remainingAllowances - p.newCount;
-    const scope = newUsed === 0 ? `today’s ${dailyNew} allowances` : `your ${p.remainingAllowances} remaining allowances`;
-    return `${plural(p.newCount, "new card")} this session. ${unused} of ${scope} ${unused === 1 ? "isn’t" : "aren’t"} used because your session holds ${sessionSize} cards and ${fixed} go to learning and due reviews. Raise Cards per review session in Settings to fit more.`;
-  }
-  if (p.binding === "daily") {
-    if (p.remainingAllowances === 0) return `No new cards this session — all ${dailyNew} of today’s allowances are used.`;
-    return newUsed === 0
-      ? `${plural(p.newCount, "new card")} — all of today’s allowance.`
-      : `${plural(p.newCount, "new card")} — all of the ${p.remainingAllowances} allowances left today.`;
-  }
-  if (p.newAvailable === 0) return "No new cards are waiting for today.";
-  return `Only ${p.newAvailable} new ${p.newAvailable === 1 ? "card is" : "cards are"} waiting in your library.`;
-}
-
 function DueToday() {
   const forced = useApp((s) => s.ss["SCR-REV-01"]);
   const review = useApp((s) => s.review);
@@ -291,12 +270,6 @@ function DueToday() {
   const total = activeCards.length;
   const plan = usePlan();
   const locked = review.phase === "active" && review.sessionCards !== null;
-  // A locked session keeps its cards; the quota line then describes the lock instead of re-planning it.
-  const quotaLine = locked
-    ? `This session is locked at ${total} cards. Changing Cards per review session or the daily limit applies from your next session; lowering the daily limit only stops new cards that haven’t been shown yet.`
-    : plan.cards.length
-      ? `${review.phase === "complete" ? "Next session: " : ""}${quotaCopy(plan, sessionSize, dailyNew, newUsed)}`
-      : null;
 
   const start = () => {
     set((s) => {
@@ -391,57 +364,7 @@ function DueToday() {
           <span className="sr-only">Queue pool: {queue.length} cards</span>
         </section>
       )}
-
-      {state !== "loading" && state !== "error" && <QuotaExplainer quotaLine={quotaLine} />}
     </div>
-  );
-}
-
-function QuotaExplainer({ quotaLine }: { quotaLine: string | null }) {
-  const dailyNew = useApp((s) => s.dailyNew);
-  const newUsed = useApp((s) => s.newUsed);
-  const offline = useApp((s) => s.offline);
-  const queue = useApp((s) => s.queue);
-  const introduced = useApp((s) => s.review.introduced);
-  const done = useApp((s) => s.review.done);
-
-  const remaining = Math.max(0, dailyNew - newUsed);
-  // The server already put today's new cards in introduction order.
-  const nextNew = queue.find((c) => c.group === "new" && !introduced[c.id] && !done[c.id]);
-
-  return (
-    <Collapsible className="flex flex-col gap-3 border-t pt-4">
-      <CollapsibleTrigger id="quota-h" className="flex min-h-11 w-full items-center text-left text-sm font-medium">How new cards are introduced</CollapsibleTrigger>
-      <CollapsibleContent forceMount className="flex flex-col gap-4 data-[state=closed]:hidden">
-      <ul className="flex list-disc flex-col gap-2 pl-5 text-sm text-muted-foreground">
-        <li>Only a new card’s first appearance in Review uses one of today’s allowances.</li>
-        <li>Saving cards, due reviews, Recall, Dictation, marking mastered and Undo don’t use or refund an allowance.</li>
-        <li>New cards are introduced by importance first, then in the order you saved them.</li>
-        <li>A sentence brings at most one card a day; its other cards follow on later days.</li>
-      </ul>
-      <div className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-2" aria-live="polite">
-        <p className="font-medium">Today: {remaining} of {dailyNew} new-card allowances remain</p>
-        {quotaLine && <p className="text-sm text-muted-foreground">{quotaLine}</p>}
-        {dailyNew < newUsed ? (
-          <p>
-            You’ve already introduced {newUsed} new cards today. Your limit is now {dailyNew}, which is lower, so those {newUsed} cards stay in your reviews and no more new cards are introduced today.
-          </p>
-        ) : remaining === 0 ? (
-          <p>No more new cards today. Due reviews continue as usual.</p>
-        ) : nextNew ? (
-          <p>
-            Next new card: {nextNew.kind} · <span lang="fr">{nextNew.kind === "Fill-in" ? nextNew.target : nextNew.sentenceFr}</span>
-          </p>
-        ) : null}
-        {offline && (
-          <p className="flex flex-wrap items-center gap-2" style={{ color: "var(--warning)" }}>
-            <CloudOff aria-hidden width={16} height={16} /> New allowances need a connection to be assigned. Cards already on this device can continue.
-          </p>
-        )}
-      </div>
-      <DailyLimitField compact />
-      </CollapsibleContent>
-    </Collapsible>
   );
 }
 

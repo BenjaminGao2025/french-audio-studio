@@ -27,7 +27,7 @@ Labels, counts, and real errors stay. Empty states are a short title and at most
 
 These stay on purpose:
 
-- Review quota sentences, including “How new cards are introduced”. Smoke tests read them from the DOM.
+- Review home stats: daily new-card limit, new cards introduced today, and the planned New count. The “How new cards are introduced” explainer is gone.
 - Keyboard hints on review grades.
 - Disabled reasons and save/load errors.
 - The exam badge “questions not yet verified”.
@@ -41,10 +41,11 @@ The sentence page leads with the French sentence. Words stay clickable, includin
 
 More is an outline Button labelled “More”, with the MoreHorizontal icon. It opens a DropdownMenu: Analyses in History, New text, Edit source / Hide source. It is closed by default and does not stretch into an empty bar.
 
-The player:
+The player is one row. It follows the width of its own bar (`@container`), not the viewport, so a word card beside the sentence collapses it the same way a phone does.
 
-- Desktop (1440): one row. Previous, n of N, next, play, progress, time, speed, repeat, play all, add to review.
-- Phone (390): one row. Previous, play, next, n/N, and a “More playback controls” menu for time, speed, repeat, play all, and add to review.
+- Wide bar: previous, n of N, next, play, progress, time, speed, repeat, play all, add to review.
+- Narrower bar: previous, n of N, next, play, progress, time, and More. Speed, repeat, play all, and add to review are in that menu.
+- Narrowest bar: previous, play, next, n/N, and More. Time is in the menu too. The time text does not wrap.
 
 Tools stay in three groups, then the tabs of the open group. `study.tab` values do not change.
 

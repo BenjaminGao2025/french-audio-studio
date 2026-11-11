@@ -390,20 +390,23 @@ describe("6. independent 6-second Undo window per mastery action", () => {
   });
 });
 
-describe("7. self-explaining Review quota numbers and frozen session cards", () => {
-  it("explains 31 assigned vs 9 unassigned allowances, shows 2-of-5 from a real 5-card sentence, and freezes session cards once started", async () => {
+describe("7. Review quota numbers and frozen session cards", () => {
+  it("shows the planned new-card count and freezes session cards once started", async () => {
     await act(async () => resetDemo());
     await act(async () => go("review"));
     await wait(700);
     const main = document.getElementById("main")!;
-    expect(main.textContent).toContain(
-      "31 new cards this session. 9 of today’s 40 allowances aren’t used because your session holds 40 cards and 9 go to learning and due reviews. Raise Cards per review session in Settings to fit more.",
-    );
-    expect(main.textContent).toContain("Next new card:");
+    expect(statValue("Learning")).toBe("8");
+    expect(statValue("Due")).toBe("1");
+    expect(statValue("New")).toBe("31");
+    expect(main.textContent).toContain("Cards per review session: 40");
+    expect(main.textContent).not.toContain("How new cards are introduced");
 
     await act(async () => REGISTRY.find((r) => r.id === "SCR-QUO-01")!.states.find((s) => s.key === "two-left")!.apply());
     await wait(100);
-    expect(main.textContent).toContain("Today: 2 of 40 new-card allowances remain");
+    expect(statValue("New")).toBe("2");
+    expect(statValue("New cards introduced today")).toBe("38");
+    expect(statValue("Daily new-card limit")).toBe("40 cards");
 
     // Start a session from default state, then lower the daily limit mid-session: only not-yet-shown new cards go
     await act(async () => resetDemo());
@@ -534,6 +537,10 @@ describe("8. feedback and copy cleanups", () => {
 /* ---------------- round 3: session size, quota, mid-session changes ---------------- */
 
 const mainText = () => document.getElementById("main")!.textContent!;
+const statValue = (label: string) => {
+  const dt = Array.from(document.querySelectorAll("dt")).find((el) => el.textContent === label);
+  return dt?.nextElementSibling?.textContent?.replace(/\s+/g, " ").trim() ?? "";
+};
 const findButton = (text: string) => Array.from(document.querySelectorAll("button")).find((b) => b.textContent === text);
 function fieldByLabel(label: string): HTMLInputElement {
   const l = Array.from(document.querySelectorAll("label")).find((x) => x.textContent === label)!;
@@ -600,36 +607,37 @@ describe("10. Cards per review session setting and its states", () => {
   });
 });
 
-describe("11. quota copy names the limit that decided the new-card count", () => {
-  it("session size, daily allowance and library each get their own plain-words explanation", async () => {
+describe("11. quota numbers name the limit that decided the new-card count", () => {
+  it("session size, daily allowance and library each show up in the session stats", async () => {
     await act(async () => resetDemo());
     await act(async () => go("review"));
     await wait(700);
     expect(mainText()).toContain("Cards per review session: 40");
-    expect(mainText()).toContain(
-      "31 new cards this session. 9 of today’s 40 allowances aren’t used because your session holds 40 cards and 9 go to learning and due reviews. Raise Cards per review session in Settings to fit more.",
-    );
+    expect(statValue("New")).toBe("31");
+    expect(statValue("Daily new-card limit")).toBe("40 cards");
     // "Change" leads to the setting
     await act(async () => Array.from(document.querySelectorAll("#main button")).find((b) => b.textContent === "Change")!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
     expect(get().route).toBe("settings");
 
     await act(async () => quotaState("daily-binds"));
     await wait(700);
-    expect(mainText()).toContain("20 new cards — all of today’s allowance.");
+    expect(statValue("New")).toBe("20");
+    expect(statValue("Daily new-card limit")).toBe("20 cards");
 
     await act(async () => quotaState("library-binds"));
     await wait(700);
-    expect(mainText()).toContain("Only 5 new cards are waiting in your library.");
+    expect(statValue("New")).toBe("5");
     expect(get().review.sessionCards).toBeNull();
 
     await act(async () => quotaState("overflow"));
     await wait(700);
-    expect(mainText()).toContain("so no new cards are added. 3 cards wait for the next session.");
-    expect(mainText()).toContain("10 cards");
+    expect(statValue("New")).toBe("0");
+    expect(document.getElementById("today-h")!.nextElementSibling!.textContent).toBe("10");
 
     await act(async () => quotaState("min"));
     await wait(700);
-    expect(mainText()).toContain("1 new card this session. 39 of today’s 40 allowances aren’t used because your session holds 10 cards and 9 go to learning and due reviews.");
+    expect(statValue("New")).toBe("1");
+    expect(mainText()).toContain("Cards per review session: 10");
   });
 
   it("offers Start another session when allowances remain, planned from what is left", async () => {
@@ -706,7 +714,7 @@ describe("12. changing limits mid-session", () => {
     expect(get().review.sessionCards).toHaveLength(40);
     await act(async () => go("review"));
     await wait(700);
-    expect(mainText()).toContain("This session is locked at 40 cards.");
+    expect(get().review.sessionCards).toHaveLength(40);
     expect(mainText()).toContain("Cards per review session: 10");
     await act(async () => go("settings"));
     await wait(50);

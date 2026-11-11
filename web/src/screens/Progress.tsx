@@ -335,7 +335,7 @@ function Devices() {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <PageHead
-        back={<Button type="button" variant="ghost" style={{ alignSelf: "flex-start", marginLeft: -12 }} className="h-8 px-2 text-sm" onClick={() => go("progress")}>{<ChevronLeft aria-hidden />}Progress</Button>}
+        back={<Button type="button" variant="ghost" className="h-8 self-start px-2 text-sm md:-ml-3" onClick={() => go("progress")}>{<ChevronLeft aria-hidden />}Progress</Button>}
         title="Devices and background listening"
       />
     </div>

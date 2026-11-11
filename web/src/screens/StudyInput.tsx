@@ -318,7 +318,7 @@ export function StudyPhoto() {
   };
 
   const back = (
-    <Button type="button" variant="ghost" style={{ alignSelf: "flex-start", marginLeft: -12 }} className="h-8 px-2 text-sm" onClick={() => go("study/new")}>{<ChevronLeft aria-hidden />}Back to text input</Button>
+    <Button type="button" variant="ghost" className="h-8 self-start px-2 text-sm md:-ml-3" onClick={() => go("study/new")}>{<ChevronLeft aria-hidden />}Back to text input</Button>
   );
 
   if (ocr.phase === "results") return <OcrResults back={back} photoTitle={photo?.file.name ?? "your photo"} />;

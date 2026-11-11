@@ -10,6 +10,8 @@ export const RELEASES = [
     changes: [
       "Empty states are a short title and at most one action. Instructional filler is gone.",
       "Sentence More is a labelled menu. On a phone the player is one row: previous, play, next, place, and more.",
+      "Narrow pages keep a side gutter. The sentence player stays one row and moves speed, repeat, and play-all into More when the bar itself is narrow.",
+      "Review shows the daily new-card numbers without the introduction explainer.",
       "Saved cards use the stock data table. Importance stays on one line. French still wraps.",
       "Streak is a card. Practice destinations are the cards themselves.",
       "The app now uses stock shadcn/ui: sidebar, buttons, forms, dialogs, tables, and toasts.",

@@ -23,7 +23,7 @@ export function PracticeScreen({ parts }: { parts: string[] }) {
 
 export function BackTo({ label, to }: { label: string; to: string }) {
   return (
-    <Button type="button" variant="ghost" style={{ alignSelf: "flex-start", marginLeft: -12 }} className="h-8 px-2 text-sm" onClick={() => go(to)}>{<ChevronLeft aria-hidden />}{label}</Button>
+    <Button type="button" variant="ghost" className="h-8 self-start px-2 text-sm md:-ml-3" onClick={() => go(to)}>{<ChevronLeft aria-hidden />}{label}</Button>
   );
 }
 

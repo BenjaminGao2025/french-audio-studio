@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, MoreHorizontal, Pause, Play, Repeat, RotateCcw, History as HistoryIcon, Plus, Check, Loader2 } from "lucide-react";
 import { ApiError } from "../api/client";
 import { lookupWord } from "../api/lookup";
@@ -60,7 +60,6 @@ export function StudyLearn() {
   const practising = study.tab === "recall" || study.tab === "dictation";
   const [pick, setPick] = useState<Pick | null>(null);
   const [srcOpen, setSrcOpen] = useState(study.sourceOpen);
-  const addReviewRef = useRef<HTMLDivElement>(null);
   const sentRef = useRef<HTMLDivElement>(null);
   const narrow = useNarrow();
 
@@ -150,26 +149,14 @@ export function StudyLearn() {
             <FrText segments={s.segments} className="sentence-fr font-serif text-3xl leading-snug tracking-tight wrap-break-word" onPick={onPick} />
             <p className="max-w-prose text-muted-foreground">{s.en}</p>
           </div>
-          <div data-sentence-player className={cx("flex items-center gap-2 border-t pt-3", narrow ? "flex-nowrap" : "flex-wrap min-[1100px]:flex-nowrap")}>
-            {narrow ? (
-              <StudyPlayer
-                practising={practising}
-                compact
-                index={study.index}
-                total={total}
-                onPrev={() => goSentence(study.index - 1)}
-                onNext={() => goSentence(study.index + 1)}
-                onAddToReview={() => addReviewRef.current?.querySelector("button")?.click()}
-              />
-            ) : (
-              <>
-                {pager}
-                <StudyPlayer practising={practising} />
-                <AddToReview sentence={s} />
-              </>
-            )}
-            {narrow && <div className="hidden" ref={addReviewRef}><AddToReview sentence={s} /></div>}
-          </div>
+          <StudyPlayer
+            practising={practising}
+            index={study.index}
+            total={total}
+            onPrev={() => goSentence(study.index - 1)}
+            onNext={() => goSentence(study.index + 1)}
+            addReview={<AddToReview sentence={s} />}
+          />
         </section>}
 
         <div className="flex flex-col gap-4 border-t pt-4">
@@ -244,23 +231,22 @@ export function StudyLearn() {
 /* ---------------- SCR-AUD-01: the sentence player ---------------- */
 function StudyPlayer({
   practising,
-  compact,
-  index = 0,
-  total = 1,
+  index,
+  total,
   onPrev,
   onNext,
-  onAddToReview,
+  addReview,
 }: {
   practising: boolean;
-  compact?: boolean;
-  index?: number;
-  total?: number;
-  onPrev?: () => void;
-  onNext?: () => void;
-  onAddToReview?: () => void;
+  index: number;
+  total: number;
+  onPrev: () => void;
+  onNext: () => void;
+  addReview: ReactNode;
 }) {
   const study = useApp((s) => s.study);
   const p = useApp((s) => s.player);
+  const addRef = useRef<HTMLDivElement>(null);
   const label = `Sentence ${study.index + 1}`;
   const sentenceLabel = SENTENCE_LABEL(study.index + 1);
   // Only this header's own playback drives its controls; a step / all-steps playback is separate.
@@ -312,57 +298,65 @@ function StudyPlayer({
   const repeatOn = mine?.repeat ?? false;
   const toggleRepeat = () => (mine ? updatePlayer({ repeat: !mine.repeat }) : set((st) => ({ settings: { ...st.settings, repeat: !st.settings.repeat } })));
   const pct = mine && mine.duration ? Math.min(100, (mine.position / mine.duration) * 100) : 0;
+  const timeLabel = `${fmtClock(mine?.position ?? 0)} / ${fmtClock(mine?.duration ?? dur(wanted))}`;
+  const first = index === 0 ? "This is the first sentence." : undefined;
+  const last = index >= total - 1 ? "This is the last sentence." : undefined;
+  // One sentence has no pager on a wide bar. A narrow bar keeps previous / next so the row stays stable.
+  const navWideHide = total > 1 ? "" : "@[520px]:hidden";
   const playButton = (
-    <Button type="button" variant="outline" size="icon" aria-disabled={(!!(loading)) || undefined} aria-busy={loading || undefined} aria-label={`${playing ? "Pause" : errored ? "Retry" : "Play"} ${label}`} className={cn((!!(loading)) ? "opacity-50" : "")} onClick={(event) => { if (!!(loading)) { event.preventDefault(); return; } (toggle)(); }}>{loading ? <Loader2 className="animate-spin" aria-hidden /> : (playing ? <Pause aria-hidden /> : errored ? <RotateCcw aria-hidden /> : <Play aria-hidden />)}</Button>
+    <Button type="button" variant="outline" size="icon" aria-disabled={(!!(loading)) || undefined} aria-busy={loading || undefined} aria-label={`${playing ? "Pause" : errored ? "Retry" : "Play"} ${label}`} className={cn("order-2 shrink-0 @[520px]:order-4", (!!(loading)) ? "opacity-50" : "")} onClick={(event) => { if (!!(loading)) { event.preventDefault(); return; } (toggle)(); }}>{loading ? <Loader2 className="animate-spin" aria-hidden /> : (playing ? <Pause aria-hidden /> : errored ? <RotateCcw aria-hidden /> : <Play aria-hidden />)}</Button>
   );
-  if (compact) {
-    return (
-      <>
-        <Button type="button" variant="outline" size="icon" aria-disabled={(!!(index === 0 ? "This is the first sentence." : undefined)) || undefined} aria-label="Previous sentence" className={cn((!!(index === 0 ? "This is the first sentence." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(index === 0 ? "This is the first sentence." : undefined)) { event.preventDefault(); return; } onPrev?.(); }}>{<ChevronLeft aria-hidden />}{(index === 0 ? "This is the first sentence." : undefined) ? <span className="sr-only">{index === 0 ? "This is the first sentence." : undefined}</span> : null}</Button>
-        {playButton}
-        <Button type="button" variant="outline" size="icon" aria-disabled={(!!(index >= total - 1 ? "This is the last sentence." : undefined)) || undefined} aria-label="Next sentence" className={cn((!!(index >= total - 1 ? "This is the last sentence." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(index >= total - 1 ? "This is the last sentence." : undefined)) { event.preventDefault(); return; } onNext?.(); }}>{<ChevronRight aria-hidden />}{(index >= total - 1 ? "This is the last sentence." : undefined) ? <span className="sr-only">{index >= total - 1 ? "This is the last sentence." : undefined}</span> : null}</Button>
-        <span className="min-w-0 shrink text-sm tabular-nums text-muted-foreground">{index + 1}/{total}</span>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button type="button" variant="outline" size="icon" aria-label="More playback controls">
-              <MoreHorizontal aria-hidden />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel className="tabular-nums">{fmtClock(mine?.position ?? 0)} / {fmtClock(mine?.duration ?? dur(wanted))}</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>Speed</DropdownMenuLabel>
-            <DropdownMenuRadioGroup value={speed} onValueChange={setSpeed}>
-              {[0.75, 1, 1.25, 1.5, 2].map((v) => (
-                <DropdownMenuRadioItem key={v} value={String(v)}>{v}×</DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuCheckboxItem checked={repeatOn} onCheckedChange={() => toggleRepeat()}>Repeat</DropdownMenuCheckboxItem>
-            <DropdownMenuItem onSelect={() => toggleAll()}>{allPlaying ? "Pause all sentences" : "Play all sentences"}</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onAddToReview?.()}>Add to review</DropdownMenuItem>
-            {errored && <DropdownMenuItem onSelect={() => retryPlayback()}>Retry</DropdownMenuItem>}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </>
-    );
-  }
   return (
-    <>
-      {playButton}
-      <Progress value={pct} className="w-28 sm:w-40" aria-label={`${statusText}. ${fmtClock(mine?.position ?? 0)} of ${fmtClock(mine?.duration ?? dur(wanted))}`} />
-      <span className="text-sm tabular-nums text-muted-foreground">{fmtClock(mine?.position ?? 0)} / {fmtClock(mine?.duration ?? dur(wanted))}</span>
-      <Select value={speed} onValueChange={setSpeed}><SelectTrigger aria-label={"Speed"} className={cn("w-full", "w-[5.5rem]")}><SelectValue /></SelectTrigger><SelectContent>{([0.75, 1, 1.25, 1.5, 2].map((v) => ({ value: String(v), label: `${v}×` }))).map((o) => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}</SelectContent></Select>
-      <Toggle variant="outline" pressed={repeatOn} onPressedChange={toggleRepeat} aria-label={repeatOn ? "Repeat on" : "Repeat off"}>
-        <Repeat aria-hidden /> Repeat
-      </Toggle>
-      <Button type="button" variant="outline" onClick={toggleAll}>{allPlaying ? <Pause aria-hidden /> : <Play aria-hidden />}{allPlaying ? "Pause all sentences" : "Play all sentences"}</Button>
-      {mine?.status === "error" && (
-        <div className="basis-full">
-          <Alert variant="destructive" role="alert"><AlertTitle>Audio couldn’t play</AlertTitle><AlertDescription><div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={retryPlayback}>Retry</Button></div></AlertDescription></Alert>
+    <div className="flex w-full min-w-0 flex-col gap-2 border-t pt-3">
+      <div data-sentence-player className="@container flex w-full min-w-0 flex-nowrap items-center gap-2 overflow-x-auto">
+        <Button type="button" variant="outline" size="icon" aria-disabled={(!!(first)) || undefined} aria-label="Previous sentence" className={cn("order-1 shrink-0", navWideHide, first ? "opacity-50" : "")} onClick={(event) => { if (first) { event.preventDefault(); return; } onPrev(); }}>{<ChevronLeft aria-hidden />}{first ? <span className="sr-only">{first}</span> : null}</Button>
+        {total > 1 && <span className="order-2 hidden min-w-14 shrink-0 text-center text-sm tabular-nums text-muted-foreground @[520px]:inline">{index + 1} of {total}</span>}
+        <Button type="button" variant="outline" size="icon" aria-disabled={(!!(last)) || undefined} aria-label="Next sentence" className={cn("order-3 shrink-0", navWideHide, last ? "opacity-50" : "")} onClick={(event) => { if (last) { event.preventDefault(); return; } onNext(); }}>{<ChevronRight aria-hidden />}{last ? <span className="sr-only">{last}</span> : null}</Button>
+        {playButton}
+        <span className="order-4 shrink-0 whitespace-nowrap text-sm tabular-nums text-muted-foreground @[520px]:hidden">{index + 1}/{total}</span>
+        <Progress value={pct} className="order-5 hidden w-28 shrink-0 @[520px]:flex" aria-label={`${statusText}. ${fmtClock(mine?.position ?? 0)} of ${fmtClock(mine?.duration ?? dur(wanted))}`} />
+        <span className="order-6 hidden shrink-0 whitespace-nowrap text-sm tabular-nums text-muted-foreground @[520px]:inline">{timeLabel}</span>
+        <div className="order-7 hidden w-[5.5rem] shrink-0 @[960px]:block">
+          <Select value={speed} onValueChange={setSpeed}><SelectTrigger aria-label={"Speed"} className="w-full"><SelectValue /></SelectTrigger><SelectContent>{([0.75, 1, 1.25, 1.5, 2].map((v) => ({ value: String(v), label: `${v}×` }))).map((o) => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}</SelectContent></Select>
         </div>
+        <div className="order-8 hidden shrink-0 @[960px]:block">
+          <Toggle variant="outline" pressed={repeatOn} onPressedChange={toggleRepeat} aria-label={repeatOn ? "Repeat on" : "Repeat off"}>
+            <Repeat aria-hidden /> Repeat
+          </Toggle>
+        </div>
+        <div className="order-9 hidden shrink-0 @[960px]:block">
+          <Button type="button" variant="outline" onClick={toggleAll}>{allPlaying ? <Pause aria-hidden /> : <Play aria-hidden />}{allPlaying ? "Pause all sentences" : "Play all sentences"}</Button>
+        </div>
+        <div ref={addRef} className="order-10 hidden shrink-0 @[960px]:block">{addReview}</div>
+        <div className="order-11 shrink-0 @[960px]:hidden">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="outline" size="icon" aria-label="More playback controls">
+                <MoreHorizontal aria-hidden />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel className="whitespace-nowrap tabular-nums">{timeLabel}</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Speed</DropdownMenuLabel>
+              <DropdownMenuRadioGroup value={speed} onValueChange={setSpeed}>
+                {[0.75, 1, 1.25, 1.5, 2].map((v) => (
+                  <DropdownMenuRadioItem key={v} value={String(v)}>{v}×</DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuCheckboxItem checked={repeatOn} onCheckedChange={() => toggleRepeat()}>Repeat</DropdownMenuCheckboxItem>
+              <DropdownMenuItem onSelect={() => toggleAll()}>{allPlaying ? "Pause all sentences" : "Play all sentences"}</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => addRef.current?.querySelector("button")?.click()}>Add to review</DropdownMenuItem>
+              {errored && <DropdownMenuItem onSelect={() => retryPlayback()}>Retry</DropdownMenuItem>}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+      {mine?.status === "error" && (
+        <Alert variant="destructive" role="alert"><AlertTitle>Audio couldn’t play</AlertTitle><AlertDescription><div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={retryPlayback}>Retry</Button></div></AlertDescription></Alert>
       )}
-    </>
+    </div>
   );
 }
 
@@ -431,7 +425,7 @@ function StepsPanel({ sentence, onPick }: { sentence: StudySentence; onPick: (p:
                   <span className="font-medium">{/[.!?…]$/.test(st.addedLabel) ? st.addedLabel : `${st.addedLabel}.`}</span>
                   {st.how && ` ${st.how}`}
                 </p>}
-                <Button type="button" variant="ghost" style={{ alignSelf: "flex-start", marginLeft: -12 }} className="h-8 px-2 text-sm" onClick={(e) => { e.stopPropagation(); playStep(i); }}>{isPlaying ? <Pause aria-hidden /> : <Play aria-hidden />}{isPlaying ? `Pause step ${i + 1}` : `Play step ${i + 1}`}</Button>
+                <Button type="button" variant="ghost" className="h-8 self-start px-2 text-sm md:-ml-3" onClick={(e) => { e.stopPropagation(); playStep(i); }}>{isPlaying ? <Pause aria-hidden /> : <Play aria-hidden />}{isPlaying ? `Pause step ${i + 1}` : `Play step ${i + 1}`}</Button>
                 <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
                   <Button type="button" variant="ghost" aria-pressed={!!player?.repeat && liveLabel === STEP_LABEL(i + 1)} onClick={() => {
                     if (liveLabel === STEP_LABEL(i + 1) && player?.repeat) stopPlayback();
@@ -597,6 +591,9 @@ function AddToReview({ sentence }: { sentence: StudySentence }) {
   };
 
   const label = allSaved ? `Already saved · ${plural(savedCount, "card")}` : savedCount ? `Add to review · ${savedCount} saved` : "Add to review";
+  const triggerBox = wrap.current?.querySelector("button")?.getBoundingClientRect();
+  // A collapsed toolbar hides this button. Open a sheet instead of anchoring a popover on a zero box.
+  const sheet = narrow || (open && !!triggerBox && (triggerBox.width === 0 || triggerBox.height === 0));
   const body =
     phase === "added" ? (
       <Alert variant="default" role="status"><AlertTitle>{`${plural(count, "card")} added to your library`}</AlertTitle></Alert>
@@ -639,7 +636,7 @@ function AddToReview({ sentence }: { sentence: StudySentence }) {
     <div ref={wrap} style={{ position: "relative" }}>
       <Button type="button" variant="outline" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen(!open)}>{allSaved ? <Check aria-hidden /> : <Plus aria-hidden />}{label}</Button>
       {open &&
-        (narrow ? (
+        (sheet ? (
           <Dialog sheet title="Add to review" onClose={() => setOpen(false)} footer={footer}>
             {body}
           </Dialog>
