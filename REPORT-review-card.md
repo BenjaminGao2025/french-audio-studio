@@ -1,32 +1,53 @@
-# Review session as a stock shadcn Card (1.1.0)
+# Site-wide stock shadcn pages, and the word card as a Sheet (1.1.0)
 
 Branch `design/review-card-card`, from `origin/main` `5a40914`. Version stays 1.1.0. Nothing was merged. Nothing was pushed to `main`. No pull request.
 
 Tool: `grok 1.0.77 (50ca579fa996) [stable]`. Model: grok-4.7.
 
-## What changed
-
-The review session (`/app/review` session) is one stock Card, `max-w-xl`, centered. The shell gutter is unchanged (`px-4` below `md`, `md:px-0`), so the card does not add a second inset.
-
-- Header: ghost Exit, title “Review”, one Progress bar, and `n / N` in tabular numerals. The duplicate “Card n of N / completed” row is gone. The version string is hidden on this focused page only. The account control stays.
-- Card header: at most two badges (New, Due, or Learning, plus the mode). A ghost icon button (`aria-label` “Card actions”) opens Mark mastered, Slow 0.75×, and Pause and return to Due today.
-- Card body: French stays in Source Serif 4 and words stay clickable. Play is an icon button (`aria-label` “Play”). Listen still hides the sentence until reveal. After reveal, a Separator, then the translation and bracket IPA.
-- Footer: unrevealed cards use one full-width Show answer (typed cards keep Check, then Show answer). Revealed cards use four equal grade buttons. The suggested grade is the default variant (Good when nothing else is suggested, matching Enter). Keys `1`–`4` and `Enter` render only from the `md` breakpoint, with the stock Kbd component.
-- `web/src/components/ui/kbd.tsx` is the stock shadcn Kbd (radix, Tailwind v4). Progress, dropdown menu, separator, card, badge, and button were already in the tree.
-- Review home and the recall reveal page were checked at 390 and 1440. They already use the same Card, Badge, and Button patterns and were left as they are. Due today stays on Study home only.
-
-The 390 header progress bar is `w-20` (measured 80px) so the count and avatar stay on one row. Grade buttons at 390 measured 72×56, all four the same. The revealed separator measured 1px tall. No second layout pass.
+Phase 1 (review session card only) remains `518e31fd4d3583d55602cccd374ed5ed0d8cb3fb`, recorded in `05c75d86e980b3a92ad428815adf155154617b53`. This note covers the site-wide pass on top of that.
 
 ## Commits
 
 - Parent: `5a40914` (Merge design/redesign-v2: stock shadcn redesign 1.1.0).
-- Design commit: `518e31fd4d3583d55602cccd374ed5ed0d8cb3fb`
-- https://github.com/BenjaminGao2025/french-audio-studio/commit/518e31fd4d3583d55602cccd374ed5ed0d8cb3fb
+- Phase 1 design: `518e31fd4d3583d55602cccd374ed5ed0d8cb3fb`
+- Page headers and cards: `1e0ef95a1ee3b261dc5bfadda1a99583230d5835`
+- Word card Sheet/Drawer: `0a540d86f0941186f36e6486151600cc233f804f`
+- https://github.com/BenjaminGao2025/french-audio-studio/commit/1e0ef95a1ee3b261dc5bfadda1a99583230d5835
+- https://github.com/BenjaminGao2025/french-audio-studio/commit/0a540d86f0941186f36e6486151600cc233f804f
+
+## Shared rules
+
+- Page title is `h1` `text-2xl font-semibold tracking-tight` (`data-page-title`). A description is one muted line, and only where the page already needed it.
+- “Back to …” text links are stock breadcrumbs. A crumb with an action stays a link.
+- Content sits in Cards, entry cards (title, one line, ChevronRight), tables, or a badge stepper.
+- Spacing stays `gap-4` / `gap-6` and `p-4 md:p-6`. French reading text stays Source Serif 4.
+- No gradients, glows, or decorative chrome. No new instructional copy.
+- Behaviors kept: grading and intervals, keys 1–4 and Enter, Space/R, mark mastered, play and slow 0.75×, clickable French words, gentle feedback sounds and the Settings toggles, reveal flow, exit and pause back to the review home, Due today only on Study home, Saved as one filter row plus one count and a wide table, focus-visible, reduced motion.
+- Bracket IPA still comes from `formatFriendlyPhonetic`. The word card still has no example sentence and no full-sentence translation. The dictionary stays visible.
+
+## Per page
+
+- Study home: title “Study”. Due today stays here only. “Practise my own words” and “My grammar map” are entry cards. Photo import uses a Study breadcrumb.
+- Sentence workspace (Listen, Words, Recall): the sentence is one card, `max-w-3xl`. Opening a word no longer splits the column.
+- Word card: desktop (`md` and up) is a right Sheet. Below that it is a bottom Drawer. Header is the serif word, a speaker button, bracket IPA, and a star Favorite (`aria-pressed`). Base form is a muted line only when it differs. Then “In this sentence”, the first two dictionary senses with “Show N more”, one attribution line, and a footer of importance plus lookup count.
+- Review home: today’s session is one card. Under it, entry cards for Saved cards and Practise my own words.
+- Review session, including Fill-in and revealed states: the phase-1 card is unchanged and used for every mode. Listen still hides the French sentence until reveal. Fill-in keeps the blank, Check, and Show answer. A picked word opens the same overlay, so the card column does not shrink.
+- Saved: left as the one-row filter, one count, and the wide table. Narrow widths keep the existing card list.
+- Practice hub: each destination is an entry card. Sub-pages (Listen, Speak, Write, Studio, feedback, Episodes, exam placeholder) use a Practice breadcrumb instead of a floating back link.
+- Own words: Study breadcrumb, a numbered badge stepper, the prepare box, and the archive as a card with Refresh in the header.
+- Grammar map: Study breadcrumb. Pattern groups stay in bordered cards.
+- Photo import: Study breadcrumb. The drop zone is unchanged.
+- Progress: History stays the header action. Devices uses a breadcrumb. The level meter is the stock Progress bar. Streak, estimate, and level stay cards.
+- History: Progress breadcrumb. The analyses, time, and recall lists stay tables.
+- Settings, including feedback: Review, Playback, Practice feedback, Account, devices, and background listening are stacked cards. Sound, volume, spoken praise, and animation stay.
+- Login: the existing card; the title uses the same `text-2xl` scale.
+- Login gate: page title plus one card, “Sign in to open this page.”, and the Sign in button.
+- Recall reveal: unchanged card from phase 1. Its word pick uses the overlay.
 
 ## Tests
 
-- `cd web && npm test`: 17 files, 362 passed (361 on main, plus one session-card test). Run finished after the last source edit.
-- `cd web && npm run build`: passed (`tsc --noEmit` and Vite 7.3.7). The bundle chunk-size warning is the existing single JS chunk.
+- `cd web && npm test`: 17 files, 364 passed. Run finished after the last source edit. The smoke test now expects a bottom drawer below `md` and a right sheet from `md` up, and still requires the sentence to stay in the page.
+- `cd web && npm run build`: passed (`tsc --noEmit` and Vite 7.3.7). The chunk-size warning is the existing single JS chunk.
 - `PYTHONPATH=".:tests" python3 -m unittest tests.test_word_context tests.test_gloss_prompt`: 25 passed. `auth_db` utcnow deprecation warnings are pre-existing. One test logs “Word context reply not usable: 'Sorry, no JSON'” and still passes.
 
 ## Audit
@@ -42,7 +63,7 @@ raw_<input>=0
 raw_<textarea>=0
 raw_<details>=0
 raw_<summary>=0
-className_uses=1328
+className_uses=1314
 css: 190 ./styles.css
 ```
 
@@ -50,8 +71,14 @@ Raw controls stay 0.
 
 ## Screenshots
 
-17 files in `/home/mgacai/review-card-v2-out/screenshots/`. Preview was `127.0.0.1:8027` only, and it was stopped after the shots. PNGs, `web/src/preview-main.tsx`, and `web/vite.audit.config.ts` are not committed.
+Directory: `/home/mgacai/review-card-v2-out/screenshots/`. Preview was `127.0.0.1:8027` only, and it was stopped after the shots. PNGs, `web/src/preview-main.tsx`, and `web/vite.audit.config.ts` are not committed.
 
-Before and after, at 1440 and 390: `review-session`, `review-session-revealed`, `recall-reveal`, `review-home`. Names: `rc-before-<page>-<w>.png` and `rc-after-<page>-<w>.png`. Extra menu shot: `rc-after-review-session-menu-390.png` (Mark mastered, Slow 0.75×, Pause and return to Due today).
+Before shots are the original main tree `5a40914` (detached worktree `/tmp/rc-main`, removed after the shots). After shots are this branch. 56 before and 57 after. The extra after file is `rc-after-review-session-menu-390.png` from phase 1.
 
-Checked by eye: review-session and review-session-revealed at 390 and 1440, the open menu at 390, review-home at 390, and recall-reveal at 390. No horizontal overflow, no edge collision, equal grade buttons, no instructional sentence on the card.
+Names, each at 1440 and 390: `study-home`, `workspace-listen`, `workspace-words`, `workspace-recall`, `word-card`, `review-home`, `review-session`, `review-session-revealed`, `review-fillin`, `review-fillin-revealed`, `saved-list`, `practice`, `practice-listen`, `practice-speak`, `practice-write`, `practice-studio`, `practice-feedback`, `episodes`, `grammar-map`, `own-words`, `photo-import`, `progress`, `history`, `settings`, `settings-feedback`, `login`, `login-gate`, `recall-reveal`. Files: `rc-before-<page>-<w>.png` and `rc-after-<page>-<w>.png`.
+
+Fill-in demo states `fillin` and `fillin-revealed` were added to the preview registry so those shots open a cloze card. They are not a new route.
+
+Word card after, measured: at 1440 the sentence is x=296 w=768 and the sheet is x=1056 w=384. At 390 the sentence is x=40 w=310 and the drawer is x=0 w=390. Every after shot logged `EDGE-OK` (document overflow 0, main overflow 0).
+
+Checked by eye after the last pass: word card, review session and revealed, fill-in and fill-in revealed, review home, own words, study home, practice, saved, settings and settings feedback, login gate, at 1440 and 390 where those files exist. One fix after that look: archive Refresh sits in the card action, step labels stay on one line, and the login gate is a card. Those shots were taken again.
