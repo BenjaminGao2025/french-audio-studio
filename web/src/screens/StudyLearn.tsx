@@ -99,9 +99,9 @@ export function StudyLearn() {
   );
 
   return (
-    // The desktop sheet is 24rem (sm:max-w-sm). Keep this column in the space to its left.
+    // The sheet renders at 24rem (base sm:max-w-sm wins over sm:max-w-md). Reserve that width and keep a 1rem gutter on both sides.
     <div className={cn("w-full min-w-0", pick && "md:pr-96")}>
-    <div className={pageFrame("study-workspace", true)}>
+    <div className={pageFrame(cn("study-workspace", pick && "md:px-4"), true)}>
       <h1 className="sr-only" tabIndex={-1} data-page-title>Study</h1>
       <div className="flex flex-col gap-4 min-w-0">
         {!!study.analysis.failedParts && <Alert variant="default"><AlertTitle>Some text could not be analysed</AlertTitle><AlertDescription>{study.analysis.failedParts} parts failed. Your original text is kept. Open New text to retry the missing parts.</AlertDescription></Alert>}

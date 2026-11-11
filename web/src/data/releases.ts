@@ -8,6 +8,16 @@ export const RELEASES = [
     version: APP_VERSION,
     date: "2026-11-11",
     changes: [
+      "History is easy to reach from Study home and Progress.",
+      "The word-card reading column keeps normal page padding.",
+      "The Listen review card is a balanced card.",
+      "Practise without new text matches the other Study link cards.",
+    ],
+  },
+  {
+    version: "1.1.0",
+    date: "2026-11-11",
+    changes: [
       "The review session is a card. Progress sits in the header. Grades share one even row. Mark mastered, slow playback, and pause are in the card menu.",
       "Pages use a title, breadcrumbs, and cards. The word card opens over the sentence. Dictionary senses past the first two stay behind Show more.",
       "Empty states are a short title and at most one action. Instructional filler is gone.",

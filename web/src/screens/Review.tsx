@@ -395,10 +395,11 @@ function DueToday() {
 
 /* ---------------- SCR-REV-02 ---------------- */
 
-function PlayButton({ onClick }: { onClick: () => void }) {
+function PlayButton({ onClick, prominent = false }: { onClick: () => void; prominent?: boolean }) {
   return (
-    <Button type="button" variant="outline" size="icon" aria-label="Play" className="shrink-0" onClick={onClick}>
+    <Button type="button" variant="outline" size={prominent ? "lg" : "icon"} aria-label="Play" className={prominent ? undefined : "shrink-0"} onClick={onClick}>
       <Play aria-hidden />
+      {prominent ? "Play" : null}
     </Button>
   );
 }
@@ -647,8 +648,8 @@ function ReviewSession() {
         {!revealed ? (
           <div className="flex flex-col gap-4">
             {mode === "listen" && (
-              <div className="flex justify-center py-6">
-                <PlayButton onClick={replay} />
+              <div className="flex min-h-20 items-center justify-center">
+                <PlayButton onClick={replay} prominent />
               </div>
             )}
             {mode === "speak" && (
