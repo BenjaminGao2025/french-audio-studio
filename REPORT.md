@@ -41,7 +41,8 @@ Two assertions were updated because the copy changed: the Study continue card no
 
 - Branch: `design/redesign-v2` (from `85db765`, v1.0.6).
 - Tree: https://github.com/BenjaminGao2025/french-audio-studio/tree/design/redesign-v2
-- Commit SHA and URL are filled in after the commit below.
+- Design commit: `8b19fbb2da3449c8a53010b4d09e3d31950a392a`
+- https://github.com/BenjaminGao2025/french-audio-studio/commit/8b19fbb2da3449c8a53010b4d09e3d31950a392a
 
 ## Screenshots
 
