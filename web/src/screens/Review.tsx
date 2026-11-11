@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bookmark, BookmarkCheck, Play, Search, Archive, RotateCcw, Volume2, ChevronLeft, ChevronRight, Loader2, ChevronDown, MoreHorizontal } from "lucide-react";
+import { Bookmark, BookmarkCheck, Play, Search, Archive, RotateCcw, Volume2, ChevronLeft, ChevronRight, Loader2, ChevronDown, MoreHorizontal, Check, X } from "lucide-react";
 import {
   DEFAULT_SESSION_SIZE,
   planSession,
@@ -14,12 +14,12 @@ import {
 import { ApiError } from "../api/client";
 import { favoriteKey, libraryReady, loadLibrary, loadQueue, masterCard, rateCard, restoreMastered, setFavorite, toReviewCard as serverToReviewCard } from "../api/review";
 import { grade } from "../lib/grading";
-import { gradeFeedback } from "../lib/feedback";
+import { gradeFeedback, practiceFeedback } from "../lib/feedback";
 import { importanceFor } from "../lib/lookup";
 import { formatFriendlyPhonetic } from "../lib/phonetic";
 import { nf, plural } from "../lib/format";
 import { announce, get, getCardLookups, go, introduceNewCard, sayFrench, set, useApp, type ReviewUI } from "../state/store";
-import { Checkbox, DisabledReason, EntryCard, Importance, PageHead, Progress, Skeleton, Spinner, Stat, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Textarea, pageFrame, useNarrow } from "../components/ui";
+import { Checkbox, DisabledReason, EntryCard, Importance, PageHead, Progress, Skeleton, Spinner, Stat, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, pageFrame, useNarrow } from "../components/ui";
 import { flexRender } from "@tanstack/react-table";
 import { getCoreRowModel, useLegacyTable, type LegacyColumnDef } from "@tanstack/react-table/legacy";
 import { FrText, tokenizeFrench, type FrPick, type FrSegment } from "../components/FrText";
@@ -37,7 +37,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Card, CardAction, CardContent, CardFooter, CardHeader } from "../components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../components/ui/dropdown-menu";
 import { Separator } from "../components/ui/separator";
-import { Kbd } from "../components/ui/kbd";
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "../components/ui/accordion";
 import { cn } from "cn";
 
 /** Design reference states set this so Due today shows their sample queue instead of loading the learner's. */
@@ -411,7 +411,7 @@ function ReviewSession() {
   const plan = usePlan();
   const forced = useApp((s) => s.ss["SCR-REV-02"]);
   const noAllowance = useApp((s) => s.newUsed >= s.dailyNew);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const card: ReviewCard | undefined = cards[review.index];
   // A learn-ahead re-queue can return the very same id; keying on index:id re-runs the per-show effects.
   const cardPos = `${review.index}:${card?.id}`;
@@ -601,7 +601,7 @@ function ReviewSession() {
   };
   const backSegments = markedSegments(sentenceFr, markTarget);
   const friendlyIpa = formatFriendlyPhonetic(meta.ipa || "");
-  const metaBits = [meta.pos, meta.lemma && meta.lemma.toLowerCase() !== card.target.toLowerCase() ? `base form ${meta.lemma}` : "", friendlyIpa].filter(Boolean);
+  const metaBits = [friendlyIpa, meta.pos, meta.lemma && meta.lemma.toLowerCase() !== card.target.toLowerCase() ? `base form ${meta.lemma}` : ""].filter(Boolean);
   const englishGloss = (value?: string) => {
     const text = (value || "").trim();
     if (!text || /\p{Script=Han}/u.test(text)) return "";
@@ -619,7 +619,6 @@ function ReviewSession() {
   };
   const suggestedGrade = (suggested ?? 3) as 1 | 2 | 3 | 4;
   const canPlay = revealed || mode === "listen" || mode === "recognize";
-  const hasBack = Boolean(translationZh || translationEn || u.result || isWordCard || dictLine || (hereLine && hereLine !== dictLine) || meta.hook || grammar.length);
 
   return (
     <div className="mx-auto flex w-full max-w-xl flex-col gap-4">
@@ -688,14 +687,13 @@ function ReviewSession() {
               <div className="flex flex-col gap-3">
                 <div className="grid gap-2">
                   <label htmlFor="rev-input" className="text-sm font-medium">Your answer in French</label>
-                  <Textarea
+                  <Input
                     id="rev-input"
                     name="review-answer"
                     autoComplete="off"
                     ref={inputRef}
-                    className="min-h-24"
+                    className="focus-visible:outline-none! focus-visible:ring-1 focus-visible:ring-ring"
                     lang="fr"
-                    rows={2}
                     value={u.draft}
                     readOnly={u.rateBusy}
                     aria-invalid={u.emptyError || undefined}
@@ -711,42 +709,52 @@ function ReviewSession() {
           </div>
         ) : (
             <div id="rev-result" tabIndex={-1} className="flex flex-col gap-4">
-              <div className="flex items-start gap-3" data-sentence={sentenceFr}>
-                <FrText segments={backSegments} className="sentence-fr min-w-0 flex-1 font-serif text-2xl leading-snug wrap-break-word" onPick={onWordPick} />
-                {canPlay && <PlayButton onClick={replay} />}
-              </div>
-              {hasBack && <Separator />}
-              {(translationZh || translationEn) && (
-                <div className="flex flex-col gap-1">
-                  {translationZh && <p className="text-sm text-muted-foreground" lang="zh">{translationZh}</p>}
-                  {translationEn && <p className="text-sm text-muted-foreground">{translationEn}</p>}
-                </div>
-              )}
-              {u.result && (
-                <div className="flex flex-col gap-4">
-                  <MarkedLine label="Your answer" words={u.result.answer} side="answer" />
-                  <MarkedLine label="Correct answer" words={u.result.target} side="target" onPick={onWordPick} />
-                </div>
+              {typed && u.result && (
+                <>
+                  <section aria-labelledby="rev-result-heading" className="flex flex-col gap-3">
+                    <h2 id="rev-result-heading" className="text-sm font-medium">Result</h2>
+                    <div className="flex items-start gap-2">
+                      <Badge variant={u.result.correct ? "secondary" : "destructive"} aria-label={u.result.correct ? "Correct" : "Incorrect"}>
+                        {u.result.correct ? <Check aria-hidden /> : <X aria-hidden />}
+                        {u.result.correct ? "Correct" : "Incorrect"}
+                      </Badge>
+                      <MarkedLine label="Your answer" words={u.result.answer} side="answer" />
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <Badge variant="secondary" aria-label="Correct answer"><Check aria-hidden /></Badge>
+                      <MarkedLine label="Correct answer" words={u.result.target} side="target" onPlay={() => sayFrench(card.target)} />
+                    </div>
+                    {typed && !u.result.correct && <RetypePractice key={cardPos} target={card.target} />}
+                  </section>
+                  <Separator />
+                </>
               )}
               {isWordCard && (
-                <div className="flex flex-col gap-1">
-                  <p className="text-sm font-medium" lang="fr">{card.target}</p>
-                  {metaBits.length > 0 && (
-                    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-                      {metaBits.map((bit) => <span key={bit}>{bit}</span>)}
-                    </p>
-                  )}
-                </div>
+                <>
+                  <section aria-labelledby="rev-word-heading" className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <h2 id="rev-word-heading"><Button type="button" variant="ghost" size="sm" className="-ml-2" onClick={() => sayFrench(card.target)}>Word/phrase</Button></h2>
+                      <Button type="button" variant="ghost" size="icon-sm" aria-label={`Pronounce ${card.target}`} onClick={() => sayFrench(card.target)}><Volume2 aria-hidden /></Button>
+                    </div>
+                    <Button type="button" variant="link" className="h-auto justify-start self-start whitespace-normal p-0 text-left font-serif text-xl" lang="fr" onClick={() => sayFrench(card.target)}>{card.target}</Button>
+                    {metaBits.length > 0 && <p className="flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground">{metaBits.map((bit) => <span key={bit}>{bit}</span>)}</p>}
+                    {dictLine && <p className="text-sm text-muted-foreground"><span className="font-medium">Saved meaning: </span>{dictLine}</p>}
+                    {hereLine && hereLine !== dictLine && <p className="text-sm text-muted-foreground"><span className="font-medium">In this sentence: </span>{hereLine}</p>}
+                    {meta.hook && <p className="text-sm text-muted-foreground">Memory hook: {meta.hook}</p>}
+                  </section>
+                  <Separator />
+                </>
               )}
-              {(dictLine || (hereLine && hereLine !== dictLine) || meta.hook) && (
-                <div className="flex flex-col gap-1">
-                  {dictLine && <p className="text-sm text-muted-foreground"><span className="font-medium">Saved meaning: </span>{dictLine}</p>}
-                  {hereLine && hereLine !== dictLine && <p className="text-sm text-muted-foreground"><span className="font-medium">In this sentence: </span>{hereLine}</p>}
-                  {meta.hook && <p className="text-sm text-muted-foreground">Memory hook: {meta.hook}</p>}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-start gap-3" data-sentence={sentenceFr}>
+                  <FrText segments={backSegments} className="sentence-fr min-w-0 flex-1 font-serif text-2xl leading-snug wrap-break-word" onPick={onWordPick} />
+                  {canPlay && <PlayButton onClick={replay} />}
                 </div>
-              )}
+                {translationZh && <p className="text-sm text-muted-foreground" lang="zh">{translationZh}</p>}
+                {translationEn && <p className="text-sm text-muted-foreground">{translationEn}</p>}
+              </div>
               {grammar.length > 0 && (
-                <Collapsible className="border-t"><CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between gap-2 py-2 text-left text-sm font-medium"><span>{`Grammar notes (${grammar.length})`}</span><ChevronDown className="size-4 shrink-0" aria-hidden /></CollapsibleTrigger><CollapsibleContent className="pb-3 text-sm">
+                <Accordion type="single" collapsible className="border-t"><AccordionItem value="grammar"><AccordionTrigger>{`Grammar notes (${grammar.length})`}</AccordionTrigger><AccordionContent>
                   <ul className="flex flex-col gap-2">
                     {grammar.map((g, i) => (
                       <li key={i} className="flex flex-col gap-1">
@@ -756,7 +764,7 @@ function ReviewSession() {
                       </li>
                     ))}
                   </ul>
-                </CollapsibleContent></Collapsible>
+                </AccordionContent></AccordionItem></Accordion>
               )}
             </div>
         )}
@@ -791,10 +799,7 @@ function ReviewSession() {
                       >
                         <span className="rev-rate-name text-sm leading-none">{r.label}</span>
                         <span className={cn("rev-rate-interval text-xs leading-none tabular-nums", suggestedThis ? "text-primary-foreground/75" : "text-muted-foreground")}>{text || "\u00a0"}</span>
-                        <span className="mt-0.5 hidden items-center justify-center gap-1 md:flex">
-                          <Kbd className={suggestedThis ? "bg-primary-foreground/15 text-primary-foreground" : undefined}>{r.value}</Kbd>
-                          {suggestedThis ? <Kbd className="bg-primary-foreground/15 text-primary-foreground">Enter</Kbd> : null}
-                        </span>
+
                       </Button>
                     );
                   })}
@@ -810,6 +815,41 @@ function ReviewSession() {
           <WordPanel key={`${pick.text}-${pick.wordIndex ?? ""}`} sentence={wpSentence} text={pick.text} wordIndex={pick.wordIndex} occurrence={pick.occurrence} onGrammar={() => setPick(null)} onClose={() => setPick(null)} inSheet />
         </WordOverlay>
       )}
+    </div>
+  );
+}
+
+function RetypePractice({ target }: { target: string }) {
+  const [draft, setDraft] = useState("");
+  const [count, setCount] = useState(0);
+  const [result, setResult] = useState<ReturnType<typeof grade> | null>(null);
+  const check = () => {
+    if (!draft.trim() || count >= 3) return;
+    const next = grade(target, draft);
+    setResult(next.correct ? null : next);
+    if (next.correct) {
+      practiceFeedback();
+      setCount((n) => Math.min(3, n + 1));
+      setDraft("");
+    }
+  };
+  return (
+    <div className="grid gap-2 border-t pt-3">
+      <div className="flex items-center justify-between gap-2">
+        <Label htmlFor="rev-retype">Type it again</Label>
+        <span className="text-xs tabular-nums text-muted-foreground" role="status">{count}/3</span>
+      </div>
+      <div className="flex gap-2">
+        <Input id="rev-retype" value={draft} lang="fr" autoComplete="off" spellCheck={false} readOnly={count === 3}
+          className="focus-visible:outline-none! focus-visible:ring-1 focus-visible:ring-ring"
+          onChange={(e) => { setDraft(e.target.value); setResult(null); }}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); check(); }
+          }} />
+        <Button type="button" variant="outline" size="sm" disabled={count === 3 || !draft.trim()} onClick={check}>Check</Button>
+      </div>
+      {result && <MarkedLine label="Try again" words={result.answer} side="answer" />}
     </div>
   );
 }

@@ -247,6 +247,12 @@ export function gradeFeedback(correct: boolean) {
   chime(pitchFor(event.streak), prefs.volume, event.milestone === 10 ? 420 : 260);
 }
 
+/** A practice repetition reuses the soft chime without changing the review streak. */
+export function practiceFeedback() {
+  const prefs = feedbackPrefs();
+  if (prefs.sound && gestured) chime(880, prefs.volume * 0.45, 260);
+}
+
 export function resetFeedbackState() {
   streak = 0;
   toast = null;
