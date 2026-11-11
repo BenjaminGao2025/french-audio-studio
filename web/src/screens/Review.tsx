@@ -12,7 +12,7 @@ import {
   type StudySentence,
 } from "../data/fixtures";
 import { ApiError } from "../api/client";
-import { libraryReady, loadLibrary, loadQueue, masterCard, rateCard, restoreMastered, toReviewCard as serverToReviewCard } from "../api/review";
+import { libraryReady, loadLibrary, loadQueue, masterCard, setCardArchived, rateCard, restoreMastered, toReviewCard as serverToReviewCard } from "../api/review";
 import { grade } from "../lib/grading";
 import { gradeFeedback, practiceFeedback } from "../lib/feedback";
 import { importanceFor } from "../lib/lookup";
@@ -37,7 +37,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Card, CardAction, CardContent, CardFooter, CardHeader } from "../components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../components/ui/dropdown-menu";
 import { Separator } from "../components/ui/separator";
-import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "../components/ui/accordion";
+import { toast } from "sonner";
 import { cn } from "cn";
 
 /** Design reference states set this so Due today shows their sample queue instead of loading the learner's. */
@@ -455,6 +455,12 @@ function ReviewSession() {
   const revealed = u.revealed || Boolean(u.result) || u.phase === "graded" || u.phase === "techfail";
   const typed = mode !== "recognize" && (mode === "cloze" || mode === "grammar" || card?.kind === "Recall");
   const isWordCard = mode === "cloze" || mode === "recognize" || mode === "grammar";
+  useEffect(() => {
+    if (typed && !revealed && review.phase === "active") inputRef.current?.focus();
+  }, [cardPos, typed, revealed, review.phase]);
+  const mounted = useRef(false);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const mastering = useRef(false);
   const markTarget = isWordCard ? card?.target ?? "" : "";
   const suggested: number | undefined = u.suggested ?? (u.result ? (u.result.correct ? (u.hinted || u.hint ? 2 : 3) : 1) : undefined);
   const groupLabel = card?.group === "new" ? "New" : card?.group === "due" ? "Due" : "Learning";
@@ -475,9 +481,9 @@ function ReviewSession() {
     const result = grade(card.target, u.draft);
     const hintUsed = Boolean(u.hinted || u.hint);
     const sugg: 1 | 2 | 3 = !result.correct ? 1 : hintUsed ? 2 : 3;
-    gradeFeedback(result.correct);
+    gradeFeedback(result.correct, { pronunciation: result.correct && typed });
     patch({ revealed: true, result, suggested: sugg, answer: u.draft, emptyError: false });
-    if (mode === "speak" || mode === "cloze" || mode === "grammar") sayFrench(cardSpeech(card));
+    if (result.correct && typed) sayFrench(card.target, 1, "fr-CA-JeanNeural");
     announce(result.correct ? "Correct. Pick how well you remembered." : "Not quite. Pick how well you remembered.");
   };
 
@@ -495,11 +501,49 @@ function ReviewSession() {
         reviewUi,
       };
     });
-    requestAnimationFrame(() => document.getElementById("rev-q")?.focus());
+    requestAnimationFrame(() => (document.getElementById("rev-input") ?? document.getElementById("rev-q"))?.focus());
+  };
+
+  const markCurrentMastered = async () => {
+    if (!card || mastering.current || u.rateBusy) return;
+    mastering.current = true;
+    try {
+      await setCardArchived(card.id, true);
+      next();
+      toast("Marked as mastered", {
+        duration: 6000,
+        action: { label: "Undo", onClick: () => {
+          void setCardArchived(card.id, false).then(() => {
+            if (mounted.current && get().review.sessionCards?.includes(card) && get().review.done[card.id]) {
+              set((s) => {
+                const sessionCards = [...(s.review.sessionCards ?? cards)];
+                const done = { ...s.review.done };
+                delete done[card.id];
+                // Preserve subsequent ratings while making the restored card current.
+                let index = s.review.phase === "complete" ? sessionCards.length : s.review.index;
+                // Remove its completed position before reinserting, so session totals stay stable.
+                const originalIndex = sessionCards.indexOf(card);
+                if (originalIndex >= 0) {
+                  sessionCards.splice(originalIndex, 1);
+                  if (originalIndex < index) index--;
+                }
+                sessionCards.splice(index, 0, card);
+                return { review: { ...s.review, phase: "active", index, sessionCards, done, completed: Math.max(0, s.review.completed - 1) } };
+              });
+            }
+            announce("Card restored.");
+          }).catch(() => announce("Couldn’t restore the card. Try again from Mastered.", true));
+        } },
+      });
+    } catch {
+      announce("Couldn’t mark the card mastered. Try again.", true);
+    } finally {
+      mastering.current = false;
+    }
   };
 
   const rate = (rating: 1 | 2 | 3 | 4) => {
-    if (!card || !revealed || u.rateBusy || u.rated) return;
+    if (!card || !revealed || u.rateBusy || u.rated || mastering.current) return;
     if (!typed) gradeFeedback(rating > 1);
     patch({ rateBusy: true, techfail: false });
     rateCard(card.id, rating, { answer: u.answer, durationMs: Date.now() - shownAt.current })
@@ -534,20 +578,21 @@ function ReviewSession() {
   // Keyboard shortcuts. A single listener reads a ref so the latest handlers are always used.
   const keys = useRef<{
     reveal: () => void; check: () => void; rate: (r: number) => void; replay: () => void;
-    revealed: boolean; suggested: number | undefined; active: boolean;
-  }>({ reveal: () => {}, check: () => {}, rate: () => {}, replay: () => {}, revealed: false, suggested: undefined, active: false });
+    master: () => void; revealed: boolean; suggested: number | undefined; active: boolean;
+  }>({ reveal: () => {}, check: () => {}, rate: () => {}, replay: () => {}, master: () => {}, revealed: false, suggested: undefined, active: false });
   keys.current = {
     reveal: () => reveal(), check, rate: (r: number) => rate(r as 1 | 2 | 3 | 4), replay,
-    revealed, suggested, active: Boolean(card) && review.phase !== "complete" && forced !== "complete",
+    master: () => { void markCurrentMastered(); }, revealed, suggested, active: Boolean(card) && review.phase !== "complete" && forced !== "complete",
   };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.isComposing || !keys.current.active) return;
+      if (e.isComposing || e.repeat || e.altKey || e.ctrlKey || e.metaKey || !keys.current.active) return;
       const t = e.target as HTMLElement | null;
       if (t?.closest?.("[role=dialog], [role=menu]")) return;
       if (e.key === "Enter" && t?.id === "rev-input") { e.preventDefault(); keys.current.check(); return; }
       const tag = t?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t?.isContentEditable) return;
+      if (e.key === "5" && !e.shiftKey && !window.matchMedia?.("(pointer: coarse)").matches) { e.preventDefault(); keys.current.master(); return; }
       const onControl = tag === "BUTTON" || tag === "A" || tag === "SUMMARY";
       if (!keys.current.revealed) {
         if (e.code === "Space" || e.key === "Enter") {
@@ -627,7 +672,7 @@ function ReviewSession() {
                   <Button type="button" variant="ghost" size="icon-sm" aria-label="Card actions"><MoreHorizontal aria-hidden /></Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-64">
-                  <DropdownMenuItem onSelect={() => { masterCard(card.id); next(); }}><Archive aria-hidden />Mark mastered</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => { void markCurrentMastered(); }}><Archive aria-hidden />Mark mastered</DropdownMenuItem>
                   <DropdownMenuItem onSelect={slow}><Volume2 aria-hidden />Slow 0.75×</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => go("review")}>Pause and return to Due today</DropdownMenuItem>
                 </DropdownMenuContent>
@@ -690,7 +735,7 @@ function ReviewSession() {
                     aria-invalid={u.emptyError || undefined}
                     aria-describedby={u.emptyError ? "rev-err" : undefined}
                     onChange={(e) => patch({ draft: e.target.value, emptyError: false })}
-                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); check(); } }}
+                    onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); check(); } }}
                     spellCheck={false}
                   />
                   {u.emptyError && <p id="rev-err" className="text-sm text-destructive" role="alert">Type an answer before checking. Nothing was recorded.</p>}
@@ -733,19 +778,6 @@ function ReviewSession() {
                 {translationZh && <p className="text-sm text-muted-foreground" lang="zh">{translationZh}</p>}
                 {translationEn && <p className="text-sm text-muted-foreground">{translationEn}</p>}
               </div>
-              {grammar.length > 0 && (
-                <Accordion type="single" collapsible className="border-t"><AccordionItem value="grammar"><AccordionTrigger>{`Grammar notes (${grammar.length})`}</AccordionTrigger><AccordionContent>
-                  <ul className="flex flex-col gap-2">
-                    {grammar.map((g, i) => (
-                      <li key={i} className="flex flex-col gap-1">
-                        {g.title && <p className="font-medium">{g.title}</p>}
-                        {(g.explanation || g.body) && <p className="text-sm text-muted-foreground">{g.explanation || g.body}</p>}
-                        {g.hook && <p className="text-xs leading-4 text-muted-foreground">Memory hook: {g.hook}</p>}
-                      </li>
-                    ))}
-                  </ul>
-                </AccordionContent></AccordionItem></Accordion>
-              )}
             </div>
         )}
         {revealed && u.techfail && (
@@ -810,6 +842,7 @@ function RetypePractice({ target }: { target: string }) {
     setResult(next.correct ? null : next);
     if (next.correct) {
       practiceFeedback();
+      sayFrench(target, 1, "fr-CA-JeanNeural");
       setCount((n) => n + 1);
       setDraft("");
       input.current?.focus();

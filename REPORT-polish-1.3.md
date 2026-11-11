@@ -106,3 +106,60 @@ No release-blocking issue found in this scope. Existing failli dictionary orderi
 Implementation: `779e64a75e1a1b471b620d824cb63633719f44f5` — design: v1.3.0 deck stars, IPA playback, review diff and unlimited retyping.
 
 The separate report commit is the commit containing this file; retrieve with `git log -1 --format=%H -- REPORT-polish-1.3.md`. Both commit IDs are also included in the final handoff. Commit messages record Tool: Codex CLI and Model: gpt-6.1-sol.
+
+
+## TASK 8 — Remove Review grammar notes (follow-up)
+
+Removed the entire “Grammar notes (N)” accordion from the shared revealed Review column, including word, listen and speak cards. Backend grammar data, schema, APIs, saveNote extras, card metadata, Study’s Grammar tab and “See grammar in this sentence” remain untouched. The frontend regression checks absence of the section while the card’s grammar snapshot is still present.
+
+Screenshots (fixture retains grammar that previously produced the accordion):
+- `/home/mgacai/polish-1.3-out/screenshots/p13-after-review-no-grammar-1280.png`
+- `/home/mgacai/polish-1.3-out/screenshots/p13-after-review-no-grammar-390.png`
+
+## TASK 9 — Review answer autofocus
+
+Unrevealed typing cards focus `#rev-input` on mount and whenever index/card changes, including repeated learning cards. Navigation’s deferred heading focus now gives the Review answer input priority; advancing also focuses the next input instead of the card container. Revealing does not refocus the hidden field. Touch/mobile uses the same focus behaviour: no coarse-pointer exclusion, since no layout break was demonstrated. Responsive browser checks passed; no physical-device keyboard claim is made. Type it again retains its existing refocus.
+
+Input, textarea, select, contenteditable, dialog and menu guards protect session shortcuts. The answer’s local Enter handler checks once and stops propagation (preventing duplicate checking/audio); composition is respected. Tests cover initial focus, navigation focus, next-card focus, 1/5 while typing, Type it again’s shortcut guard and Enter checking.
+
+Screenshot: `/home/mgacai/polish-1.3-out/screenshots/p13-after-review-input-focus-1280.png` (automatically focused, stock focus ring; no manual focus for this shot).
+
+## TASK 10 — Correct-answer pronunciation and spoken default
+
+Every correct Type it again attempt keeps the soft success chime and invokes `sayFrench(target, 1, "fr-CA-JeanNeural")`, including attempts beyond 3/3. Correct main typed Checks invoke the same one-shot path exactly once; incorrect Checks do not pronounce the answer. Listen/Speak have no fabricated typed-answer audio. The existing one-shot player cancels its previous clip and pauses main playback through sayFrench. The helper now accepts an optional voice override: existing word/sentence callers retain their prior voice selection, while these reinforcement calls explicitly use Jean.
+
+`DEFAULT_FEEDBACK.spoken` is false (pending Ben’s confirmation). Missing spoken fields also take that default. The Excellent clip, preference control and persistence remain available. Saved `spoken: true` remains true; no localStorage preferences were wiped. A main typed Check that plays pronunciation suppresses spoken praise even when enabled, retaining the chime so the two TTS voices do not start together. Other feedback continues to honour the saved spoken preference. Tests assert the target text and Jean override on a correct Check and all four correct retypes, and verify unset versus saved-true preferences. No extra audio screenshot required.
+
+## TASK 11 — Hidden desktop 5, soft archive and Undo
+
+Unmodified desktop key 5 invokes the same persisted soft-archive endpoint used by the existing Mark mastered mechanism: `POST /api/srs/cards/{card_id}/archive` with `{ "archived": true }`, backed by `srs.set_archived`. No mastered flag, deletion, database schema change or migration was added. The menu and shortcut share this action. The card advances after the archive succeeds without confirmation; the last card completes the session. A failed archive keeps the current card and announces the failure. Repeated keys and modifiers are ignored; 5 is excluded on coarse pointers and never shown as a button chip.
+
+The stock Sonner toast reads “Marked as mastered” with an Undo action, lasts six seconds, and does not block the next card. Undo posts `{ "archived": false }` and returns the card to the current position when that session is still mounted, preserving subsequent work and session totals. Otherwise it still unarchives and announces restoration. Rollback: POST the same archive endpoint with `{ "archived": false }`, or Restore in Mastered. Tests cover archive+advance, last Listen/Speak completion, typing guards and Undo restoration.
+
+Screenshot: `/home/mgacai/polish-1.3-out/screenshots/p13-after-review-mastered-toast-1280.png` (real archive shortcut against fakeBackend, next card and stock Undo toast visible).
+
+## TASK 12 — Structured Simplified Chinese word origin
+
+The etymology prompt now requires Simplified Chinese explanations, glosses and language labels, preserves citation forms such as à, fin, ad, finem and finis, states uncertainty and distinguishes mnemonic associations. Responses add `lang: "zh"`, `schema_version: 2`, `construction: [{form, gloss_zh}]`, `source: [{lang, form, from_form}]`, `sense_history_zh` and `memory_zh`; the plain `text` fallback remains for old clients and Chinese plain model replies. Typed Pydantic response parsing bounds fields before caching. English-only, empty and error replies are rejected rather than cached.
+
+The existing etymology text column stores structured JSON; no database schema changes. The `zh:v2:{lemma}` cache namespace regenerates legacy English/old origins on the next section expansion, without deleting legacy cache entries. The old request language field is still accepted, but explanations now always use Chinese. No eager etymology request on word-card open: the module stays collapsed and mounts its loader only when expanded. While generating, it shows the existing Spinner. Failure shows “暂无法获取词源，请重试。” plus Retry; failed requests are evicted from the client promise cache, and no failure string is stored as an origin.
+
+The stock layout uses small muted labels 构成 / 来源 / 词义演变 / 记忆提示, omits empty blocks and distinguishes source forms with serif text/language attributes. Construction parts use stock link Buttons wired to the same nested dictionary drill as dictionary chips. fakeBackend returns a structured Chinese example. Frontend tests cover lazy loading, Retry, Chinese blocks, preserved source forms and clicking fin into its nested card. Eight isolated backend tests cover persistent Chinese caching, legacy-English regeneration, JSON/source preservation, invalid English rejection, authorization, validation and retry after failure.
+
+Screenshots (afin fixture, expanded origin, clickable à and fin):
+- `/home/mgacai/polish-1.3-out/screenshots/p13-after-word-origin-zh-1280.png`
+- `/home/mgacai/polish-1.3-out/screenshots/p13-after-word-origin-zh-390.png`
+
+### Follow-up verification and boundaries
+
+Tool: Codex CLI. Model: gpt-6.1-sol. Version remains 1.3.0; Tasks 1–7 were preserved. Branch stayed `design/polish-1.3`; origin was fetched and was not ahead, so no pull was needed. Only `git push origin design/polish-1.3` is used; no PR, main operation, force push or deployment.
+
+- `cd web && npm test`: 396 tests pass across 18 files.
+- `PYTHONPATH=tests python3 -m unittest test_etymology -q`: 8 tests pass using testenv’s isolated temporary data and mocked model calls; existing datetime deprecation warnings only.
+- `cd web && npm run build`: passes; existing large-chunk advisory only.
+- `bash /home/mgacai/polish-1.3-out/audit.sh`: raw button/select/input/textarea/details/summary counts all 0.
+- `git diff --check`: clean.
+
+Playwright/Chrome screenshot script: `/tmp/ui-audit-pw/shots-polish-13-followup.mjs`. Browser assertions verified automatic focus and that 5 in the answer input does not master. Screenshots were visually inspected. Preview used only `127.0.0.1:8028`, confirmed free before startup, with fakeBackend and no live LLM or production services. Preview is stopped after verification. Harness copies and screenshots remain outside the commit; no PNG, node_modules, preview-main.tsx or vite.audit.config.ts is staged.
+
+Production containers, compose.yml, Dockerfile, docker, cloudflared, outputs/, live users.db, .env, models and credentials were not touched. No other processes were killed. Reports are appended, and only the requested design branch is committed/pushed.

@@ -10,6 +10,7 @@ import {
   useLookupCount,
   wordContext,
   type DictionaryEntry,
+  type EtymologyResponse,
   type Phrase,
   type WordContextHints,
   type WordContextResult,
@@ -273,7 +274,7 @@ export function WordPanel({
           )}
           {dictSt === "ready" && dict && <DictionaryResult result={dict} onWord={drill} />}
       </Module>
-      {!compact && <><Module key={`origin-${shown}`} title="Word origin"><Origin key={shown} word={shown} lemma={dict?.lemma || shown} /></Module>
+      {!compact && <><Module key={`origin-${shown}`} title="Word origin"><Origin key={shown} word={shown} lemma={dict?.lemma || shown} onWord={drill} /></Module>
       <Module key={`ask-${shown}`} title="Ask AI"><Ask key={shown} sentence={sentence} word={shown} /></Module>
       <Module key={`notes-${shown}`} title="Notes"><WordNotes key={shown} word={shown} /></Module></>}
       {compact && <WordNotes key={shown} word={shown} compact />}
@@ -340,12 +341,20 @@ function French({ value, onWord, language = "fr" }: { value: string; onWord: (wo
 function Module({ title, defaultOpen = false, children }: { title: string; defaultOpen?: boolean; children: ReactNode }) {
   return <section aria-label={title} className="rounded-xl border px-3"><Collapsible defaultOpen={defaultOpen}><CollapsibleTrigger className="flex min-h-10 w-full items-center justify-between text-sm font-medium"><h3>{title}</h3><ChevronDown className="size-4" aria-hidden /></CollapsibleTrigger><CollapsibleContent className="flex flex-col gap-2 pb-3">{children}</CollapsibleContent></Collapsible></section>;
 }
-function Origin({ word, lemma }: { word: string; lemma: string }) {
-  const [value, setValue] = useState("");
+function Origin({ word, lemma, onWord }: { word: string; lemma: string; onWord: (word: string) => void }) {
+  const [value, setValue] = useState<EtymologyResponse | null>(null);
   const [error, setError] = useState(false);
-  const load = useCallback(() => { setError(false); etymology(word, lemma).then(r => setValue(r.text)).catch(() => setError(true)); }, [word, lemma]);
+  const load = useCallback(() => { setError(false); etymology(word, lemma).then(setValue).catch(() => setError(true)); }, [word, lemma]);
   useEffect(load, [load]);
-  return error ? <Button variant="outline" onClick={load}>Retry</Button> : value ? <p className="text-sm">{value}</p> : <Spinner label="Loading word origin…" />;
+  if (error) return <div className="grid gap-2"><p className="text-sm text-muted-foreground" lang="zh">暂无法获取词源，请重试。</p><Button variant="outline" onClick={load}>Retry</Button></div>;
+  if (!value) return <Spinner label="Loading word origin…" />;
+  const structured = value.construction?.length || value.source?.length || value.sense_history_zh || value.memory_zh;
+  return structured ? <dl className="grid gap-3 text-sm" lang="zh">
+    {Boolean(value.construction?.length) && <div className="grid gap-1"><dt className="text-xs text-muted-foreground">构成</dt><dd className="flex flex-wrap items-baseline gap-x-2 gap-y-1">{value.construction!.map((p, i) => <span key={i}>{i > 0 && <span className="mr-2 text-muted-foreground">+</span>}<Button variant="link" className="h-auto p-0 font-serif text-base" lang="fr" onClick={() => onWord(p.form)}>{p.form}</Button>{p.gloss_zh && <span className="ml-1">（{p.gloss_zh}）</span>}</span>)}</dd></div>}
+    {Boolean(value.source?.length) && <div className="grid gap-1"><dt className="text-xs text-muted-foreground">来源</dt><dd>{value.source!.map((p, i) => <p key={i}>{p.lang} <span className="font-serif" lang="und">{p.form}{p.from_form ? ` ← ${p.from_form}` : ""}</span></p>)}</dd></div>}
+    {value.sense_history_zh && <div className="grid gap-1"><dt className="text-xs text-muted-foreground">词义演变</dt><dd>{value.sense_history_zh}</dd></div>}
+    {value.memory_zh && <div className="grid gap-1"><dt className="text-xs text-muted-foreground">记忆提示</dt><dd>{value.memory_zh}</dd></div>}
+  </dl> : <p className="whitespace-pre-line text-sm" lang="zh">{value.text}</p>;
 }
 function Ask({ sentence, word }: { sentence: StudySentence; word: string }) {
   const [question, setQuestion] = useState(""); const [answer, setAnswer] = useState(""); const [busy, setBusy] = useState(false); const [error, setError] = useState(false);

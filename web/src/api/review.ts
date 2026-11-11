@@ -254,6 +254,12 @@ async function putArchived(cardId: string, archived: boolean) {
 const setMastered = (cardId: string, mastered: boolean) =>
   set((s) => ({ cards: s.cards.map((c) => (c.id === cardId ? { ...c, mastered } : c)) }));
 
+/** Review waits for persistence before advancing; Undo uses the same soft archive. */
+export async function setCardArchived(cardId: string, archived: boolean): Promise<void> {
+  await putArchived(cardId, archived);
+  setMastered(cardId, archived);
+}
+
 /** Marks a card mastered right away (with the 6-second Undo) and saves it; a failed save puts it back. */
 export function masterCard(cardId: string): string {
   const actionId = markMastered(cardId);

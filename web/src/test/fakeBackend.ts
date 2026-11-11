@@ -316,7 +316,7 @@ function route(method: string, url: URL, body: Record<string, unknown>): Respons
       fake.etymologyFails--;
       return json(503, { detail: "etymology_failed" });
     }
-    return json(200, { text: body.language === "en" ? "A short English note about the word’s origin." : "这是一个示例词根词源说明。", cached: false });
+    return json(200, { text: "构成：à + fin。来源：拉丁语 ad + finem。", lang: "zh", schema_version: 2, construction: [{ form: "à", gloss_zh: "到" }, { form: "fin", gloss_zh: "终点、目的" }], source: [{ lang: "拉丁语", form: "ad + finem", from_form: "finis" }], sense_history_zh: "由“到达终点”引申为“为了某个目的”。", memory_zh: "把目的想成要到达的终点（记忆联想）。", cached: false });
   }
   return srsRoute(method, url, body);
 }

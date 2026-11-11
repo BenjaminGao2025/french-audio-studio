@@ -14,7 +14,7 @@ export const FEEDBACK_KEY = "frenchStudio.feedback";
 export const DEFAULT_FEEDBACK: FeedbackPrefs = {
   sound: true,
   volume: 0.7,
-  spoken: true,
+  spoken: false,
   animation: true,
 };
 
@@ -61,7 +61,7 @@ function readPrefs(): FeedbackPrefs {
     return {
       sound: raw.sound !== false,
       volume: clampVolume(typeof raw.volume === "number" ? raw.volume : DEFAULT_FEEDBACK.volume),
-      spoken: raw.spoken !== false,
+      spoken: typeof raw.spoken === "boolean" ? raw.spoken : DEFAULT_FEEDBACK.spoken,
       animation: raw.animation !== false,
     };
   } catch {
@@ -216,7 +216,7 @@ function speakPraise(volume: number): Promise<void> {
  * Record the outcome, then play and show praise without awaiting audio.
  * Answer-known checks should not call this: they are not an independent result.
  */
-export function gradeFeedback(correct: boolean) {
+export function gradeFeedback(correct: boolean, options: { pronunciation?: boolean } = {}) {
   const event = noteOutcome(correct);
   const prefs = feedbackPrefs();
   const animate = animationOn(prefs);
@@ -240,7 +240,7 @@ export function gradeFeedback(correct: boolean) {
     chime(196, prefs.volume * 0.45, 140);
     return;
   }
-  if (event.milestone === 5 && prefs.spoken) {
+  if (event.milestone === 5 && prefs.spoken && !options.pronunciation) {
     void speakPraise(prefs.volume).catch(() => chime(880, prefs.volume, 280));
     return;
   }

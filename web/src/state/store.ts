@@ -404,7 +404,9 @@ export function go(route: string, opts: { focus?: boolean; keepDemo?: boolean } 
 export function focusHeading() {
   requestAnimationFrame(() => {
     const h = document.querySelector<HTMLElement>("[data-page-title]");
-    h?.focus({ preventScroll: false });
+    // Review typing takes priority over the deferred navigation heading focus.
+    const answer = get().route === "review/session" ? document.getElementById("rev-input") : null;
+    (answer ?? h)?.focus({ preventScroll: false });
   });
 }
 
@@ -677,12 +679,12 @@ export function stopPlayback() {
  * Say one short word or a free selection aloud without taking over sentence playback. The main
  * player is only paused so the two clips never play at once; its position and `texts` are kept.
  */
-export function sayFrench(text: string, rate = 1) {
+export function sayFrench(text: string, rate = 1, voice?: string) {
   const p = get().player;
   if (p && (p.status === "playing" || p.status === "buffering" || p.status === "loading")) {
     updatePlayer({ status: "paused" });
   }
-  speakOnce(text, rate);
+  speakOnce(text, rate, voice);
 }
 
 /** Records the session's counted time in Audio activity history and remembers episode positions. */

@@ -421,7 +421,11 @@ describe("Task B — Study word card, selection and steps", () => {
     await wait(100);
     await act(async () => findButton("Retry").click());
     await wait(100);
-    expect(panel.textContent).toContain("A short English note");
+    for (const label of ["构成", "来源", "词义演变", "记忆提示", "ad + finem", "finis"]) expect(panel.textContent).toContain(label);
+    expect(fake.calls.find(call => call.path === "/api/etymology")?.body).toMatchObject({ language: "zh" });
+    await act(async () => Array.from(panel.querySelectorAll<HTMLButtonElement>("button")).find(b => b.textContent === "fin")!.click());
+    await wait(100);
+    expect(panel.querySelector(".wp-headword")?.textContent).toBe("fin");
     expect(fake.calls.filter(call => call.path === "/api/etymology")).toHaveLength(2);
   });
 });
