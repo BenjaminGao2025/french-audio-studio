@@ -155,13 +155,21 @@ const TABS = [
 
 export function ReviewScreen({ sub }: { sub: string }) {
   const tab = sub === "session" ? "due" : sub === "library" ? "saved" : sub;
+  if (sub === "session") {
+    return (
+      <div className="page page--read review-focus">
+        <h1 className="sr-only" tabIndex={-1} data-page-title>Review</h1>
+        <ReviewSession />
+      </div>
+    );
+  }
   return (
-    <div className="page page--wide">
-      <PageHead title="Review" desc={sub === "session" ? undefined : "Cards you saved come back when they’re due. Only answering cards here changes their review schedule."} />
+    <div className={cx("page", tab === "saved" && "page--wide")}>
+      <PageHead title="Review" />
       <div className="stack gap-5">
         <Tabs label="Review sections" idBase="review" value={tab} tabs={TABS} onChange={(v) => go(`review/${v}`, { focus: false })} />
         <div id="review-panel" role="tabpanel" aria-labelledby={`review-tab-${tab}`}>
-          {sub === "session" ? <ReviewSession /> : tab === "due" ? <DueToday /> : tab === "saved" ? <SavedCards /> : <MasteredList />}
+          {tab === "due" ? <DueToday /> : tab === "saved" ? <SavedCards /> : <MasteredList />}
         </div>
       </div>
     </div>
@@ -342,11 +350,24 @@ function DueToday() {
       {(state === "active" || state === "offline") && (
         <section className="stack gap-5" aria-labelledby="today-h">
           <div className="stack gap-2">
-            <h2 id="today-h" className="t-section">Today’s session</h2>
-            <p className="t-figure">{nf.format(state === "offline" ? 12 : total)} cards</p>
-            <p className="t-support">
-              {state === "offline" ? "Assigned to this device: 8 learning · 1 due review · 3 new" : `${learning} learning cards · ${due} due review card · ${newAssigned} new cards`}
-            </p>
+            <h2 id="today-h" className="meta-k">Today’s session</h2>
+            <p className="journey-num">{nf.format(state === "offline" ? 12 : total)}</p>
+            <p className="t-support">cards</p>
+            <dl className="fact-row">
+              {state === "offline" ? (
+                <>
+                  <div><dt>Learning</dt><dd>8</dd></div>
+                  <div><dt>Due</dt><dd>1</dd></div>
+                  <div><dt>New</dt><dd>3</dd></div>
+                </>
+              ) : (
+                <>
+                  <div><dt>Learning</dt><dd>{learning}</dd></div>
+                  <div><dt>Due</dt><dd>{due}</dd></div>
+                  <div><dt>New</dt><dd>{newAssigned}</dd></div>
+                </>
+              )}
+            </dl>
             {state !== "offline" && quotaLine && (
               <p className="t-support" data-quota-explanation>
                 <span className="t-strong">New cards:</span> {quotaLine}
@@ -377,7 +398,7 @@ function DueToday() {
           <dl className="stat-grid">
             <div className="stat"><dt className="t-support">Daily new-card limit</dt><dd className="t-section num" style={{ margin: 0 }}>{dailyNew} cards</dd></div>
             <div className="stat"><dt className="t-support">New cards introduced today</dt><dd className="t-section num" style={{ margin: 0 }}>{newUsed}</dd></div>
-            <div className="stat"><dt className="t-support">Your whole library</dt><dd className="t-section num" style={{ margin: 0 }}>{libOk ? `${nf.format(sentences)} sentences · ${nf.format(savedCards)} cards` : "…"}</dd></div>
+            <div className="stat"><dt className="t-support">Your whole library</dt><dd className="t-section num" style={{ margin: 0 }}>{libOk ? <span className="meta-row"><span>{nf.format(sentences)} sentences</span><span>{nf.format(savedCards)} cards</span></span> : "…"}</dd></div>
           </dl>
           <span className="sr-only">Queue pool: {queue.length} cards</span>
         </section>
@@ -651,7 +672,7 @@ function ReviewSession() {
     <div className={cx("with-word-card", pick && !narrow && "is-open")}>
       <div className="exercise" data-mode={mode} data-card-id={card.id}>
         <div className="row row--between">
-          <h2 id="rev-q" tabIndex={-1} className="t-section">Card {review.index + 1} of {cards.length}</h2>
+          <p id="rev-q" tabIndex={-1} className="t-meta num">Card {review.index + 1} of {cards.length}</p>
           <span className="t-support num">{review.completed} completed</span>
         </div>
         {review.removedNew > 0 && <p className="t-support" role="status">{plural(review.removedNew, "new card")} removed because you lowered today’s limit.</p>}
@@ -667,7 +688,7 @@ function ReviewSession() {
             {/* ---------------- FRONT, per mode ---------------- */}
             {mode === "listen" && (
               <div className="rev-listen stack gap-3">
-                <p className="t-support">Listen, then say what it means. Show the answer to check.</p>
+                <p className="rev-lead">Listen, then say what it means.</p>
                 <div className="btn-row">
                   <Button kind="secondary" className="rev-play-big" iconOnly icon={<Play aria-hidden />} aria-label="Play the sentence" onClick={() => sayFrench(sentenceFr)} />
                   <Button kind="secondary" icon={<Volume2 aria-hidden />} onClick={() => sayFrench(sentenceFr, 0.75)}>Slow 0.75&nbsp;×</Button>
@@ -676,7 +697,7 @@ function ReviewSession() {
             )}
             {mode === "speak" && (
               <div className="stack gap-3">
-                <p className="t-support">Say this in French out loud, then show the answer.</p>
+                <p className="rev-lead">Say this in French out loud.</p>
                 <p className="rev-prompt-zh" lang={translationZh ? "zh" : undefined}>{translationZh || translationEn || "No translation yet."}</p>
                 {showEnglish && <Disclosure summary="Show English"><p className="t-support">{translationEn}</p></Disclosure>}
                 <Disclosure summary="Show initials"><p className="rev-initials" lang="fr">{initialsHint(sentenceFr)}</p></Disclosure>
@@ -685,7 +706,7 @@ function ReviewSession() {
             {mode === "recognize" && (
               <div className="stack gap-3">
                 <FrText segments={tokenizeFrench(card.target)} className="t-fr-lg" onPick={onWordPick} />
-                <p className="t-support">What does it mean?</p>
+                <p className="rev-lead">What does it mean?</p>
                 <div className="btn-row">
                   <Button kind="secondary" className="rev-play-big" iconOnly icon={<Play aria-hidden />} aria-label="Play the word" onClick={() => sayFrench(card.target)} />
                   <Button kind="secondary" icon={<Volume2 aria-hidden />} onClick={() => sayFrench(card.target, 0.75)}>Slow 0.75&nbsp;×</Button>

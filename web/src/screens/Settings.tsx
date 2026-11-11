@@ -182,8 +182,8 @@ export function SettingsScreen({ sub }: { sub?: string }) {
     if (route.includes("signout")) setSignOut(true);
   }, [sub, route]);
   return (
-    <div className="page">
-      <PageHead title="Settings" desc="Review limits, playback on this device, your account and signed-in devices." />
+    <div className="page settings-page">
+      <PageHead title="Settings" />
       <div className="stack gap-7">
         <section className="stack gap-5" aria-labelledby="pref-h">
           <h2 id="pref-h" className="t-section">Review</h2>

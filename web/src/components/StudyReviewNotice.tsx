@@ -23,11 +23,13 @@ export function StudyReviewNotice() {
   if (!counts?.total) return null;
   const revisit = counts.review + counts.learning;
   return (
-    <p className="due-line">
-      <span className="meta-k">Due today</span>
-      <span className="meta-chip">{counts.total} cards</span>
-      <span className="meta-chip">{revisit} to revisit</span>
+    <aside className="fact-card">
+      <h2 className="meta-k">Due today</h2>
+      <dl className="fact-dl">
+        <div><dt>Cards</dt><dd>{counts.total}</dd></div>
+        <div><dt>To revisit</dt><dd>{revisit}</dd></div>
+      </dl>
       <Button kind="secondary" onClick={() => go("review/due")}>Review today’s cards</Button>
-    </p>
+    </aside>
   );
 }

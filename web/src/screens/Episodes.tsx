@@ -127,16 +127,20 @@ export function EpisodeList() {
 
 function EpisodeRow({ e, position, onChanged }: { e: ServerEpisode; position: number; onChanged: () => void }) {
   const [busy, setBusy] = useState(false);
-  const meta = [levelOf(e), e.status === "ready" ? `${minutesOf(e)} min` : e.settings?.minutes ? `${e.settings.minutes} min requested` : ""].filter(Boolean).join(" · ");
+  const minutes = e.status === "ready" ? `${minutesOf(e)} min` : e.settings?.minutes ? `${e.settings.minutes} min requested` : "";
   if (e.status === "ready") {
     const d = e.duration ?? 0;
     const status = position >= d - 5 && d > 0 ? "Finished" : position > 5 ? `Continue at ${fmtClock(position)}` : "Not started";
     return (
       <button className="list-btn" onClick={() => go(`practice/episodes/${e.id}`)}>
         <span className="grow stack gap-1">
-          <span className="row"><span lang="fr" className="t-strong">{episodeTitle(e)}</span>{levelOf(e) && <Pill>{levelOf(e)}</Pill>}</span>
+          <span className="episode-title" lang="fr">{episodeTitle(e)}</span>
           {e.settings?.request && <span className="t-support">{e.settings.request}</span>}
-          <span className="t-meta num">{meta} · {status}</span>
+          <span className="meta-row">
+            {levelOf(e) && <span className="meta-chip">{levelOf(e)}</span>}
+            {minutes && <span className="meta-chip num">{minutes}</span>}
+            <span className="meta-chip">{status}</span>
+          </span>
         </span>
         <ChevronRight aria-hidden className="chev" />
       </button>
@@ -154,7 +158,12 @@ function EpisodeRow({ e, position, onChanged }: { e: ServerEpisode; position: nu
         ) : (
           <span className="t-support">{e.error || "The episode couldn’t be made."}</span>
         )}
-        {meta && <span className="t-meta num">{meta}</span>}
+        {(levelOf(e) || minutes) && (
+          <span className="meta-row">
+            {levelOf(e) && <span className="meta-chip">{levelOf(e)}</span>}
+            {minutes && <span className="meta-chip num">{minutes}</span>}
+          </span>
+        )}
       </span>
       {e.status === "failed" && (
         <Button

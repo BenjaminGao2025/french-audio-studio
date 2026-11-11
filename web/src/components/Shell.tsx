@@ -98,44 +98,80 @@ export function AppRoot({ children }: { children: ReactNode }) {
 /** Screens that already read and write the learner's real data (the rest still run on sample data). */
 const isConnected = (route: string) => ["study", "review", "login", "progress", "practice", "settings", "moved"].some((r) => route === r || route.startsWith(`${r}/`) || route.startsWith(`${r}?`));
 
+const pathOf = (route: string) => route.split("?")[0];
+
+function NavLinks() {
+  const route = useApp((s) => s.route);
+  const top = pathOf(route).split("/")[0];
+  return (
+    <ul className="nav-list">
+      {NAV.map((n) => {
+        const Icon = n.icon;
+        const active = top === n.key;
+        return (
+          <li key={n.key}>
+            <a
+              href={routeUrl(n.key)}
+              className="nav-item"
+              aria-current={active ? "page" : undefined}
+              onClick={(e) => {
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                e.preventDefault();
+                go(n.key);
+              }}
+            >
+              <span className="nav-ind"><Icon aria-hidden /></span>
+              <span>{n.label}</span>
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function FocusBar() {
+  const route = useApp((s) => s.route);
+  const review = useApp((s) => s.review);
+  const activeRun = useApp((s) => s.activeRun);
+  const kind = useApp((s) => (activeRun ? s.exercises[activeRun]?.kind : undefined));
+  const path = pathOf(route);
+  if (path === "review/session") {
+    const total = review.sessionCards?.length ?? 0;
+    return (
+      <div className="focus-bar">
+        <Button kind="tertiary" onClick={() => go("review")}>Exit</Button>
+        <span className="focus-name">Review</span>
+        {total > 0 && <span className="focus-progress num">{review.index + 1} of {total}</span>}
+      </div>
+    );
+  }
+  const back = kind === "Dictation" ? "study/dictation" : kind === "Recall" ? "study/recall" : "study";
+  return (
+    <div className="focus-bar">
+      <Button kind="tertiary" onClick={() => go(back)}>Exit</Button>
+      <span className="focus-name">{kind ?? "Practice"}</span>
+    </div>
+  );
+}
+
 export function Shell({ children }: { children: ReactNode }) {
   const route = useApp((s) => s.route);
-  const top = route.split("/")[0];
+  const path = pathOf(route);
+  const focused = path === "review/session" || path === "study/run";
   return (
-    <div className="shell">
+    <div className={cx("shell", focused && "shell--focus")}>
       <a className="skip-link" href="#main" onClick={(e) => { e.preventDefault(); document.getElementById("main")?.focus(); }}>
         Skip to main content
       </a>
-      <nav className="nav" aria-label="Primary">
-        <div className="nav-brand"><Brand /></div>
-        <ul className="nav-list">
-          {NAV.map((n) => {
-            const Icon = n.icon;
-            const active = top === n.key;
-            return (
-              <li key={n.key}>
-                <a
-                  href={routeUrl(n.key)}
-                  className="nav-item"
-                  aria-current={active ? "page" : undefined}
-                  onClick={(e) => {
-                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-                    e.preventDefault();
-                    go(n.key);
-                  }}
-                >
-                  <span className="nav-ind"><Icon aria-hidden /></span>
-                  <span>{n.label}</span>
-                </a>
-              </li>
-            );
-          })}
-        </ul>
-        <div className="nav-foot">
-          <VersionInfo />
+      <header className="topbar">
+        <span className="topbar-brand"><Brand /></span>
+        {focused ? <FocusBar /> : <nav className="nav nav--inline" aria-label="Primary"><NavLinks /></nav>}
+        <div className="topbar-end">
+          <VersionInfo className="header-version" />
+          <AccountSlot />
         </div>
-      </nav>
-      <Header />
+      </header>
       <main className="main" id="main" tabIndex={-1}>
         {!isConnected(route) && (
           <div className="demo-banner">
@@ -149,11 +185,16 @@ export function Shell({ children }: { children: ReactNode }) {
       <div className="player-slot">
         <GlobalPlayer />
       </div>
+      {!focused && (
+        <nav className="tabbar" aria-label="Primary">
+          <NavLinks />
+        </nav>
+      )}
     </div>
   );
 }
 
-function Header() {
+function AccountSlot() {
   const auth = useApp((s) => s.auth);
   const offline = useApp((s) => s.offline);
   const sync = useApp((s) => s.sync);
@@ -163,10 +204,8 @@ function Header() {
   const user = useSession().user;
   const email = user?.email ?? "";
   return (
-    <header className="header">
-      <span className="header-brand"><Brand /></span>
-      <VersionInfo className="header-version" />
-      {offline && <Pill tone="warning" icon={<CloudOff aria-hidden />}>Offline · simulated</Pill>}
+    <>
+      {offline && <Pill tone="warning" icon={<CloudOff aria-hidden />}>Offline, simulated</Pill>}
       {auth === "in" && !isConnected(route) && <SyncIndicator sync={sync} offline={offline} />}
       {auth === "in" ? (
         <button
@@ -186,7 +225,7 @@ function Header() {
         <Pill>Signed out</Pill>
       )}
       {menuOpen && <AccountMenu email={email} onClose={() => { set(() => ({ menuOpen: false })); menuBtn.current?.focus(); }} />}
-    </header>
+    </>
   );
 }
 

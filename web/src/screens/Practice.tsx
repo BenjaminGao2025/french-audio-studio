@@ -38,8 +38,8 @@ function Hub() {
   ];
   return (
     <div className="page">
-      <PageHead title="Practice" desc="Practise one skill at a time, listen for longer, or prepare your own listening material." />
-      <ul className="list">
+      <PageHead title="Practice" />
+      <ul className="list studio-grid">
         {dest.map((d) => (
           <li key={d.to}>
             <button className="list-btn" onClick={() => go(d.to)}>

@@ -19,7 +19,7 @@ import {
   updatePlayer,
   useApp,
 } from "../state/store";
-import { Banner, Button, Dialog, PageHead, Popover, Skeleton, Spinner, useNarrow, WordDock } from "../components/ui";
+import { Banner, Button, Dialog, Popover, Skeleton, Spinner, useNarrow, WordDock } from "../components/ui";
 import { FrText, stepSegments, type FrPick } from "../components/FrText";
 import { WordPanel } from "./WordPopup";
 import { Exercise } from "./Exercise";
@@ -86,43 +86,40 @@ export function StudyLearn() {
     if (p?.owner.kind === "study") stopPlayback();
   };
 
-  return (
-    <div className="page page--wide">
-      <PageHead
-        title="Study"
-        eyebrow={<span className="meta-row"><span>{study.analysis.source}</span><span>{plural(total, "sentence")}</span></span>}
-        actions={
-          <>
-            <Button kind="tertiary" icon={<HistoryIcon aria-hidden />} onClick={() => go("progress/history?tab=analyses")}>
-              Analyses in History
-            </Button>
-            <Button kind="tertiary" icon={<Plus aria-hidden />} onClick={() => go("study/new")}>
-              New text
-            </Button>
-          </>
-        }
-      />
+  const pager = total > 1 && (
+    <div className="btn-row">
+      <span className="t-meta num">{study.index + 1} of {total}</span>
+      <Button kind="secondary" iconOnly icon={<ChevronLeft aria-hidden />} aria-label="Previous sentence" disabledReason={study.index === 0 ? "This is the first sentence." : undefined} onClick={() => goSentence(study.index - 1)} />
+      <Button kind="secondary" iconOnly icon={<ChevronRight aria-hidden />} aria-label="Next sentence" disabledReason={study.index === total - 1 ? "This is the last sentence." : undefined} onClick={() => goSentence(study.index + 1)} />
+    </div>
+  );
 
+  return (
+    <div className="page page--wide study-workspace">
+      <h1 className="sr-only" tabIndex={-1} data-page-title>Study</h1>
       <div className={cx("with-word-card", pick && !narrow && "is-open")}>
-      <div className="stack gap-5">
+      <div className="stack gap-4 workspace-col">
         {!!study.analysis.failedParts && <Banner tone="warning" title="Some text could not be analysed">{study.analysis.failedParts} parts failed. Your original text is kept. Open New text to retry the missing parts.</Banner>}
         {!practising && s.raw?.accent_fixed_from && <Banner tone="info" title="Accents corrected">Original: <span lang="fr">{s.raw.accent_fixed_from}</span>. The sentence below uses corrected French accents.</Banner>}
-        {/* Source, collapsed after success. Hidden while practising so the target never shows. */}
         {!practising && (
-          <div className="stack gap-2">
-            <Button
-              kind="tertiary"
-              icon={<PencilLine aria-hidden />}
-              aria-expanded={srcOpen}
-              aria-controls="source-panel"
-              onClick={() => setSrcOpen(!srcOpen)}
-              style={{ alignSelf: "flex-start", marginLeft: -12 }}
-            >
-              {srcOpen ? "Hide source" : "Edit source"}
-            </Button>
+          <details className="more-block" open={srcOpen || undefined}>
+            <summary>More</summary>
+            <div className="btn-row">
+              <Button kind="tertiary" icon={<HistoryIcon aria-hidden />} onClick={() => go("progress/history?tab=analyses")}>Analyses in History</Button>
+              <Button kind="tertiary" icon={<Plus aria-hidden />} onClick={() => go("study/new")}>New text</Button>
+              <Button
+                kind="tertiary"
+                icon={<PencilLine aria-hidden />}
+                aria-expanded={srcOpen}
+                aria-controls="source-panel"
+                onClick={() => setSrcOpen(!srcOpen)}
+              >
+                {srcOpen ? "Hide source" : "Edit source"}
+              </Button>
+            </div>
             {srcOpen && (
               <div id="source-panel" className="panel stack gap-3">
-                <p className="t-support">Original text</p>
+                <p className="meta-row"><span>{study.analysis.source}</span><span>{plural(total, "sentence")}</span></p>
                 <p lang="fr">{study.analysis.input}</p>
                 <div className="btn-row">
                   <Button kind="secondary" onClick={() => go("study/new")}>Edit text and analyse again</Button>
@@ -130,46 +127,27 @@ export function StudyLearn() {
                 </div>
               </div>
             )}
-          </div>
+          </details>
         )}
 
-        {practising && total > 1 && (
-          <div className="row row--between">
-            <h2 className="t-label">Sentence {study.index + 1} of {total}</h2>
-            <div className="btn-row">
-              <Button kind="secondary" iconOnly icon={<ChevronLeft aria-hidden />} aria-label="Previous sentence" disabledReason={study.index === 0 ? "This is the first sentence." : undefined} onClick={() => goSentence(study.index - 1)} />
-              <Button kind="secondary" iconOnly icon={<ChevronRight aria-hidden />} aria-label="Next sentence" disabledReason={study.index === total - 1 ? "This is the last sentence." : undefined} onClick={() => goSentence(study.index + 1)} />
-            </div>
-          </div>
-        )}
+        {practising && pager}
 
         {!practising && <section className="sentence-hero" aria-labelledby="current-sentence-heading">
-          <div className="row row--between">
-            <h2 id="current-sentence-heading" tabIndex={-1} className="sr-only">
-              {total > 1 ? `Sentence ${study.index + 1} of ${total}` : "Current sentence"}
-            </h2>
-            {total > 1 && <p className="t-meta">Sentence {study.index + 1} of {total}</p>}
-            {total > 1 && (
-              <div className="btn-row">
-                <Button kind="secondary" iconOnly icon={<ChevronLeft aria-hidden />} aria-label="Previous sentence" disabledReason={study.index === 0 ? "This is the first sentence." : undefined} onClick={() => goSentence(study.index - 1)} />
-                <Button kind="secondary" iconOnly icon={<ChevronRight aria-hidden />} aria-label="Next sentence" disabledReason={study.index === total - 1 ? "This is the last sentence." : undefined} onClick={() => goSentence(study.index + 1)} />
-              </div>
-            )}
-          </div>
-
+          <h2 id="current-sentence-heading" tabIndex={-1} className="sr-only">
+            {total > 1 ? `Sentence ${study.index + 1} of ${total}` : "Current sentence"}
+          </h2>
           <div ref={sentRef}>
             <FrText segments={s.segments} className="sentence-fr" onPick={onPick} />
             <p className="sentence-en">{s.en}</p>
           </div>
-
-          <StudyPlayer practising={practising} />
-
-          <div className="btn-row">
+          <div className="sentence-toolbar">
+            {pager}
+            <StudyPlayer practising={practising} />
             <AddToReview sentence={s} />
           </div>
         </section>}
 
-        <div className="stack gap-4">
+        <div className="stack gap-4 tool-groups-wrap">
           <StudyNavigation value={study.tab} onChange={(tab) => {
             setPick(null);
             const p = get().player;
@@ -289,7 +267,7 @@ function StudyPlayer({ practising }: { practising: boolean }) {
   const allPlaying = allStatus === "playing" || allStatus === "buffering" || allStatus === "loading";
 
   return (
-    <div className="player" role="group" aria-label="Sentence player">
+    <div className="player player--quiet" role="group" aria-label="Sentence player">
       <div className="player-main">
         <Button
           kind="secondary"

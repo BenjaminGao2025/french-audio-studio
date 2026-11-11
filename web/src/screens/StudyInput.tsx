@@ -74,15 +74,18 @@ export function StudyInput() {
           : undefined;
 
   return (
-    <div className="page page--wide study-home">
-      <PageHead
-        title="Study"
-        desc="Paste French, or an idea you want to say."
-        actions={study.sentences.length > 0 && !busy ? <Button kind="tertiary" onClick={() => go("study")}>Back to current sentence</Button> : undefined}
-      />
+    <div className="page study-home">
+      <header className="page-head">
+        <div className="page-head-row">
+          <h1 className="t-page" tabIndex={-1} data-page-title>Study</h1>
+          {study.sentences.length > 0 && !busy && <Button kind="tertiary" onClick={() => go("study")}>Back to current sentence</Button>}
+        </div>
+      </header>
       <div className="stack gap-4">
-        <div className="panel stack gap-4 study-composer">
+        <section className="start-sheet" aria-labelledby="start-h">
+          <h2 id="start-h" className="t-section">Start</h2>
           <Segmented
+            block
             label="Input mode"
             value={mode}
             onChange={(m) => patchStudy({ mode: m })}
@@ -107,7 +110,7 @@ export function StudyInput() {
               ref={taRef}
               className="textarea"
               lang={mode === "text" ? "fr" : "en"}
-              rows={mode === "text" ? 12 : 8}
+              rows={mode === "text" ? 7 : 5}
               placeholder={mode === "text" ? "e.g. J’ai failli oublier…" : "e.g. I almost forgot the meeting…"}
               value={draft}
               aria-invalid={v === "over" || a.status === "invalid" ? true : undefined}
@@ -128,7 +131,8 @@ export function StudyInput() {
             />
             <div className="row row--between">
               <span id="study-count" className={v === "over" ? "counter counter--over" : "counter"}>
-                {nf.format(draft.length)} / {nf.format(limit)} characters{v === "over" ? ` · ${nf.format(draft.length - limit)} over the limit` : ""}
+                {nf.format(draft.length)} / {nf.format(limit)} characters
+                {v === "over" ? <span> {nf.format(draft.length - limit)} over the limit</span> : ""}
               </span>
               <span className="btn-row">
                 <Button kind="tertiary" onClick={() => setDraft(mode === "text" ? EXAMPLE_TEXT : IDEAS_EXAMPLE)} disabled={busy}>
@@ -150,7 +154,7 @@ export function StudyInput() {
           {photoError && <Banner tone="error" title="Couldn’t import image">{photoError}</Banner>}
           <AnalysisStatus />
 
-          <div className="sticky-actions" style={{ background: "var(--surface)" }}>
+          <div className="stack gap-2">
             <div className="btn-row">
               <Button kind="primary" onClick={() => runAnalysis(source)} disabledReason={reason} busy={busy}>
                 {busy ? "Analysing…" : mode === "text" ? "Analyse text" : "Create French example"}
@@ -163,32 +167,26 @@ export function StudyInput() {
             </div>
             {reason && !busy && <DisabledReason>{reason}</DisabledReason>}
           </div>
-        </div>
+        </section>
 
-        <div className="study-home-tools">
-          <StudyReviewNotice />
-          <div className="btn-row">
-            <Button kind="secondary" onClick={() => go("study/personal")}>Practise my own words</Button>
-            <Button kind="secondary" onClick={() => go("study/grammar")}>My grammar map</Button>
-          </div>
-        </div>
-        {last.record && !busy && (
-          <Banner
-            tone="info"
-            title="Pick up where you left off?"
-            actions={
-              <>
-                <Button kind="secondary" onClick={() => last.record && openAnalysisInStudy(last.record)}>Open last analysis</Button>
+        <div className="dash-pair">
+          {last.record && !busy && (
+            <section className="continue-card" aria-label="Continue">
+              <p className="meta-k">Continue</p>
+              <p className="t-strong">{plural(sentenceCount(last.record), "sentence")} saved</p>
+              <p className="meta-chip">{fmtWhen(last.record.created_at)}</p>
+              <div className="btn-row">
+                <Button kind="secondary" onClick={() => last.record && openAnalysisInStudy(last.record)}>Continue</Button>
                 <Button kind="tertiary" onClick={last.dismiss}>Dismiss</Button>
-              </>
-            }
-          >
-            <span className="meta-row">
-              <span>{fmtWhen(last.record.created_at)}</span>
-              <span>{plural(sentenceCount(last.record), "sentence")} saved</span>
-            </span>
-          </Banner>
-        )}
+              </div>
+            </section>
+          )}
+          <StudyReviewNotice />
+        </div>
+        <div className="quiet-row">
+          <Button kind="tertiary" onClick={() => go("study/personal")}>Practise my own words</Button>
+          <Button kind="tertiary" onClick={() => go("study/grammar")}>My grammar map</Button>
+        </div>
         {(study.restored || forced === "restored") && draft.trim() && (
           <Banner
             tone="info"
@@ -199,29 +197,13 @@ export function StudyInput() {
           </Banner>
         )}
 
-        <section className="section" aria-labelledby="prl-h">
-          <h2 id="prl-h" className="t-section">Practise without new text</h2>
-          <ul className="list study-side-actions">
-            <li>
-              <button className="list-btn" onClick={() => go("study/recall")}>
-                <span className="dest-icon"><PenLine aria-hidden /></span>
-                <span className="grow stack">
-                  <span className="t-strong">Recall</span>
-                  <span className="t-support">See the English meaning, type the French.</span>
-                </span>
-              </button>
-            </li>
-            <li>
-              <button className="list-btn" onClick={() => go("study/dictation")}>
-                <span className="dest-icon"><Headphones aria-hidden /></span>
-                <span className="grow stack">
-                  <span className="t-strong">Dictation</span>
-                  <span className="t-support">Listen to practice audio, type what you hear.</span>
-                </span>
-              </button>
-            </li>
-          </ul>
-        </section>
+        <details className="more-block">
+          <summary id="prl-h">Practise without new text</summary>
+          <div className="btn-row">
+            <Button kind="secondary" icon={<PenLine aria-hidden />} onClick={() => go("study/recall")}>Recall</Button>
+            <Button kind="secondary" icon={<Headphones aria-hidden />} onClick={() => go("study/dictation")}>Dictation</Button>
+          </div>
+        </details>
       </div>
 
       {confirmClear && (

@@ -8,6 +8,16 @@ export const RELEASES = [
     version: APP_VERSION,
     date: "2026-11-10",
     changes: [
+      "A new reading-app shell: a top bar on a wide screen, a bottom bar on a phone, and a paper page on a warm ground.",
+      "Study home is a dashboard with a Start composer, a continue card, and Due today as structured facts.",
+      "The French sentence is the center of the workspace. The eight tools sit in three groups: Understand, Listen & speak, and Check yourself.",
+      "Review is a session dashboard, and the card session hides the main navigation. Grade buttons keep their keys and intervals.",
+    ],
+  },
+  {
+    version: "1.0.6",
+    date: "2026-11-10",
+    changes: [
       "Study, Review and Settings now use a calm reading theme: warm paper, olive actions, and a serif face for French sentences.",
       "French sentences are the large line on the workspace and in review. Player controls sit in a quiet toolbar.",
       "Saved cards wrap on a desktop table and become a card list on a phone. Word cards sit beside the sentence instead of covering the player.",

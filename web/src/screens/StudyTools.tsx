@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { BookOpen, Check, Mic, Volume2, MessageCircle, Layers, PenLine, Headphones, Map as MapIcon, Plus } from "lucide-react";
+import { Check, Volume2, Map as MapIcon, Plus } from "lucide-react";
 import type { StudySentence } from "../data/fixtures";
 import { type AppState, go, sayFrench } from "../state/store";
 import { cardKey, useSavedCards } from "../api/srs";
@@ -12,21 +12,40 @@ import { formatFriendlyPhonetic } from "../lib/phonetic";
 import { StudyRecorder } from "../components/StudyRecorder";
 
 type Tab = AppState["study"]["tab"];
-const GROUPS = [
-  { title: "Understand", tabs: [{ id: "words", label: "Words", icon: BookOpen }, { id: "grammar", label: "Grammar", icon: MapIcon }, { id: "sounds", label: "Sounds", icon: Volume2 }] },
-  { title: "Listen & speak", tabs: [{ id: "steps", label: "Steps", icon: Layers }, { id: "shadowing", label: "Say it", icon: Mic }] },
-  { title: "Check yourself", tabs: [{ id: "recall", label: "Recall", icon: PenLine }, { id: "dictation", label: "Dictation", icon: Headphones }, { id: "explain", label: "Explain it", icon: MessageCircle }] },
-] as const;
+const GROUPS: { id: string; title: string; tabs: { id: Tab; label: string }[] }[] = [
+  { id: "understand", title: "Understand", tabs: [{ id: "words", label: "Words" }, { id: "grammar", label: "Grammar" }, { id: "explain", label: "Explain it" }] },
+  { id: "listen", title: "Listen & speak", tabs: [{ id: "sounds", label: "Sounds" }, { id: "steps", label: "Steps" }, { id: "shadowing", label: "Say it" }] },
+  { id: "check", title: "Check yourself", tabs: [{ id: "recall", label: "Recall" }, { id: "dictation", label: "Dictation" }] },
+];
 export function StudyNavigation({ value, onChange }: { value: Tab; onChange: (tab: Tab) => void }) {
-  const tabs = GROUPS.flatMap((g) => [...g.tabs]);
+  const memory = useRef<Partial<Record<string, Tab>>>({});
+  const group = GROUPS.find((g) => g.tabs.some((t) => t.id === value)) ?? GROUPS[0];
+  memory.current[group.id] = value;
   return (
-    <Tabs
-      label="Sentence practice"
-      idBase="learn"
-      value={value}
-      tabs={tabs.map((t) => ({ value: t.id, label: t.label }))}
-      onChange={onChange}
-    />
+    <div className="tool-groups">
+      <div className="seg tool-group" role="group" aria-label="Tool group">
+        {GROUPS.map((g) => (
+          <button
+            key={g.id}
+            type="button"
+            aria-pressed={g.id === group.id}
+            onClick={() => {
+              if (g.id === group.id) return;
+              onChange(memory.current[g.id] ?? g.tabs[0].id);
+            }}
+          >
+            {g.title}
+          </button>
+        ))}
+      </div>
+      <Tabs
+        label={group.title}
+        idBase="learn"
+        value={value}
+        tabs={group.tabs.map((t) => ({ value: t.id, label: t.label }))}
+        onChange={onChange}
+      />
+    </div>
   );
 }
 

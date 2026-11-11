@@ -50,7 +50,6 @@ export function HistoryScreen() {
       <PageHead
         back={<Button kind="tertiary" className="btn--sm-text" icon={<ChevronLeft aria-hidden />} onClick={() => go("progress")} style={{ alignSelf: "flex-start", marginLeft: -12 }}>Progress</Button>}
         title="History"
-        desc="A record of what you’ve done. This isn’t your card library — saved cards live in Review."
       />
       <div className="stack gap-5">
         <Tabs

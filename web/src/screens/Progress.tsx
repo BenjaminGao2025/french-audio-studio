@@ -120,13 +120,13 @@ function Goal({ s }: { s: StudySummary }) {
   const finish = s.projected_finish ? new Date(`${s.projected_finish}T12:00:00Z`) : null;
   return (
     <>
-      <section className="stack gap-4" aria-labelledby="goal-h">
-        <h2 id="goal-h" className="sr-only">Goal</h2>
-        <div className="stack gap-1">
-          <span className="t-support">Total study time</span>
-          <span className="t-figure">{s.total_seconds < 60 ? "0 h" : fmtDuration(s.total_seconds / 60)}</span>
-          <span className="t-support">of {nf.format(s.goal_hours)} hours · {pct.toFixed(1)}%</span>
-        </div>
+      <section className="journey stack gap-2" aria-labelledby="goal-h">
+        <h2 id="goal-h" className="meta-k">1,000-hour journey</h2>
+        <p className="journey-num">{s.total_seconds < 60 ? "0 h" : fmtDuration(s.total_seconds / 60)}</p>
+        <dl className="fact-row">
+          <div><dt>Goal</dt><dd>{nf.format(s.goal_hours)} h</dd></div>
+          <div><dt>Done</dt><dd>{pct.toFixed(1)}%</dd></div>
+        </dl>
         <div className="goal-bar" role="img" aria-label={`${pct.toFixed(1)} percent of the ${nf.format(s.goal_hours)}-hour goal`}>
           <div style={{ width: `${pct}%` }} />
         </div>

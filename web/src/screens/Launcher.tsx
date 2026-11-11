@@ -156,14 +156,10 @@ export function RunScreen() {
   }
   const kind = sess?.kind ?? meta!.kind;
   return (
-    <div className="page">
-      <PageHead
-        back={<Button kind="tertiary" className="btn--sm-text" icon={<ChevronLeft aria-hidden />} onClick={() => go(kind === "Recall" ? "study/recall" : "study/dictation")} style={{ alignSelf: "flex-start", marginLeft: -12 }}>Change source</Button>}
-        title={kind}
-      />
-      <div className="panel">
-        <Exercise sessionKey={key} kind={kind} source={sess?.source ?? meta!.source} items={sess?.items ?? meta!.items} onDone={() => go("study")} />
-      </div>
+    <div className="page page--read">
+      <h1 className="sr-only" tabIndex={-1} data-page-title>{kind}</h1>
+      <Button kind="tertiary" className="btn--sm-text" icon={<ChevronLeft aria-hidden />} onClick={() => go(kind === "Recall" ? "study/recall" : "study/dictation")} style={{ alignSelf: "flex-start", marginLeft: -12 }}>Change source</Button>
+      <Exercise sessionKey={key} kind={kind} source={sess?.source ?? meta!.source} items={sess?.items ?? meta!.items} onDone={() => go("study")} />
     </div>
   );
 }

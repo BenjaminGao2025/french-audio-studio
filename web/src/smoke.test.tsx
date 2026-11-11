@@ -784,8 +784,9 @@ describe("14. History, Progress and Episodes on the server", () => {
     fake.studyRecords = [studyRecord("r1", ["Il fait beau.", "On sort ?"])];
     await act(async () => go("study/new"));
     await wait(200);
-    expect(document.getElementById("main")!.textContent).toContain("Pick up where you left off?");
-    await act(async () => buttonWith("Open last analysis").click());
+    expect(document.getElementById("main")!.textContent).toContain("Continue");
+    expect(document.getElementById("main")!.textContent).toContain("2 sentences saved");
+    await act(async () => buttonWith("Continue").click());
     expect(get().study.sentences).toHaveLength(2);
     expect(get().route).toBe("study");
   });

@@ -1,4 +1,4 @@
-import { ArrowRight, BookOpen, Layers, LogIn } from "lucide-react";
+import { ArrowRight, LogIn } from "lucide-react";
 import { loginUrl } from "../api/client";
 import { go, useApp } from "../state/store";
 import { Button, PageHead } from "../components/ui";
@@ -17,19 +17,13 @@ export function Gate({ dest }: { dest: string }) {
   const route = useApp((s) => s.route);
   const b = BENEFITS[dest] ?? BENEFITS.review;
   return (
-    <div className="page">
-      <PageHead title={b.title} eyebrow="You’re signed out" desc={b.text} />
-      <div className="panel stack gap-4" style={{ maxWidth: 560 }}>
-        <div className="row gap-3">
-          <span className="dest-icon">{dest === "review" ? <Layers aria-hidden /> : <BookOpen aria-hidden />}</span>
-          <p className="grow">Sign in to see your own cards, history and progress.</p>
-        </div>
-        <div className="btn-row">
-          <Button kind="primary" icon={<LogIn aria-hidden />} onClick={() => location.assign(loginUrl(route))}>
-            Sign in
-          </Button>
-        </div>
-        <p className="t-meta">After signing in you’ll return to {b.title}.</p>
+    <div className="page page--read">
+      <h1 className="t-page" tabIndex={-1} data-page-title>{b.title}</h1>
+      <p className="t-support">Sign in to open this page.</p>
+      <div className="btn-row">
+        <Button kind="primary" icon={<LogIn aria-hidden />} onClick={() => location.assign(loginUrl(route))}>
+          Sign in
+        </Button>
       </div>
     </div>
   );
