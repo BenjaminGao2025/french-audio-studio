@@ -63,7 +63,7 @@ raw_<input>=0
 raw_<textarea>=0
 raw_<details>=0
 raw_<summary>=0
-className_uses=1314
+className_uses=1315
 css: 190 ./styles.css
 ```
 
@@ -82,3 +82,12 @@ Fill-in demo states `fillin` and `fillin-revealed` were added to the preview reg
 Word card after, measured: at 1440 the sentence is x=296 w=768 and the sheet is x=1056 w=384. At 390 the sentence is x=40 w=310 and the drawer is x=0 w=390. Every after shot logged `EDGE-OK` (document overflow 0, main overflow 0).
 
 Checked by eye after the last pass: word card, review session and revealed, fill-in and fill-in revealed, review home, own words, study home, practice, saved, settings and settings feedback, login gate, at 1440 and 390 where those files exist. One fix after that look: archive Refresh sits in the card action, step labels stay on one line, and the login gate is a card. Those shots were taken again.
+
+## Fix round
+
+Reviewer notes on the after shots.
+
+- Word card Sheet: the visible heading is the word, with the speaker and bracket IPA. Favorite and Close sit in that same row with a gap. “Meaning of …” is an sr-only dialog title on both the Sheet and the Drawer. The panel uses stock `p-4` / `gap-4`. The sheet does not draw its own overlay, and `modal` is off, so the sentence stays full width and readable. Esc and Close still dismiss the card. Other sheets and drawers are unchanged.
+- Own words: Refresh is an outline `size="sm"` button in `CardAction`, lined up with the title. The empty archive no longer draws a border. Below `sm` the stepper is one row of numbers plus the current step name, and it scrolls inside the page if it needs to.
+
+Re-checked `rc-after-word-card-1440.png`, `rc-after-word-card-390.png`, `rc-after-own-words-1440.png`, and `rc-after-own-words-390.png`. At 1440 the sentence is x=296 w=768 and the sheet is x=1056 w=384, with no scrim. At 390 the sentence is x=40 w=310 and the drawer is x=0 w=390. Edge checks stayed at 0. Audit `className_uses` is 1315. Raw controls stay 0. Web tests 364 passed, build passed, Python 25 passed.

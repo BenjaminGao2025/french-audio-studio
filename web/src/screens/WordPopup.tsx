@@ -215,11 +215,11 @@ export function WordPanel({
           )}
           {nested && <Button type="button" variant="ghost" className="h-8 justify-start px-0" onClick={() => setNested(null)}><ArrowLeft aria-hidden />Back to {text}</Button>}
         </div>
-        <div className="flex shrink-0 items-center">
+        <div className="flex shrink-0 items-center gap-2">
           <Button type="button" variant="ghost" size="icon" aria-pressed={fav} aria-label={fav ? "Favorited" : "Favorite"} onClick={() => void setFavorite(text, !fav)}>
             <Star aria-hidden className={fav ? "fill-current" : undefined} />
           </Button>
-          {!inSheet && <Button type="button" variant="ghost" size="icon" aria-label="Close word card" className="wp-close" onClick={onClose}><X aria-hidden /></Button>}
+          <Button type="button" variant="ghost" size="icon" aria-label={inSheet ? "Close" : "Close word card"} className={inSheet ? undefined : "wp-close"} onClick={onClose}><X aria-hidden /></Button>
         </div>
       </header>
 
@@ -318,6 +318,11 @@ function DictEntry({ entry }: { entry: NonNullable<DictionaryEntry["entries"]>[n
   );
 }
 
+/** Keep the sentence readable behind the word card. Esc and the close button still dismiss it. */
+const keepPage = (event: Event) => {
+  event.preventDefault();
+};
+
 /** Desktop: right Sheet. Narrow: bottom Drawer. The page column stays full width. */
 export function WordOverlay({ label, onClose, children }: { label: string; onClose: () => void; children: ReactNode }) {
   const desktop = useAppWidth() >= 768;
@@ -330,24 +335,32 @@ export function WordOverlay({ label, onClose, children }: { label: string; onClo
   };
   if (desktop) {
     return (
-      <Sheet open onOpenChange={(open) => { if (!open) onClose(); }}>
-        <SheetContent side="right" className="w-full gap-0 overflow-y-auto sm:max-w-md" onOpenAutoFocus={focusWord} aria-describedby={undefined}>
+      <Sheet open modal={false} onOpenChange={(open) => { if (!open) onClose(); }}>
+        <SheetContent
+          side="right"
+          showCloseButton={false}
+          showOverlay={false}
+          className="w-full gap-4 overflow-y-auto p-4 sm:max-w-md"
+          onOpenAutoFocus={focusWord}
+          onInteractOutside={keepPage}
+          onPointerDownOutside={keepPage}
+          aria-describedby={undefined}
+        >
           <SheetHeader className="sr-only">
             <SheetTitle>{label}</SheetTitle>
           </SheetHeader>
-          <div className="px-4 pb-6">{children}</div>
+          {children}
         </SheetContent>
       </Sheet>
     );
   }
   return (
-    <Drawer open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DrawerContent className="max-h-[85vh]" onOpenAutoFocus={focusWord} aria-describedby={undefined}>
-        <DrawerHeader className="flex-row items-center justify-between text-left">
+    <Drawer open modal={false} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DrawerContent className="max-h-[85vh] gap-4" onOpenAutoFocus={focusWord} aria-describedby={undefined}>
+        <DrawerHeader className="sr-only">
           <DrawerTitle>{label}</DrawerTitle>
-          <Button type="button" variant="ghost" size="icon" aria-label="Close" onClick={onClose}><X aria-hidden /></Button>
         </DrawerHeader>
-        <div className="overflow-y-auto px-4 pb-6">{children}</div>
+        <div className="overflow-y-auto p-4">{children}</div>
       </DrawerContent>
     </Drawer>
   );

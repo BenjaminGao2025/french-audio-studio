@@ -66,9 +66,11 @@ export function StudyPersonal() {
     if (entry) reflections.set(entry.id, { text, recalled: checked });
   };
   const stages = ["Prepare", "First attempt", "Practise & recall", "Reflect", "Archived"];
-  return <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 personal-practice"><PageHead title="Practise my own words" back={<Crumbs items={[{ label: "Study", onClick: () => go("study/new") }, { label: "Practise my own words" }]} />} />
-    <div className="flex flex-col gap-6">
-      <ol className="flex list-none flex-wrap items-center gap-x-2 gap-y-3 p-0" aria-label="Practice stages">{stages.map((label, i) => <li key={label} className="flex items-center gap-2" aria-current={stage === i ? "step" : undefined}><Badge variant={stage === i ? "default" : "outline"}>{i + 1}</Badge><span className="text-sm whitespace-nowrap">{label}</span>{i < stages.length - 1 && <Separator className="mx-1 hidden h-px w-6 sm:block" />}</li>)}</ol>
+  return <div className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-6 personal-practice"><PageHead title="Practise my own words" back={<Crumbs items={[{ label: "Study", onClick: () => go("study/new") }, { label: "Practise my own words" }]} />} />
+    <div className="flex min-w-0 flex-col gap-6">
+      <div className="min-w-0 overflow-x-auto">
+        <ol className="flex w-max min-w-full list-none flex-nowrap items-center gap-2 p-0" aria-label="Practice stages">{stages.map((label, i) => <li key={label} className="flex items-center gap-2" aria-current={stage === i ? "step" : undefined} aria-label={label}><Badge variant={stage === i ? "default" : "outline"}>{i + 1}</Badge><span className={cn("text-sm whitespace-nowrap", i !== stage && "max-sm:sr-only")}>{label}</span>{i < stages.length - 1 && <Separator className="mx-1 hidden h-px w-6 sm:block" />}</li>)}</ol>
+      </div>
       {busy && <Spinner label={busy} />}
       {error && <Alert variant="destructive" role="alert"><AlertTitle>Couldn’t finish</AlertTitle><AlertDescription>{error} Your saved work is kept.</AlertDescription></Alert>}
       {!entry ? <section className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-3"><label htmlFor="personal-native" className="text-sm font-medium">What I want to say</label>
@@ -102,13 +104,13 @@ export function StudyPersonal() {
       <Card>
         <CardHeader>
           <CardTitle>My practice archive</CardTitle>
-          <CardAction>
-            <Button type="button" variant="ghost" aria-disabled={(!!(!!busy)) || undefined} className={cn((!!(!!busy)) ? "opacity-50" : "")} onClick={(event) => { if (!!(!!busy)) { event.preventDefault(); return; } (() => void request("Refreshing archive…", async () => { const r = await listJournals(); if (mounted.current) setEntries(r.entries); }))(); }}>Refresh</Button>
+          <CardAction className="self-center">
+            <Button type="button" variant="outline" size="sm" aria-disabled={(!!(!!busy)) || undefined} className={cn((!!(!!busy)) ? "opacity-50" : "")} onClick={(event) => { if (!!(!!busy)) { event.preventDefault(); return; } (() => void request("Refreshing archive…", async () => { const r = await listJournals(); if (mounted.current) setEntries(r.entries); }))(); }}>Refresh</Button>
           </CardAction>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
         {!entries.length && !busy && <p className="text-sm text-muted-foreground">No practice entries yet.</p>}
-        <ul className="divide-y overflow-hidden rounded-lg border">{entries.map((e) => <li key={e.id}><Button type="button" variant="ghost" aria-disabled={(!!(!!busy || unsaved)) || undefined} className={cn((!!(!!busy)) || unsaved ? "opacity-50" : "", "h-auto w-full justify-start whitespace-normal px-4 py-3 text-left")} onClick={(event) => { if (!!(!!busy || unsaved)) { event.preventDefault(); return; } (() => void request("Opening saved practice…", async () => select(await getJournal(e.id))))(); }}><span className="flex flex-col gap-1 font-normal"><span>{e.native_text.slice(0, 100)}{e.native_text.length > 100 ? "…" : ""}</span><span className="text-xs leading-4 text-muted-foreground">{fmtWhen(e.created_at)} · {e.complete ? "Archived" : "In progress"}</span></span></Button></li>)}</ul>
+        {entries.length > 0 && <ul className="divide-y overflow-hidden rounded-lg border">{entries.map((e) => <li key={e.id}><Button type="button" variant="ghost" aria-disabled={(!!(!!busy || unsaved)) || undefined} className={cn((!!(!!busy)) || unsaved ? "opacity-50" : "", "h-auto w-full justify-start whitespace-normal px-4 py-3 text-left")} onClick={(event) => { if (!!(!!busy || unsaved)) { event.preventDefault(); return; } (() => void request("Opening saved practice…", async () => select(await getJournal(e.id))))(); }}><span className="flex flex-col gap-1 font-normal"><span>{e.native_text.slice(0, 100)}{e.native_text.length > 100 ? "…" : ""}</span><span className="text-xs leading-4 text-muted-foreground">{fmtWhen(e.created_at)} · {e.complete ? "Archived" : "In progress"}</span></span></Button></li>)}</ul>}
         </CardContent>
       </Card>
     </div>
