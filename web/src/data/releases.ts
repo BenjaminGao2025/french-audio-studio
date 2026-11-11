@@ -8,6 +8,13 @@ export const RELEASES = [
     version: APP_VERSION,
     date: "2026-11-11",
     changes: [
+      "Removed the French character keyboard and Enter hint from Recall and Dictation.",
+    ],
+  },
+  {
+    version: "1.3.0",
+    date: "2026-11-11",
+    changes: [
       "Tap phonetics to hear pronunciation. Star a word to save it to your word deck.",
       "Word cards and review evaluations open with sentence meaning and Dictionary expanded.",
       "Typed answers show character differences. Type it again supports unlimited repetitions.",

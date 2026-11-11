@@ -266,29 +266,6 @@ export function MarkedLine({
   );
 }
 
-export function AccentBar({ target }: { target: React.RefObject<HTMLTextAreaElement | null> }) {
-  const chars = ["é", "è", "ê", "à", "â", "ç", "î", "ô", "û", "ù", "œ", "’"];
-  return (
-    <div className="flex flex-wrap gap-1" role="group" aria-label="Insert a French character">
-      {chars.map((c) => (
-        <Button type="button" variant="outline" key={c} aria-label={`Insert ${c === "’" ? "apostrophe" : c}`} onMouseDown={(e) => e.preventDefault()} className="h-8 w-8 px-0" onClick={() => {
-            const el = target.current;
-            if (!el) return;
-            const { selectionStart: a, selectionEnd: b, value } = el;
-            const next = value.slice(0, a) + c + value.slice(b);
-            const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
-            setter.call(el, next);
-            el.dispatchEvent(new Event("input", { bubbles: true }));
-            requestAnimationFrame(() => {
-              el.focus();
-              el.setSelectionRange(a + c.length, a + c.length);
-            });
-          }}>{c}</Button>
-      ))}
-    </div>
-  );
-}
-
 /* ---------------- Exercise ---------------- */
 
 export function Exercise({
@@ -460,7 +437,7 @@ export function Exercise({
               value={draft}
               readOnly={busy || ui.phase === "techfail"}
               aria-invalid={ui.emptyError || undefined}
-              aria-describedby={`ex-keys-${sessionKey}${ui.emptyError ? ` ex-err-${sessionKey}` : ""}`}
+              aria-describedby={ui.emptyError ? `ex-err-${sessionKey}` : undefined}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
@@ -472,12 +449,10 @@ export function Exercise({
               autoCapitalize="off"
               autoComplete="off"
             />
-            <p id={`ex-keys-${sessionKey}`} className="text-sm text-muted-foreground">Enter checks your answer. Shift + Enter adds a new line.</p>
             {ui.emptyError && (
               <p id={`ex-err-${sessionKey}`} className="text-sm text-destructive" role="alert">Type an answer before checking. No attempt was recorded.</p>
             )}
           </div>
-          <AccentBar target={inputRef} />
           {ui.phase === "techfail" && (
             <Alert variant="destructive" role="alert"><AlertTitle>Checking didn’t finish</AlertTitle><AlertDescription>This is a technical problem, not a wrong answer. Your answer is kept and Retry checks the same attempt.</AlertDescription></Alert>
           )}
