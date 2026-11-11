@@ -22,11 +22,13 @@ The product is light. `color-scheme: light`. A `.dark` block was left by `shadcn
 | `--primary-weak` | `#e5efe6` | Selected nav, pressed secondary controls |
 | `--ring` | `#8a5a2b` | Keyboard focus, bronze, not the action color |
 | `--link` | `#3d5c56` | Links, separate from primary |
-| `--success` / `--warning` / `--error` / `--info` | `#1d6b45` / `#8a5a12` / `#8f3b32` / `#3d5270` | Distinct hues |
+| `--success` / `--warning` / `--error` / `--info` | `#1d6b45` / `#8a5a12` / `#8f3b32` / `#5c4630` | Distinct hues. Info sits on `#f1e6d4`. Neutral notices use `#e3dacb`. |
 | `--border` / `--divider` | `#ddd4c4` / `#e3dacb` | Warm lines |
 | `--radius` | `0.625rem` | shadcn radius; controls use 10px |
 
 `theme-color` is `#f3efe6`. Unused `--sidebar-*` tokens from init are still in `:root`. The shell does not use the shadcn Sidebar block, so they do not paint.
+
+The bookmark mark in `static/brand-symbol.svg` and the PWA icons is the same shape, filled `#2f4634` instead of `#1d4ed8`. The wordmark H stays `var(--primary)`.
 
 ## Fonts
 

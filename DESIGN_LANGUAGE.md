@@ -11,7 +11,7 @@ A calm study tool for an adult learning French. The page should feel like a book
 
 ## Tokens
 
-Light mode only. `color-scheme: light`. Canvas `#f3efe6`, surface `#fbf8f2`, ink `#2a2622`, secondary text `#5c5348`. Primary olive `#2f4634`. Focus ring bronze `#8a5a2b`. Success `#1d6b45`, warning `#8a5a12`, error `#8f3b32`, info `#3d5270`. Radius 10px on controls, 14px on panels, 18px on sheets.
+Light mode only. `color-scheme: light`. Canvas `#f3efe6`, surface `#fbf8f2`, ink `#2a2622`, secondary text `#5c5348`. Primary olive `#2f4634`. Focus ring bronze `#8a5a2b`. Success `#1d6b45`, warning `#8a5a12`, error `#8f3b32`, info `#5c4630` on `#f1e6d4`. Neutral notices use the warm divider `#e3dacb`, not a cool gray. Radius 10px on controls, 14px on panels, 18px on sheets.
 
 Do not put the olive on links, badges, focus, and success at once. Links are a dull teal `#3d5c56`. Empty stars and secondary labels use `#5c5348`.
 

@@ -298,7 +298,7 @@ function Account({ onSignOut }: { onSignOut: () => void }) {
     <div className="stack gap-3">
       <ul className="list">
         <li className="list-row">
-          <span className="brand-mark" style={{ background: "#475569", borderRadius: "50%", width: 40, height: 40 }} aria-hidden>{initials(email)}</span>
+          <span className="brand-mark" style={{ background: "var(--text)", borderRadius: "50%", width: 40, height: 40 }} aria-hidden>{initials(email)}</span>
           <span className="grow stack">
             <span className="t-strong">{email}</span>
             <span className="t-support">Signed in on this device</span>

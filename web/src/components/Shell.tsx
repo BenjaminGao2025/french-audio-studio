@@ -178,7 +178,7 @@ function Header() {
           aria-haspopup="menu"
           onClick={() => set((s) => ({ menuOpen: !s.menuOpen }))}
         >
-          <span className="brand-mark" style={{ background: "#475569", borderRadius: "50%" }} aria-hidden>
+          <span className="brand-mark" style={{ background: "var(--text)", borderRadius: "50%" }} aria-hidden>
             {initials(email)}
           </span>
         </button>

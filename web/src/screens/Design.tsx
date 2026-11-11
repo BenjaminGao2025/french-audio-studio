@@ -14,23 +14,24 @@ export function contrast(a: string, b: string) {
 }
 
 const PAIRS: [string, string, string, number][] = [
-  ["Primary text on canvas", "#172033", "#F7F8FA", 4.5],
-  ["Primary text on surface", "#172033", "#FFFFFF", 4.5],
-  ["Secondary text on canvas", "#475569", "#F7F8FA", 4.5],
-  ["Secondary text on surface", "#475569", "#FFFFFF", 4.5],
-  ["White on primary", "#FFFFFF", "#1D4ED8", 4.5],
-  ["Primary as text/link on surface", "#1D4ED8", "#FFFFFF", 4.5],
-  ["Primary on primary-weak (selected)", "#1E40AF", "#EEF3FF", 4.5],
-  ["Success text on success bg", "#166534", "#F0FDF4", 4.5],
-  ["Error text on error bg", "#B91C1C", "#FEF2F2", 4.5],
-  ["Warning text on warning bg", "#92400E", "#FFFBEB", 4.5],
-  ["White on destructive", "#FFFFFF", "#B91C1C", 4.5],
-  ["Disabled primary label", "#334155", "#CBD5E1", 4.5],
-  ["Control border on surface", "#64748B", "#FFFFFF", 3],
-  ["Focus ring on surface", "#1D4ED8", "#FFFFFF", 3],
-  ["Focus ring on canvas", "#1D4ED8", "#F7F8FA", 3],
-  ["Importance stars on surface", "#B45309", "#FFFFFF", 3],
-  ["Divider on surface (decorative only)", "#E2E8F0", "#FFFFFF", 0],
+  ["Primary text on canvas", "#2A2622", "#F3EFE6", 4.5],
+  ["Primary text on surface", "#2A2622", "#FBF8F2", 4.5],
+  ["Secondary text on canvas", "#5C5348", "#F3EFE6", 4.5],
+  ["Secondary text on surface", "#5C5348", "#FBF8F2", 4.5],
+  ["Cream on primary", "#F7F4EE", "#2F4634", 4.5],
+  ["Link on surface", "#3D5C56", "#FBF8F2", 4.5],
+  ["Primary on primary-weak (selected)", "#243628", "#E5EFE6", 4.5],
+  ["Success text on success bg", "#1D6B45", "#E5F2EA", 4.5],
+  ["Error text on error bg", "#8F3B32", "#F8EBE8", 4.5],
+  ["Warning text on warning bg", "#8A5A12", "#F8F0DC", 4.5],
+  ["Info text on info bg", "#5C4630", "#F1E6D4", 4.5],
+  ["White on destructive", "#FFFFFF", "#8F3B32", 4.5],
+  ["Disabled primary label", "#3D3832", "#D9D0C2", 4.5],
+  ["Control border on surface", "#8A8172", "#FBF8F2", 3],
+  ["Focus ring on surface", "#8A5A2B", "#FBF8F2", 3],
+  ["Focus ring on canvas", "#8A5A2B", "#F3EFE6", 3],
+  ["Importance stars on surface", "#B45309", "#FBF8F2", 3],
+  ["Divider on surface (decorative only)", "#E3DACB", "#FBF8F2", 0],
 ];
 
 const TYPE: [string, string, string][] = [
@@ -87,7 +88,7 @@ export function DesignReference() {
                   return (
                     <tr key={name}>
                       <th scope="row" style={{ fontWeight: 500 }}>{name}<br /><span className="code muted">{fg} on {bg}</span></th>
-                      <td><span style={{ background: bg, color: fg, padding: "4px 10px", borderRadius: 6, border: "1px solid #E2E8F0", fontWeight: 500 }}>Aa Ég œ</span></td>
+                      <td><span style={{ background: bg, color: fg, padding: "4px 10px", borderRadius: 6, border: "1px solid #E3DACB", fontWeight: 500 }}>Aa Ég œ</span></td>
                       <td className="num">{r.toFixed(2)}:1</td>
                       <td>{need ? <Pill tone={r >= need ? "success" : "error"}>{r >= need ? `Pass ≥ ${need}:1` : `Fails ${need}:1`}</Pill> : <Pill>Decorative, no requirement</Pill>}</td>
                     </tr>
@@ -176,7 +177,7 @@ export function DesignReference() {
         <section className="stack gap-3" aria-labelledby="dsn-a11y">
           <h2 id="dsn-a11y" className="t-section">Accessibility specifications</h2>
           <ul className="stack gap-2" style={{ paddingLeft: 20 }}>
-            <li>Focus ring: 3 px #1D4ED8 with a 2 px light offset, on every interactive element.</li>
+            <li>Focus ring: 2 px #8A5A2B with a 2 px offset, on real controls.</li>
             <li>Skip link first; then navigation, page heading, instructions, input, primary action, secondary actions.</li>
             <li>Submitting moves focus to the result summary; nothing auto-advances.</li>
             <li>Closing a popover or sheet returns focus to its trigger. Modal dialogs trap focus and close with Escape.</li>
