@@ -17,7 +17,7 @@ export function WordNotes({ word, compact = false }: { word: string; compact?: b
     try { if (editing !== null) await editWordNote(editing, text.trim()); else await createWordNote(word, text.trim()); setText(""); setEditing(null); await load(); }
     catch { setError(true); } finally { setBusy(false); }
   };
-  const content = <div className="flex flex-col gap-3">
+  const content = <div className="flex flex-col gap-3 text-sm font-normal text-foreground">
     {error && <div className="text-sm text-destructive">Couldn’t load or save notes. <Button variant="outline" onClick={() => void load()}>Retry</Button></div>}
     {notes.map(note => <div key={note.id} className="flex flex-col gap-1 border-b pb-2">
       <p className="whitespace-pre-wrap text-sm">{note.text}</p>
@@ -26,5 +26,5 @@ export function WordNotes({ word, compact = false }: { word: string; compact?: b
     </div>)}
     {!compact && <><Textarea aria-label="Note text" value={text} onChange={e => setText(e.target.value)} /><div className="flex gap-2"><Button disabled={busy || !text.trim()} onClick={() => void save()}>{editing !== null ? "Save note" : "Add note"}</Button>{editing !== null && <Button variant="ghost" onClick={() => { setEditing(null); setText(""); }}>Cancel</Button>}{busy && <Spinner label="Saving note…" />}</div></>}
   </div>;
-  return compact ? <Collapsible onOpenChange={open => { if (open) void load(); }}><CollapsibleTrigger className="text-xs text-muted-foreground">Notes ({notes.length})</CollapsibleTrigger><CollapsibleContent>{content}</CollapsibleContent></Collapsible> : content;
+  return compact ? <Collapsible onOpenChange={open => { if (open) void load(); }}><CollapsibleTrigger className="text-xs font-medium tracking-wide text-muted-foreground">Notes ({notes.length})</CollapsibleTrigger><CollapsibleContent>{content}</CollapsibleContent></Collapsible> : content;
 }

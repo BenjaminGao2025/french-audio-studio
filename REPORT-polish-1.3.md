@@ -163,3 +163,40 @@ Tool: Codex CLI. Model: gpt-6.1-sol. Version remains 1.3.0; Tasks 1–7 were pre
 Playwright/Chrome screenshot script: `/tmp/ui-audit-pw/shots-polish-13-followup.mjs`. Browser assertions verified automatic focus and that 5 in the answer input does not master. Screenshots were visually inspected. Preview used only `127.0.0.1:8028`, confirmed free before startup, with fakeBackend and no live LLM or production services. Preview is stopped after verification. Harness copies and screenshots remain outside the commit; no PNG, node_modules, preview-main.tsx or vite.audit.config.ts is staged.
 
 Production containers, compose.yml, Dockerfile, docker, cloudflared, outputs/, live users.db, .env, models and credentials were not touched. No other processes were killed. Reports are appended, and only the requested design branch is committed/pushed.
+
+
+## TASK 13 — Word-card hierarchy and fewer nested borders
+
+Tool: Codex CLI. Model: `gpt-6.1-sol`. Follow-up only; version stays `1.3.0`.
+
+`WordPopup.tsx` now groups the modules in one stock bordered, rounded container with horizontal dividers. Each section retains its stock Collapsible and accessible heading/name. In this sentence and Dictionary still default open and reset on each new word, nested drill, Back, and reopening; Word origin, Ask AI and Notes remain collapsed. The shared Review evaluation WordPanel receives the same layout. Compact Notes uses the same label typography.
+
+Module triggers and Chinese origin labels use `text-xs font-medium tracking-wide text-muted-foreground`. Meaning, dictionary glosses and origin bodies use normal readable foreground body text. Browser measurements confirm 12px/500 muted section labels versus 14px/400 foreground meaning and gloss. French definition links also use normal weight. French definitions sit in a lightly muted inner block without another border. Stock spacing uses gap-2/gap-3 and px-3/pb-3; the source sentence's French serif size, IPA playback, deck star and clickable construction forms are preserved.
+
+Before/after screenshots were captured and visually inspected at desktop 1280 and mobile 390; the desktop after shot includes expanded French definitions, and the mobile drawer shows the default expanded meaning and Dictionary alongside the collapsed modules. Additional captures show Chinese structured origin labels and Review's shared embed. All paths are under `/home/mgacai/polish-1.3-out/screenshots/`:
+
+- `p13-before-hierarchy-1280.png`
+- `p13-before-hierarchy-390.png`
+- `p13-after-hierarchy-1280.png`
+- `p13-after-hierarchy-390.png`
+- `p13-after-hierarchy-origin-1280.png`
+- `p13-after-hierarchy-review-1280.png`
+
+## TASK 14 — Remove a selected photo import
+
+Tool: Codex CLI. Model: `gpt-6.1-sol`.
+
+`StudyInput.tsx` adds a stock ghost Button with an X icon and visible accessible name “Remove” beside the photo filename. The filename occupies its own row on small screens so both controls remain legible. The selected-photo preview group is focusable; Backspace and Delete invoke the same removal path only when the group itself is focused, without handling keys from descendant inputs or controls.
+
+Removal aborts any current OCR controller, revokes the created object URL with `URL.revokeObjectURL`, clears both the module-level file and component preview, resets OCR lines/phase/partial state and local error/progress state, clears the file input, announces “Photo removed.” through the existing live region, and focuses the empty choose-photo control. It stays on the photo import screen. Existing abort guards prevent late image preparation or OCR responses from restoring removed content. Choose another photo and the privacy fact line are retained.
+
+Five added frontend cases cover Remove, focused-preview Backspace, focused-preview Delete, removal during image preparation, and removal during an upload. They verify preview removal, the empty choose control, cleared persistent file state on remount, OCR reset, the announcement, object-URL revocation, aborted upload signals and ignored late results.
+
+Selected and removed screenshots were captured and visually inspected, with filename, Remove and privacy fact visible. Paths under `/home/mgacai/polish-1.3-out/screenshots/`:
+
+- `p13-after-photo-selected-1280.png`
+- `p13-after-photo-selected-390.png`
+- `p13-after-photo-removed-1280.png`
+- `p13-after-photo-removed-390.png`
+
+Verification for Tasks 13–14: `cd web && npm test` passes **401 tests across 18 files** (including the five added cases); `npm run build` passes. The build retains its large-chunk advisory. The full suite emits existing React act warnings. `bash /home/mgacai/polish-1.3-out/audit.sh` reports raw button/select/input/textarea/details/summary counts **all 0**. `git diff --check` passes. Preview was bound only to `127.0.0.1:8028`, confirmed free before startup, and stopped after capture. Preview harness files and PNGs are excluded from the commit. No production resources or version metadata were changed.

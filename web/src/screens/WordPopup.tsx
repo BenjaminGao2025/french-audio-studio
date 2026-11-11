@@ -245,38 +245,40 @@ export function WordPanel({
         </div>
       </header>
 
-      <Module key={`context-${sentence.id}-${shown}`} title="In this sentence" defaultOpen>
-          {tooLong ? (
-            <p className="text-sm text-muted-foreground">Select a word or a short phrase</p>
-          ) : meaning ? (
-            <p className="wp-definition text-base" lang="en">{meaning}</p>
-          ) : ctxSt === "loading" ? (
-            <><Spinner label="Finding the meaning…" /><Skeleton lines={1} /></>
-          ) : ctxSt === "error" ? (
-            <div className="flex flex-col gap-2"><p className="text-sm text-muted-foreground">Couldn’t load the meaning in this sentence.</p><Button type="button" variant="outline" onClick={loadCtx}>Retry</Button></div>
-          ) : (
-            <p className="text-sm text-muted-foreground">No meaning for this sentence</p>
-          )}
-          {!nested && phraseMeaning && plain(overlapping?.text ?? "") !== plain(text) && phraseMeaning !== meaning && (
-            <p className="text-sm text-muted-foreground">
-              <French value={overlapping?.phrase || overlapping?.text || ""} onWord={drill} />
-              {" "}
-              {phraseMeaning}
-            </p>
-          )}
-          {!nested && why && <p className="text-sm text-muted-foreground"><French value={why} onWord={drill} language="en" /></p>}
-      </Module>
+      <div className="divide-y rounded-lg border">
+        <Module key={`context-${sentence.id}-${shown}`} title="In this sentence" defaultOpen>
+            {tooLong ? (
+              <p className="text-sm text-muted-foreground">Select a word or a short phrase</p>
+            ) : meaning ? (
+              <p className="wp-definition text-sm font-normal text-foreground" lang="en">{meaning}</p>
+            ) : ctxSt === "loading" ? (
+              <><Spinner label="Finding the meaning…" /><Skeleton lines={1} /></>
+            ) : ctxSt === "error" ? (
+              <div className="flex flex-col gap-2"><p className="text-sm text-muted-foreground">Couldn’t load the meaning in this sentence.</p><Button type="button" variant="outline" onClick={loadCtx}>Retry</Button></div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No meaning for this sentence</p>
+            )}
+            {!nested && phraseMeaning && plain(overlapping?.text ?? "") !== plain(text) && phraseMeaning !== meaning && (
+              <p className="text-sm text-muted-foreground">
+                <French value={overlapping?.phrase || overlapping?.text || ""} onWord={drill} />
+                {" "}
+                {phraseMeaning}
+              </p>
+            )}
+            {!nested && why && <p className="text-sm text-muted-foreground"><French value={why} onWord={drill} language="en" /></p>}
+        </Module>
 
-      <Module key={`dictionary-${sentence.id}-${shown}`} title="Dictionary" defaultOpen>
-          {dictSt === "loading" && <Spinner label="Loading dictionary…" />}
-          {dictSt === "error" && (
-            <Alert variant="destructive"><AlertTitle>Dictionary request failed</AlertTitle><AlertDescription>{englishOnly(dictErr) || "Please try again."}<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={loadDict}>Retry</Button></div></AlertDescription></Alert>
-          )}
-          {dictSt === "ready" && dict && <DictionaryResult result={dict} onWord={drill} />}
-      </Module>
-      {!compact && <><Module key={`origin-${shown}`} title="Word origin"><Origin key={shown} word={shown} lemma={dict?.lemma || shown} onWord={drill} /></Module>
-      <Module key={`ask-${shown}`} title="Ask AI"><Ask key={shown} sentence={sentence} word={shown} /></Module>
-      <Module key={`notes-${shown}`} title="Notes"><WordNotes key={shown} word={shown} /></Module></>}
+        <Module key={`dictionary-${sentence.id}-${shown}`} title="Dictionary" defaultOpen>
+            {dictSt === "loading" && <Spinner label="Loading dictionary…" />}
+            {dictSt === "error" && (
+              <Alert variant="destructive"><AlertTitle>Dictionary request failed</AlertTitle><AlertDescription>{englishOnly(dictErr) || "Please try again."}<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={loadDict}>Retry</Button></div></AlertDescription></Alert>
+            )}
+            {dictSt === "ready" && dict && <DictionaryResult result={dict} onWord={drill} />}
+        </Module>
+        {!compact && <><Module key={`origin-${shown}`} title="Word origin"><Origin key={shown} word={shown} lemma={dict?.lemma || shown} onWord={drill} /></Module>
+        <Module key={`ask-${shown}`} title="Ask AI"><Ask key={shown} sentence={sentence} word={shown} /></Module>
+        <Module key={`notes-${shown}`} title="Notes"><WordNotes key={shown} word={shown} /></Module></>}
+      </div>
       {compact && <WordNotes key={shown} word={shown} compact />}
 
       <footer className="wp-footer flex flex-wrap items-center justify-between gap-2 border-t pt-3">
@@ -303,7 +305,7 @@ function DictionaryResult({ result, onWord }: { result: DictionaryEntry; onWord:
   return <>
     {result.match_type === "related" && <p className="text-sm text-muted-foreground">Related: <French value={result.related || ""} onWord={onWord} /></p>}
     {entries.filter(e => e.language === "en").map((entry, index) => <DictEntry key={index} entry={entry} onWord={onWord} />)}
-    {entries.some(e => e.language !== "en") && <Module title="French definitions">{entries.filter(e => e.language !== "en").map((entry, index) => <DictEntry key={index} entry={entry} onWord={onWord} />)}</Module>}
+    {entries.some(e => e.language !== "en") && <Module title="French definitions" inner>{entries.filter(e => e.language !== "en").map((entry, index) => <DictEntry key={index} entry={entry} onWord={onWord} />)}</Module>}
     <p className="wp-attribution text-xs text-muted-foreground" title={[result.attribution, result.changes].filter(Boolean).join(" ")}>
       <a href={entries[0].source_url} target="_blank" rel="noopener noreferrer">Source: Wiktionary (CC BY-SA)</a>
     </p>
@@ -335,11 +337,18 @@ function DictEntry({ entry, onWord }: { entry: NonNullable<DictionaryEntry["entr
 }
 
 function French({ value, onWord, language = "fr" }: { value: string; onWord: (word: string) => void; language?: string }) {
-  return <span lang={language}>{value.split(/([\p{L}\p{N}’'-]+)/u).map((part, i) => /\p{L}/u.test(part) ? <Button key={i} variant="link" className="inline h-auto whitespace-normal p-0 font-inherit text-inherit" onClick={() => onWord(part)}>{part}</Button> : part)}</span>;
+  return <span lang={language}>{value.split(/([\p{L}\p{N}’'-]+)/u).map((part, i) => /\p{L}/u.test(part) ? <Button key={i} variant="link" className="inline h-auto whitespace-normal p-0 font-normal text-inherit" onClick={() => onWord(part)}>{part}</Button> : part)}</span>;
 }
 
-function Module({ title, defaultOpen = false, children }: { title: string; defaultOpen?: boolean; children: ReactNode }) {
-  return <section aria-label={title} className="rounded-xl border px-3"><Collapsible defaultOpen={defaultOpen}><CollapsibleTrigger className="flex min-h-10 w-full items-center justify-between text-sm font-medium"><h3>{title}</h3><ChevronDown className="size-4" aria-hidden /></CollapsibleTrigger><CollapsibleContent className="flex flex-col gap-2 pb-3">{children}</CollapsibleContent></Collapsible></section>;
+function Module({ title, defaultOpen = false, inner = false, children }: { title: string; defaultOpen?: boolean; inner?: boolean; children: ReactNode }) {
+  return <section aria-label={title} className={inner ? "rounded-md bg-muted/50 px-3" : "px-3"}>
+    <Collapsible defaultOpen={defaultOpen}>
+      <h3><CollapsibleTrigger className="flex min-h-10 w-full items-center justify-between gap-2 text-xs font-medium tracking-wide text-muted-foreground">
+        {title}<ChevronDown className="size-4" aria-hidden />
+      </CollapsibleTrigger></h3>
+      <CollapsibleContent className="flex flex-col gap-3 pb-3 text-sm font-normal text-foreground">{children}</CollapsibleContent>
+    </Collapsible>
+  </section>;
 }
 function Origin({ word, lemma, onWord }: { word: string; lemma: string; onWord: (word: string) => void }) {
   const [value, setValue] = useState<EtymologyResponse | null>(null);
@@ -350,10 +359,10 @@ function Origin({ word, lemma, onWord }: { word: string; lemma: string; onWord: 
   if (!value) return <Spinner label="Loading word origin…" />;
   const structured = value.construction?.length || value.source?.length || value.sense_history_zh || value.memory_zh;
   return structured ? <dl className="grid gap-3 text-sm" lang="zh">
-    {Boolean(value.construction?.length) && <div className="grid gap-1"><dt className="text-xs text-muted-foreground">构成</dt><dd className="flex flex-wrap items-baseline gap-x-2 gap-y-1">{value.construction!.map((p, i) => <span key={i}>{i > 0 && <span className="mr-2 text-muted-foreground">+</span>}<Button variant="link" className="h-auto p-0 font-serif text-base" lang="fr" onClick={() => onWord(p.form)}>{p.form}</Button>{p.gloss_zh && <span className="ml-1">（{p.gloss_zh}）</span>}</span>)}</dd></div>}
-    {Boolean(value.source?.length) && <div className="grid gap-1"><dt className="text-xs text-muted-foreground">来源</dt><dd>{value.source!.map((p, i) => <p key={i}>{p.lang} <span className="font-serif" lang="und">{p.form}{p.from_form ? ` ← ${p.from_form}` : ""}</span></p>)}</dd></div>}
-    {value.sense_history_zh && <div className="grid gap-1"><dt className="text-xs text-muted-foreground">词义演变</dt><dd>{value.sense_history_zh}</dd></div>}
-    {value.memory_zh && <div className="grid gap-1"><dt className="text-xs text-muted-foreground">记忆提示</dt><dd>{value.memory_zh}</dd></div>}
+    {Boolean(value.construction?.length) && <div className="grid gap-1"><dt className="text-xs font-medium tracking-wide text-muted-foreground">构成</dt><dd className="flex flex-wrap items-baseline gap-x-2 gap-y-1">{value.construction!.map((p, i) => <span key={i}>{i > 0 && <span className="mr-2 text-muted-foreground">+</span>}<Button variant="link" className="h-auto p-0 font-serif text-base" lang="fr" onClick={() => onWord(p.form)}>{p.form}</Button>{p.gloss_zh && <span className="ml-1">（{p.gloss_zh}）</span>}</span>)}</dd></div>}
+    {Boolean(value.source?.length) && <div className="grid gap-1"><dt className="text-xs font-medium tracking-wide text-muted-foreground">来源</dt><dd>{value.source!.map((p, i) => <p key={i}>{p.lang} <span className="font-serif" lang="und">{p.form}{p.from_form ? ` ← ${p.from_form}` : ""}</span></p>)}</dd></div>}
+    {value.sense_history_zh && <div className="grid gap-1"><dt className="text-xs font-medium tracking-wide text-muted-foreground">词义演变</dt><dd>{value.sense_history_zh}</dd></div>}
+    {value.memory_zh && <div className="grid gap-1"><dt className="text-xs font-medium tracking-wide text-muted-foreground">记忆提示</dt><dd>{value.memory_zh}</dd></div>}
   </dl> : <p className="whitespace-pre-line text-sm" lang="zh">{value.text}</p>;
 }
 function Ask({ sentence, word }: { sentence: StudySentence; word: string }) {
