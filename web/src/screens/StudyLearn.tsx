@@ -19,12 +19,12 @@ import {
   updatePlayer,
   useApp,
 } from "../state/store";
-import { Banner, Button, Dialog, Popover, Skeleton, Spinner, useNarrow, WordDock } from "../components/ui";
+import { Banner, Button, Checkbox, ChoiceSelect, Collapsible, CollapsibleContent, CollapsibleTrigger, Dialog, Popover, Progress, Skeleton, Spinner, useNarrow, WordDock } from "../components/ui";
+import { Toggle } from "../components/ui/toggle";
 import { FrText, stepSegments, type FrPick } from "../components/FrText";
 import { WordPanel } from "./WordPopup";
 import { Exercise } from "./Exercise";
 import { ExplainPanel, GrammarSave, ShadowingPanel, SoundsPanel, StructurePanel, StudyNavigation, WordsPanel } from "./StudyTools";
-import "./study-tools.css";
 
 
 interface Pick {
@@ -55,6 +55,7 @@ export function StudyLearn() {
   const practising = study.tab === "recall" || study.tab === "dictation";
   const [pick, setPick] = useState<Pick | null>(null);
   const [srcOpen, setSrcOpen] = useState(study.sourceOpen);
+  const [moreOpen, setMoreOpen] = useState(study.sourceOpen);
   const sentRef = useRef<HTMLDivElement>(null);
   const narrow = useNarrow();
 
@@ -87,24 +88,25 @@ export function StudyLearn() {
   };
 
   const pager = total > 1 && (
-    <div className="btn-row">
-      <span className="t-meta num">{study.index + 1} of {total}</span>
+    <div className="flex items-center gap-1">
       <Button kind="secondary" iconOnly icon={<ChevronLeft aria-hidden />} aria-label="Previous sentence" disabledReason={study.index === 0 ? "This is the first sentence." : undefined} onClick={() => goSentence(study.index - 1)} />
+      <span className="min-w-14 text-center text-sm tabular-nums text-muted-foreground">{study.index + 1} of {total}</span>
       <Button kind="secondary" iconOnly icon={<ChevronRight aria-hidden />} aria-label="Next sentence" disabledReason={study.index === total - 1 ? "This is the last sentence." : undefined} onClick={() => goSentence(study.index + 1)} />
     </div>
   );
 
   return (
-    <div className="page page--wide study-workspace">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 study-workspace">
       <h1 className="sr-only" tabIndex={-1} data-page-title>Study</h1>
-      <div className={cx("with-word-card", pick && !narrow && "is-open")}>
-      <div className="stack gap-4 workspace-col">
+      <div className={cx("grid items-start gap-6", pick && !narrow && "lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]")}>
+      <div className="flex flex-col gap-4 min-w-0">
         {!!study.analysis.failedParts && <Banner tone="warning" title="Some text could not be analysed">{study.analysis.failedParts} parts failed. Your original text is kept. Open New text to retry the missing parts.</Banner>}
         {!practising && s.raw?.accent_fixed_from && <Banner tone="info" title="Accents corrected">Original: <span lang="fr">{s.raw.accent_fixed_from}</span>. The sentence below uses corrected French accents.</Banner>}
         {!practising && (
-          <details className="more-block" open={srcOpen || undefined}>
-            <summary>More</summary>
-            <div className="btn-row">
+          <Collapsible open={moreOpen || srcOpen} onOpenChange={(open) => { setMoreOpen(open); if (!open) setSrcOpen(false); }} className="rounded-lg border px-4">
+            <CollapsibleTrigger className="flex min-h-11 w-full items-center text-sm font-medium">More</CollapsibleTrigger>
+            <CollapsibleContent className="flex flex-col gap-3 pb-4">
+            <div className="flex flex-wrap items-center gap-2">
               <Button kind="tertiary" icon={<HistoryIcon aria-hidden />} onClick={() => go("progress/history?tab=analyses")}>Analyses in History</Button>
               <Button kind="tertiary" icon={<Plus aria-hidden />} onClick={() => go("study/new")}>New text</Button>
               <Button
@@ -118,36 +120,37 @@ export function StudyLearn() {
               </Button>
             </div>
             {srcOpen && (
-              <div id="source-panel" className="panel stack gap-3">
-                <p className="meta-row"><span>{study.analysis.source}</span><span>{plural(total, "sentence")}</span></p>
+              <div id="source-panel" className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-3">
+                <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"><span>{study.analysis.source}</span><span>{plural(total, "sentence")}</span></p>
                 <p lang="fr">{study.analysis.input}</p>
-                <div className="btn-row">
+                <div className="flex flex-wrap items-center gap-2">
                   <Button kind="secondary" onClick={() => go("study/new")}>Edit text and analyse again</Button>
                   <Button kind="tertiary" onClick={() => setSrcOpen(false)}>Cancel</Button>
                 </div>
               </div>
             )}
-          </details>
+            </CollapsibleContent>
+          </Collapsible>
         )}
 
         {practising && pager}
 
-        {!practising && <section className="sentence-hero" aria-labelledby="current-sentence-heading">
+        {!practising && <section className="flex flex-col gap-3" aria-labelledby="current-sentence-heading">
           <h2 id="current-sentence-heading" tabIndex={-1} className="sr-only">
             {total > 1 ? `Sentence ${study.index + 1} of ${total}` : "Current sentence"}
           </h2>
-          <div ref={sentRef}>
-            <FrText segments={s.segments} className="sentence-fr" onPick={onPick} />
-            <p className="sentence-en">{s.en}</p>
+          <div ref={sentRef} className="max-w-3xl">
+            <FrText segments={s.segments} className="sentence-fr font-serif text-3xl leading-snug tracking-tight wrap-break-word" onPick={onPick} />
+            <p className="max-w-prose text-muted-foreground">{s.en}</p>
           </div>
-          <div className="sentence-toolbar">
+          <div className="flex flex-wrap items-center gap-2 border-t pt-3 min-[1100px]:flex-nowrap">
             {pager}
             <StudyPlayer practising={practising} />
             <AddToReview sentence={s} />
           </div>
         </section>}
 
-        <div className="stack gap-4 tool-groups-wrap">
+        <div className="flex flex-col gap-4 border-t pt-4">
           <StudyNavigation value={study.tab} onChange={(tab) => {
             setPick(null);
             const p = get().player;
@@ -266,59 +269,44 @@ function StudyPlayer({ practising }: { practising: boolean }) {
   const errored = sentenceStatus === "error";
   const allPlaying = allStatus === "playing" || allStatus === "buffering" || allStatus === "loading";
 
+  const speed = String(mine?.speed ?? 1);
+  const setSpeed = (v: string) => (mine ? updatePlayer({ speed: Number(v) }) : set((st) => ({ settings: { ...st.settings, speed: Number(v) } })));
+  const repeatOn = mine?.repeat ?? false;
+  const toggleRepeat = () => (mine ? updatePlayer({ repeat: !mine.repeat }) : set((st) => ({ settings: { ...st.settings, repeat: !st.settings.repeat } })));
+  const pct = mine && mine.duration ? Math.min(100, (mine.position / mine.duration) * 100) : 0;
   return (
-    <div className="player player--quiet" role="group" aria-label="Sentence player">
-      <div className="player-main">
-        <Button
-          kind="secondary"
-          className="play-btn"
-          iconOnly
-          busy={loading}
-          aria-label={`${playing ? "Pause" : errored ? "Retry" : "Play"} ${label}`}
-          icon={playing ? <Pause aria-hidden /> : errored ? <RotateCcw aria-hidden /> : <Play aria-hidden />}
-          onClick={toggle}
-        />
-        <div className="grow stack gap-1" style={{ minWidth: 160 }}>
-          <span className="t-strong">{label}</span>
-          <span className="t-support num" aria-live="off">
-            <span>{statusText}</span>{" "}
-            <span>{fmtClock(mine?.position ?? 0)} / {fmtClock(mine?.duration ?? dur(wanted))}</span>
-          </span>
-          <div className="progress-track" aria-hidden>
-            <div className="progress-fill" style={{ width: `${mine ? Math.min(100, (mine.position / mine.duration) * 100) : 0}%` }} />
-          </div>
-        </div>
-        <label className="row gap-2">
-          <span className="t-support">Speed</span>
-          <select
-            className="select"
-            style={{ width: 92 }}
-            value={mine?.speed ?? 1}
-            onChange={(e) => (mine ? updatePlayer({ speed: Number(e.target.value) }) : set((st) => ({ settings: { ...st.settings, speed: Number(e.target.value) } })))}
-          >
-            {[0.75, 1, 1.25, 1.5, 2].map((v) => (
-              <option key={v} value={v}>{`${v}\u00a0×`}</option>
-            ))}
-          </select>
-        </label>
-        <Button
-          kind="secondary"
-          icon={<Repeat aria-hidden />}
-          aria-pressed={mine?.repeat ?? false}
-          onClick={() => (mine ? updatePlayer({ repeat: !mine.repeat }) : set((st) => ({ settings: { ...st.settings, repeat: !st.settings.repeat } })))}
-        >
-          Repeat {(mine?.repeat ?? false) ? "on" : "off"}
-        </Button>
-        <Button kind="secondary" icon={allPlaying ? <Pause aria-hidden /> : <Play aria-hidden />} onClick={toggleAll}>
-          {allPlaying ? "Pause all sentences" : "Play all sentences"}
-        </Button>
-      </div>
+    <>
+      <Button
+        kind="secondary"
+        iconOnly
+        busy={loading}
+        aria-label={`${playing ? "Pause" : errored ? "Retry" : "Play"} ${label}`}
+        icon={playing ? <Pause aria-hidden /> : errored ? <RotateCcw aria-hidden /> : <Play aria-hidden />}
+        onClick={toggle}
+      />
+      <Progress value={pct} className="w-28 sm:w-40" aria-label={`${statusText}. ${fmtClock(mine?.position ?? 0)} of ${fmtClock(mine?.duration ?? dur(wanted))}`} />
+      <span className="text-sm tabular-nums text-muted-foreground">{fmtClock(mine?.position ?? 0)} / {fmtClock(mine?.duration ?? dur(wanted))}</span>
+      <ChoiceSelect
+        ariaLabel="Speed"
+        className="w-[5.5rem]"
+        value={speed}
+        onValueChange={setSpeed}
+        options={[0.75, 1, 1.25, 1.5, 2].map((v) => ({ value: String(v), label: `${v}×` }))}
+      />
+      <Toggle variant="outline" pressed={repeatOn} onPressedChange={toggleRepeat} aria-label={repeatOn ? "Repeat on" : "Repeat off"}>
+        <Repeat aria-hidden /> Repeat
+      </Toggle>
+      <Button kind="secondary" icon={allPlaying ? <Pause aria-hidden /> : <Play aria-hidden />} onClick={toggleAll}>
+        {allPlaying ? "Pause all sentences" : "Play all sentences"}
+      </Button>
       {mine?.status === "error" && (
-        <Banner tone="error" title="Audio couldn’t play" live="assertive" actions={<Button kind="secondary" onClick={retryPlayback}>Retry</Button>}>
-          The voice didn’t load. Your place in the sentence is kept.
-        </Banner>
+        <div className="basis-full">
+          <Banner tone="error" title="Audio couldn’t play" live="assertive" actions={<Button kind="secondary" onClick={retryPlayback}>Retry</Button>}>
+            The voice didn’t load. Your place in the sentence is kept.
+          </Banner>
+        </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -360,49 +348,45 @@ function StepsPanel({ sentence, onPick }: { sentence: StudySentence; onPick: (p:
   };
 
   return (
-    <div className="stack gap-3">
-      <p className="t-support">
-        Build the sentence a piece at a time. Each step marks what is <mark className="added">new</mark>.
-      </p>
-      <div className="study-step-tools btn-row">
+    <div className="flex flex-col gap-3">
+      <div className="study-step-tools flex flex-wrap items-center gap-2">
         <Button kind={blind ? "primary" : "secondary"} aria-pressed={blind} onClick={() => { setBlind(!blind); setRevealed([]); }}>{blind ? "Show all words" : "Test me"}</Button>
         <Button kind="secondary" icon={allStepsPlaying ? <Pause aria-hidden /> : <Play aria-hidden />} onClick={playAllSteps}>
           {allStepsPlaying ? "Pause all steps" : "Play all steps"}
         </Button>
         {blind && <Button kind="tertiary" onClick={() => setRevealed(revealed.length ? [] : sentence.steps.map((_, i) => i))}>{revealed.length ? "Hide again" : "Reveal all"}</Button>}
       </div>
-      {blind && <p className="t-support">Say the missing part from memory, then reveal it or record yourself.</p>}
-      <ol className="list" style={{ padding: "0 16px" }}>
+      <ol className="divide-y overflow-hidden rounded-lg border" style={{ padding: "0 16px" }}>
         {sentence.steps.map((st, i) => {
           const isPlaying = liveLabel === STEP_LABEL(i + 1);
           return (
             <li
               key={i}
-              className={cx("step-item", isPlaying && "is-playing")}
+              className={cx("grid grid-cols-[2rem_minmax(0,1fr)] gap-3 border-b py-3", isPlaying && "is-playing")}
               onClick={(e) => {
                 const t = e.target as HTMLElement;
                 if (t.closest(".fr-word, button, a, summary, input, label")) return;
                 playStep(i);
               }}
             >
-              <span className="step-num" aria-hidden>{i + 1}</span>
-              <div className="stack gap-2">
-                {blind && !revealed.includes(i) ? <p className="step-fr" lang="fr">{st.parts.map((part, j) => part.added || i === 0 ? <button type="button" key={j} className="study-blank" aria-label={`Reveal new words in step ${i + 1}`} onClick={(e) => { e.stopPropagation(); setRevealed([...revealed, i]); }}>…</button> : <span key={j}>{part.t}</span>)}</p> : <FrText segments={stepSegments(st.parts)} className="step-fr" onPick={onPick} />}
-                <p className="t-support">{st.en}</p>
-                {(!blind || revealed.includes(i)) && <p className="t-body">
-                  <span className="t-strong">{/[.!?…]$/.test(st.addedLabel) ? st.addedLabel : `${st.addedLabel}.`}</span>
+              <span className="grid size-8 place-items-center rounded-full border text-sm font-medium" aria-hidden>{i + 1}</span>
+              <div className="flex flex-col gap-2">
+                {blind && !revealed.includes(i) ? <p className="step-fr font-serif text-xl leading-snug wrap-break-word" lang="fr">{st.parts.map((part, j) => part.added || i === 0 ? <Button key={j} kind="secondary" className="h-9 border-dashed px-3" aria-label={`Reveal new words in step ${i + 1}`} onClick={(e) => { e.stopPropagation(); setRevealed([...revealed, i]); }}>…</Button> : <span key={j}>{part.t}</span>)}</p> : <FrText segments={stepSegments(st.parts)} className="step-fr font-serif text-xl leading-snug wrap-break-word" onPick={onPick} />}
+                <p className="text-sm text-muted-foreground">{st.en}</p>
+                {(!blind || revealed.includes(i)) && <p className="text-base">
+                  <span className="font-medium">{/[.!?…]$/.test(st.addedLabel) ? st.addedLabel : `${st.addedLabel}.`}</span>
                   {st.how && ` ${st.how}`}
                 </p>}
                 <Button
                   kind="tertiary"
-                  className="btn--sm-text"
+                  className="h-8 px-2 text-sm"
                   style={{ alignSelf: "flex-start", marginLeft: -12 }}
                   icon={isPlaying ? <Pause aria-hidden /> : <Play aria-hidden />}
                   onClick={(e) => { e.stopPropagation(); playStep(i); }}
                 >
                   {isPlaying ? `Pause step ${i + 1}` : `Play step ${i + 1}`}
                 </Button>
-                <div className="btn-row" onClick={(e) => e.stopPropagation()}>
+                <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
                   <Button kind="tertiary" aria-pressed={!!player?.repeat && liveLabel === STEP_LABEL(i + 1)} onClick={() => {
                     if (liveLabel === STEP_LABEL(i + 1) && player?.repeat) stopPlayback();
                     else startPlayback({ kind: "study", label: STEP_LABEL(i + 1), route: "study" }, estimate(stepText(st)), { texts: [stepText(st)], repeat: true });
@@ -428,9 +412,9 @@ function GrammarPanel({ sentence }: { sentence: StudySentence }) {
   const state = retried ? (sentence.grammar ? "content" : "none") : forced && forced !== "auto" ? forced : sentence.grammar ? "content" : "none";
   const notes = sentence.grammar ?? [];
   return (
-    <div className="stack gap-4" aria-busy={state === "loading"}>
+    <div className="flex flex-col gap-4" aria-busy={state === "loading"}>
       <StructurePanel sentence={sentence} />
-      <p className="t-support">Grammar for this sentence. Your place is kept: sentence {index + 1}.</p>
+      <p className="text-sm text-muted-foreground">Grammar for this sentence. Your place is kept: sentence {index + 1}.</p>
       {state === "loading" && (
         <>
           <Spinner label="Loading grammar notes…" />
@@ -448,15 +432,15 @@ function GrammarPanel({ sentence }: { sentence: StudySentence }) {
         </Banner>
       )}
       {state === "content" && (
-        <ul className="list">
+        <ul className="divide-y overflow-hidden rounded-lg border">
           {notes.map((g) => (
-            <li key={g.title + g.body} className="stack gap-2" style={{ padding: 16 }}>
-              <h3 className="t-strong">{g.title}</h3>
+            <li key={g.title + g.body} className="flex flex-col gap-2" style={{ padding: 16 }}>
+              <h3 className="font-medium">{g.title}</h3>
               {g.body && <p>{g.body}</p>}
               <GrammarSave key={sentence.id + g.title} sentence={sentence} point={{ title: g.title, explanation: g.body, hook: g.example ?? "" }} />
               {g.example && (
-                <p className="t-support">
-                  <span className="t-strong" style={{ color: "var(--text)" }}>{g.example}</span>
+                <p className="text-sm text-muted-foreground">
+                  <span className="font-medium" style={{ color: "var(--text)" }}>{g.example}</span>
                   {g.exampleEn && ` — ${g.exampleEn}`}
                 </p>
               )}
@@ -464,7 +448,7 @@ function GrammarPanel({ sentence }: { sentence: StudySentence }) {
           ))}
         </ul>
       )}
-      <div className="btn-row">
+      <div className="flex flex-wrap items-center gap-2">
         <Button kind="secondary" onClick={() => patchStudy({ tab: "steps" })}>Back to Steps</Button>
       </div>
     </div>
@@ -582,25 +566,24 @@ function AddToReview({ sentence }: { sentence: StudySentence }) {
       <Banner tone="neutral" title="Already saved">All {plural(options.length, "card")} from this sentence are already in your library. Nothing will be duplicated.</Banner>
     ) : (
       <>
-        <p className="t-support">Save selected cards to your library. Saving does not use today’s new-card limit.</p>
+        <p className="text-sm text-muted-foreground">Save selected cards to your library. Saving does not use today’s new-card limit.</p>
         <fieldset style={{ border: 0, margin: 0, padding: 0 }}>
           <legend className="sr-only">Cards from this sentence</legend>
           {options.map((c) => (
-            <label key={c.key} className="check">
-              <input
-                type="checkbox"
+            <label key={c.key} className="flex items-start gap-3 py-2">
+              <Checkbox
                 checked={saved.has(c.key) ? true : sel[c.key] !== false}
                 disabled={saved.has(c.key) || phase === "saving"}
-                onChange={(e) => setSel({ ...sel, [c.key]: e.target.checked })}
+                onCheckedChange={(v) => setSel({ ...sel, [c.key]: v === true })}
               />
-              <span className="stack">
+              <span className="flex flex-col">
                 <span>{c.label}</span>
-                {saved.has(c.key) && <span className="t-meta">Already saved</span>}
+                {saved.has(c.key) && <span className="text-xs leading-4 text-muted-foreground">Already saved</span>}
               </span>
             </label>
           ))}
         </fieldset>
-        {!picked?.length && <p className="t-meta">Look up a word in the sentence to add a Fill-in card for it.</p>}
+        {!picked?.length && <p className="text-xs leading-4 text-muted-foreground">Look up a word in the sentence to add a Fill-in card for it.</p>}
         {phase === "failed" && (
           <Banner tone="error" title="Couldn’t save" live="assertive">
             {error || "The server didn’t respond."} Nothing was added. Your selection is kept — try again.
@@ -638,9 +621,9 @@ function AddToReview({ sentence }: { sentence: StudySentence }) {
           </Dialog>
         ) : (
           <Popover anchor={wrap.current?.querySelector("button") ?? null} container={wrap.current} onClose={() => setOpen(false)} label="Add to review">
-            <h3 className="t-strong">Add to review</h3>
+            <h3 className="font-medium">Add to review</h3>
             {body}
-            <div className="btn-row btn-row--end">{footer}</div>
+            <div className="flex flex-wrap items-center gap-2 justify-end">{footer}</div>
           </Popover>
         ))}
       {!open && phase === "choose" && !allSaved && <span className="sr-only">Not added yet</span>}

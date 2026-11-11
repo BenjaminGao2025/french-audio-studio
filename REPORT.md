@@ -1,87 +1,106 @@
-# 1.1.0 redesign report
+# Stock shadcn pass (1.1.0)
 
-Branch `design/redesign-v2`. Nothing was merged. Nothing was pushed to `main`.
+Branch `design/redesign-v2`. Version stays 1.1.0. Nothing was merged. Nothing was pushed to `main`. No pull request.
 
-## Navigation
+shadcn/ui is the component system. The shell is the stock Sidebar (`SidebarProvider`, `Sidebar`, `SidebarMenu`, `SidebarInset`), not sidebar-07 and not the earlier reading bar or bottom tab bar. A narrow window uses the sidebar’s own sheet. `review/session` and `study/run` hide the sidebar and keep a slim Exit header. Warm paper, olive, and bronze are theme variables only. Inter is the UI face. Source Serif 4 is French text only.
 
-The left sidebar and the separate header are gone. On a wide screen the app is a reading bar: brand on the left, Study / Review / Practice / Progress / Settings in the bar, version and account on the right. The page is a centered paper sheet on a deeper warm ground (`#e4dcc8`). On a phone the same five destinations stay in a bottom tab bar with a safe-area inset, and the top bar is only the brand plus the account. Review session (`review/session`) and a Recall or Dictation run (`study/run`) hide that navigation and keep a slim Exit bar.
+## Commits
 
-- Study, Review, Practice, Progress, Settings stay the five destinations. URLs are unchanged.
-- Focused modes: `review/session`, `study/run`.
-- Due today still appears only on the Study home (`StudyReviewNotice`).
+- Parent: `cf4b1e9` (docs: record the 1.1.0 redesign commit SHA).
+- This pass: `design: stock shadcn components end to end (1.1.0)`. The SHA is filled in the follow-up docs commit on this branch.
+
+## Audit
+
+Script: `bash /tmp/rd-audit.sh`. Non-test `.tsx` outside `components/ui`, excluding `preview-main.tsx`.
+
+Before:
+
+```
+app_tsx_files=34
+files_importing_ui=30
+raw_<button>=16
+raw_<select>=12
+raw_<input>=11
+raw_<textarea>=11
+raw_<details>=6
+raw_<summary>=6
+className_uses=1227
+ui_components=badge button card dialog drawer dropdown-menu index input label popover scroll-area separator sheet slider sonner switch table tabs textarea tooltip
+css: 56 ./screens/study-tools.css + 985 ./styles.css = 1041 total
+```
+
+After:
+
+```
+app_tsx_files=34
+files_importing_ui=30
+raw_<button>=0
+raw_<select>=0
+raw_<input>=0
+raw_<textarea>=0
+raw_<details>=0
+raw_<summary>=0
+className_uses=1154
+ui_components=accordion.tsx alert.tsx badge.tsx breadcrumb.tsx button.tsx card.tsx checkbox.tsx collapsible.tsx dialog.tsx drawer.tsx dropdown-menu.tsx index.tsx input.tsx label.tsx popover.tsx progress.tsx radio-group.tsx scroll-area.tsx select.tsx separator.tsx sheet.tsx sidebar.tsx skeleton.tsx slider.tsx sonner.tsx switch.tsx table.tsx tabs.tsx textarea.tsx toggle-group.tsx toggle.tsx tooltip.tsx
+--- css ---
+190 ./styles.css
+```
+
+`raw_<input>=0` because the allowed photo file input is `<input` followed by a newline, so the audit regex does not count it. It is still in `StudyInput.tsx`, `class="sr-only"`, opened by a Button. The four files that do not import `components/ui` are `App.tsx`, `Brand.tsx`, `FrText.tsx`, and `GradeFeedback.tsx`.
+
+## CSS
+
+- Before: 1041 lines (`styles.css` 985 + `screens/study-tools.css` 56).
+- After: 190 lines. `study-tools.css` is deleted. `styles.css` keeps theme tokens, `@fontsource` imports, `:focus-visible` exceptions, the French word underline, safe-area padding, and `prefers-reduced-motion`.
+- `className` stays high because Tailwind utilities replaced the old stylesheet.
+
+## Components added
+
+Installed with the shadcn CLI and left stock: select, checkbox, radio-group, collapsible, accordion, toggle, toggle-group, progress, skeleton, alert, sidebar, breadcrumb. `web/src/hooks/use-mobile.ts` came with the sidebar. `@tanstack/react-table` 9.3.1 is the table package. History uses `useLegacyTable` from `@tanstack/react-table/legacy` because v9’s current API is not the v8 table.
+
+`components/ui/index.tsx` still wraps stock parts: Button `kind` maps to default / outline / ghost / destructive, Banner to Alert, Pill to Badge, FieldText to Label + Input, Segmented to ToggleGroup, Disclosure to Collapsible, Dialog to Dialog or Sheet, ChoiceSelect to Select. Select values are non-empty strings.
 
 ## Per page
 
-- Study home (`study/new`, and Study with no analysis): a Start composer (French text, own ideas, photo import), a Continue card when a previous analysis exists, Due today as Cards / To revisit, then quieter links for own words, the grammar map, and practise without new text.
-- Study workspace: the French sentence is the large serif line. Pager, playback, and Add to review sit in a toolbar under it. The eight tools stay reachable as three groups: Understand (Words, Grammar, Explain it), Listen & speak (Sounds, Steps, Say it), Check yourself (Recall, Dictation). `study.tab` values are unchanged.
-- Word card: unchanged contract. Desktop dock sits beside the sentence. A narrow width still uses the sheet. First line is the word, speaker, and bracket IPA when the lookup has IPA.
-- Review home: today’s session is a count, then Learning / Due / New, with one Start review action. Saved and Mastered stay on their routes.
-- Review session: focused. One keyboard-hint line on the front, another after the reveal. After reveal the French is large, then Again / Hard / Good / Easy with intervals and keys.
-- Saved: one filter row on a wide screen, one count, French wraps in the table. A narrow width stays a card list. Search, filters, favorites, and practise-from-selection remain.
-- Practice: the landing is a two-column studio of the existing destinations (one column on a phone). Listen, Speak, Write, Studio, and Feedback keep their task flows inside the new sheet.
-- Episodes: the list title is serif, and level, length, and status are separate chips.
-- Progress: the hero is the 1,000-hour total and the recent activity, then the existing charts and lists. History uses the same sheet and drops the old helper sentence under the title.
-- Settings: sections are separated. Practice feedback stays a vertical list. Volume still shows its number.
-- Signed-out gate: a short paper card and a Sign in button. No benefit paragraphs. The real login screen uses the same warm ground and paper card. The invite-code sentence stays.
-- Other routes (personal words, grammar map, photo, recall and dictation launchers, design reference, moved, 404) render in the new shell. Their inner forms were not rebuilt.
-
-## What stayed on purpose
-
-Friendly bracket IPA (`formatFriendlyPhonetic`), clickable French words including revealed answers, feedback sounds and streaks, Settings practice-feedback toggles, keyboard hints on review grades, `:focus-visible` without a thick ring on the route heading, `prefers-reduced-motion`, the compact word card (no example sentence, no full-sentence translation), and the Saved search and filters. No backend, SRS, audio-pipeline, auth, or API payload changes. No new routes.
+- Study home: sidebar, breadcrumb, Card composer, quiet `0 / 15,000` counter, Due today only here.
+- Study workspace: one player row at 1440 (prev, n of N, next, play, Progress, time, speed Select, Repeat Toggle, Play all, Add to review). It wraps at 390. Tool groups are a ToggleGroup. Tabs are shadcn Tabs.
+- Word card: dock on desktop, sheet at 390. Headword, speaker, meaning, dictionary open, Favorite, Importance. Demo lookup returns an empty phonetic, so these shots have no bracket IPA. The card still prints `formatFriendlyPhonetic` when the lookup has IPA.
+- Review home: session count at `text-lg`. The long quota paragraph and “How new cards are introduced” sit in a closed Collapsible. The text stays in the DOM so the existing assertions still pass.
+- Review session: focused Exit header. Grades keep keys and intervals.
+- Saved: one filter row, one count, wide table, French wraps. Visible cells stay hand-built so column 4 is Due and column 6 is Saved. `useLegacyTable` only walks the rows.
+- Practice: card grid. Listen, Speak, Write, Audio Studio, and feedback use stock controls. Instructional page descriptions and sparkle icons are gone. Empty Listen still says “Nothing to listen to yet”.
+- Grammar map and own words: card sections and stock buttons. The preview fake answers `GET /api/grammar/map` and `GET /api/homework` so those screens are not a 404. That is the test double, not the Python API.
+- Photo import: Button plus the hidden file input. The extra “Choose a photo first.” sentence is gone. The button stays disabled until a photo is chosen.
+- History: shadcn Table via `useLegacyTable` for analyses, study time, and attempts. The after3 shot shows three seeded rows. Seeding is only in the untracked preview entry.
+- Progress: `text-lg` totals, a Progress bar, a four-column stat grid. “What counts” is a closed Collapsible. The NCLC lecture line is gone.
+- Episodes: form Card and list rows. The long intro and the half-weight footer are gone.
+- Settings: label, description, control, Separator between sections. Feedback switches and the volume slider still work.
+- Login: login-01 Card. The signed-out gate is a separate shot.
 
 ## Tests
 
-- `cd web && npm test`: 17 files, 361 passed.
-- `cd web && npm run build`: `tsc --noEmit` and Vite build succeeded.
-- `PYTHONPATH=".:tests" python3 -m unittest tests.test_word_context tests.test_gloss_prompt`: 25 tests, OK.
-
-Two assertions were updated because the copy changed: the Study continue card now says “Continue”, and Due today is “Cards” / “To revisit” instead of “9 cards” and “5 to revisit” in one string. The Speak prompt “Say this in French out loud” was kept.
-
-## Git
-
-- Branch: `design/redesign-v2` (from `85db765`, v1.0.6).
-- Tree: https://github.com/BenjaminGao2025/french-audio-studio/tree/design/redesign-v2
-- Design commit: `8b19fbb2da3449c8a53010b4d09e3d31950a392a`
-- https://github.com/BenjaminGao2025/french-audio-studio/commit/8b19fbb2da3449c8a53010b4d09e3d31950a392a
+- `cd web && npm test`: 17 files, 361 passed. jsdom `act()` warnings and `HTMLMediaElement.prototype.play/load` “not implemented” are pre-existing stderr, not failures.
+- `cd web && npm run build`: `tsc --noEmit` and Vite build succeeded. The bundle is about 1,000 kB and Vite prints the existing chunk-size warning.
+- `PYTHONPATH=".:tests" python3 -m unittest tests.test_word_context tests.test_gloss_prompt`: 25 tests, OK. `auth_db.py` `utcnow` DeprecationWarnings are pre-existing. No Python files were changed.
 
 ## Screenshots
 
-Same filenames in both directories. PNGs are untracked.
+`after3-<page>-<w>.png` at 1440 and 390. 52 files in each directory. `before-*` and `after-*` were not overwritten. PNGs are not committed.
 
 - `/home/mgacai/projects/notion-mcp-terminal/TTS-wt/redesign-v2/screenshots/`
-- `/home/mgacai/redesign-v2-out/screenshots/`
+- `/home/mgacai/redesign-v3-out/screenshots/`
 
-32 before and 32 after. Widths 1440 and 390.
+Pages: study-home, workspace-listen, workspace-words, workspace-recall, word-card, review-home, review-session, review-session-revealed, saved-list, practice, practice-listen, practice-speak, practice-write, practice-studio, practice-feedback, grammar-map, own-words, photo-import, history, progress, episodes, settings, settings-feedback, login, login-gate, recall-reveal.
 
-- study-home
-- workspace-listen
-- workspace-words
-- workspace-recall
-- word-card
-- review-home
-- review-session
-- review-session-revealed
-- saved-list
-- practice
-- progress
-- episodes
-- settings
-- settings-feedback
-- login
-- recall-reveal
+## Leftovers
 
-Pattern: `before-<page>-<w>.png` and `after-<page>-<w>.png`.
+- Thin wrappers in `components/ui/index.tsx` (listed above).
+- Saved table cells are hand-built. History is the flexRender data table.
+- Hidden file input, `<audio>`, and clickable `FrText` spans stay native.
+- Quota copy is in a closed Collapsible, not deleted, because smoke tests read `textContent`.
+- Demo word-card shots have no bracket IPA (empty fake phonetic).
+- Preview seeding for History and the grammar/homework fake routes are not production API changes.
 
 ## Tool
 
-`grok --version` printed `grok 1.0.77 (50ca579fa996) [stable]`. Model for this session: grok-4.7 / Grok 4.7.
-
-## Not verified
-
-A physical iPhone notch and safe area, real LLM answers, production `users.db`, spoken audio playback, and a real device keyboard. Screenshots are headless Chrome at 1440×1100 and 390×844 against the demo registry on `127.0.0.1:8027`. The preview server is stopped after this report.
-
-Listen, Speak, Write, Audio Studio, and Practice feedback steps were not given a separate layout pass. They sit in the new sheet with their previous task UI. Grammar map, personal words, photo import, and History tables likewise keep their previous inner layout.
-
-## Merge and rollback
-
-Do not merge from this session. A person merges `design/redesign-v2` into `main` only after Ben approves the before/after screenshots. Rollback is `git revert` of that merge commit on `main`. Do not force-push.
+`grok --version` printed `grok 1.0.77 (50ca579fa996) [stable]`. Model: grok-4.7.

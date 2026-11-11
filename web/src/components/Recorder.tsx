@@ -155,8 +155,8 @@ export function Recorder({ label, onText, disabled }: { label: string; onText: (
 
   const busy = phase === "asking" || phase === "transcribing";
   return (
-    <div className="stack gap-3" role="group" aria-label={label}>
-      <div className="btn-row">
+    <div className="flex flex-col gap-3" role="group" aria-label={label}>
+      <div className="flex flex-wrap items-center gap-2">
         {phase === "recording" ? (
           <Button kind="primary" icon={<Square aria-hidden />} onClick={stop}>Stop recording</Button>
         ) : (
@@ -169,7 +169,7 @@ export function Recorder({ label, onText, disabled }: { label: string; onText: (
             {playing ? "Pause my recording" : "Play my recording"}
           </Button>
         )}
-        <span className="t-support num" aria-live="off">
+        <span className="text-sm text-muted-foreground tabular-nums" aria-live="off">
           {phase === "recording" ? `Recording · ${fmtClock(secs)} / ${fmtClock(MAX_RECORD_SECONDS)}` : phase === "asking" ? "Waiting for the microphone…" : ""}
         </span>
       </div>

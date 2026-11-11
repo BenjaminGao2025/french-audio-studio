@@ -7,7 +7,9 @@ import { askQuestion, checkExplanation, saveAnswer, saveGrammar, transcribeExpla
 import { evaluateShadowing } from "../lib/shadowing";
 import { gradeFeedback } from "../lib/feedback";
 import { FrText, type FrPick } from "../components/FrText";
-import { Banner, Button, Tabs } from "../components/ui";
+import { Banner, Button, Collapsible, CollapsibleContent, CollapsibleTrigger, Tabs, Textarea } from "../components/ui";
+import { Toggle } from "../components/ui/toggle";
+import { ToggleGroup, ToggleGroupItem } from "../components/ui/toggle-group";
 import { formatFriendlyPhonetic } from "../lib/phonetic";
 import { StudyRecorder } from "../components/StudyRecorder";
 
@@ -22,22 +24,24 @@ export function StudyNavigation({ value, onChange }: { value: Tab; onChange: (ta
   const group = GROUPS.find((g) => g.tabs.some((t) => t.id === value)) ?? GROUPS[0];
   memory.current[group.id] = value;
   return (
-    <div className="tool-groups">
-      <div className="seg tool-group" role="group" aria-label="Tool group">
+    <div className="flex flex-col gap-2">
+      <ToggleGroup
+        type="single"
+        variant="outline"
+        className="w-full"
+        aria-label="Tool group"
+        value={group.id}
+        onValueChange={(id) => {
+          if (!id || id === group.id) return;
+          onChange(memory.current[id] ?? GROUPS.find((g) => g.id === id)!.tabs[0].id);
+        }}
+      >
         {GROUPS.map((g) => (
-          <button
-            key={g.id}
-            type="button"
-            aria-pressed={g.id === group.id}
-            onClick={() => {
-              if (g.id === group.id) return;
-              onChange(memory.current[g.id] ?? g.tabs[0].id);
-            }}
-          >
+          <ToggleGroupItem key={g.id} value={g.id} className="flex-1">
             {g.title}
-          </button>
+          </ToggleGroupItem>
         ))}
-      </div>
+      </ToggleGroup>
       <Tabs
         label={group.title}
         idBase="learn"
@@ -54,18 +58,18 @@ export function WordsPanel({ sentence, onPick }: { sentence: StudySentence; onPi
   const words = raw?.words ?? [];
   const content = words.map((w, i) => ({ ...w, index: i })).filter((w) => !/^(article|pronoun|preposition|conjunction|determiner|pronom|préposition|déterminant)\b/i.test(w.type));
   const functionWords = words.map((w, i) => ({ ...w, index: i })).filter((w) => !content.some((c) => c.index === w.index));
-  const list = (items: typeof content) => <div className="study-word-grid">{items.map((w) => <article key={w.index} className="study-word-item"><div className="row row--between"><FrText segments={[{ t: w.fr, w: true, wi: w.index }]} className="t-strong" onPick={onPick} /><span className="t-meta">{w.type}</span></div><p>{w.meaning}</p>{formatFriendlyPhonetic(w.ipa) && <p className="t-meta">{formatFriendlyPhonetic(w.ipa)}</p>}<details><summary>Usage & memory</summary><div className="stack gap-2">{w.lemma && w.lemma !== w.fr && <p className="t-meta">Base form: {w.lemma}</p>}{w.why && <p>{w.why}</p>}{w.english_link && <p>{w.english_link}</p>}{w.false_friend && <p className="t-meta">False friend: check the meaning carefully.</p>}</div></details><Button kind="tertiary" onClick={(e) => onPick({ text: w.fr, wordIndex: w.index, occurrence: 0, anchor: e.currentTarget })}>Meaning & save card</Button></article>)}</div>;
-  return <section className="stack gap-4"><div><h3 className="t-section">Words in this sentence</h3></div>
-    {!!raw?.alignment?.length && <div className="study-gloss" aria-label="Word by word">{raw.alignment.map((a, i) => <div key={i}><FrText text={a.fr} onPick={onPick} /><span className="t-support">{a.en}</span></div>)}</div>}
-    {raw?.order_note && <p className="study-note">{raw.order_note}</p>}
-    {words.length ? <>{list(content.length ? content : functionWords)}{!!content.length && !!functionWords.length && <details className="panel"><summary>Function words ({functionWords.length})</summary>{list(functionWords)}</details>}</> : <Banner tone="neutral" title="No saved word breakdown">Tap words in the sentence above to look them up. Reanalyse an older text to get a full word breakdown.</Banner>}
+  const list = (items: typeof content) => <div className="grid gap-3 sm:grid-cols-2">{items.map((w) => <article key={w.index} className="flex flex-col gap-3 rounded-lg border bg-card p-4"><div className="flex flex-wrap items-center justify-between gap-2"><FrText segments={[{ t: w.fr, w: true, wi: w.index }]} className="font-medium" onPick={onPick} /><span className="text-xs leading-4 text-muted-foreground">{w.type}</span></div><p>{w.meaning}</p>{formatFriendlyPhonetic(w.ipa) && <p className="text-xs leading-4 text-muted-foreground">{formatFriendlyPhonetic(w.ipa)}</p>}<Collapsible><CollapsibleTrigger className="flex min-h-11 items-center text-sm font-medium">Usage & memory</CollapsibleTrigger><CollapsibleContent><div className="flex flex-col gap-2">{w.lemma && w.lemma !== w.fr && <p className="text-xs leading-4 text-muted-foreground">Base form: {w.lemma}</p>}{w.why && <p>{w.why}</p>}{w.english_link && <p>{w.english_link}</p>}{w.false_friend && <p className="text-xs leading-4 text-muted-foreground">False friend: check the meaning carefully.</p>}</div></CollapsibleContent></Collapsible><Button kind="tertiary" onClick={(e) => onPick({ text: w.fr, wordIndex: w.index, occurrence: 0, anchor: e.currentTarget })}>Meaning & save card</Button></article>)}</div>;
+  return <section className="flex flex-col gap-4"><div><h3 className="text-lg font-semibold text-balance">Words in this sentence</h3></div>
+    {!!raw?.alignment?.length && <div className="grid gap-3 rounded-lg border p-4 sm:grid-cols-2" aria-label="Word by word">{raw.alignment.map((a, i) => <div key={i}><FrText text={a.fr} onPick={onPick} /><span className="text-sm text-muted-foreground">{a.en}</span></div>)}</div>}
+    {raw?.order_note && <p className="rounded-md border-l-2 border-primary bg-muted px-3 py-2">{raw.order_note}</p>}
+    {words.length ? <>{list(content.length ? content : functionWords)}{!!content.length && !!functionWords.length && <Collapsible className="rounded-lg border bg-card p-4 text-card-foreground"><CollapsibleTrigger className="flex min-h-11 w-full items-center text-sm font-medium">Function words ({functionWords.length})</CollapsibleTrigger><CollapsibleContent>{list(functionWords)}</CollapsibleContent></Collapsible>}</> : <Banner tone="neutral" title="No saved word breakdown">Tap words in the sentence above to look them up. Reanalyse an older text to get a full word breakdown.</Banner>}
   </section>;
 }
 
 export function SoundsPanel({ sentence, onPick }: { sentence: StudySentence; onPick: (p: FrPick) => void }) {
   const tips = sentence.raw?.pronunciation_tips ?? [];
-  return <section className="stack gap-4"><h3 className="t-section">Hear the details</h3><p className="t-support">Listen to the model, then try the same sounds in Say it.</p><Button kind="secondary" icon={<Volume2 aria-hidden />} onClick={() => sayFrench(sentence.fr)}>Listen to the sentence</Button>
-    {tips.length ? <ul className="list">{tips.map((tip, i) => <li className="study-tip stack gap-2" key={i}><p>{tip}</p><div className="btn-row">{[...tip.matchAll(/[«“"`]([^»”"`]+)[»”"`]/g)].map((m, j) => <FrText key={j} text={m[1]} onPick={onPick} />)}</div></li>)}</ul> : <Banner tone="neutral" title="No saved pronunciation tips">You can still listen and practise this sentence. Reanalyse older text to request fresh pronunciation notes.</Banner>}
+  return <section className="flex flex-col gap-4"><h3 className="text-lg font-semibold text-balance">Hear the details</h3><Button kind="secondary" icon={<Volume2 aria-hidden />} onClick={() => sayFrench(sentence.fr)}>Listen to the sentence</Button>
+    {tips.length ? <ul className="divide-y overflow-hidden rounded-lg border">{tips.map((tip, i) => <li className="flex flex-col gap-2 border-b p-4 last:border-b-0 flex flex-col gap-2" key={i}><p>{tip}</p><div className="flex flex-wrap items-center gap-2">{[...tip.matchAll(/[«“"`]([^»”"`]+)[»”"`]/g)].map((m, j) => <FrText key={j} text={m[1]} onPick={onPick} />)}</div></li>)}</ul> : <Banner tone="neutral" title="No saved pronunciation tips">You can still listen and practise this sentence. Reanalyse older text to request fresh pronunciation notes.</Banner>}
   </section>;
 }
 
@@ -73,8 +77,8 @@ const shadowResults = new Map<string, string>();
 export function ShadowingPanel({ text, id, compact = false, onPick }: { text: string; id: string; compact?: boolean; onPick?: (p: FrPick) => void }) {
   const [transcript, setTranscript] = useState(shadowResults.get(id) ?? "");
   const result = transcript ? evaluateShadowing(text, transcript) : null;
-  return <section className="stack gap-3 study-shadow" aria-label={compact ? "Step shadowing" : "Sentence shadowing"}>
-    {!compact && <h3 className="t-section">Listen, say it, compare</h3>}
+  return <section className="flex flex-col gap-3 rounded-lg border bg-card p-4" aria-label={compact ? "Step shadowing" : "Sentence shadowing"}>
+    {!compact && <h3 className="text-lg font-semibold text-balance">Listen, say it, compare</h3>}
     <Button kind="tertiary" icon={<Volume2 aria-hidden />} onClick={() => sayFrench(text)}>Listen to model</Button>
     <StudyRecorder key={id} id={id} label={compact ? "Say this step" : "Record this sentence"} onTake={async (blob, signal) => {
       const spoken = await transcribeTake(blob, "fr", text, signal);
@@ -83,10 +87,10 @@ export function ShadowingPanel({ text, id, compact = false, onPick }: { text: st
       setTranscript(spoken);
       gradeFeedback(evaluateShadowing(text, spoken).score >= 70);
     }} />
-    {result && <div className="study-score stack gap-3" aria-live="polite"><div className="study-score-metrics"><strong>{result.score}<small>/100</small></strong><span>Similarity <b>{result.accuracy}%</b></span><span>Completeness <b>{result.completeness}%</b></span></div>
-      <div className="study-score-words">{result.words.map((w, i) => <span key={i} className={`shadow-${w.status}`} title={`${w.status}: ${w.score}%`}>{onPick ? <FrText text={w.word} onPick={onPick} /> : w.word}<span className="sr-only"> {w.status}</span></span>)}</div>
-      {!!result.extras.length && <p className="t-support">Extra words heard: <span lang="fr">{result.extras.join(" ")}</span></p>}
-      <p className="t-support">Heard: <span lang="fr">{transcript}</span></p>
+    {result && <div className="border-t pt-4 flex flex-col gap-3" aria-live="polite"><div className="flex flex-wrap items-center gap-6"><strong>{result.score}<small>/100</small></strong><span>Similarity <b>{result.accuracy}%</b></span><span>Completeness <b>{result.completeness}%</b></span></div>
+      <div className="flex flex-wrap gap-1.5">{result.words.map((w, i) => <span key={i} className={`shadow-${w.status}`} title={`${w.status}: ${w.score}%`}>{onPick ? <FrText text={w.word} onPick={onPick} /> : w.word}<span className="sr-only"> {w.status}</span></span>)}</div>
+      {!!result.extras.length && <p className="text-sm text-muted-foreground">Extra words heard: <span lang="fr">{result.extras.join(" ")}</span></p>}
+      <p className="text-sm text-muted-foreground">Heard: <span lang="fr">{transcript}</span></p>
     </div>}
   </section>;
 }
@@ -94,16 +98,16 @@ export function ShadowingPanel({ text, id, compact = false, onPick }: { text: st
 export function GrammarSave({ sentence, point }: { sentence: StudySentence; point: { title: string; explanation: string; hook: string } }) {
   const saved = useSavedCards(sentence.fr).has(cardKey("grammar", point.title));
   const [done, setDone] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
-  return <div className="stack gap-2"><Button kind="secondary" icon={saved || done ? <Check aria-hidden /> : <Plus aria-hidden />} busy={busy} disabled={saved || done} onClick={async () => {
+  return <div className="flex flex-col gap-2"><Button kind="secondary" icon={saved || done ? <Check aria-hidden /> : <Plus aria-hidden />} busy={busy} disabled={saved || done} onClick={async () => {
     setBusy(true); setError(""); try { await saveGrammar(sentence, point); setDone(true); } catch (e) { setError(e instanceof Error ? e.message : "Couldn’t save. Try again."); } finally { setBusy(false); }
-  }}>{saved || done ? "Grammar card saved" : "Make a practice card"}</Button>{error && <p className="field-error" role="alert">{error}</p>}</div>;
+  }}>{saved || done ? "Grammar card saved" : "Make a practice card"}</Button>{error && <p className="text-sm text-destructive" role="alert">{error}</p>}</div>;
 }
 
 export function StructurePanel({ sentence }: { sentence: StudySentence }) {
   const [selected, setSelected] = useState<number | null>(null);
   const spans = sentence.raw?.structure ?? [];
   const part = selected === null ? null : spans[selected];
-  return <div className="stack gap-3">{!!spans.length && <><p className="t-label">How the sentence fits together</p><div className="study-structure">{spans.map((s, i) => <button key={i} className={`structure-${s.block}`} aria-pressed={selected === i} onClick={() => setSelected(selected === i ? null : i)}><span lang="fr">{s.text}</span><small>{s.block === "N" ? "Noun group" : s.block === "V" ? "Verb" : "Sentence building"}</small></button>)}</div>{part && <div className="study-note"><strong>{part.role}</strong><p>{part.detail}</p>{part.gid && <Button kind="tertiary" onClick={() => go(`study/grammar?point=${encodeURIComponent(part.gid!)}`)}>Explore this grammar point</Button>}</div>}</>}<Button kind="tertiary" icon={<MapIcon aria-hidden />} onClick={() => go("study/grammar")}>My grammar map</Button></div>;
+  return <div className="flex flex-col gap-3">{!!spans.length && <><p className="text-sm font-medium">How the sentence fits together</p><div className="flex flex-wrap gap-2">{spans.map((s, i) => <Toggle key={i} variant="outline" pressed={selected === i} onPressedChange={() => setSelected(selected === i ? null : i)} className="h-auto flex-col items-start gap-0.5 px-3 py-2"><span lang="fr">{s.text}</span><span className="text-xs text-muted-foreground">{s.block === "N" ? "Noun group" : s.block === "V" ? "Verb" : "Sentence building"}</span></Toggle>)}</div>{part && <div className="rounded-md border-l-2 border-primary bg-muted px-3 py-2"><strong>{part.role}</strong><p>{part.detail}</p>{part.gid && <Button kind="tertiary" onClick={() => go(`study/grammar?point=${encodeURIComponent(part.gid!)}`)}>Explore this grammar point</Button>}</div>}</>}<Button kind="tertiary" icon={<MapIcon aria-hidden />} onClick={() => go("study/grammar")}>My grammar map</Button></div>;
 }
 
 interface ExplainState { explanation: string; variation: string; question: string; feedback?: ExplanationFeedback; history: TutorTurn[]; saved: number[] }
@@ -133,14 +137,14 @@ export function ExplainPanel({ sentence }: { sentence: StudySentence }) {
     if (!signal.aborted) update({ [field]: `${current.current[field]} ${text}`.trim().slice(0, field === "explanation" ? 2000 : 1000) });
   };
   const fb = state.feedback;
-  return <div className="stack gap-5"><section className="panel stack gap-3"><h3 className="t-section">Explain it in your own words</h3><p className="t-support">What does the sentence mean, and why is it built this way? Use Chinese or English. The tutor helps you find gaps.</p>
-    <label className="field-label" htmlFor="explain-draft">My explanation</label><textarea className="textarea" id="explain-draft" rows={4} maxLength={2000} value={state.explanation} disabled={!!busy} onChange={(e) => update({ explanation: e.target.value })} />
+  return <div className="flex flex-col gap-6"><section className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-3"><h3 className="text-lg font-semibold text-balance">Explain it in your own words</h3><p className="text-sm text-muted-foreground">What does the sentence mean, and why is it built this way? Use Chinese or English. The tutor helps you find gaps.</p>
+    <label className="text-sm font-medium" htmlFor="explain-draft">My explanation</label><Textarea id="explain-draft" rows={4} maxLength={2000} value={state.explanation} disabled={!!busy} onChange={(e) => update({ explanation: e.target.value })} />
     <StudyRecorder id={`explain:${sentence.id}`} label="Speak my explanation (Chinese)" disabled={!!busy} onTake={spoken("explanation")} />
-    <details><summary>Try a sentence of my own</summary><label className="sr-only" htmlFor="explain-variation">My own French sentence</label><textarea className="textarea" id="explain-variation" lang="fr" rows={2} maxLength={500} disabled={!!busy} value={state.variation} onChange={(e) => update({ variation: e.target.value })} name="explain-variation" autoComplete="off" placeholder="e.g. J’ai failli…" /></details>
+    <Collapsible><CollapsibleTrigger className="flex min-h-11 items-center text-sm font-medium">Try a sentence of my own</CollapsibleTrigger><CollapsibleContent className="grid gap-2"><label className="sr-only" htmlFor="explain-variation">My own French sentence</label><Textarea id="explain-variation" lang="fr" rows={2} maxLength={500} disabled={!!busy} value={state.variation} onChange={(e) => update({ variation: e.target.value })} name="explain-variation" autoComplete="off" placeholder="e.g. J’ai failli…" /></CollapsibleContent></Collapsible>
     <Button kind="primary" disabled={!state.explanation.trim() || !!busy} busy={busy === "explain"} onClick={() => void check()}>Check my understanding</Button>
-    {fb && <div className="study-feedback stack gap-3" aria-live="polite"><h4 className="t-strong">{fb.verdict === "solid" ? "You explained the key ideas" : fb.verdict === "partial" ? "A few gaps to work on" : "Let’s revisit the key ideas"}</h4>{!!fb.got_right.length && <div><p className="t-label">What you got right</p><ul>{fb.got_right.map((s, i) => <li key={i}>{s}</li>)}</ul></div>}{!!fb.gaps.length && <div><p className="t-label">What to revisit</p><ul>{fb.gaps.map((s, i) => <li key={i}>{s}</li>)}</ul></div>}{fb.variation && <p>{fb.variation.ok ? "Your sentence works." : `Try: ${fb.variation.corrected}`} {fb.variation.note}</p>}{fb.follow_up && <div className="study-note"><strong>Think about this</strong><p>{fb.follow_up}</p><Button kind="tertiary" onClick={() => { update({ history: [...state.history, { role: "tutor", content: fb.follow_up }] }); document.getElementById("tutor-question")?.focus(); }}>Answer below</Button></div>}</div>}
-  </section><section className="panel stack gap-3"><h3 className="t-section">Ask about this sentence</h3><div className="study-conversation" aria-live="polite">{state.history.map((turn, i) => <article key={i} className={`study-turn study-turn--${turn.role}`}><p className="t-meta">{turn.role === "learner" ? "You" : "Tutor"}</p><p style={{ whiteSpace: "pre-wrap" }}>{turn.content}</p>{turn.role === "tutor" && i > 0 && state.history[i - 1]?.role === "learner" && <Button kind="tertiary" disabled={state.saved.includes(i) || !!busy} busy={busy === `save-${i}`} onClick={() => void request(`save-${i}`, async (signal) => { await saveAnswer(sentence, state.history[i - 1].content, turn.content); if (!signal.aborted) update({ saved: [...current.current.saved, i] }); })}>{state.saved.includes(i) ? "Practice card saved" : "Turn this answer into a practice card"}</Button>}</article>)}</div>
-    <label className="field-label" htmlFor="tutor-question">My question or follow-up answer</label><textarea className="textarea" id="tutor-question" rows={2} maxLength={1000} value={state.question} disabled={!!busy} onChange={(e) => update({ question: e.target.value })} name="tutor-question" autoComplete="off" placeholder="e.g. Why is this word here…" />
+    {fb && <div className="flex flex-col gap-3 rounded-lg bg-muted p-4 flex flex-col gap-3" aria-live="polite"><h4 className="font-medium">{fb.verdict === "solid" ? "You explained the key ideas" : fb.verdict === "partial" ? "A few gaps to work on" : "Let’s revisit the key ideas"}</h4>{!!fb.got_right.length && <div><p className="text-sm font-medium">What you got right</p><ul>{fb.got_right.map((s, i) => <li key={i}>{s}</li>)}</ul></div>}{!!fb.gaps.length && <div><p className="text-sm font-medium">What to revisit</p><ul>{fb.gaps.map((s, i) => <li key={i}>{s}</li>)}</ul></div>}{fb.variation && <p>{fb.variation.ok ? "Your sentence works." : `Try: ${fb.variation.corrected}`} {fb.variation.note}</p>}{fb.follow_up && <div className="rounded-md border-l-2 border-primary bg-muted px-3 py-2"><strong>Think about this</strong><p>{fb.follow_up}</p><Button kind="tertiary" onClick={() => { update({ history: [...state.history, { role: "tutor", content: fb.follow_up }] }); document.getElementById("tutor-question")?.focus(); }}>Answer below</Button></div>}</div>}
+  </section><section className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-3"><h3 className="text-lg font-semibold text-balance">Ask about this sentence</h3><div className="flex flex-col gap-3" aria-live="polite">{state.history.map((turn, i) => <article key={i} className={`rounded-lg border p-4 wrap-break-word study-turn--${turn.role}`}><p className="text-xs leading-4 text-muted-foreground">{turn.role === "learner" ? "You" : "Tutor"}</p><p style={{ whiteSpace: "pre-wrap" }}>{turn.content}</p>{turn.role === "tutor" && i > 0 && state.history[i - 1]?.role === "learner" && <Button kind="tertiary" disabled={state.saved.includes(i) || !!busy} busy={busy === `save-${i}`} onClick={() => void request(`save-${i}`, async (signal) => { await saveAnswer(sentence, state.history[i - 1].content, turn.content); if (!signal.aborted) update({ saved: [...current.current.saved, i] }); })}>{state.saved.includes(i) ? "Practice card saved" : "Turn this answer into a practice card"}</Button>}</article>)}</div>
+    <label className="text-sm font-medium" htmlFor="tutor-question">My question or follow-up answer</label><Textarea id="tutor-question" rows={2} maxLength={1000} value={state.question} disabled={!!busy} onChange={(e) => update({ question: e.target.value })} name="tutor-question" autoComplete="off" placeholder="e.g. Why is this word here…" />
     <StudyRecorder id={`ask:${sentence.id}`} label="Ask by speaking (Chinese)" disabled={!!busy} onTake={spoken("question")} /><Button kind="primary" disabled={!state.question.trim() || !!busy} busy={busy === "ask"} onClick={() => void ask()}>Ask tutor</Button>
   </section>{error && <Banner tone="error" title="Couldn’t finish" live="assertive">{error} Your draft is kept. Try again.</Banner>}</div>;
 }

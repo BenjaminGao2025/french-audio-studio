@@ -22,18 +22,21 @@ describe("version and update history", () => {
       await act(async () => root.render(<WidthContext.Provider value={width}><VersionInfo /></WidthContext.Provider>));
       const trigger = host.querySelector<HTMLButtonElement>("button")!;
       expect(trigger.textContent).toBe(`v${version}`);
-      expect(host.querySelector('[role="dialog"]')).toBeNull();
+      expect(document.querySelector('[role="dialog"]')).toBeNull();
       trigger.focus();
       await act(async () => trigger.click());
-      const dialog = host.querySelector<HTMLElement>('[role="dialog"]')!;
+      const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
       expect(dialog).toBeTruthy();
       expect(dialog.classList.contains("sheet")).toBe(width < 640);
+      expect(dialog.classList.contains("dialog")).toBe(width >= 640);
       expect(dialog.textContent).toContain("What’s new");
       expect(dialog.textContent).toContain(`v${version}`);
       expect(dialog.textContent).toContain("Removed the French character shortcut buttons");
       expect(dialog.textContent).toContain("v1.0.0");
-      await act(async () => dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
-      expect(host.querySelector('[role="dialog"]')).toBeNull();
+      await act(async () => {
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+      });
+      expect(document.querySelector('[role="dialog"]')).toBeNull();
     } finally {
       await act(async () => root.unmount());
       host.remove();

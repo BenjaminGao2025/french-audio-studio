@@ -17,7 +17,7 @@ import {
 } from "../api/practice";
 import { fmtClock } from "../lib/format";
 import { announce, go, set, startPlayback, useApp } from "../state/store";
-import { Banner, Button, PageHead, Pill, Segmented, Spinner } from "../components/ui";
+import { Banner, Button, ChoiceSelect, PageHead, Pill, Segmented, Spinner, Textarea } from "../components/ui";
 import { Recorder, type Recording } from "../components/Recorder";
 import { AiLabel, Checklist, ErrorHints, Round2 } from "./PracticeFeedback";
 import { BackTo } from "./Practice";
@@ -185,7 +185,7 @@ export function Speak() {
 
   if (!data) {
     return (
-      <div className="page">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
         <PageHead back={<BackTo label="Practice" to="practice" />} title="Speak" desc="TCF Canada speaking tasks: answer out loud, then fix it with feedback." />
         {loadErr ? <Banner tone="error" title="Couldn’t load the speaking tasks" live="assertive" actions={<Button kind="secondary" onClick={load}>Retry</Button>}>{loadErr}</Banner> : <Spinner label="Loading tasks…" />}
       </div>
@@ -195,38 +195,41 @@ export function Speak() {
   const builtIns = data.subjects[task] ?? [];
   const answering = phase === "answer" || phase === "wait1";
   return (
-    <div className="page">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <PageHead
         back={<BackTo label="Practice" to="practice" />}
         title="Speak"
         eyebrow="Expression orale · practice"
-        desc="Answer out loud. Your voice is transcribed on our server and only the text is kept; you can correct the text before sending it."
+        desc="Expression orale"
       />
-      <div className="stack gap-5">
+      <div className="flex flex-col gap-6">
         {answering && !attempt && (
-          <div className="stack gap-3">
+          <div className="flex flex-col gap-3">
             <Segmented
               label="Task"
               value={task}
               onChange={(t) => { setTask(t); setSubject(data.subjects[t]?.[0] ?? null); setTurns([]); }}
               options={TASKS.map((t) => ({ value: t, label: t === data.recommended_task ? `${t} · suggested` : t }))}
             />
-            <label className="field" style={{ maxWidth: 480 }}>
-              <span className="field-label">Subject</span>
-              <select className="select" value={subj?.id ?? ""} onChange={(e) => { const s = builtIns.find((x) => x.id === e.target.value); if (s) { setSubject(s); setTurns([]); } }}>
-                {builtIns.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
-              </select>
+            <label className="grid gap-2" style={{ maxWidth: 480 }}>
+              <span className="text-sm font-medium">Subject</span>
+              <ChoiceSelect
+                ariaLabel="Subject"
+                value={subj && builtIns.some((s) => s.id === subj.id) ? subj.id : (builtIns[0]?.id ?? "subject")}
+                onValueChange={(v) => { const s = builtIns.find((x) => x.id === v); if (s) { setSubject(s); setTurns([]); } }}
+                options={builtIns.map((s) => ({ value: s.id, label: s.title }))}
+              />
             </label>
           </div>
         )}
 
         {subj && spec && (
-          <section className="panel stack gap-2" aria-label="Subject">
-            <p className="t-label">{spec.name_en}</p>
-            <p lang="fr" className="t-strong">{subj.title}</p>
+          <section className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-2" aria-label="Subject">
+            <p className="text-sm font-medium">{spec.name_en}</p>
+            <p lang="fr" className="font-medium">{subj.title}</p>
             <p lang="fr">{subj.prompt}</p>
             {task === "T1" && !!subj.questions?.length && (
-              <ol className="stack gap-1" style={{ paddingLeft: 20 }}>
+              <ol className="flex flex-col gap-1" style={{ paddingLeft: 20 }}>
                 {subj.questions.map((q, i) => (
                   <li key={i} lang="fr">
                     {q}{" "}
@@ -235,9 +238,9 @@ export function Speak() {
                 ))}
               </ol>
             )}
-            {task === "T2" && !!subj.target_points?.length && <p className="t-support">Find out about: <span lang="fr">{subj.target_points.join(" · ")}</span></p>}
-            {task === "T3" && !!subj.structure_hints?.length && <p className="t-support">Plan: <span lang="fr">{subj.structure_hints.join(" · ")}</span></p>}
-            <p className="t-meta">About {fmtClock(spec.timer_seconds)} in the exam. {spec.desc_en}</p>
+            {task === "T2" && !!subj.target_points?.length && <p className="text-sm text-muted-foreground">Find out about: <span lang="fr">{subj.target_points.join(" · ")}</span></p>}
+            {task === "T3" && !!subj.structure_hints?.length && <p className="text-sm text-muted-foreground">Plan: <span lang="fr">{subj.structure_hints.join(" · ")}</span></p>}
+            <p className="text-xs leading-4 text-muted-foreground">About {fmtClock(spec.timer_seconds)} in the exam. {spec.desc_en}</p>
           </section>
         )}
 
@@ -247,14 +250,14 @@ export function Speak() {
             {replyBusy && <Spinner label="The examiner is answering…" />}
             {replyErr && <Banner tone="warning" title="The examiner didn’t answer">{replyErr} Ask your next question or send what you have.</Banner>}
             <Recorder label={task === "T2" ? "Ask the examiner a question" : "Record your answer"} onText={(r) => void onTake(r)} disabled={phase === "wait1"} />
-            <div className="field">
-              <label htmlFor="speak-ta" className="field-label">Transcript (you can correct it or type)</label>
-              <textarea id="speak-ta" className="textarea" lang="fr" rows={6} value={transcript} readOnly={phase === "wait1"} onChange={(e) => { setTranscript(e.target.value); setError(""); }} />
-              <p className="counter">{wordCount(transcript)} words{audioSecs ? ` · ${fmtClock(audioSecs)} recorded` : ""}</p>
+            <div className="grid gap-2">
+              <label htmlFor="speak-ta" className="text-sm font-medium">Transcript (you can correct it or type)</label>
+              <Textarea id="speak-ta" lang="fr" rows={6} value={transcript} readOnly={phase === "wait1"} onChange={(e) => { setTranscript(e.target.value); setError(""); }} />
+              <p className="text-sm tabular-nums text-muted-foreground">{wordCount(transcript)} words{audioSecs ? ` · ${fmtClock(audioSecs)} recorded` : ""}</p>
             </div>
             {error && <Banner tone="error" title="Feedback didn’t load" live="assertive">{error}</Banner>}
             {phase === "wait1" && <Spinner label="Listening to your answer… this usually takes 10–40 seconds." />}
-            <div className="btn-row">
+            <div className="flex flex-wrap items-center gap-2">
               <Button kind="primary" busy={phase === "wait1"} disabledReason={!transcript.trim() ? "Record or type your answer first." : undefined} onClick={() => void submit1()}>
                 {error ? "Retry" : "Get feedback"}
               </Button>
@@ -263,21 +266,21 @@ export function Speak() {
           </>
         ) : (
           attempt && (
-            <div className="stack gap-5">
-              <div id="speak-fb" tabIndex={-1} className="stack gap-4">
+            <div className="flex flex-col gap-6">
+              <div id="speak-fb" tabIndex={-1} className="flex flex-col gap-4">
                 <AiLabel />
-                <div className="stack gap-1">
-                  <span className="def-label">What you said</span>
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm font-medium text-muted-foreground">What you said</span>
                   <p lang="fr" style={{ whiteSpace: "pre-wrap" }}>{attempt.transcript_1}</p>
                 </div>
                 <Round1 a={attempt} />
               </div>
-              <hr className="divider" />
+              <hr className="border-t" />
               {phase === "round2" ? (
-                <div className="stack gap-4">
-                  <p className="t-section">Round 2 · corrections</p>
-                  <div className="stack gap-1">
-                    <span className="def-label">Your second take</span>
+                <div className="flex flex-col gap-4">
+                  <p className="text-lg font-semibold text-balance">Round 2 · corrections</p>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-sm font-medium text-muted-foreground">Your second take</span>
                     <p lang="fr" style={{ whiteSpace: "pre-wrap" }}>{attempt.transcript_2}</p>
                   </div>
                   <Round2 fb={attempt.feedback_2} correctedLabel="Corrected transcript" />
@@ -286,17 +289,17 @@ export function Speak() {
                   </Banner>
                 </div>
               ) : (
-                <div className="stack gap-3">
-                  <p className="t-section">Round 2 · say it again</p>
-                  <p className="t-support">Use the hints above and answer again out loud. Then send your second take for corrections.</p>
+                <div className="flex flex-col gap-3">
+                  <p className="text-lg font-semibold text-balance">Round 2 · say it again</p>
+                  <p className="text-sm text-muted-foreground">Use the hints above and answer again out loud. Then send your second take for corrections.</p>
                   <Recorder label="Record your second take" onText={(r) => { setRetakeSecs((s) => s + r.seconds); setRetake(retake ? `${retake} ${r.text}` : r.text); }} disabled={phase === "wait2"} />
-                  <div className="field">
-                    <label htmlFor="speak-rev" className="field-label">Second take transcript</label>
-                    <textarea id="speak-rev" className="textarea" lang="fr" rows={6} value={retake} readOnly={phase === "wait2"} onChange={(e) => { setRetake(e.target.value); setError(""); }} />
+                  <div className="grid gap-2">
+                    <label htmlFor="speak-rev" className="text-sm font-medium">Second take transcript</label>
+                    <Textarea id="speak-rev" lang="fr" rows={6} value={retake} readOnly={phase === "wait2"} onChange={(e) => { setRetake(e.target.value); setError(""); }} />
                   </div>
                   {error && <Banner tone="error" title="Corrections didn’t load" live="assertive">{error}</Banner>}
                   {phase === "wait2" && <Spinner label="Checking your second take…" />}
-                  <div className="btn-row">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Button kind="primary" busy={phase === "wait2"} disabledReason={!retake.trim() ? "Record or type your second take first." : undefined} onClick={() => void submit2()}>
                       {error ? "Retry" : "Get corrections"}
                     </Button>
@@ -317,11 +320,11 @@ const estimate = (t: string) => Math.max(1, Math.round(wordCount(t) / 2));
 
 function Dialogue({ turns }: { turns: Turn[] }) {
   return (
-    <ol className="list" aria-label="Role-play so far">
+    <ol className="divide-y overflow-hidden rounded-lg border" aria-label="Role-play so far">
       {turns.map((t, i) => (
-        <li key={i} className="list-row row--top">
+        <li key={i} className="flex flex-wrap items-center gap-3 px-4 py-3 items-start">
           <Pill tone={t.role === "user" ? "info" : undefined}>{t.role === "user" ? "You" : "Examiner"}</Pill>
-          <span lang="fr" className="grow">{t.content}</span>
+          <span lang="fr" className="min-w-0 flex-1">{t.content}</span>
           {t.role === "assistant" && <Button kind="tertiary" iconOnly icon={<Volume2 aria-hidden />} aria-label="Listen again" onClick={() => say(t.content)} />}
         </li>
       ))}
@@ -334,24 +337,24 @@ function Round1({ a }: { a: SpeakAttempt }) {
   if (!fb || !Object.keys(fb).length) return null;
   const t3 = fb.t3_structure;
   return (
-    <div className="stack gap-4">
-      {fb.praise && <p><span className="t-strong">What works · </span>{fb.praise}</p>}
+    <div className="flex flex-col gap-4">
+      {fb.praise && <p><span className="font-medium">What works · </span>{fb.praise}</p>}
       {fb.stats && (
-        <p className="row gap-2">
+        <p className="flex flex-wrap items-center gap-2 gap-2">
           <Pill>{Math.round(fb.stats.wpm)} words/min</Pill>
-          <span className="t-support">{fb.stats.pace_note}</span>
+          <span className="text-sm text-muted-foreground">{fb.stats.pace_note}</span>
         </p>
       )}
       {fb.t2_questions && (
-        <p className="row gap-2">
+        <p className="flex flex-wrap items-center gap-2 gap-2">
           <Pill tone={fb.t2_questions.forms_ok ? "success" : "warning"}>{fb.t2_questions.count} questions asked</Pill>
-          <span className="t-support">{fb.t2_questions.note}</span>
+          <span className="text-sm text-muted-foreground">{fb.t2_questions.note}</span>
         </p>
       )}
       {t3 && (
-        <p className="row gap-2">
+        <p className="flex flex-wrap items-center gap-2 gap-2">
           {(["opinion", "arguments", "example", "conclusion"] as const).map((k) => <Pill key={k} tone={t3[k] ? "success" : "warning"}>{k}</Pill>)}
-          <span className="t-support">{t3.note}</span>
+          <span className="text-sm text-muted-foreground">{t3.note}</span>
         </p>
       )}
       <Checklist items={fb.checklist} />

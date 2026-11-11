@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { LogIn, UserPlus } from "lucide-react";
 import { ApiError } from "../api/client";
 import { login, register } from "../api/auth";
-import { Banner, Button, FieldText } from "../components/ui";
+import { Banner, Button, Card, CardContent, CardHeader, FieldText } from "../components/ui";
 import { Brand } from "../components/Brand";
 
 /** Where to go after signing in: only an in-app path, never another site. */
@@ -46,11 +46,14 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: (next: string) => void
 
   const isLogin = mode === "login";
   return (
-    <main className="login-page" id="main">
-      <form className="panel stack gap-4 login-card" onSubmit={submit} noValidate>
+    <main className="flex min-h-dvh items-center justify-center bg-background p-4" id="main">
+      <Card className="w-full max-w-sm">
+      <form className="flex flex-col gap-4" onSubmit={submit} noValidate>
+        <CardHeader>
         <Brand />
-        <h1 className="t-page" tabIndex={-1} data-page-title>{isLogin ? "Sign in" : "Create an account"}</h1>
-        {!isLogin && <p className="t-support">Sign-up needs an invite code from the person who shared this site with you.</p>}
+        <h1 className="text-xl font-semibold tracking-tight text-balance" tabIndex={-1} data-page-title>{isLogin ? "Sign in" : "Create an account"}</h1>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
         <FieldText
           label="Email"
           type="email"
@@ -69,7 +72,7 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: (next: string) => void
         />
         {!isLogin && <FieldText label="Invite code" autoComplete="off" value={invite} onChange={setInvite} />}
         {error && <Banner tone="error" title={isLogin ? "Couldn’t sign in" : "Couldn’t create the account"} live="assertive">{error}</Banner>}
-        <div className="btn-row">
+        <div className="flex flex-wrap items-center gap-2">
           <Button kind="primary" type="submit" busy={busy} icon={isLogin ? <LogIn aria-hidden /> : <UserPlus aria-hidden />}>
             {busy ? (isLogin ? "Signing in…" : "Creating account…") : isLogin ? "Sign in" : "Create account"}
           </Button>
@@ -77,7 +80,9 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: (next: string) => void
             {isLogin ? "I have an invite code" : "I already have an account"}
           </Button>
         </div>
+        </CardContent>
       </form>
+      </Card>
     </main>
   );
 }

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
+import { flexRender } from "@tanstack/react-table";
+import { getCoreRowModel, useLegacyTable, type LegacyColumnDef } from "@tanstack/react-table/legacy";
+import { ChevronLeft, Trash2 } from "lucide-react";
 import {
   attemptKind,
   canReopen,
@@ -17,7 +19,7 @@ import { LANE_LABEL, loadDays, type DayTime, type Lane } from "../api/time";
 import { fmtDuration, plural } from "../lib/format";
 import { openAnalysisInStudy } from "../state/study";
 import { announce, clearAttemptHistory, go, patchStudy, set, useApp } from "../state/store";
-import { Banner, Button, Dialog, DisabledReason, PageHead, Pill, Skeleton, Spinner, Tabs } from "../components/ui";
+import { Banner, Button, ChoiceSelect, Dialog, DisabledReason, PageHead, Pill, Skeleton, Spinner, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Tabs } from "../components/ui";
 
 type Tab = "analyses" | "time" | "attempts";
 const TABS: Tab[] = ["analyses", "time", "attempts"];
@@ -46,12 +48,12 @@ export function HistoryScreen() {
   const asked = params.get("tab") as Tab;
   const tab: Tab = TABS.includes(asked) ? asked : "analyses";
   return (
-    <div className="page">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
       <PageHead
-        back={<Button kind="tertiary" className="btn--sm-text" icon={<ChevronLeft aria-hidden />} onClick={() => go("progress")} style={{ alignSelf: "flex-start", marginLeft: -12 }}>Progress</Button>}
+        back={<Button kind="tertiary" className="h-8 px-2 text-sm" icon={<ChevronLeft aria-hidden />} onClick={() => go("progress")} style={{ alignSelf: "flex-start", marginLeft: -12 }}>Progress</Button>}
         title="History"
       />
-      <div className="stack gap-5">
+      <div className="flex flex-col gap-6">
         <Tabs
           label="History type"
           idBase="hist"
@@ -63,7 +65,7 @@ export function HistoryScreen() {
             { value: "attempts", label: "Recall & Dictation" },
           ]}
         />
-        <div id="hist-panel" role="tabpanel" aria-labelledby={`hist-tab-${tab}`} className="stack gap-4">
+        <div id="hist-panel" role="tabpanel" aria-labelledby={`hist-tab-${tab}`} className="flex flex-col gap-4">
           {tab === "analyses" ? <Analyses /> : tab === "time" ? <Time /> : <Attempts />}
         </div>
       </div>
@@ -84,17 +86,34 @@ function Loading({ status, what, onRetry }: { status: "loading" | "error"; what:
   );
 }
 
-function RowButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+function DataTable<T extends Record<string, any>>({ data, columns }: { data: T[]; columns: LegacyColumnDef<T>[] }) {
+  const table = useLegacyTable({ data, columns, getCoreRowModel: getCoreRowModel() });
   return (
-    <button className="list-btn" onClick={onClick} style={{ minHeight: 56 }}>
-      <span className="grow stack gap-1">{children}</span>
-      <ChevronRight aria-hidden className="chev" />
-    </button>
+    <Table>
+      <TableHeader>
+        {table.getHeaderGroups().map((group) => (
+          <TableRow key={group.id}>
+            {group.headers.map((header) => (
+              <TableHead key={header.id}>{header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}</TableHead>
+            ))}
+          </TableRow>
+        ))}
+      </TableHeader>
+      <TableBody>
+        {table.getRowModel().rows.map((row) => (
+          <TableRow key={row.id}>
+            {row.getVisibleCells().map((cell) => (
+              <TableCell key={cell.id} className="align-top whitespace-normal">{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+            ))}
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   );
 }
 
 const BackButton = ({ onBack }: { onBack: () => void }) => (
-  <Button kind="tertiary" className="btn--sm-text" icon={<ChevronLeft aria-hidden />} onClick={onBack} style={{ alignSelf: "flex-start", marginLeft: -12 }}>
+  <Button kind="tertiary" className="h-8 px-2 text-sm" icon={<ChevronLeft aria-hidden />} onClick={onBack} style={{ alignSelf: "flex-start", marginLeft: -12 }}>
     Back to list
   </Button>
 );
@@ -114,16 +133,21 @@ function Analyses() {
   const shown = all.filter((r) => src === "all" || sourceLabel(r) === src);
   return (
     <>
-      <label className="field" style={{ width: 220 }}>
-        <span className="field-label">Source</span>
-        <select className="select" value={src} onChange={(e) => setSrc(e.target.value)}>
-          <option value="all">All sources</option>
-          <option>Pasted text</option>
-          <option>Photo import</option>
-          <option>My own idea</option>
-        </select>
+      <label className="grid gap-2" style={{ width: 220 }}>
+        <span className="text-sm font-medium">Source</span>
+        <ChoiceSelect
+          ariaLabel="Source"
+          value={src}
+          onValueChange={setSrc}
+          options={[
+            { value: "all", label: "All sources" },
+            { value: "Pasted text", label: "Pasted text" },
+            { value: "Photo import", label: "Photo import" },
+            { value: "My own idea", label: "My own idea" },
+          ]}
+        />
       </label>
-      <p className="t-support" aria-live="polite">
+      <p className="text-sm text-muted-foreground" aria-live="polite">
         {plural(all.length, "Study analysis", "Study analyses")}
         {shown.length !== all.length ? ` · Showing ${shown.length}` : ""}
       </p>
@@ -134,16 +158,16 @@ function Analyses() {
       ) : shown.length === 0 ? (
         <Banner tone="neutral" title="No analyses match this filter" actions={<Button kind="secondary" onClick={() => setSrc("all")}>Show all sources</Button>} />
       ) : (
-        <ul className="list">
-          {shown.map((r) => (
-            <li key={r.id}>
-              <RowButton onClick={() => setDetail(r.id)}>
-                <span lang="fr" className="t-strong">{preview(r.text)}</span>
-                <span className="t-support">{fmtWhen(r.created_at)} · {sourceLabel(r)} · {plural(sentenceCount(r), "sentence")}</span>
-              </RowButton>
-            </li>
-          ))}
-        </ul>
+        <DataTable
+          data={shown}
+          columns={[
+            { header: "Text", cell: ({ row }) => <span lang="fr" className="font-serif">{preview(row.original.text)}</span> },
+            { header: "When", cell: ({ row }) => fmtWhen(row.original.created_at) },
+            { header: "Source", cell: ({ row }) => sourceLabel(row.original) },
+            { header: "Sentences", cell: ({ row }) => plural(sentenceCount(row.original), "sentence") },
+            { id: "open", header: "", cell: ({ row }) => <Button kind="tertiary" className="h-8 px-2" onClick={() => setDetail(row.original.id)}>Open</Button> },
+          ]}
+        />
       )}
       <ClearAction kind="analyses" count={all.length} onCleared={list.reload} />
     </>
@@ -155,20 +179,20 @@ function AnalysisDetail({ r, onBack }: { r: StudyRecord; onBack: () => void }) {
   const isOpen = study.analysis.status === "done" && study.analysis.input === r.text;
   const n = sentenceCount(r);
   return (
-    <div className="stack gap-4">
+    <div className="flex flex-col gap-4">
       <BackButton onBack={onBack} />
-      <h2 className="t-section" tabIndex={-1} data-autofocus>Study analysis · {fmtWhen(r.created_at)}</h2>
-      <dl className="stat-grid">
-        <div className="stat"><dt className="t-support">Source</dt><dd style={{ margin: 0 }}>{sourceLabel(r)}</dd></div>
-        <div className="stat"><dt className="t-support">Sentences</dt><dd style={{ margin: 0 }}>{n}</dd></div>
+      <h2 className="text-lg font-semibold text-balance" tabIndex={-1} data-autofocus>Study analysis · {fmtWhen(r.created_at)}</h2>
+      <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+        <div className="flex flex-col gap-0.5"><dt className="text-sm text-muted-foreground">Source</dt><dd style={{ margin: 0 }}>{sourceLabel(r)}</dd></div>
+        <div className="flex flex-col gap-0.5"><dt className="text-sm text-muted-foreground">Sentences</dt><dd style={{ margin: 0 }}>{n}</dd></div>
       </dl>
       <p lang="fr" style={{ whiteSpace: "pre-wrap" }}>{r.text}</p>
       {canReopen(r) ? (
-        !isOpen && <p className="t-support">Opening it loads its {plural(n, "sentence")} into Study. Nothing is analysed again.</p>
+        !isOpen && <p className="text-sm text-muted-foreground">Opening it loads its {plural(n, "sentence")} into Study. Nothing is analysed again.</p>
       ) : (
         <DisabledReason>This entry was saved without its analysed sentences, so it can’t be opened. You can analyse the text again in Study.</DisabledReason>
       )}
-      <div className="btn-row">
+      <div className="flex flex-wrap items-center gap-2">
         {canReopen(r) ? (
           <Button kind="primary" onClick={() => openAnalysisInStudy(r)}>{isOpen ? "Open in Study" : "Open this analysis in Study"}</Button>
         ) : (
@@ -199,7 +223,7 @@ function Time() {
   const total = days.reduce((a, d) => a + d.seconds, 0);
   return (
     <>
-      <p className="t-support" aria-live="polite">
+      <p className="text-sm text-muted-foreground" aria-live="polite">
         {plural(days.length, "day")} with study time · {fmtDuration(total / 60)} in all (last 60 study days)
       </p>
       {days.length === 0 ? (
@@ -207,19 +231,16 @@ function Time() {
           Time you spend studying, reviewing or listening is counted automatically and appears here.
         </Banner>
       ) : (
-        <ul className="list">
-          {days.map((d) => (
-            <li key={d.day} className="stack gap-1" style={{ padding: "12px 16px" }}>
-              <span className="row" style={{ justifyContent: "space-between" }}>
-                <span className="t-strong">{dayLabel(d.day)}</span>
-                <span className="t-strong num">{fmtDuration(d.seconds / 60)}</span>
-              </span>
-              <span className="t-support">{laneLine(d)}</span>
-            </li>
-          ))}
-        </ul>
+        <DataTable
+          data={days}
+          columns={[
+            { header: "Day", cell: ({ row }) => dayLabel(row.original.day) },
+            { header: "Time", cell: ({ row }) => <span className="tabular-nums">{fmtDuration(row.original.seconds / 60)}</span> },
+            { header: "Lanes", cell: ({ row }) => laneLine(row.original) },
+          ]}
+        />
       )}
-      <p className="t-meta">Study time can’t be cleared here; it’s your 1,000-hour total. Days start at 4:00.</p>
+      <p className="text-xs leading-4 text-muted-foreground">Study time can’t be cleared here; it’s your 1,000-hour total. Days start at 4:00.</p>
     </>
   );
 }
@@ -254,38 +275,48 @@ function Attempts() {
   const avg = shown.length ? Math.round(shown.reduce((s, a) => s + a.accuracy, 0) / shown.length) : 0;
   return (
     <>
-      <div className="filter-bar">
-        <label className="field" style={{ width: 230 }}>
-          <span className="field-label">Practice</span>
-          <select className="select" value={kind} onChange={(e) => setKind(e.target.value)}>
-            <option value="all">Recall and Dictation</option>
-            <option>Recall</option>
-            <option>Dictation</option>
-          </select>
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="grid gap-2" style={{ width: 230 }}>
+          <span className="text-sm font-medium">Practice</span>
+          <ChoiceSelect
+            ariaLabel="Practice"
+            value={kind}
+            onValueChange={setKind}
+            options={[
+              { value: "all", label: "Recall and Dictation" },
+              { value: "Recall", label: "Recall" },
+              { value: "Dictation", label: "Dictation" },
+            ]}
+          />
         </label>
-        <label className="field" style={{ width: 180 }}>
-          <span className="field-label">Outcome</span>
-          <select className="select" value={outcome} onChange={(e) => setOutcome(e.target.value)}>
-            <option value="all">All outcomes</option>
-            <option value="correct">Correct</option>
-            <option value="incorrect">Not yet correct</option>
-          </select>
+        <label className="grid gap-2" style={{ width: 180 }}>
+          <span className="text-sm font-medium">Outcome</span>
+          <ChoiceSelect
+            ariaLabel="Outcome"
+            value={outcome}
+            onValueChange={setOutcome}
+            options={[
+              { value: "all", label: "All outcomes" },
+              { value: "correct", label: "Correct" },
+              { value: "incorrect", label: "Not yet correct" },
+            ]}
+          />
         </label>
       </div>
-      <p className="t-support" aria-live="polite">
+      <p className="text-sm text-muted-foreground" aria-live="polite">
         {plural(total, "practice attempt")}
         {total > all.length ? ` · Showing the newest ${all.length}` : ""}
         {shown.length !== all.length ? ` · ${shown.length} match the filters` : ""}
       </p>
-      <dl className="stat-grid">
+      <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
         {[
           ["Attempts", shown.length],
           ["Correct", correct],
           ["Average accuracy", `${avg}%`],
         ].map(([k, v]) => (
-          <div key={k} className="stat">
-            <dt className="t-support">{k}</dt>
-            <dd className="t-section num" style={{ margin: 0 }}>{v}</dd>
+          <div key={k} className="flex flex-col gap-0.5">
+            <dt className="text-sm text-muted-foreground">{k}</dt>
+            <dd className="text-lg font-semibold text-balance tabular-nums" style={{ margin: 0 }}>{v}</dd>
           </div>
         ))}
       </dl>
@@ -296,23 +327,19 @@ function Attempts() {
       ) : shown.length === 0 ? (
         <Banner tone="neutral" title="No attempts match these filters" actions={<Button kind="secondary" onClick={() => { setKind("all"); setOutcome("all"); }}>Clear filters</Button>} />
       ) : (
-        <ul className="list">
-          {shown.map((a) => (
-            <li key={a.id}>
-              <RowButton onClick={() => setDetail(a.id)}>
-                <span className="row">
-                  <span className="t-strong">{attemptKind(a)}</span>
-                  <Pill tone={a.correct ? "success" : "error"}>{a.correct ? "Correct" : "Not yet"}</Pill>
-                  <span className="t-support num">{a.accuracy}%</span>
-                </span>
-                <span lang="fr" className="t-support">{preview(a.sentence)}</span>
-                <span className="t-meta">{fmtWhen(a.created_at)}{a.step ? ` · step ${a.step}` : ""}</span>
-              </RowButton>
-            </li>
-          ))}
-        </ul>
+        <DataTable
+          data={shown}
+          columns={[
+            { header: "Practice", cell: ({ row }) => attemptKind(row.original) },
+            { header: "Outcome", cell: ({ row }) => <Pill tone={row.original.correct ? "success" : "error"}>{row.original.correct ? "Correct" : "Not yet"}</Pill> },
+            { header: "Accuracy", cell: ({ row }) => <span className="tabular-nums">{row.original.accuracy}%</span> },
+            { header: "Sentence", cell: ({ row }) => <span lang="fr">{preview(row.original.sentence)}</span> },
+            { header: "When", cell: ({ row }) => `${fmtWhen(row.original.created_at)}${row.original.step ? ` · step ${row.original.step}` : ""}` },
+            { id: "open", header: "", cell: ({ row }) => <Button kind="tertiary" className="h-8 px-2" onClick={() => setDetail(row.original.id)}>Open</Button> },
+          ]}
+        />
       )}
-      <p className="t-meta">No official or combined score is calculated from practice attempts.</p>
+      <p className="text-xs leading-4 text-muted-foreground">No official or combined score is calculated from practice attempts.</p>
       <ClearAction kind="attempts" count={total} onCleared={list.reload} />
     </>
   );
@@ -321,19 +348,19 @@ function Attempts() {
 function AttemptDetail({ a, onBack }: { a: AttemptRecord; onBack: () => void }) {
   const kind = attemptKind(a);
   return (
-    <div className="stack gap-4">
+    <div className="flex flex-col gap-4">
       <BackButton onBack={onBack} />
-      <h2 className="t-section" tabIndex={-1} data-autofocus>{kind} attempt · {fmtWhen(a.created_at)}</h2>
-      <dl className="stack gap-3">
-        <div><dt className="def-label">Sentence</dt><dd lang="fr" style={{ margin: 0 }}>{a.sentence}</dd></div>
-        {a.expected && a.expected !== a.sentence && <div><dt className="def-label">Expected{a.step ? ` (step ${a.step})` : ""}</dt><dd lang="fr" style={{ margin: 0 }}>{a.expected}</dd></div>}
-        <div><dt className="def-label">Your answer</dt><dd lang="fr" style={{ margin: 0 }}>{a.answer || "—"}</dd></div>
+      <h2 className="text-lg font-semibold text-balance" tabIndex={-1} data-autofocus>{kind} attempt · {fmtWhen(a.created_at)}</h2>
+      <dl className="flex flex-col gap-3">
+        <div><dt className="text-sm font-medium text-muted-foreground">Sentence</dt><dd lang="fr" style={{ margin: 0 }}>{a.sentence}</dd></div>
+        {a.expected && a.expected !== a.sentence && <div><dt className="text-sm font-medium text-muted-foreground">Expected{a.step ? ` (step ${a.step})` : ""}</dt><dd lang="fr" style={{ margin: 0 }}>{a.expected}</dd></div>}
+        <div><dt className="text-sm font-medium text-muted-foreground">Your answer</dt><dd lang="fr" style={{ margin: 0 }}>{a.answer || "—"}</dd></div>
         <div>
-          <dt className="def-label">Result</dt>
+          <dt className="text-sm font-medium text-muted-foreground">Result</dt>
           <dd style={{ margin: 0 }}>{a.correct ? "Correct" : "Not yet correct"} · {a.accuracy}% accuracy</dd>
         </div>
       </dl>
-      <div className="btn-row">
+      <div className="flex flex-wrap items-center gap-2">
         <Button kind="secondary" onClick={() => { set((s) => ({ libFilters: { ...s.libFilters, q: a.sentence } })); go("review/saved"); }}>Find saved card</Button>
         <Button kind="tertiary" onClick={() => { patchStudy({ tab: kind === "Recall" ? "recall" : "dictation" }); go(kind === "Recall" ? "study/recall" : "study/dictation"); }}>Practise again</Button>
       </div>
@@ -366,7 +393,7 @@ function ClearAction({ kind, count, onCleared }: { kind: "analyses" | "attempts"
       });
   };
   return (
-    <div className="stack gap-2" style={{ marginTop: 16 }}>
+    <div className="flex flex-col gap-2" style={{ marginTop: 16 }}>
       {done && count === 0 && (
         <Banner tone="success" title="Cleared" live="polite">
           {kind === "analyses" ? "Your Study analysis list is empty." : "Your practice attempt history is empty."} Saved cards, review scheduling, lookup counts and study time are unchanged.
@@ -401,9 +428,9 @@ function ClearAction({ kind, count, onCleared }: { kind: "analyses" | "attempts"
               ? `This removes ${plural(count, "entry", "entries")} from your Study analysis list. It can’t be undone.`
               : `This removes ${plural(count, "attempt")} from your practice history. It can’t be undone.`}
           </p>
-          <div className="stack gap-2">
-            <p className="t-strong">These stay exactly the same:</p>
-            <ul className="stack gap-1 t-support" style={{ paddingLeft: 20, color: "var(--text)" }}>
+          <div className="flex flex-col gap-2">
+            <p className="font-medium">These stay exactly the same:</p>
+            <ul className="flex flex-col gap-1 text-sm text-muted-foreground" style={{ paddingLeft: 20, color: "var(--text)" }}>
               <li>Saved cards and saved definition snapshots</li>
               <li>Lookup counts and importance</li>
               <li>Review scheduling and mastered cards</li>

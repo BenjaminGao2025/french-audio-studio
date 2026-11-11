@@ -150,7 +150,7 @@ function mastery(state?: "undone" | "expired" | "queued" | "syncing" | "conflict
 const states = (...xs: [string, string, () => void][]): DemoState[] => xs.map(([key, label, apply]) => ({ key, label, apply }));
 const word = (entry: string, wstate: string, multi = true, index = 0) => {
   withAnalysis(multi);
-  patchStudy({ index });
+  patchStudy({ index, tab: "words" });
   at("study", "SCR-WRD-01", wstate, { word: entry });
 };
 const setCount = (n: number) => {

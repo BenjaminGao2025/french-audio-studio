@@ -7,7 +7,7 @@ import { saveReviewSettings } from "../api/review";
 import { initials } from "../components/Shell";
 import { SPEEDS, announce, get, go, routeUrl, set, setDailyNew, setPlaybackPrefs, setSessionSize, stopPlayback, useApp } from "../state/store";
 import { fmtWhen } from "../api/history";
-import { Banner, Button, Dialog, FieldText, PageHead, Pill, Spinner } from "../components/ui";
+import { Banner, Button, Checkbox, ChoiceSelect, Dialog, FieldText, PageHead, Pill, Separator, Spinner } from "../components/ui";
 import { Slider } from "../components/ui/slider";
 import { Switch } from "../components/ui/switch";
 import { animationOn, feedbackPrefs, prefersReducedMotion, saveFeedback, subscribeFeedback } from "../lib/feedback";
@@ -59,8 +59,8 @@ export function DailyLimitField({ compact }: { compact?: boolean }) {
       });
   };
   return (
-    <div className="stack gap-3" style={{ maxWidth: 520 }}>
-      <div className="row row--top gap-3" style={{ alignItems: "flex-end" }}>
+    <div className="flex flex-col gap-3" style={{ maxWidth: 520 }}>
+      <div className="flex flex-wrap items-start gap-2 gap-3" style={{ alignItems: "flex-end" }}>
         <div style={{ width: 200 }}>
           <FieldText
             label="Daily new cards"
@@ -81,11 +81,11 @@ export function DailyLimitField({ compact }: { compact?: boolean }) {
           {state === "failed" ? "Retry" : "Save limit"}
         </Button>
       </div>
-      {valid && n === 0 && <p className="t-support">0 means no new cards are introduced. Due reviews continue.</p>}
-      {valid && n === 200 && <p className="t-support">200 is the highest daily limit.</p>}
-      {valid && n < newUsed && <p className="t-support">You’ve already introduced {newUsed} new cards today. They stay; no more will be introduced today.</p>}
+      {valid && n === 0 && <p className="text-sm text-muted-foreground">0 means no new cards are introduced. Due reviews continue.</p>}
+      {valid && n === 200 && <p className="text-sm text-muted-foreground">200 is the highest daily limit.</p>}
+      {valid && n < newUsed && <p className="text-sm text-muted-foreground">You’ve already introduced {newUsed} new cards today. They stay; no more will be introduced today.</p>}
       {state === "saving" && <Spinner label="Saving…" />}
-      {state === "saved" && <p className="t-support" role="status" style={{ color: "var(--success)" }}>Saved. Daily new cards: {dailyNew}.</p>}
+      {state === "saved" && <p className="text-sm text-muted-foreground" role="status" style={{ color: "var(--success)" }}>Saved. Daily new cards: {dailyNew}.</p>}
       {state === "failed" && <Banner tone="error" title="Couldn’t save the daily limit" live="assertive">Your previous limit ({dailyNew}) is still in use.</Banner>}
       {state === "offline" && <Banner tone="warning" title="Saved on this device" live="polite">It will sync when you’re back online. New-card allowances can’t be assigned until then.</Banner>}
     </div>
@@ -138,8 +138,8 @@ export function SessionSizeField() {
       });
   };
   return (
-    <div className="stack gap-3" style={{ maxWidth: 520 }}>
-      <div className="row row--top gap-3" style={{ alignItems: "flex-end" }}>
+    <div className="flex flex-col gap-3" style={{ maxWidth: 520 }}>
+      <div className="flex flex-wrap items-start gap-2 gap-3" style={{ alignItems: "flex-end" }}>
         <div style={{ width: 200 }}>
           <FieldText
             label="Cards per review session"
@@ -160,13 +160,13 @@ export function SessionSizeField() {
           {state === "failed" ? "Retry" : "Save size"}
         </Button>
       </div>
-      {valid && n === MIN_SESSION_SIZE && <p className="t-support">{MIN_SESSION_SIZE} is the smallest session.</p>}
-      {valid && n === MAX_SESSION_SIZE && <p className="t-support">{MAX_SESSION_SIZE} is the largest session.</p>}
+      {valid && n === MIN_SESSION_SIZE && <p className="text-sm text-muted-foreground">{MIN_SESSION_SIZE} is the smallest session.</p>}
+      {valid && n === MAX_SESSION_SIZE && <p className="text-sm text-muted-foreground">{MAX_SESSION_SIZE} is the largest session.</p>}
       {lockedSize !== null && (
-        <p className="t-support">Your session in progress stays at {lockedSize} cards. A new size applies from your next session.</p>
+        <p className="text-sm text-muted-foreground">Your session in progress stays at {lockedSize} cards. A new size applies from your next session.</p>
       )}
       {state === "saving" && <Spinner label="Saving…" />}
-      {state === "saved" && <p className="t-support" role="status" style={{ color: "var(--success)" }}>Saved. Cards per review session: {sessionSize}. Applies from your next session.</p>}
+      {state === "saved" && <p className="text-sm text-muted-foreground" role="status" style={{ color: "var(--success)" }}>Saved. Cards per review session: {sessionSize}. Applies from your next session.</p>}
       {state === "failed" && <Banner tone="error" title="Couldn’t save the session size" live="assertive">Your previous size ({sessionSize}) is still in use.</Banner>}
       {state === "offline" && <Banner tone="warning" title="Saved on this device" live="polite">It will sync when you’re back online.</Banner>}
     </div>
@@ -182,24 +182,28 @@ export function SettingsScreen({ sub }: { sub?: string }) {
     if (route.includes("signout")) setSignOut(true);
   }, [sub, route]);
   return (
-    <div className="page settings-page">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <PageHead title="Settings" />
-      <div className="stack gap-7">
-        <section className="stack gap-5" aria-labelledby="pref-h">
-          <h2 id="pref-h" className="t-section">Review</h2>
+      <div className="flex flex-col gap-12">
+        <section className="flex flex-col gap-6" aria-labelledby="pref-h">
+          <h2 id="pref-h" className="text-lg font-semibold text-balance">Review</h2>
           <DailyLimitField />
           <SessionSizeField />
         </section>
+        <Separator />
         <Playback />
+        <Separator />
         <FeedbackSettings />
-        <section ref={accountRef} className="stack gap-5" aria-labelledby="acct-h" style={{ scrollMarginTop: 16 }}>
-          <h2 id="acct-h" className="t-section">Account</h2>
+        <Separator />
+        <section ref={accountRef} className="flex flex-col gap-6" aria-labelledby="acct-h" style={{ scrollMarginTop: 16 }}>
+          <h2 id="acct-h" className="text-lg font-semibold text-balance">Account</h2>
           <Account onSignOut={() => setSignOut(true)} />
         </section>
+        <Separator />
         <Devices />
-        <section className="stack gap-3" aria-labelledby="dev-h">
-          <h2 id="dev-h" className="t-section">Background listening</h2>
-          <p className="t-support">How listening time is counted on phones and computers, and what still needs testing.</p>
+        <Separator />
+        <section className="flex flex-col gap-3" aria-labelledby="dev-h">
+          <h2 id="dev-h" className="text-lg font-semibold text-balance">Background listening</h2>
           <Button kind="secondary" iconAfter={<ArrowRight aria-hidden />} onClick={() => go("progress/devices")} style={{ alignSelf: "flex-start" }}>
             Devices and background listening
           </Button>
@@ -214,22 +218,23 @@ export function SettingsScreen({ sub }: { sub?: string }) {
 function Playback() {
   const settings = useApp((s) => s.settings);
   return (
-    <section className="stack gap-4" aria-labelledby="play-h">
-      <h2 id="play-h" className="t-section">Playback on this device</h2>
-      <div className="row gap-4" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
-        <label className="field" style={{ width: 200 }}>
-          <span className="field-label">Default playback speed</span>
-          <select className="select" value={settings.speed} onChange={(e) => { setPlaybackPrefs({ speed: Number(e.target.value) }); announce("Speed saved on this device."); }}>
-            {SPEEDS.map((v) => <option key={v} value={v}>{`${v}\u00a0×`}</option>)}
-          </select>
+    <section className="flex flex-col gap-4" aria-labelledby="play-h">
+      <h2 id="play-h" className="text-lg font-semibold text-balance">Playback on this device</h2>
+      <div className="flex flex-wrap items-center gap-2 gap-4" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
+        <label className="grid gap-2" style={{ width: 200 }}>
+          <span className="text-sm font-medium">Default playback speed</span>
+          <ChoiceSelect
+            ariaLabel="Default playback speed"
+            value={String(settings.speed)}
+            onValueChange={(v) => { setPlaybackPrefs({ speed: Number(v) }); announce("Speed saved on this device."); }}
+            options={SPEEDS.map((v) => ({ value: String(v), label: `${v}×` }))}
+          />
         </label>
-        <label className="check">
-          <input type="checkbox" checked={settings.repeat} onChange={(e) => { setPlaybackPrefs({ repeat: e.target.checked }); announce("Saved on this device."); }} /> Repeat audio by default
+        <label className="flex items-center gap-3 py-2">
+          <Checkbox checked={settings.repeat} onCheckedChange={(v) => { setPlaybackPrefs({ repeat: v === true }); announce("Saved on this device."); }} /> Repeat audio by default
         </label>
       </div>
-      <p className="t-support">
-        Saved on this device only. Practice listening clips always play once at their own speed. Days are counted in this device’s time zone ({settings.timezone}).
-      </p>
+      <p className="text-sm text-muted-foreground">This device · {settings.timezone}</p>
     </section>
   );
 }
@@ -248,18 +253,18 @@ function FeedbackSettings() {
   );
   const volume = Math.round(prefs.volume * 100);
   return (
-    <section className="stack gap-4" aria-labelledby="feedback-h">
-      <h2 id="feedback-h" className="t-section">Practice feedback</h2>
-      <ul className="feedback-list">
+    <section className="flex flex-col gap-4" aria-labelledby="feedback-h">
+      <h2 id="feedback-h" className="text-lg font-semibold text-balance">Practice feedback</h2>
+      <ul className="divide-y border-y">
         <li>
-          <label className="feedback-row">
+          <label className="flex min-h-11 w-full items-center justify-between gap-4 py-2">
             <span>Sound</span>
             <Switch checked={prefs.sound} onCheckedChange={(on) => saveFeedback({ sound: on })} aria-label="Sound" />
           </label>
         </li>
-        <li className="feedback-row">
+        <li className="flex min-h-11 w-full items-center justify-between gap-4 py-2">
           <label htmlFor="feedback-volume">Volume</label>
-          <div className="feedback-slider">
+          <div className="flex max-w-xs flex-1 items-center gap-3">
             <Slider
               id="feedback-volume"
               min={0}
@@ -268,23 +273,23 @@ function FeedbackSettings() {
               aria-valuetext={`${volume} percent`}
               onValueChange={(next) => saveFeedback({ volume: (next[0] ?? 0) / 100 })}
             />
-            <span className="num" aria-hidden>{volume}</span>
+            <span className="tabular-nums" aria-hidden>{volume}</span>
           </div>
         </li>
         <li>
-          <label className="feedback-row">
+          <label className="flex min-h-11 w-full items-center justify-between gap-4 py-2">
             <span>Spoken praise</span>
             <Switch checked={prefs.spoken} onCheckedChange={(on) => saveFeedback({ spoken: on })} aria-label="Spoken praise" />
           </label>
         </li>
         <li>
-          <label className="feedback-row">
+          <label className="flex min-h-11 w-full items-center justify-between gap-4 py-2">
             <span>Animation</span>
             <Switch checked={prefs.animation} onCheckedChange={(on) => saveFeedback({ animation: on })} aria-label="Animation" />
           </label>
         </li>
       </ul>
-      {reduced && prefs.animation && !animationOn(prefs, reduced) && <p className="t-meta">Animation stays off while this device asks for reduced motion.</p>}
+      {reduced && prefs.animation && !animationOn(prefs, reduced) && <p className="text-xs leading-4 text-muted-foreground">Animation stays off while this device asks for reduced motion.</p>}
     </section>
   );
 }
@@ -295,19 +300,19 @@ function Account({ onSignOut }: { onSignOut: () => void }) {
   const plan = user?.plan ?? "";
   const access = !user ? "" : !user.is_valid ? "Access ended" : user.trial_expires_at ? `${plan || "Trial"} · ${user.days_left} ${user.days_left === 1 ? "day" : "days"} left` : plan || "Active";
   return (
-    <div className="stack gap-3">
-      <ul className="list">
-        <li className="list-row">
+    <div className="flex flex-col gap-3">
+      <ul className="divide-y overflow-hidden rounded-lg border">
+        <li className="flex flex-wrap items-center gap-3 px-4 py-3">
           <span className="brand-mark" style={{ background: "var(--text)", borderRadius: "50%", width: 40, height: 40 }} aria-hidden>{initials(email)}</span>
-          <span className="grow stack">
-            <span className="t-strong">{email}</span>
-            <span className="t-support">Signed in on this device</span>
+          <span className="min-w-0 flex-1 flex flex-col">
+            <span className="font-medium">{email}</span>
+            <span className="text-sm text-muted-foreground">Signed in on this device</span>
           </span>
         </li>
-        <li className="list-row">
-          <span className="grow stack">
-            <span className="t-strong">Access</span>
-            <span className="t-support">Your cards, history and hours stay in your account.</span>
+        <li className="flex flex-wrap items-center gap-3 px-4 py-3">
+          <span className="min-w-0 flex-1 flex flex-col">
+            <span className="font-medium">Access</span>
+            <span className="text-sm text-muted-foreground">Your cards, history and hours stay in your account.</span>
           </span>
           {access && <Pill tone={user?.is_valid ? "success" : "warning"}>{access}</Pill>}
         </li>
@@ -341,25 +346,25 @@ function Devices() {
     }
   };
   return (
-    <section className="stack gap-3" aria-labelledby="devices-h">
-      <h2 id="devices-h" className="t-section">Signed-in devices</h2>
+    <section className="flex flex-col gap-3" aria-labelledby="devices-h">
+      <h2 id="devices-h" className="text-lg font-semibold text-balance">Signed-in devices</h2>
       {!list && !error && <Spinner label="Loading devices…" />}
       {error && <Banner tone="error" title="Something went wrong" live="assertive" actions={<Button kind="secondary" onClick={load}>Retry</Button>}>{error}</Banner>}
       {list && (
         <>
-          <ul className="list">
+          <ul className="divide-y overflow-hidden rounded-lg border">
             {list.devices.map((d) => (
-              <li key={d.id} className="list-row">
+              <li key={d.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
                 <Monitor aria-hidden width={20} height={20} />
-                <span className="grow stack">
-                  <span className="t-strong">{d.device || "Unknown device"}</span>
-                  <span className="t-support meta-row"><span>Last active {fmtWhen(d.last_seen_at)}</span><span>Signed in {fmtWhen(d.created_at)}</span></span>
+                <span className="min-w-0 flex-1 flex flex-col">
+                  <span className="font-medium">{d.device || "Unknown device"}</span>
+                  <span className="text-sm text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"><span>Last active {fmtWhen(d.last_seen_at)}</span><span>Signed in {fmtWhen(d.created_at)}</span></span>
                 </span>
                 {d.current ? <Pill tone="info">This device</Pill> : <Button kind="tertiary" busy={busy === d.id} onClick={() => void end(d)}>Sign out</Button>}
               </li>
             ))}
           </ul>
-          <p className="t-meta">Up to {list.max} devices can be signed in at once; signing in on another one signs out the one used least recently.</p>
+          <p className="text-xs leading-4 text-muted-foreground">Up to {list.max} devices can be signed in at once; signing in on another one signs out the one used least recently.</p>
         </>
       )}
     </section>

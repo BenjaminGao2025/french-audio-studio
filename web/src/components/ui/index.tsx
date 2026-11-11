@@ -10,34 +10,49 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { AlertCircle, CheckCircle2, ChevronDown, Info, Loader2, Star, TriangleAlert, X, FlaskConical } from "lucide-react";
 import { createPortal } from "react-dom";
-import { cx } from "../../lib/format";
+import { AlertCircle, ChevronDown, Loader2, Star, X } from "lucide-react";
+import { cn } from "cn";
 import { importanceFor, importanceLabel } from "../../lib/lookup";
+import { Alert, AlertDescription, AlertTitle } from "./alert";
+import { Badge } from "./badge";
 import { Button as ShadButton } from "./button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./collapsible";
+import {
+  Dialog as ShadDialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "./dialog";
+import { Input } from "./input";
+import { Label } from "./label";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "./sheet";
+import { Skeleton as ShadSkeleton } from "./skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select";
 import { Tabs as ShadTabs, TabsList, TabsTrigger } from "./tabs";
+import { ToggleGroup, ToggleGroupItem } from "./toggle-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./tooltip";
 
-/* ---------- App width (container-based responsive logic) ---------- */
 export const WidthContext = createContext(1200);
 export const useAppWidth = () => useContext(WidthContext);
 export const useNarrow = () => useAppWidth() < 640;
 export const OverlayRootContext = createContext<HTMLElement | null>(null);
 
-/* ---------- Button: exactly four roles ---------- */
 export type ButtonRole = "primary" | "secondary" | "tertiary" | "destructive";
 interface BtnProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "role"> {
   kind?: ButtonRole;
   icon?: ReactNode;
   iconAfter?: ReactNode;
   busy?: boolean;
-  /** Visible + announced reason why the action is unavailable. */
   disabledReason?: string;
   block?: boolean;
   iconOnly?: boolean;
 }
 const BUTTON_VARIANT = { primary: "default", secondary: "outline", tertiary: "ghost", destructive: "destructive" } as const;
 
+/** Stock Button. `kind` only picks a stock variant. */
 export function Button({ kind = "secondary", icon, iconAfter, busy, disabledReason, block, iconOnly, className, children, onClick, disabled, ...rest }: BtnProps) {
   const reasonId = useId();
   const off = disabled || !!disabledReason || busy;
@@ -48,7 +63,7 @@ export function Button({ kind = "secondary", icon, iconAfter, busy, disabledReas
       variant={BUTTON_VARIANT[kind]}
       size={iconOnly ? "icon" : "default"}
       {...rest}
-      className={cx("h-11 min-h-11 w-fit max-w-full gap-2 px-4 text-base", block && "w-full", iconOnly && "size-11 min-w-11 p-0", off && "cursor-not-allowed opacity-70", className)}
+      className={cn(block && "w-full", off && "opacity-50", className)}
       aria-disabled={off || undefined}
       aria-busy={busy || undefined}
       aria-describedby={disabledReason ? reasonId : rest["aria-describedby"]}
@@ -60,7 +75,7 @@ export function Button({ kind = "secondary", icon, iconAfter, busy, disabledReas
         onClick?.(e);
       }}
     >
-      {busy ? <Loader2 className="spin" aria-hidden /> : icon}
+      {busy ? <Loader2 className="animate-spin" aria-hidden /> : icon}
       {children}
       {iconAfter}
       {disabledReason && (
@@ -83,21 +98,14 @@ export function Button({ kind = "secondary", icon, iconAfter, busy, disabledReas
 
 export function DisabledReason({ children }: { children: ReactNode }) {
   return (
-    <p className="field-help" role="note">
+    <p className="text-sm text-muted-foreground" role="note">
       {children}
     </p>
   );
 }
 
-/* ---------- Status ---------- */
 type Tone = "info" | "success" | "error" | "warning" | "neutral";
-const TONE_ICON: Record<Tone, ReactNode> = {
-  info: <Info aria-hidden />,
-  success: <CheckCircle2 aria-hidden />,
-  error: <AlertCircle aria-hidden />,
-  warning: <TriangleAlert aria-hidden />,
-  neutral: <Info aria-hidden />,
-};
+
 export function Banner({
   tone = "neutral",
   title,
@@ -116,44 +124,41 @@ export function Banner({
   tabIndex?: number;
 }) {
   return (
-    <div
+    <Alert
       id={id}
       tabIndex={tabIndex}
-      className={cx("banner", tone !== "neutral" && `banner--${tone}`)}
+      variant={tone === "error" ? "destructive" : "default"}
       role={live === "assertive" ? "alert" : live === "polite" ? "status" : undefined}
     >
-      {TONE_ICON[tone]}
-      <div className="banner-body">
-        {title && <p className="banner-title">{title}</p>}
-        {children && <div>{children}</div>}
-        {actions && <div className="btn-row">{actions}</div>}
-      </div>
-    </div>
+      {title && <AlertTitle>{title}</AlertTitle>}
+      {(children || actions) && (
+        <AlertDescription>
+          {children}
+          {actions && <div className="mt-3 flex flex-wrap items-center gap-2">{actions}</div>}
+        </AlertDescription>
+      )}
+    </Alert>
   );
 }
 
 export function Pill({ tone, children, icon }: { tone?: "success" | "error" | "warning" | "info" | "demo"; children: ReactNode; icon?: ReactNode }) {
+  const variant = tone === "error" ? "destructive" : tone === "success" || tone === "info" ? "secondary" : "outline";
   return (
-    <span className={cx("pill", tone && `pill--${tone}`)}>
+    <Badge variant={variant}>
       {icon}
       {children}
-    </span>
+    </Badge>
   );
 }
 
 export function DemoNote({ children }: { children: ReactNode }) {
-  return (
-    <span className="demo-note">
-      <FlaskConical aria-hidden />
-      {children}
-    </span>
-  );
+  return <Badge variant="outline">{children}</Badge>;
 }
 
 export function Spinner({ label }: { label: string }) {
   return (
-    <span className="row t-support" role="status">
-      <Loader2 className="spin" aria-hidden width={18} height={18} />
+    <span className="inline-flex items-center gap-2 text-sm text-muted-foreground" role="status">
+      <Loader2 className="size-4 animate-spin" aria-hidden />
       {label}
     </span>
   );
@@ -161,32 +166,30 @@ export function Spinner({ label }: { label: string }) {
 
 export function Skeleton({ lines = 3 }: { lines?: number }) {
   return (
-    <div className="stack gap-2" aria-hidden>
+    <div className="flex flex-col gap-2" aria-hidden>
       {Array.from({ length: lines }, (_, i) => (
-        <div key={i} className="skel" style={{ height: 16, width: `${92 - i * 14}%` }} />
+        <ShadSkeleton key={i} className="h-4" style={{ width: `${92 - i * 14}%` }} />
       ))}
     </div>
   );
 }
 
-/* ---------- Page head ---------- */
 export function PageHead({ title, eyebrow, desc, actions, back }: { title: string; eyebrow?: ReactNode; desc?: ReactNode; actions?: ReactNode; back?: ReactNode }) {
   return (
-    <header className="page-head">
-      {back}
-      {eyebrow && <p className="eyebrow">{eyebrow}</p>}
-      <div className="page-head-row">
-        <h1 className="t-page" tabIndex={-1} data-page-title>
+    <header className="mb-6 flex flex-col gap-2">
+      {back && <div className="self-start">{back}</div>}
+      {eyebrow && <div className="text-sm text-muted-foreground">{eyebrow}</div>}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h1 className="text-xl font-semibold tracking-tight text-balance" tabIndex={-1} data-page-title>
           {title}
         </h1>
-        {actions && <div className="btn-row">{actions}</div>}
+        {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
       </div>
-      {desc && <div className="t-body muted" style={{ maxWidth: 680 }}>{desc}</div>}
+      {desc && <div className="max-w-prose text-sm text-muted-foreground">{desc}</div>}
     </header>
   );
 }
 
-/* ---------- Form fields ---------- */
 export function FieldText({
   label,
   help,
@@ -225,19 +228,16 @@ export function FieldText({
   const auto = useId();
   const id = idProp ?? auto;
   return (
-    <div className="field" style={width ? { maxWidth: width } : undefined}>
-      <label htmlFor={id} className="field-label">
-        {label}
-      </label>
+    <div className="grid gap-2" style={width ? { maxWidth: width } : undefined}>
+      <Label htmlFor={id}>{label}</Label>
       {help && (
-        <p id={`${id}-help`} className="field-help">
+        <p id={`${id}-help`} className="text-sm text-muted-foreground">
           {help}
         </p>
       )}
-      <input
+      <Input
         id={id}
         ref={inputRef}
-        className="input"
         type={type}
         inputMode={inputMode}
         lang={lang}
@@ -247,13 +247,13 @@ export function FieldText({
         autoComplete={autoComplete ?? "off"}
         spellCheck={spellCheck}
         aria-invalid={error ? true : undefined}
-        aria-describedby={cx(help ? `${id}-help` : undefined, error ? `${id}-err` : undefined) || undefined}
+        aria-describedby={[help ? `${id}-help` : "", error ? `${id}-err` : ""].filter(Boolean).join(" ") || undefined}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKeyDown}
       />
       {error && (
-        <p id={`${id}-err`} className="field-error">
-          <AlertCircle aria-hidden />
+        <p id={`${id}-err`} className="flex items-start gap-1.5 text-sm text-destructive">
+          <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
           <span>{error}</span>
         </p>
       )}
@@ -261,7 +261,6 @@ export function FieldText({
   );
 }
 
-/* ---------- Segmented (radiogroup) ---------- */
 export function Segmented<T extends string>({
   label,
   value,
@@ -275,37 +274,26 @@ export function Segmented<T extends string>({
   onChange: (v: T) => void;
   block?: boolean;
 }) {
-  const refs = useRef<(HTMLButtonElement | null)[]>([]);
   return (
-    <div role="radiogroup" aria-label={label} className={cx("seg", block && "seg--block")}>
-      {options.map((o, i) => (
-        <button
-          key={o.value}
-          ref={(el) => {
-            refs.current[i] = el;
-          }}
-          type="button"
-          role="radio"
-          aria-checked={o.value === value}
-          tabIndex={o.value === value ? 0 : -1}
-          onClick={() => onChange(o.value)}
-          onKeyDown={(e) => {
-            const d = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
-            if (!d) return;
-            e.preventDefault();
-            const n = (i + d + options.length) % options.length;
-            refs.current[n]?.focus();
-            onChange(options[n].value);
-          }}
-        >
+    <ToggleGroup
+      type="single"
+      variant="outline"
+      value={value}
+      onValueChange={(next) => {
+        if (next) onChange(next as T);
+      }}
+      aria-label={label}
+      className={cn(block && "flex w-full")}
+    >
+      {options.map((o) => (
+        <ToggleGroupItem key={o.value} value={o.value} className={cn(block && "flex-1")}>
           {o.label}
-        </button>
+        </ToggleGroupItem>
       ))}
-    </div>
+    </ToggleGroup>
   );
 }
 
-/* ---------- Tabs ---------- */
 export function Tabs<T extends string>({
   label,
   value,
@@ -321,9 +309,9 @@ export function Tabs<T extends string>({
 }) {
   return (
     <ShadTabs value={value} onValueChange={(next) => onChange(next as T)}>
-      <TabsList variant="line" aria-label={label} className="tabs-scroll">
+      <TabsList aria-label={label} className="h-auto max-w-full flex-wrap justify-start">
         {tabs.map((t) => (
-          <TabsTrigger key={t.value} id={`${idBase}-tab-${t.value}`} value={t.value} className="tab-trigger">
+          <TabsTrigger key={t.value} id={`${idBase}-tab-${t.value}`} value={t.value}>
             {t.label}
           </TabsTrigger>
         ))}
@@ -332,7 +320,6 @@ export function Tabs<T extends string>({
   );
 }
 
-/* ---------- Focus helpers ---------- */
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
 
 function useRestoreFocus() {
@@ -346,7 +333,14 @@ function useRestoreFocus() {
   }, []);
 }
 
-/* ---------- Modal dialog / sheet ---------- */
+function focusAutofocus(event: Event) {
+  const root = event.currentTarget as HTMLElement | null;
+  const el = root?.querySelector<HTMLElement>("[data-autofocus]");
+  if (!el) return;
+  event.preventDefault();
+  el.focus();
+}
+
 export function Dialog({
   title,
   onClose,
@@ -368,75 +362,66 @@ export function Dialog({
   closeLabel?: string;
   dismissible?: boolean;
   describedBy?: string;
-  /** Keep the title for assistive tech when the card already shows its own heading. */
   titleHidden?: boolean;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const titleId = useId();
   useRestoreFocus();
   useEffect(() => {
-    const el = ref.current!;
-    const first = el.querySelector<HTMLElement>("[data-autofocus]") ?? el.querySelector<HTMLElement>(FOCUSABLE);
-    first?.focus();
-  }, []);
-  useEffect(() => {
-    const shell = document.querySelector<HTMLElement>(".shell");
-    if (!shell) return;
-    shell.setAttribute("inert", "");
-    return () => shell.removeAttribute("inert");
-  }, []);
-  const node = (
-    <div
-      className={cx("overlay", sheet && "overlay--sheet")}
-      onMouseDown={(e) => {
-        if (dismissible && e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        ref={ref}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={describedBy}
-        className={cx(sheet ? "sheet" : "dialog", wide && "dialog--wide")}
-        onKeyDown={(e) => {
-          if (e.key === "Escape" && dismissible) {
-            e.stopPropagation();
-            onClose();
-          }
-          if (e.key !== "Tab") return;
-          const items = Array.from(ref.current!.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((x) => x.offsetParent !== null);
-          if (!items.length) return;
-          const first = items[0];
-          const last = items[items.length - 1];
-          if (e.shiftKey && document.activeElement === first) {
-            e.preventDefault();
-            last.focus();
-          } else if (!e.shiftKey && document.activeElement === last) {
-            e.preventDefault();
-            first.focus();
-          }
-        }}
-      >
-        {sheet && <div className="sheet-grip" aria-hidden />}
-        <div className={cx("dialog-head", titleHidden && "dialog-head--tools")}>
-          <h2 id={titleId} className={cx("t-section", titleHidden && "sr-only")}>
-            {title}
-          </h2>
-          {dismissible && (
-            <Button kind="tertiary" iconOnly aria-label={closeLabel} icon={<X aria-hidden />} onClick={onClose} />
-          )}
-        </div>
-        {children}
-        {footer && <div className="btn-row btn-row--end">{footer}</div>}
-      </div>
-    </div>
+    if (!dismissible) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [dismissible, onClose]);
+  const close = (
+    dismissible ? (
+      <Button kind="tertiary" iconOnly aria-label={closeLabel} icon={<X aria-hidden />} onClick={onClose} />
+    ) : null
   );
-  const root = typeof document !== "undefined" ? document.getElementById("app-root") : null;
-  return root ? createPortal(node, root) : node;
+  if (sheet) {
+    return (
+      <Sheet open onOpenChange={(open) => { if (!open && dismissible) onClose(); }}>
+        <SheetContent
+          side="bottom"
+          showCloseButton={false}
+          className={cn("overlay--sheet sheet max-h-[85vh] overflow-y-auto", wide && "sm:max-w-3xl")}
+          onOpenAutoFocus={focusAutofocus}
+          aria-describedby={describedBy}
+        >
+          <SheetHeader className="flex-row items-start justify-between gap-3">
+            <SheetTitle className={cn(titleHidden && "sr-only")}>{title}</SheetTitle>
+            {close}
+          </SheetHeader>
+          <div className="grid gap-4 px-4 pb-4">
+            {children}
+            {footer && <div className="flex flex-wrap items-center justify-end gap-2">{footer}</div>}
+          </div>
+        </SheetContent>
+      </Sheet>
+    );
+  }
+  return (
+    <ShadDialog open onOpenChange={(open) => { if (!open && dismissible) onClose(); }}>
+      <DialogContent
+        className={cn("dialog", wide && "sm:max-w-3xl")}
+        showCloseButton={false}
+        onOpenAutoFocus={focusAutofocus}
+        aria-describedby={describedBy}
+      >
+        <DialogHeader className="flex-row items-start justify-between gap-3">
+          <DialogTitle className={cn(titleHidden && "sr-only")}>{title}</DialogTitle>
+          {close}
+        </DialogHeader>
+        {describedBy ? null : <DialogDescription className="sr-only">{title}</DialogDescription>}
+        {children}
+        {footer && <DialogFooter>{footer}</DialogFooter>}
+      </DialogContent>
+    </ShadDialog>
+  );
 }
 
-/** Desktop word card: a sticky column, so it never covers the player or the tabs. */
 export function WordDock({ label, onClose, children }: { label: string; onClose: () => void; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   useRestoreFocus();
@@ -458,7 +443,7 @@ export function WordDock({ label, onClose, children }: { label: string; onClose:
       role="dialog"
       aria-label={label}
       tabIndex={-1}
-      className="popover word-dock"
+      className="popover word-dock sticky top-3 z-10 max-h-[min(72dvh,640px)] overflow-auto rounded-xl border bg-card p-4 text-card-foreground shadow-sm"
       onKeyDown={(e) => {
         if (e.key === "Escape") {
           e.stopPropagation();
@@ -471,7 +456,6 @@ export function WordDock({ label, onClose, children }: { label: string; onClose:
   );
 }
 
-/* ---------- Anchored popover (non-modal, desktop) ---------- */
 export function Popover({
   anchor,
   onClose,
@@ -531,7 +515,7 @@ export function Popover({
       role="dialog"
       aria-label={label}
       tabIndex={-1}
-      className="popover"
+      className="popover absolute z-40 flex w-[min(440px,calc(100%-16px))] flex-col gap-3 overflow-auto rounded-xl border bg-popover p-4 text-popover-foreground shadow-md"
       style={{ top: pos.top, left: pos.left, maxHeight: pos.maxHeight }}
       onKeyDown={(e) => {
         if (e.key === "Escape") {
@@ -544,7 +528,7 @@ export function Popover({
           const last = items[items.length - 1];
           if (!e.shiftKey && document.activeElement === last) {
             e.preventDefault();
-            onClose(); // focus returns to the trigger
+            onClose();
           }
         }
       }}
@@ -555,45 +539,90 @@ export function Popover({
   );
 }
 
-/* ---------- Importance (read-only) ---------- */
 export function Importance({ count, lookups = "inline" }: { count: number; lookups?: "inline" | "muted" }) {
   const n = importanceFor(count);
   const times = `${count} ${count === 1 ? "lookup" : "lookups"}`;
   return (
-    <p className={cx("row gap-2", lookups === "muted" && "importance--muted")} style={{ flexWrap: "nowrap" }}>
-      <span className="stars" aria-hidden>
+    <p className="flex flex-nowrap items-center gap-2">
+      <span className="inline-flex text-primary" aria-hidden>
         {[1, 2, 3, 4, 5].map((i) => (
-          <Star key={i} className={i <= n ? "" : "off"} fill={i <= n ? "currentColor" : "none"} />
+          <Star key={i} className={cn("size-4", i > n && "text-muted-foreground")} fill={i <= n ? "currentColor" : "none"} />
         ))}
       </span>
-      <span className="t-support">
+      <span className="text-sm text-muted-foreground">
         <span className="sr-only">{importanceLabel(count)}</span>
         <span aria-hidden>{lookups === "muted" ? times : `Importance ${n}/5`}</span>
-        {lookups !== "muted" && <span className="t-meta">{times}</span>}
+        {lookups !== "muted" && <span className="ml-2 text-xs text-muted-foreground">{times}</span>}
       </span>
     </p>
   );
 }
 
-/* ---------- Disclosure ---------- */
 export function Disclosure({ summary, children, defaultOpen }: { summary: ReactNode; children: ReactNode; defaultOpen?: boolean }) {
   return (
-    <details className="disc" open={defaultOpen}>
-      <summary>
+    <Collapsible defaultOpen={defaultOpen} className="border-t">
+      <CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between gap-2 py-2 text-left text-sm font-medium">
         <span>{summary}</span>
-        <ChevronDown aria-hidden width={18} height={18} />
-      </summary>
-      <div className="disc-body">{children}</div>
-    </details>
+        <ChevronDown className="size-4 shrink-0" aria-hidden />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="pb-3 text-sm">{children}</CollapsibleContent>
+    </Collapsible>
   );
 }
 
 export function Stat({ label, value, sub }: { label: string; value: ReactNode; sub?: ReactNode }) {
   return (
-    <div className="stat">
-      <span className="t-support">{label}</span>
-      <span className="t-section num">{value}</span>
-      {sub && <span className="t-meta">{sub}</span>}
+    <div className="flex flex-col gap-0.5">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="text-lg font-semibold tabular-nums">{value}</span>
+      {sub && <span className="text-xs text-muted-foreground">{sub}</span>}
     </div>
+  );
+}
+
+export { Input } from "./input";
+export { Textarea } from "./textarea";
+export { Checkbox } from "./checkbox";
+export { Label } from "./label";
+export { RadioGroup, RadioGroupItem } from "./radio-group";
+export { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select";
+export { Progress } from "./progress";
+export { Toggle } from "./toggle";
+export { Separator } from "./separator";
+export { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./card";
+export { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./table";
+export { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./collapsible";
+
+/** Stock Select with a flat option list. Option values must be non-empty strings. */
+export function ChoiceSelect({
+  id,
+  value,
+  onValueChange,
+  options,
+  disabled,
+  describedBy,
+  className,
+  ariaLabel,
+}: {
+  id?: string;
+  value: string;
+  onValueChange: (value: string) => void;
+  options: { value: string; label: ReactNode }[];
+  disabled?: boolean;
+  describedBy?: string;
+  className?: string;
+  ariaLabel?: string;
+}) {
+  return (
+    <Select value={value} onValueChange={onValueChange} disabled={disabled}>
+      <SelectTrigger id={id} aria-describedby={describedBy} aria-label={ariaLabel} className={cn("w-full", className)}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((o) => (
+          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

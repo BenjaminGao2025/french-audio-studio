@@ -23,9 +23,9 @@ export function StudyReviewNotice() {
   if (!counts?.total) return null;
   const revisit = counts.review + counts.learning;
   return (
-    <aside className="fact-card">
-      <h2 className="meta-k">Due today</h2>
-      <dl className="fact-dl">
+    <aside className="flex flex-col items-start gap-2 rounded-xl border bg-card p-4">
+      <h2 className="text-xs font-medium text-muted-foreground">Due today</h2>
+      <dl className="flex flex-wrap gap-6">
         <div><dt>Cards</dt><dd>{counts.total}</dd></div>
         <div><dt>To revisit</dt><dd>{revisit}</dd></div>
       </dl>

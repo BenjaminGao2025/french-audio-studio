@@ -27,9 +27,9 @@ export function PrivateAudio({ path, label }: { path: string; label: string }) {
   useEffect(() => {
     if (globalPlayer && ["playing", "loading", "buffering"].includes(globalPlayer.status)) player.current?.pause();
   }, [globalPlayer]);
-  return <div className="stack gap-2"><p className="t-label">{label}</p>
+  return <div className="flex flex-col gap-2"><p className="text-sm font-medium">{label}</p>
     {url && <audio ref={player} aria-label={label} controls src={url} onPlay={() => takeAudioFocus(player.current)} onError={() => setError("Couldn’t play this audio. Try loading it again.")} />}
     {!url && !error && <Spinner label="Loading audio…" />}
-    {error && <><p role="alert" className="field-error">{error}</p><Button kind="secondary" onClick={() => setAttempt((n) => n + 1)}>Retry audio</Button></>}
+    {error && <><p role="alert" className="text-sm text-destructive">{error}</p><Button kind="secondary" onClick={() => setAttempt((n) => n + 1)}>Retry audio</Button></>}
   </div>;
 }

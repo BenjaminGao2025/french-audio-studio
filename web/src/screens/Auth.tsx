@@ -17,10 +17,10 @@ export function Gate({ dest }: { dest: string }) {
   const route = useApp((s) => s.route);
   const b = BENEFITS[dest] ?? BENEFITS.review;
   return (
-    <div className="page page--read">
-      <h1 className="t-page" tabIndex={-1} data-page-title>{b.title}</h1>
-      <p className="t-support">Sign in to open this page.</p>
-      <div className="btn-row">
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+      <h1 className="text-xl font-semibold tracking-tight text-balance" tabIndex={-1} data-page-title>{b.title}</h1>
+      <p className="text-sm text-muted-foreground">Sign in to open this page.</p>
+      <div className="flex flex-wrap items-center gap-2">
         <Button kind="primary" icon={<LogIn aria-hidden />} onClick={() => location.assign(loginUrl(route))}>
           Sign in
         </Button>
@@ -32,9 +32,9 @@ export function Gate({ dest }: { dest: string }) {
 /* Unknown /app path */
 export function NotFound() {
   return (
-    <div className="page">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <PageHead title="Page not found" desc="There is no page at this address." />
-      <div className="btn-row">
+      <div className="flex flex-wrap items-center gap-2">
         <Button kind="primary" iconAfter={<ArrowRight aria-hidden />} onClick={() => go("study")}>Continue to Study</Button>
       </div>
     </div>
@@ -44,22 +44,22 @@ export function NotFound() {
 /* SCR-LEG-01 */
 export function Legacy() {
   return (
-    <div className="page">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <PageHead title="This page has moved" desc="The link you followed points to an older page. Everything you need now lives in Study, Review, Practice, Progress and Settings." />
-      <div className="stack gap-5" style={{ maxWidth: 640 }}>
-        <div className="btn-row">
+      <div className="flex flex-col gap-6" style={{ maxWidth: 640 }}>
+        <div className="flex flex-wrap items-center gap-2">
           <Button kind="primary" iconAfter={<ArrowRight aria-hidden />} onClick={() => go("study")}>Continue to Study</Button>
           <Button kind="secondary" onClick={() => go("review/saved")}>Find my saved content</Button>
         </div>
-        <section className="stack gap-3">
-          <h2 className="t-section">Can’t find something?</h2>
-          <ul className="list">
-            <li className="list-row"><span className="grow">Saved cards and sentences</span><Button kind="tertiary" onClick={() => go("review/saved")}>Review → Saved cards</Button></li>
-            <li className="list-row"><span className="grow">Mastered cards</span><Button kind="tertiary" onClick={() => go("review/mastered")}>Review → Mastered</Button></li>
-            <li className="list-row"><span className="grow">Past analyses and practice attempts</span><Button kind="tertiary" onClick={() => go("progress/history")}>Progress → History</Button></li>
-            <li className="list-row"><span className="grow">Exam practice</span><Button kind="tertiary" onClick={() => go("practice/exams")}>Practice → Exam practice</Button></li>
+        <section className="flex flex-col gap-3">
+          <h2 className="text-lg font-semibold text-balance">Can’t find something?</h2>
+          <ul className="divide-y overflow-hidden rounded-lg border">
+            <li className="flex flex-wrap items-center gap-3 px-4 py-3"><span className="min-w-0 flex-1">Saved cards and sentences</span><Button kind="tertiary" onClick={() => go("review/saved")}>Review → Saved cards</Button></li>
+            <li className="flex flex-wrap items-center gap-3 px-4 py-3"><span className="min-w-0 flex-1">Mastered cards</span><Button kind="tertiary" onClick={() => go("review/mastered")}>Review → Mastered</Button></li>
+            <li className="flex flex-wrap items-center gap-3 px-4 py-3"><span className="min-w-0 flex-1">Past analyses and practice attempts</span><Button kind="tertiary" onClick={() => go("progress/history")}>Progress → History</Button></li>
+            <li className="flex flex-wrap items-center gap-3 px-4 py-3"><span className="min-w-0 flex-1">Exam practice</span><Button kind="tertiary" onClick={() => go("practice/exams")}>Practice → Exam practice</Button></li>
           </ul>
-          <p className="t-support">Your saved content stays in your account. Nothing needs to be cleared or reset to find it.</p>
+          <p className="text-sm text-muted-foreground">Your saved content stays in your account. Nothing needs to be cleared or reset to find it.</p>
         </section>
       </div>
     </div>

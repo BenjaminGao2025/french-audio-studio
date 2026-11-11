@@ -17,6 +17,7 @@ import {
   Clock,
   User,
 } from "lucide-react";
+import { toast } from "sonner";
 import { useSession } from "../api/auth";
 import { undoMastered } from "../api/review";
 import { cx, fmtClock } from "../lib/format";
@@ -37,6 +38,34 @@ import {
 import { Banner, Button, Pill, WidthContext } from "./ui";
 import { Brand } from "./Brand";
 import { VersionInfo } from "./VersionInfo";
+import { Progress } from "./ui/progress";
+import { Toaster } from "./ui/sonner";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarRail,
+  SidebarTrigger,
+} from "./ui/sidebar";
+import { TooltipProvider } from "./ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
+import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from "./ui/breadcrumb";
+import { Separator } from "./ui/separator";
 
 export const NAV = [
   { key: "study", label: "Study", icon: BookOpen },
@@ -48,31 +77,18 @@ export const NAV = [
 
 export function Frame({ children }: { children: ReactNode }) {
   const frame = useApp((s) => s.frame);
-  const macWidth = useApp((s) => s.macWidth);
-  const macRef = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    if (frame === "mac" && macRef.current) macRef.current.style.width = `${macWidth}px`;
-  }, [frame, macWidth]);
-  if (frame === "fluid") return <div className="stage stage--fluid"><div className="frame">{children}</div></div>;
+  if (frame === "fluid") return <div className="h-full">{children}</div>;
   if (frame === "iphone")
     return (
-      <div className="stage stage--device">
-        <p className="frame-caption">iPhone-sized layout (390 × 844) · browser simulation, not a native app or device test</p>
-        <div className="frame--iphone">{children}</div>
+      <div className="flex min-h-full flex-col items-center gap-3 overflow-auto p-6">
+        <p className="max-w-xl text-center text-sm text-muted-foreground">iPhone-sized layout (390 × 844). Browser simulation.</p>
+        <div className="h-[844px] w-[390px] max-w-full overflow-hidden rounded-[2.5rem] border bg-background p-3">{children}</div>
       </div>
     );
   return (
-    <div className="stage stage--device">
-      <p className="frame-caption">Resizable Mac-style window · drag the lower-right corner, or use Demo states → Frame width. Browser simulation only.</p>
-      <div className="frame--mac" ref={macRef}>
-        <div className="mac-titlebar" aria-hidden>
-          <span className="mac-dot" />
-          <span className="mac-dot" />
-          <span className="mac-dot" />
-          <span className="mac-title">1000H French — Demo</span>
-        </div>
-        {children}
-      </div>
+    <div className="flex min-h-full flex-col items-center gap-3 overflow-auto p-6">
+      <p className="max-w-xl text-center text-sm text-muted-foreground">Resizable window. Browser simulation.</p>
+      <div className="flex h-[720px] w-[1080px] max-w-full flex-col overflow-hidden rounded-xl border bg-card shadow-sm">{children}</div>
     </div>
   );
 }
@@ -88,45 +104,59 @@ export function AppRoot({ children }: { children: ReactNode }) {
   }, []);
   return (
     <WidthContext.Provider value={width}>
-      <div className="app" ref={ref} id="app-root">
+      <div className="relative h-full bg-background" ref={ref} id="app-root">
         {children}
       </div>
     </WidthContext.Provider>
   );
 }
 
-/** Screens that already read and write the learner's real data (the rest still run on sample data). */
 const isConnected = (route: string) => ["study", "review", "login", "progress", "practice", "settings", "moved"].some((r) => route === r || route.startsWith(`${r}/`) || route.startsWith(`${r}?`));
-
 const pathOf = (route: string) => route.split("?")[0];
 
-function NavLinks() {
+function AppSidebar() {
   const route = useApp((s) => s.route);
   const top = pathOf(route).split("/")[0];
   return (
-    <ul className="nav-list">
-      {NAV.map((n) => {
-        const Icon = n.icon;
-        const active = top === n.key;
-        return (
-          <li key={n.key}>
-            <a
-              href={routeUrl(n.key)}
-              className="nav-item"
-              aria-current={active ? "page" : undefined}
-              onClick={(e) => {
-                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-                e.preventDefault();
-                go(n.key);
-              }}
-            >
-              <span className="nav-ind"><Icon aria-hidden /></span>
-              <span>{n.label}</span>
-            </a>
-          </li>
-        );
-      })}
-    </ul>
+    <Sidebar collapsible="icon">
+      <SidebarHeader className="pt-safe">
+        <Brand />
+      </SidebarHeader>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {NAV.map((n) => {
+                const Icon = n.icon;
+                const active = top === n.key;
+                return (
+                  <SidebarMenuItem key={n.key}>
+                    <SidebarMenuButton asChild isActive={active} tooltip={n.label}>
+                      <a
+                        href={routeUrl(n.key)}
+                        aria-current={active ? "page" : undefined}
+                        onClick={(e) => {
+                          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                          e.preventDefault();
+                          go(n.key);
+                        }}
+                      >
+                        <Icon aria-hidden />
+                        <span>{n.label}</span>
+                      </a>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+      <SidebarFooter className="pb-safe">
+        <VersionInfo />
+      </SidebarFooter>
+      <SidebarRail />
+    </Sidebar>
   );
 }
 
@@ -139,18 +169,18 @@ function FocusBar() {
   if (path === "review/session") {
     const total = review.sessionCards?.length ?? 0;
     return (
-      <div className="focus-bar">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
         <Button kind="tertiary" onClick={() => go("review")}>Exit</Button>
-        <span className="focus-name">Review</span>
-        {total > 0 && <span className="focus-progress num">{review.index + 1} of {total}</span>}
+        <span className="font-medium">Review</span>
+        {total > 0 && <span className="ml-auto text-sm tabular-nums text-muted-foreground">{review.index + 1} of {total}</span>}
       </div>
     );
   }
   const back = kind === "Dictation" ? "study/dictation" : kind === "Recall" ? "study/recall" : "study";
   return (
-    <div className="focus-bar">
+    <div className="flex min-w-0 flex-1 items-center gap-3">
       <Button kind="tertiary" onClick={() => go(back)}>Exit</Button>
-      <span className="focus-name">{kind ?? "Practice"}</span>
+      <span className="font-medium">{kind ?? "Practice"}</span>
     </div>
   );
 }
@@ -159,38 +189,52 @@ export function Shell({ children }: { children: ReactNode }) {
   const route = useApp((s) => s.route);
   const path = pathOf(route);
   const focused = path === "review/session" || path === "study/run";
+  const top = path.split("/")[0];
+  const section = NAV.find((n) => n.key === top)?.label ?? "1000H French";
   return (
-    <div className={cx("shell", focused && "shell--focus")}>
-      <a className="skip-link" href="#main" onClick={(e) => { e.preventDefault(); document.getElementById("main")?.focus(); }}>
-        Skip to main content
-      </a>
-      <header className="topbar">
-        <span className="topbar-brand"><Brand /></span>
-        {focused ? <FocusBar /> : <nav className="nav nav--inline" aria-label="Primary"><NavLinks /></nav>}
-        <div className="topbar-end">
-          <VersionInfo className="header-version" />
-          <AccountSlot />
-        </div>
-      </header>
-      <main className="main" id="main" tabIndex={-1}>
-        {!isConnected(route) && (
-          <div className="demo-banner">
-            <Banner tone="warning" title="Demo data — not connected yet">
-              You are signed in for real, but this screen still shows sample data. Nothing you do here is saved to your account yet.
-            </Banner>
-          </div>
-        )}
-        {children}
-      </main>
-      <div className="player-slot">
-        <GlobalPlayer />
-      </div>
-      {!focused && (
-        <nav className="tabbar" aria-label="Primary">
-          <NavLinks />
-        </nav>
-      )}
-    </div>
+    <TooltipProvider>
+      <SidebarProvider>
+        {!focused && <AppSidebar />}
+        <SidebarInset id="main" tabIndex={-1} className="main flex h-svh min-w-0 flex-col overflow-y-auto bg-background">
+          <a
+            className="sr-only focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-50 focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-primary-foreground"
+            href="#main"
+            onClick={(e) => { e.preventDefault(); document.getElementById("main")?.focus(); }}
+          >
+            Skip to main content
+          </a>
+          <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b bg-background px-3 pt-safe">
+            {focused ? <FocusBar /> : (
+              <>
+                <SidebarTrigger />
+                <Separator orientation="vertical" className="mx-1 h-4" />
+                <Breadcrumb>
+                  <BreadcrumbList>
+                    <BreadcrumbItem>
+                      <BreadcrumbPage>{section}</BreadcrumbPage>
+                    </BreadcrumbItem>
+                  </BreadcrumbList>
+                </Breadcrumb>
+              </>
+            )}
+            <div className="ml-auto flex items-center gap-2">
+              {focused && <VersionInfo />}
+              <AccountSlot />
+            </div>
+          </header>
+          {!isConnected(route) && (
+            <div className="mx-auto w-full max-w-3xl mx-auto w-full max-w-3xl px-4 pt-4">
+              <Banner tone="warning" title="Demo data — not connected yet">
+                You are signed in for real, but this screen still shows sample data. Nothing you do here is saved to your account yet.
+              </Banner>
+            </div>
+          )}
+          <div className="flex flex-1 flex-col">{children}</div>
+          <GlobalPlayer />
+        </SidebarInset>
+        <Toaster />
+      </SidebarProvider>
+    </TooltipProvider>
   );
 }
 
@@ -200,7 +244,6 @@ function AccountSlot() {
   const sync = useApp((s) => s.sync);
   const menuOpen = useApp((s) => s.menuOpen);
   const route = useApp((s) => s.route);
-  const menuBtn = useRef<HTMLButtonElement>(null);
   const user = useSession().user;
   const email = user?.email ?? "";
   return (
@@ -208,23 +251,30 @@ function AccountSlot() {
       {offline && <Pill tone="warning" icon={<CloudOff aria-hidden />}>Offline, simulated</Pill>}
       {auth === "in" && !isConnected(route) && <SyncIndicator sync={sync} offline={offline} />}
       {auth === "in" ? (
-        <button
-          ref={menuBtn}
-          type="button"
-          className="btn btn--tertiary btn--icon"
-          aria-label={`Account menu, ${email}`}
-          aria-expanded={menuOpen}
-          aria-haspopup="menu"
-          onClick={() => set((s) => ({ menuOpen: !s.menuOpen }))}
-        >
-          <span className="brand-mark" style={{ background: "var(--text)", borderRadius: "50%" }} aria-hidden>
-            {initials(email)}
-          </span>
-        </button>
+        <DropdownMenu open={menuOpen} onOpenChange={(open) => set(() => ({ menuOpen: open }))}>
+          <DropdownMenuTrigger asChild>
+            <Button kind="tertiary" iconOnly aria-label={`Account menu, ${email}`}>
+              <span className="flex size-7 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground" aria-hidden>
+                {initials(email)}
+              </span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel className="font-normal">{email}</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => go("settings/account")}>
+              <User aria-hidden />
+              Account and sync
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => go("settings/account?signout")}>
+              <LogOut aria-hidden />
+              Sign out…
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       ) : (
         <Pill>Signed out</Pill>
       )}
-      {menuOpen && <AccountMenu email={email} onClose={() => { set(() => ({ menuOpen: false })); menuBtn.current?.focus(); }} />}
     </>
   );
 }
@@ -236,67 +286,23 @@ export function initials(email: string): string {
 function SyncIndicator({ sync, offline }: { sync: string; offline: boolean }) {
   if (sync === "synced")
     return (
-      <span className="pill pill--success hide-narrow">
-        <CheckCircle2 aria-hidden /> Synced · simulated
+      <span className="hidden items-center gap-1 md:inline-flex">
+        <Pill tone="success" icon={<CheckCircle2 aria-hidden />}>Synced · simulated</Pill>
       </span>
     );
   if (sync === "pending")
     return (
-      <button type="button" className="btn btn--tertiary btn--sm-text" onClick={() => go("settings/account")}>
+      <Button kind="tertiary" onClick={() => go("settings/account")}>
         <Clock aria-hidden /> {offline ? "Changes waiting for connection" : "Sync pending"}
-      </button>
+      </Button>
     );
   return (
-    <button type="button" className="btn btn--tertiary btn--sm-text" style={{ color: "var(--error)" }} onClick={() => syncChange()}>
+    <Button kind="destructive" onClick={() => syncChange()}>
       <AlertCircle aria-hidden /> Sync failed · Retry
-    </button>
+    </Button>
   );
 }
 
-function AccountMenu({ email, onClose }: { email: string; onClose: () => void }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    ref.current?.querySelector<HTMLElement>("[role=menuitem]")?.focus();
-    const down = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) onClose();
-    };
-    setTimeout(() => document.addEventListener("mousedown", down));
-    return () => document.removeEventListener("mousedown", down);
-  }, [onClose]);
-  const items: [string, ReactNode, () => void][] = [
-    ["Account and sync", <User aria-hidden />, () => go("settings/account")],
-    ["Sign out…", <LogOut aria-hidden />, () => go("settings/account?signout")],
-  ];
-  return (
-    <div
-      ref={ref}
-      className="popover menu"
-      role="menu"
-      aria-label="Account"
-      onKeyDown={(e) => {
-        const list = Array.from(ref.current!.querySelectorAll<HTMLElement>("[role=menuitem]"));
-        const i = list.indexOf(document.activeElement as HTMLElement);
-        if (e.key === "Escape") onClose();
-        if (e.key === "ArrowDown") { e.preventDefault(); list[(i + 1) % list.length].focus(); }
-        if (e.key === "ArrowUp") { e.preventDefault(); list[(i - 1 + list.length) % list.length].focus(); }
-        if (e.key === "Tab") onClose();
-      }}
-    >
-      <div style={{ padding: "8px 12px" }}>
-        <p className="t-strong">{email}</p>
-      </div>
-      <hr className="divider" />
-      {items.map(([label, icon, fn]) => (
-        <button key={label} role="menuitem" type="button" className="menu-item" tabIndex={-1} onClick={() => { set(() => ({ menuOpen: false })); fn(); }}>
-          {icon}
-          {label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/* ---------- Compact global player (only during an active session, away from its owner) ---------- */
 function GlobalPlayer() {
   const p = useApp((s) => s.player);
   const route = useApp((s) => s.route);
@@ -311,8 +317,9 @@ function GlobalPlayer() {
     error: "Couldn't play",
     buffering: "Buffering…",
   };
+  const pct = p.duration ? Math.min(100, (p.position / p.duration) * 100) : 0;
   return (
-    <section className="gplayer" aria-label={`Player: ${p.owner.label}`}>
+    <section className="sticky bottom-0 z-20 flex flex-wrap items-center gap-3 border-t bg-background px-4 py-2 pb-safe" aria-label={`Player: ${p.owner.label}`}>
       {p.status === "error" ? (
         <Button kind="secondary" iconOnly aria-label={`Retry ${p.owner.label}`} icon={<RotateCcw aria-hidden />} onClick={retryPlayback} />
       ) : p.status === "playing" || p.status === "buffering" ? (
@@ -327,16 +334,14 @@ function GlobalPlayer() {
           onClick={() => updatePlayer(p.status === "ended" ? { status: "playing", position: 0 } : { status: "playing" })}
         />
       )}
-      <div className="gplayer-meta">
-        <span className="gplayer-title">{p.owner.label}</span>
-        <span className="t-meta num">
+      <div className="min-w-40 flex-1">
+        <p className="truncate text-sm font-medium">{p.owner.label}</p>
+        <p className="text-xs tabular-nums text-muted-foreground">
           {statusText[p.status]} · {fmtClock(p.position)} / {fmtClock(p.duration)} · {p.speed}×{p.texts ? "" : " · Simulated audio"}
-        </span>
-        <div className="progress-track" aria-hidden>
-          <div className="progress-fill" style={{ width: `${Math.min(100, (p.position / p.duration) * 100)}%` }} />
-        </div>
+        </p>
+        <Progress value={pct} className="mt-1" />
       </div>
-      <Button kind="tertiary" className="btn--sm-text" onClick={() => go(p.owner.route)}>
+      <Button kind="tertiary" onClick={() => go(p.owner.route)}>
         {p.owner.kind === "episode" ? "Return to episode" : p.owner.kind === "exercise" ? "Return to practice" : "Return to source"}
       </Button>
       <Button kind="tertiary" iconOnly aria-label={`Stop ${p.owner.label}`} icon={<Square aria-hidden />} onClick={stopPlayback} />
@@ -344,7 +349,6 @@ function GlobalPlayer() {
   );
 }
 
-/* ---------- Mastery Undo toast: 6 s measured from each action ---------- */
 export function MasteryToast() {
   const mastery = useApp((s) => s.mastery);
   const cards = useApp((s) => s.cards);
@@ -364,7 +368,6 @@ export function MasteryToast() {
     return () => clearInterval(timer);
   }, [mastery.length]);
 
-  // Auto-hide settled toasts ("undone" / "expired") 6 seconds after they settle.
   useEffect(() => {
     const timers: ReturnType<typeof setTimeout>[] = [];
     for (const m of mastery) {
@@ -378,7 +381,6 @@ export function MasteryToast() {
     return () => timers.forEach(clearTimeout);
   }, [mastery, dismissed]);
 
-  // Most recent first, at most 3 visible.
   const visible = [...mastery]
     .reverse()
     .filter((m) => !dismissed[`${m.id}:${m.state}`])
@@ -387,7 +389,7 @@ export function MasteryToast() {
   if (!visible.length) return null;
 
   return (
-    <>
+    <div className="pointer-events-none fixed bottom-4 left-1/2 z-50 flex w-[min(32rem,calc(100%-1.5rem))] -translate-x-1/2 flex-col gap-2">
       {visible.map((m, idx) => {
         const left = Math.max(0, Math.ceil((UNDO_MS - (now - m.at)) / 1000));
         const card = cards.find((c) => c.id === m.cardId);
@@ -397,9 +399,9 @@ export function MasteryToast() {
         if (m.state === "active")
           body = (
             <>
-              <span className="toast-text">
+              <span className="min-w-0 flex-1 text-sm">
                 {kindLabel} marked mastered · hidden from your default review. Nothing was deleted.{" "}
-                <span aria-hidden className="num">({left} s to undo)</span>
+                <span aria-hidden className="tabular-nums">({left} s to undo)</span>
               </span>
               <Button
                 kind="tertiary"
@@ -412,26 +414,26 @@ export function MasteryToast() {
             </>
           );
         else if (m.state === "undone")
-          body = <span className="toast-text">Undo applied ({kindLabel.toLowerCase()}). The card is back in your default review.</span>;
+          body = <span className="text-sm">Undo applied ({kindLabel.toLowerCase()}). The card is back in your default review.</span>;
         else if (m.state === "expired")
           body = (
             <>
-              <span className="toast-text">The 6-second Undo window has ended ({kindLabel.toLowerCase()}). You can restore this card from Mastered at any time.</span>
+              <span className="min-w-0 flex-1 text-sm">The 6-second Undo window has ended ({kindLabel.toLowerCase()}). You can restore this card from Mastered at any time.</span>
               <Button kind="tertiary" onClick={() => go("review/mastered")}>Open Mastered</Button>
             </>
           );
         else if (m.state === "queued")
           body = (
-            <span className="toast-text">
+            <span className="text-sm">
               Undo saved on this device at {(((m.undoAt ?? m.at) - m.at) / 1000).toFixed(1)} s — on time.{" "}
               {offline ? "It will sync when you are back online." : "Syncing…"}
             </span>
           );
-        else if (m.state === "syncing") body = <span className="toast-text">Syncing your on-time Undo… (simulated delay)</span>;
+        else if (m.state === "syncing") body = <span className="text-sm">Syncing your on-time Undo… (simulated delay)</span>;
         else
           body = (
             <>
-              <span className="toast-text">
+              <span className="min-w-0 flex-1 text-sm">
                 Your Undo was on time, but this card was marked mastered again later on another device (simulated). The later decision is kept.
               </span>
               <Button kind="tertiary" onClick={() => go("review/mastered")}>Review card</Button>
@@ -439,28 +441,27 @@ export function MasteryToast() {
             </>
           );
         return (
-          <div key={m.id} className="toast" role="group" aria-label={`Mastery update ${m.cardId}`}>
+          <div key={m.id} className="pointer-events-auto flex flex-wrap items-center gap-3 rounded-lg border bg-card p-3 text-card-foreground shadow-sm" role="group" aria-label={`Mastery update ${m.cardId}`}>
             {body}
           </div>
         );
       })}
-    </>
+    </div>
   );
 }
 
 export function Toasts() {
   const toasts = useApp((s) => s.toasts);
-  const hasPlayer = useApp((s) => !!s.player);
-  return (
-    <div className="toasts" style={{ ["--toast-offset" as string]: hasPlayer ? "150px" : "84px" }}>
-      <MasteryToast />
-      {toasts.map((t) => (
-        <div key={t.id} className="toast">
-          <span className="toast-text">{t.text}</span>
-        </div>
-      ))}
-    </div>
-  );
+  const seen = useRef(new Set<string>());
+  useEffect(() => {
+    for (const t of toasts) {
+      const id = String(t.id);
+      if (seen.current.has(id)) continue;
+      seen.current.add(id);
+      toast(t.text);
+    }
+  }, [toasts]);
+  return <MasteryToast />;
 }
 
 export function Announcer() {

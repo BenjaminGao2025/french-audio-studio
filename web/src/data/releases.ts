@@ -8,10 +8,10 @@ export const RELEASES = [
     version: APP_VERSION,
     date: "2026-11-10",
     changes: [
-      "A new reading-app shell: a top bar on a wide screen, a bottom bar on a phone, and a paper page on a warm ground.",
-      "Study home is a dashboard with a Start composer, a continue card, and Due today as structured facts.",
-      "The French sentence is the center of the workspace. The eight tools sit in three groups: Understand, Listen & speak, and Check yourself.",
-      "Review is a session dashboard, and the card session hides the main navigation. Grade buttons keep their keys and intervals.",
+      "The app now uses stock shadcn/ui: sidebar, buttons, forms, dialogs, tables, and toasts.",
+      "Warm paper, olive, and bronze stay as theme colors. French text stays in Source Serif 4.",
+      "Saved cards and History are data tables. Settings is a stacked form. The login screen is a card.",
+      "Review grades still show their keys and intervals. Due today stays on the Study home only.",
     ],
   },
   {

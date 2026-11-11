@@ -1,6 +1,6 @@
 /* SCR-PRA-02 Writing practice: TCF Canada tasks, two feedback rounds (hints, then corrections). */
 import { useEffect, useRef, useState } from "react";
-import { Sparkles } from "lucide-react";
+
 import {
   type ExamTask,
   type WriteAttempt,
@@ -16,7 +16,7 @@ import {
 } from "../api/practice";
 import { fmtWhen } from "../api/history";
 import { announce, go, set, useApp } from "../state/store";
-import { Banner, Button, PageHead, Pill, Segmented, Spinner } from "../components/ui";
+import { Banner, Button, ChoiceSelect, PageHead, Pill, Segmented, Spinner, Textarea } from "../components/ui";
 import { AiLabel, Checklist, ErrorHints, Round2 } from "./PracticeFeedback";
 import { BackTo } from "./Practice";
 
@@ -180,8 +180,8 @@ export function Write() {
 
   if (!data) {
     return (
-      <div className="page">
-        <PageHead back={<BackTo label="Practice" to="practice" />} title="Write" desc="TCF Canada writing tasks with two rounds of feedback." />
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+        <PageHead back={<BackTo label="Practice" to="practice" />} title="Write" />
         {loadErr ? <Banner tone="error" title="Couldn’t load the writing tasks" live="assertive" actions={<Button kind="secondary" onClick={load}>Retry</Button>}>{loadErr}</Banner> : <Spinner label="Loading tasks…" />}
       </div>
     );
@@ -193,30 +193,31 @@ export function Write() {
   const n = wordCount(editing ? draft : revision);
   const over = spec ? n > spec.max_words : false;
   return (
-    <div className="page">
-      <PageHead back={<BackTo label="Practice" to="practice" />} title="Write" eyebrow="Expression écrite · practice" desc="Write, get hints and fix your own mistakes, then see the corrections. Your draft is kept on this device." />
-      <div className="stack gap-5">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+      <PageHead back={<BackTo label="Practice" to="practice" />} title="Write" eyebrow="Expression écrite" />
+      <div className="flex flex-col gap-6">
         {editing && !attempt && (
-          <div className="stack gap-3">
+          <div className="flex flex-col gap-3">
             <Segmented
               label="Task"
               value={task}
               onChange={(t) => { setTask(t); setSubject(data.subjects[t]?.[0] ?? null); setGenErr(""); }}
               options={TASKS.map((t) => ({ value: t, label: t === data.recommended_task ? `${t} · suggested` : t }))}
             />
-            <div className="row gap-3" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
-              <label className="field" style={{ minWidth: 0, flex: "1 1 260px", maxWidth: 480 }}>
-                <span className="field-label">Subject</span>
-                <select
-                  className="select"
+            <div className="flex flex-wrap items-center gap-2 gap-3" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
+              <label className="grid gap-2" style={{ minWidth: 0, flex: "1 1 260px", maxWidth: 480 }}>
+                <span className="text-sm font-medium">Subject</span>
+                <ChoiceSelect
+                  ariaLabel="Subject"
                   value={subj && builtIns.some((s) => s.id === subj.id) ? subj.id : "custom"}
-                  onChange={(e) => { const s = builtIns.find((x) => x.id === e.target.value); if (s) setSubject(s); }}
-                >
-                  {builtIns.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
-                  {subj && !builtIns.some((s) => s.id === subj.id) && <option value="custom">{subj.title} (new)</option>}
-                </select>
+                  onValueChange={(v) => { const s = builtIns.find((x) => x.id === v); if (s) setSubject(s); }}
+                  options={[
+                    ...builtIns.map((s) => ({ value: s.id, label: s.title })),
+                    ...(subj && !builtIns.some((s) => s.id === subj.id) ? [{ value: "custom", label: `${subj.title} (new)` }] : []),
+                  ]}
+                />
               </label>
-              <Button kind="tertiary" icon={<Sparkles aria-hidden />} busy={genBusy} onClick={() => void generate()}>New subject</Button>
+              <Button kind="tertiary" busy={genBusy} onClick={() => void generate()}>New subject</Button>
             </div>
             {genBusy && <Spinner label="Writing a new subject…" />}
             {genErr && <Banner tone="error" title="Couldn’t make a new subject" live="assertive">{genErr}</Banner>}
@@ -227,38 +228,38 @@ export function Write() {
 
         {editing ? (
           <>
-            <div className="field">
-              <label htmlFor="write-ta" className="field-label">Your text in French</label>
-              <textarea id="write-ta" className="textarea" lang="fr" rows={10} value={draft} readOnly={phase === "wait1"} aria-describedby="write-count" onChange={(e) => { setDraft(e.target.value); setError(""); }} />
-              <p id="write-count" className={over ? "counter counter--over" : "counter"}>
+            <div className="grid gap-2">
+              <label htmlFor="write-ta" className="text-sm font-medium">Your text in French</label>
+              <Textarea id="write-ta" lang="fr" rows={10} value={draft} readOnly={phase === "wait1"} aria-describedby="write-count" onChange={(e) => { setDraft(e.target.value); setError(""); }} />
+              <p id="write-count" className={over ? "text-sm text-destructive" : "text-sm text-muted-foreground"}>
                 {n} {n === 1 ? "word" : "words"}{spec ? ` · target ${spec.min_words}–${spec.max_words}` : ""}
               </p>
             </div>
             {error && <Banner tone="error" title="Feedback didn’t load" live="assertive">{error} Your text is kept.</Banner>}
             {phase === "wait1" && <Spinner label="Reading your text… this usually takes 10–40 seconds." />}
-            <div className="sticky-actions">
-              <div className="btn-row">
+            <div className="sticky bottom-0 z-10 bg-background py-3">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button kind="primary" busy={phase === "wait1"} onClick={() => void submit1()}>{error ? "Retry" : "Get feedback"}</Button>
               </div>
             </div>
           </>
         ) : (
           attempt && (
-            <div className="stack gap-5">
-              <div id="write-fb" tabIndex={-1} className="stack gap-4">
+            <div className="flex flex-col gap-6">
+              <div id="write-fb" tabIndex={-1} className="flex flex-col gap-4">
                 <AiLabel />
-                <div className="stack gap-1">
-                  <span className="def-label">Your first draft</span>
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm font-medium text-muted-foreground">Your first draft</span>
                   <p lang="fr" style={{ whiteSpace: "pre-wrap" }}>{attempt.text_1}</p>
                 </div>
                 <Round1 a={attempt} />
               </div>
-              <hr className="divider" />
+              <hr className="border-t" />
               {phase === "round2" ? (
-                <div className="stack gap-4">
-                  <p className="t-section">Round 2 · corrections</p>
-                  <div className="stack gap-1">
-                    <span className="def-label">Your revision</span>
+                <div className="flex flex-col gap-4">
+                  <p className="text-lg font-semibold text-balance">Round 2 · corrections</p>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-sm font-medium text-muted-foreground">Your revision</span>
                     <p lang="fr" style={{ whiteSpace: "pre-wrap" }}>{attempt.text_2}</p>
                   </div>
                   <Round2 fb={attempt.feedback_2} correctedLabel="Corrected text" />
@@ -267,17 +268,17 @@ export function Write() {
                   </Banner>
                 </div>
               ) : (
-                <div className="stack gap-3">
-                  <p className="t-section">Round 2 · fix it yourself</p>
-                  <p className="t-support">Use the hints above to correct your text, then send it for the corrections.</p>
-                  <div className="field">
-                    <label htmlFor="write-rev" className="field-label">Your revised text</label>
-                    <textarea id="write-rev" className="textarea" lang="fr" rows={10} value={revision} readOnly={phase === "wait2"} onChange={(e) => { setRevision(e.target.value); setError(""); }} />
-                    <p className={over ? "counter counter--over" : "counter"}>{n} {n === 1 ? "word" : "words"}</p>
+                <div className="flex flex-col gap-3">
+                  <p className="text-lg font-semibold text-balance">Round 2 · fix it yourself</p>
+                  <p className="text-sm text-muted-foreground">Use the hints above to correct your text, then send it for the corrections.</p>
+                  <div className="grid gap-2">
+                    <label htmlFor="write-rev" className="text-sm font-medium">Your revised text</label>
+                    <Textarea id="write-rev" lang="fr" rows={10} value={revision} readOnly={phase === "wait2"} onChange={(e) => { setRevision(e.target.value); setError(""); }} />
+                    <p className={over ? "text-sm text-destructive" : "text-sm text-muted-foreground"}>{n} {n === 1 ? "word" : "words"}</p>
                   </div>
                   {error && <Banner tone="error" title="Corrections didn’t load" live="assertive">{error} Your revision is kept.</Banner>}
                   {phase === "wait2" && <Spinner label="Checking your revision…" />}
-                  <div className="btn-row">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Button kind="primary" busy={phase === "wait2"} disabledReason={!revision.trim() ? "Write your revision first." : undefined} onClick={() => void submit2()}>
                       {error ? "Retry" : "Get corrections"}
                     </Button>
@@ -297,20 +298,20 @@ export function Write() {
 
 function SubjectCard({ subject, spec }: { subject: WriteSubject; spec: { name_en: string; desc_en: string; min_words: number; max_words: number; part1_range?: string; part2_range?: string } }) {
   return (
-    <section className="panel stack gap-2" aria-label="Subject">
-      <p className="t-label">{spec.name_en}</p>
-      <p lang="fr" className="t-strong">{subject.title}</p>
+    <section className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-2" aria-label="Subject">
+      <p className="text-sm font-medium">{spec.name_en}</p>
+      <p lang="fr" className="font-medium">{subject.title}</p>
       <p lang="fr">{subject.prompt}</p>
-      {subject.doc1 && <p lang="fr" className="t-support"><span className="t-strong">Document 1 · </span>{subject.doc1}</p>}
-      {subject.doc2 && <p lang="fr" className="t-support"><span className="t-strong">Document 2 · </span>{subject.doc2}</p>}
+      {subject.doc1 && <p lang="fr" className="text-sm text-muted-foreground"><span className="font-medium">Document 1 · </span>{subject.doc1}</p>}
+      {subject.doc2 && <p lang="fr" className="text-sm text-muted-foreground"><span className="font-medium">Document 2 · </span>{subject.doc2}</p>}
       {!!subject.requirements?.length && (
-        <ul className="stack gap-1" style={{ paddingLeft: 20 }}>
+        <ul className="flex flex-col gap-1" style={{ paddingLeft: 20 }}>
           {subject.requirements.map((r, i) => <li key={i} lang="fr">{r}</li>)}
         </ul>
       )}
-      {!!subject.stems?.length && <p lang="fr" className="t-support">Starters: {subject.stems.join(" · ")}</p>}
-      {!!subject.words?.length && <p lang="fr" className="t-support">Words: {subject.words.join(" · ")}</p>}
-      <p className="t-meta">
+      {!!subject.stems?.length && <p lang="fr" className="text-sm text-muted-foreground">Starters: {subject.stems.join(" · ")}</p>}
+      {!!subject.words?.length && <p lang="fr" className="text-sm text-muted-foreground">Words: {subject.words.join(" · ")}</p>}
+      <p className="text-xs leading-4 text-muted-foreground">
         {spec.min_words}–{spec.max_words} words{spec.part1_range ? ` (comparison ${spec.part1_range}, opinion ${spec.part2_range})` : ""}. {spec.desc_en}
       </p>
     </section>
@@ -321,24 +322,24 @@ function Round1({ a }: { a: WriteAttempt }) {
   const fb = a.feedback_1;
   if (!fb || !Object.keys(fb).length) return null;
   return (
-    <div className="stack gap-4">
-      {fb.praise && <p><span className="t-strong">What works · </span>{fb.praise}</p>}
+    <div className="flex flex-col gap-4">
+      {fb.praise && <p><span className="font-medium">What works · </span>{fb.praise}</p>}
       {fb.word_count && (
-        <p className="row gap-2">
+        <p className="flex flex-wrap items-center gap-2 gap-2">
           <Pill tone={fb.word_count.in_range ? "success" : "warning"}>{fb.word_count.in_range ? "Length OK" : "Length"}</Pill>
-          <span className="t-support">{fb.word_count.note}</span>
+          <span className="text-sm text-muted-foreground">{fb.word_count.note}</span>
         </p>
       )}
       {fb.register?.note && (
-        <p className="row gap-2">
+        <p className="flex flex-wrap items-center gap-2 gap-2">
           <Pill tone={fb.register.fits ? "success" : "warning"}>Register · {fb.register.choice}</Pill>
-          <span className="t-support">{fb.register.note}</span>
+          <span className="text-sm text-muted-foreground">{fb.register.note}</span>
         </p>
       )}
       {fb.t3_comparison && (
-        <p className="row gap-2">
+        <p className="flex flex-wrap items-center gap-2 gap-2">
           <Pill tone={fb.t3_comparison.compared && fb.t3_comparison.position_clear ? "success" : "warning"}>Comparison and position</Pill>
-          <span className="t-support">{fb.t3_comparison.note}</span>
+          <span className="text-sm text-muted-foreground">{fb.t3_comparison.note}</span>
         </p>
       )}
       <Checklist items={fb.checklist} />
@@ -350,17 +351,17 @@ function Round1({ a }: { a: WriteAttempt }) {
 function PastAttempts({ attempts, onOpen }: { attempts: WriteAttempt[]; onOpen: (a: WriteAttempt) => void }) {
   if (!attempts.length) return null;
   return (
-    <section className="stack gap-2" aria-labelledby="write-past">
-      <h2 id="write-past" className="t-section">Recent writing</h2>
-      <ul className="list">
+    <section className="flex flex-col gap-2" aria-labelledby="write-past">
+      <h2 id="write-past" className="text-lg font-semibold text-balance">Recent writing</h2>
+      <ul className="divide-y overflow-hidden rounded-lg border">
         {attempts.slice(0, 5).map((a) => (
           <li key={a.id}>
-            <button className="list-btn" onClick={() => onOpen(a)}>
-              <span className="grow stack">
-                <span lang="fr" className="t-strong">{a.subject?.title || a.task}</span>
-                <span className="t-support">{a.task} · {fmtWhen(a.created_at)} · {a.status === "failed" ? "Feedback failed" : a.text_2 ? "Both rounds" : a.status === "ready" ? "Round 1 done" : "In progress"}</span>
+            <Button kind="tertiary" className="h-auto w-full justify-start whitespace-normal px-4 py-3 text-left" onClick={() => onOpen(a)}>
+              <span className="min-w-0 flex-1 flex flex-col">
+                <span lang="fr" className="font-medium">{a.subject?.title || a.task}</span>
+                <span className="text-sm font-normal text-muted-foreground">{a.task} · {fmtWhen(a.created_at)} · {a.status === "failed" ? "Feedback failed" : a.text_2 ? "Both rounds" : a.status === "ready" ? "Round 1 done" : "In progress"}</span>
               </span>
-            </button>
+            </Button>
           </li>
         ))}
       </ul>

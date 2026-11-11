@@ -105,13 +105,13 @@ export function StudyRecorder({ id, label, actionLabel = "Check recording", onTa
       setError(e instanceof DOMException && e.name === "NotAllowedError" ? "Allow microphone access in your browser’s site settings, then try again." : e instanceof Error ? e.message : "Couldn’t start the microphone.");
     }
   };
-  return <div className="study-recorder stack gap-3" role="group" aria-label={label}>
-    <div className="btn-row">
+  return <div className="study-recorder flex flex-col gap-3" role="group" aria-label={label}>
+    <div className="flex flex-wrap items-center gap-2">
       {phase === "recording" ? <Button kind="primary" icon={<Square aria-hidden />} onClick={stop}>Stop · {fmtClock(seconds)}</Button> :
         <Button kind="secondary" icon={<Mic aria-hidden />} busy={phase === "asking"} disabled={disabled || phase === "busy"} onClick={() => void start()}>{take ? "Record again" : label}</Button>}
       {take && phase !== "recording" && <Button kind="primary" busy={phase === "busy"} disabled={take.saved || disabled} onClick={() => void submit()}>{take.saved ? (autoSubmit ? "Checked" : "Saved") : error ? "Retry recording" : actionLabel}</Button>}
     </div>
-    {take && phase !== "recording" && <div className="stack gap-2"><span className="t-meta">My recording</span><audio ref={player} controls src={take.url} onPlay={() => { takeAudioFocus(player.current); }} /></div>}
+    {take && phase !== "recording" && <div className="flex flex-col gap-2"><span className="text-xs leading-4 text-muted-foreground">My recording</span><audio ref={player} controls src={take.url} onPlay={() => { takeAudioFocus(player.current); }} /></div>}
     {error && <Banner tone="error" title="Recording needs attention" live="assertive">{error} Your last recording is kept so you can retry.</Banner>}
   </div>;
 }

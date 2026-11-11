@@ -1,6 +1,6 @@
 # Redesign 1.1.0
 
-A reading app, not an admin console. The 1.0.6 theme (warm paper, olive, bronze, Inter + Source Serif 4) stays. The shell, the page, and how tools are grouped change.
+A reading app, not an admin console. The 1.0.6 theme (warm paper, olive, bronze, Inter + Source Serif 4) stays. The current shell is the stock Sidebar in [Stock shadcn pass](#stock-shadcn-pass). The Navigation section below is the previous reading-bar pass.
 
 ## Navigation
 
@@ -117,3 +117,13 @@ The signed-out gate and the login form are one paper card, centered. No marketin
 ## What does not change
 
 SRS math, audio pipeline, auth, API payloads, IPA formatting, feedback sounds, keyboard shortcuts, `:focus-visible` (no ring on a route-change heading), `prefers-reduced-motion`, and every URL.
+
+## Stock shadcn pass
+
+shadcn/ui is the only component system. The earlier reading bar and bottom tab bar are retired.
+
+Shell: the stock Sidebar block (`SidebarProvider`, `Sidebar`, `SidebarMenu`, `SidebarInset`), not the sidebar-07 team switcher. Five destinations map to one menu. On a narrow window the sidebar uses its own sheet. Focused modes (`review/session`, `study/run`) hide the sidebar and keep a slim Exit header inside the inset. Warm paper, olive, and bronze exist only as CSS variables (`--background`, `--primary`, `--sidebar`, and the rest). Inter is the UI face. Source Serif 4 is only for French.
+
+Login is a login-01 card: label, input, and one primary button. Saved and History use `@tanstack/react-table` with the shadcn Table. Settings is stacked label-and-control sections separated by Separator. Practice landing is a card grid. Transient status uses Sonner. Persistent form errors stay inline Alerts.
+
+Stock variants only: default, secondary, outline, ghost, link, and destructive when the action deletes or discards. No custom gradients, glows, or display numbers.

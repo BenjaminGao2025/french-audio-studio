@@ -29,17 +29,17 @@ function AuthGate() {
   }
   if (status === "error")
     return (
-      <main className="login-page" id="main">
-        <div className="panel stack gap-4 login-card">
+      <main className="flex min-h-dvh items-center justify-center bg-background p-4" id="main">
+        <div className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-4 w-full max-w-sm">
           <Banner tone="error" title="Couldn’t reach the server" live="assertive">Your sign-in is kept. Check your connection and try again.</Banner>
-          <div className="btn-row">
+          <div className="flex flex-wrap items-center gap-2">
             <Button kind="primary" onClick={() => void loadMe()}>Try again</Button>
           </div>
         </div>
       </main>
     );
   return (
-    <main className="login-page" id="main">
+    <main className="flex min-h-dvh items-center justify-center bg-background p-4" id="main">
       <Spinner label="Loading…" />
     </main>
   );

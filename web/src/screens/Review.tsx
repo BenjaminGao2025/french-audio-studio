@@ -19,7 +19,8 @@ import { importanceFor } from "../lib/lookup";
 import { formatFriendlyPhonetic } from "../lib/phonetic";
 import { cx, nf, plural } from "../lib/format";
 import { announce, get, getCardLookups, go, introduceNewCard, sayFrench, set, useApp, type ReviewUI } from "../state/store";
-import { Banner, Button, Dialog, DisabledReason, Disclosure, FieldText, Importance, PageHead, Pill, Skeleton, Spinner, Tabs, useNarrow, WordDock } from "../components/ui";
+import { Banner, Button, Checkbox, ChoiceSelect, Collapsible, CollapsibleContent, CollapsibleTrigger, Dialog, DisabledReason, Disclosure, FieldText, Importance, PageHead, Pill, Progress, Skeleton, Spinner, Table, Tabs, Textarea, WordDock, useNarrow } from "../components/ui";
+import { getCoreRowModel, useLegacyTable, type LegacyColumnDef } from "@tanstack/react-table/legacy";
 import { FrText, tokenizeFrench, type FrPick, type FrSegment } from "../components/FrText";
 import { WordPanel } from "./WordPopup";
 import { MarkedLine } from "./Exercise";
@@ -157,16 +158,16 @@ export function ReviewScreen({ sub }: { sub: string }) {
   const tab = sub === "session" ? "due" : sub === "library" ? "saved" : sub;
   if (sub === "session") {
     return (
-      <div className="page page--read review-focus">
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 review-focus">
         <h1 className="sr-only" tabIndex={-1} data-page-title>Review</h1>
         <ReviewSession />
       </div>
     );
   }
   return (
-    <div className={cx("page", tab === "saved" && "page--wide")}>
+    <div className={cx("mx-auto flex w-full max-w-3xl flex-col gap-6", tab === "saved" && "max-w-6xl!")}>
       <PageHead title="Review" />
-      <div className="stack gap-5">
+      <div className="flex flex-col gap-6">
         <Tabs label="Review sections" idBase="review" value={tab} tabs={TABS} onChange={(v) => go(`review/${v}`, { focus: false })} />
         <div id="review-panel" role="tabpanel" aria-labelledby={`review-tab-${tab}`}>
           {tab === "due" ? <DueToday /> : tab === "saved" ? <SavedCards /> : <MasteredList />}
@@ -304,9 +305,9 @@ function DueToday() {
   };
 
   return (
-    <div className="stack gap-6">
+    <div className="flex flex-col gap-8">
       {state === "loading" && (
-        <div className="stack gap-3">
+        <div className="flex flex-col gap-3">
           <Spinner label="Loading today’s cards…" />
           <Skeleton lines={3} />
         </div>
@@ -348,12 +349,12 @@ function DueToday() {
       )}
 
       {(state === "active" || state === "offline") && (
-        <section className="stack gap-5" aria-labelledby="today-h">
-          <div className="stack gap-2">
-            <h2 id="today-h" className="meta-k">Today’s session</h2>
-            <p className="journey-num">{nf.format(state === "offline" ? 12 : total)}</p>
-            <p className="t-support">cards</p>
-            <dl className="fact-row">
+        <section className="flex flex-col gap-6" aria-labelledby="today-h">
+          <div className="flex flex-col gap-2">
+            <h2 id="today-h" className="text-xs font-medium text-muted-foreground">Today’s session</h2>
+            <p className="text-lg font-semibold tabular-nums">{nf.format(state === "offline" ? 12 : total)}</p>
+            <p className="text-sm text-muted-foreground">cards</p>
+            <dl className="flex flex-wrap gap-6">
               {state === "offline" ? (
                 <>
                   <div><dt>Learning</dt><dd>8</dd></div>
@@ -368,43 +369,39 @@ function DueToday() {
                 </>
               )}
             </dl>
-            {state !== "offline" && quotaLine && (
-              <p className="t-support" data-quota-explanation>
-                <span className="t-strong">New cards:</span> {quotaLine}
-              </p>
-            )}
+
             {state !== "offline" && (
-              <div className="row gap-2">
-                <span className="t-support">Cards per review session: <span className="num">{sessionSize}</span></span>
-                <Button kind="tertiary" className="btn--sm-text" aria-label="Change cards per review session in Settings" onClick={() => go("settings")}>Change</Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm text-muted-foreground">Cards per review session: <span className="tabular-nums">{sessionSize}</span></span>
+                <Button kind="tertiary" className="h-8 px-2 text-sm" aria-label="Change cards per review session in Settings" onClick={() => go("settings")}>Change</Button>
               </div>
             )}
             {locked && review.removedNew > 0 && (
-              <p className="t-support" role="status">{plural(review.removedNew, "new card")} removed because you lowered today’s limit.</p>
+              <p className="text-sm text-muted-foreground" role="status">{plural(review.removedNew, "new card")} removed because you lowered today’s limit.</p>
             )}
           </div>
-          <div className="stack gap-2">
-            <div className="row row--between">
-              <span className="t-label">Session progress</span>
-              <span className="t-support num">{review.completed} of {state === "offline" ? 12 : total} cards completed</span>
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-sm font-medium">Session progress</span>
+              <span className="text-sm text-muted-foreground tabular-nums">{review.completed} of {state === "offline" ? 12 : total} cards completed</span>
             </div>
-            <div className="goal-bar" aria-hidden><div style={{ width: `${(review.completed / Math.max(1, total)) * 100}%` }} /></div>
+            <Progress value={(review.completed / Math.max(1, total)) * 100} aria-label="Session progress" />
           </div>
-          <div className="btn-row">
+          <div className="flex flex-wrap items-center gap-2">
             <Button kind="primary" onClick={start} disabledReason={total === 0 ? "No cards are assigned today." : undefined}>
               {review.phase === "active" ? "Continue review" : "Start review"}
             </Button>
           </div>
-          <dl className="stat-grid">
-            <div className="stat"><dt className="t-support">Daily new-card limit</dt><dd className="t-section num" style={{ margin: 0 }}>{dailyNew} cards</dd></div>
-            <div className="stat"><dt className="t-support">New cards introduced today</dt><dd className="t-section num" style={{ margin: 0 }}>{newUsed}</dd></div>
-            <div className="stat"><dt className="t-support">Your whole library</dt><dd className="t-section num" style={{ margin: 0 }}>{libOk ? <span className="meta-row"><span>{nf.format(sentences)} sentences</span><span>{nf.format(savedCards)} cards</span></span> : "…"}</dd></div>
+          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            <div className="flex flex-col gap-0.5"><dt className="text-sm text-muted-foreground">Daily new-card limit</dt><dd className="text-lg font-semibold text-balance tabular-nums" style={{ margin: 0 }}>{dailyNew} cards</dd></div>
+            <div className="flex flex-col gap-0.5"><dt className="text-sm text-muted-foreground">New cards introduced today</dt><dd className="text-lg font-semibold text-balance tabular-nums" style={{ margin: 0 }}>{newUsed}</dd></div>
+            <div className="flex flex-col gap-0.5"><dt className="text-sm text-muted-foreground">Your whole library</dt><dd className="text-lg font-semibold text-balance tabular-nums" style={{ margin: 0 }}>{libOk ? <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"><span>{nf.format(sentences)} sentences</span><span>{nf.format(savedCards)} cards</span></span> : "…"}</dd></div>
           </dl>
           <span className="sr-only">Queue pool: {queue.length} cards</span>
         </section>
       )}
 
-      {state !== "loading" && state !== "error" && <QuotaExplainer quotaLine={state === "active" || state === "offline" ? null : quotaLine} />}
+      {state !== "loading" && state !== "error" && <QuotaExplainer quotaLine={quotaLine} />}
     </div>
   );
 }
@@ -422,18 +419,18 @@ function QuotaExplainer({ quotaLine }: { quotaLine: string | null }) {
   const nextNew = queue.find((c) => c.group === "new" && !introduced[c.id] && !done[c.id]);
 
   return (
-    <section className="stack gap-4" aria-labelledby="quota-h">
-      <hr className="divider" />
-      <h2 id="quota-h" className="t-section">How new cards are introduced</h2>
-      <ul className="stack gap-2" style={{ paddingLeft: 20 }}>
+    <Collapsible className="flex flex-col gap-3 border-t pt-4">
+      <CollapsibleTrigger id="quota-h" className="flex min-h-11 w-full items-center text-left text-sm font-medium">How new cards are introduced</CollapsibleTrigger>
+      <CollapsibleContent forceMount className="flex flex-col gap-4 data-[state=closed]:hidden">
+      <ul className="flex list-disc flex-col gap-2 pl-5 text-sm text-muted-foreground">
         <li>Only a new card’s first appearance in Review uses one of today’s allowances.</li>
         <li>Saving cards, due reviews, Recall, Dictation, marking mastered and Undo don’t use or refund an allowance.</li>
         <li>New cards are introduced by importance first, then in the order you saved them.</li>
         <li>A sentence brings at most one card a day; its other cards follow on later days.</li>
       </ul>
-      <div className="panel stack gap-2" aria-live="polite">
-        <p className="t-strong">Today: {remaining} of {dailyNew} new-card allowances remain</p>
-        {quotaLine && <p className="t-support">{quotaLine}</p>}
+      <div className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-2" aria-live="polite">
+        <p className="font-medium">Today: {remaining} of {dailyNew} new-card allowances remain</p>
+        {quotaLine && <p className="text-sm text-muted-foreground">{quotaLine}</p>}
         {dailyNew < newUsed ? (
           <p>
             You’ve already introduced {newUsed} new cards today. Your limit is now {dailyNew}, which is lower, so those {newUsed} cards stay in your reviews and no more new cards are introduced today.
@@ -446,13 +443,14 @@ function QuotaExplainer({ quotaLine }: { quotaLine: string | null }) {
           </p>
         ) : null}
         {offline && (
-          <p className="row" style={{ color: "var(--warning)" }}>
+          <p className="flex flex-wrap items-center gap-2" style={{ color: "var(--warning)" }}>
             <CloudOff aria-hidden width={16} height={16} /> New allowances need a connection to be assigned. Cards already on this device can continue.
           </p>
         )}
       </div>
       <DailyLimitField compact />
-    </section>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -625,12 +623,12 @@ function ReviewSession() {
 
   if (review.phase === "complete" || forced === "complete" || !card) {
     return (
-      <div className="stack gap-4">
+      <div className="flex flex-col gap-4">
         <Banner tone="success" title="Review complete" live="polite">
           {review.completed} of {cards.length} cards in this session completed. Each review updated that card’s schedule.
         </Banner>
-        {review.removedNew > 0 && <p className="t-support">{plural(review.removedNew, "new card")} removed because you lowered today’s limit.</p>}
-        <div className="btn-row">
+        {review.removedNew > 0 && <p className="text-sm text-muted-foreground">{plural(review.removedNew, "new card")} removed because you lowered today’s limit.</p>}
+        <div className="flex flex-wrap items-center gap-2">
           {plan.cards.length > 0 && <Button kind="primary" onClick={startNextSession}>Start another session ({plan.cards.length} cards)</Button>}
           <Button kind={plan.cards.length ? "secondary" : "primary"} onClick={() => go("review")}>Done — back to Due today</Button>
           <Button kind="secondary" onClick={() => go("review/saved")}>Open saved cards</Button>
@@ -669,79 +667,79 @@ function ReviewSession() {
   };
 
   return (
-    <div className={cx("with-word-card", pick && !narrow && "is-open")}>
-      <div className="exercise" data-mode={mode} data-card-id={card.id}>
-        <div className="row row--between">
-          <p id="rev-q" tabIndex={-1} className="t-meta num">Card {review.index + 1} of {cards.length}</p>
-          <span className="t-support num">{review.completed} completed</span>
+    <div className={cx("grid items-start gap-6", pick && !narrow && "lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]")}>
+      <div className="flex flex-col gap-6" data-mode={mode} data-card-id={card.id}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p id="rev-q" tabIndex={-1} className="text-xs leading-4 text-muted-foreground tabular-nums">Card {review.index + 1} of {cards.length}</p>
+          <span className="text-sm text-muted-foreground tabular-nums">{review.completed} completed</span>
         </div>
-        {review.removedNew > 0 && <p className="t-support" role="status">{plural(review.removedNew, "new card")} removed because you lowered today’s limit.</p>}
-        <div className="row">
+        {review.removedNew > 0 && <p className="text-sm text-muted-foreground" role="status">{plural(review.removedNew, "new card")} removed because you lowered today’s limit.</p>}
+        <div className="flex flex-wrap items-center gap-2">
           <Pill tone={card.group === "new" ? "info" : undefined}>{groupLabel}</Pill>
           <Pill>{MODE_LABEL[mode]}</Pill>
-          {card.group === "new" && <span className="t-support">First introduction. Uses 1 of today’s new-card allowances.</span>}
+          {card.group === "new" && <span className="text-sm text-muted-foreground">First introduction. Uses 1 of today’s new-card allowances.</span>}
         </div>
-        <hr className="divider" />
+        <hr className="border-t" />
 
         {!revealed ? (
-          <div className="rev-stage">
+          <div className="flex flex-col gap-4">
             {/* ---------------- FRONT, per mode ---------------- */}
             {mode === "listen" && (
-              <div className="rev-listen stack gap-3">
+              <div className="rev-listen flex flex-col gap-3">
                 <p className="rev-lead">Listen, then say what it means.</p>
-                <div className="btn-row">
-                  <Button kind="secondary" className="rev-play-big" iconOnly icon={<Play aria-hidden />} aria-label="Play the sentence" onClick={() => sayFrench(sentenceFr)} />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button kind="secondary" className="" iconOnly icon={<Play aria-hidden />} aria-label="Play the sentence" onClick={() => sayFrench(sentenceFr)} />
                   <Button kind="secondary" icon={<Volume2 aria-hidden />} onClick={() => sayFrench(sentenceFr, 0.75)}>Slow 0.75&nbsp;×</Button>
                 </div>
               </div>
             )}
             {mode === "speak" && (
-              <div className="stack gap-3">
+              <div className="flex flex-col gap-3">
                 <p className="rev-lead">Say this in French out loud.</p>
                 <p className="rev-prompt-zh" lang={translationZh ? "zh" : undefined}>{translationZh || translationEn || "No translation yet."}</p>
-                {showEnglish && <Disclosure summary="Show English"><p className="t-support">{translationEn}</p></Disclosure>}
+                {showEnglish && <Disclosure summary="Show English"><p className="text-sm text-muted-foreground">{translationEn}</p></Disclosure>}
                 <Disclosure summary="Show initials"><p className="rev-initials" lang="fr">{initialsHint(sentenceFr)}</p></Disclosure>
               </div>
             )}
             {mode === "recognize" && (
-              <div className="stack gap-3">
-                <FrText segments={tokenizeFrench(card.target)} className="t-fr-lg" onPick={onWordPick} />
+              <div className="flex flex-col gap-3">
+                <FrText segments={tokenizeFrench(card.target)} className="font-serif text-2xl leading-snug wrap-break-word" onPick={onWordPick} />
                 <p className="rev-lead">What does it mean?</p>
-                <div className="btn-row">
-                  <Button kind="secondary" className="rev-play-big" iconOnly icon={<Play aria-hidden />} aria-label="Play the word" onClick={() => sayFrench(card.target)} />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button kind="secondary" className="" iconOnly icon={<Play aria-hidden />} aria-label="Play the word" onClick={() => sayFrench(card.target)} />
                   <Button kind="secondary" icon={<Volume2 aria-hidden />} onClick={() => sayFrench(card.target, 0.75)}>Slow 0.75&nbsp;×</Button>
                 </div>
               </div>
             )}
             {typed && (
-              <div className="stack gap-3">
+              <div className="flex flex-col gap-3">
                 {mode === "grammar" && meta.rule && <Pill>{meta.rule}</Pill>}
                 {card.kind === "Recall" ? (
-                  <p className="prompt-en">{card.prompt}</p>
+                  <p className="text-lg font-medium">{card.prompt}</p>
                 ) : (
-                  <FrText segments={tokenizeFrench(mode === "grammar" ? (meta.prompt_fr || card.prompt) : card.prompt)} className="t-fr-lg" onPick={onWordPick} />
+                  <FrText segments={tokenizeFrench(mode === "grammar" ? (meta.prompt_fr || card.prompt) : card.prompt)} className="font-serif text-2xl leading-snug wrap-break-word" onPick={onWordPick} />
                 )}
                 {(mode === "grammar" ? meta.full_en : (translationZh || translationEn)) && (
-                  <p className="t-support" lang={translationZh && mode !== "grammar" ? "zh" : undefined}>
+                  <p className="text-sm text-muted-foreground" lang={translationZh && mode !== "grammar" ? "zh" : undefined}>
                     {mode === "grammar" ? meta.full_en : (translationZh || translationEn)}
                   </p>
                 )}
-                {card.kind === "Fill-in" && (meta.meaning_zh || meta.meaning_en) && <p className="t-support">Blank means: {meta.meaning_zh || meta.meaning_en}</p>}
-                {mode === "grammar" && meta.hint && <p className="t-support">Hint: {meta.hint}</p>}
+                {card.kind === "Fill-in" && (meta.meaning_zh || meta.meaning_en) && <p className="text-sm text-muted-foreground">Blank means: {meta.meaning_zh || meta.meaning_en}</p>}
+                {mode === "grammar" && meta.hint && <p className="text-sm text-muted-foreground">Hint: {meta.hint}</p>}
                 <Disclosure summary="Show initials"><p className="rev-initials" lang="fr">{initialsHint(card.target)}</p></Disclosure>
               </div>
             )}
 
             {typed && (
-              <div className="stack gap-3">
-                <div className="field">
-                  <label htmlFor="rev-input" className="field-label">Your answer in French</label>
-                  <textarea
+              <div className="flex flex-col gap-3">
+                <div className="grid gap-2">
+                  <label htmlFor="rev-input" className="text-sm font-medium">Your answer in French</label>
+                  <Textarea
                     id="rev-input"
                     name="review-answer"
                     autoComplete="off"
                     ref={inputRef}
-                    className="textarea textarea--answer"
+                    className="min-h-24"
                     lang="fr"
                     rows={2}
                     value={u.draft}
@@ -752,66 +750,66 @@ function ReviewSession() {
                     onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); check(); } }}
                     spellCheck={false}
                   />
-                  {u.emptyError && <p id="rev-err" className="field-error" role="alert">Type an answer before checking. Nothing was recorded.</p>}
+                  {u.emptyError && <p id="rev-err" className="text-sm text-destructive" role="alert">Type an answer before checking. Nothing was recorded.</p>}
                 </div>
               </div>
             )}
-            <div className="sticky-actions">
-              <div className="btn-row">
+            <div className="sticky bottom-0 z-10 bg-background py-3">
+              <div className="flex flex-wrap items-center gap-2">
                 {typed && <Button kind="primary" onClick={check}>Check</Button>}
                 <Button kind={typed ? "secondary" : "primary"} icon={<Eye aria-hidden />} onClick={() => reveal()}>Show answer</Button>
               </div>
             </div>
-            <p className="key-hints"><span><kbd>Space</kbd> shows the answer</span><span><kbd>R</kbd> replays</span></p>
+            <p className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground"><span><kbd>Space</kbd> shows the answer</span><span><kbd>R</kbd> replays</span></p>
           </div>
         ) : (
           <>
             {/* ---------------- BACK, after Show answer or Check ---------------- */}
-            <div id="rev-result" tabIndex={-1} className="stack gap-4">
+            <div id="rev-result" tabIndex={-1} className="flex flex-col gap-4">
               <div className="rev-answer-row" data-sentence={sentenceFr}>
                 <FrText segments={backSegments} className={isWordCard ? "t-fr-lg" : "sentence-fr"} onPick={onWordPick} />
-                <div className="btn-row">
+                <div className="flex flex-wrap items-center gap-2">
                   <Button kind="secondary" icon={<Play aria-hidden />} onClick={() => sayFrench(cardSpeech(card))}>Play</Button>
                   <Button kind="secondary" icon={<Volume2 aria-hidden />} onClick={() => sayFrench(cardSpeech(card), 0.75)}>Slow 0.75&nbsp;×</Button>
                 </div>
               </div>
               {(translationZh || translationEn) && (
                 <div className="rev-translations">
-                  {translationZh && <p className="t-support" lang="zh">{translationZh}</p>}
-                  {translationEn && <p className="t-support">{translationEn}</p>}
+                  {translationZh && <p className="text-sm text-muted-foreground" lang="zh">{translationZh}</p>}
+                  {translationEn && <p className="text-sm text-muted-foreground">{translationEn}</p>}
                 </div>
               )}
               {u.result && (
-                <div className="compare">
+                <div className="flex flex-col gap-4">
                   <MarkedLine label="Your answer" words={u.result.answer} side="answer" />
                   <MarkedLine label="Correct answer" words={u.result.target} side="target" onPick={onWordPick} />
                 </div>
               )}
               {isWordCard && (
                 <div className="rev-meta">
-                  <p className="t-strong" lang="fr">{card.target}</p>
+                  <p className="font-medium" lang="fr">{card.target}</p>
                   {metaBits.length > 0 && (
-                    <p className="meta-row">
-                      {metaBits.map((bit) => <span className="meta-chip" key={bit}>{bit}</span>)}
+                    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                      {metaBits.map((bit) => <span className="inline-flex items-baseline gap-1.5 text-sm" key={bit}>{bit}</span>)}
                     </p>
                   )}
                 </div>
               )}
               {(dictLine || (hereLine && hereLine !== dictLine) || meta.hook) && (
-                <div className="rev-snapshot stack gap-1">
-                  {dictLine && <p className="t-body"><span className="def-label">Saved meaning: </span>{dictLine}</p>}
-                  {hereLine && hereLine !== dictLine && <p className="t-support"><span className="def-label">In this sentence: </span>{hereLine}</p>}
-                  {meta.hook && <p className="t-support">Memory hook: {meta.hook}</p>}
+                <div className="rev-snapshot flex flex-col gap-1">
+                  {dictLine && <p className="text-base"><span className="text-sm font-medium text-muted-foreground">Saved meaning: </span>{dictLine}</p>}
+                  {hereLine && hereLine !== dictLine && <p className="text-sm text-muted-foreground"><span className="text-sm font-medium text-muted-foreground">In this sentence: </span>{hereLine}</p>}
+                  {meta.hook && <p className="text-sm text-muted-foreground">Memory hook: {meta.hook}</p>}
                 </div>
               )}
               {grammar.length > 0 && (
                 <Disclosure summary={`Grammar notes (${grammar.length})`}>
-                  <ul className="stack gap-2">
+                  <ul className="flex flex-col gap-2">
                     {grammar.map((g, i) => (
-                      <li key={i} className="stack gap-1">
-                        {g.title && <p className="t-strong">{g.title}</p>}
-                        {(g.explanation || g.body) && <p className="t-support">{g.explanation || g.body}</p>}
-                        {g.hook && <p className="t-meta">Memory hook: {g.hook}</p>}
+                      <li key={i} className="flex flex-col gap-1">
+                        {g.title && <p className="font-medium">{g.title}</p>}
+                        {(g.explanation || g.body) && <p className="text-sm text-muted-foreground">{g.explanation || g.body}</p>}
+                        {g.hook && <p className="text-xs leading-4 text-muted-foreground">Memory hook: {g.hook}</p>}
                       </li>
                     ))}
                   </ul>
@@ -829,32 +827,32 @@ function ReviewSession() {
               {RATINGS.map((r) => {
                 const text = intervalText(r.value);
                 return (
-                  <button
+                  <Button
                     key={r.value}
-                    type="button"
-                    className={cx("rev-rate", suggested === r.value && "rev-rate--suggested")}
+                    kind="secondary"
+                    className={cx("rev-rate h-auto flex-col gap-0 px-3 py-2", suggested === r.value && "rev-rate--suggested")}
                     data-rating={r.value}
                     disabled={u.rateBusy || u.rated}
                     onClick={() => rate(r.value)}
                   >
                     <span className="rev-rate-name">{r.label}</span>
-                    <span className="rev-rate-interval num">{text}</span>
-                    <kbd>{r.value}</kbd>
-                  </button>
+                    <span className="rev-rate-interval tabular-nums">{text}</span>
+                    <kbd className="text-xs text-muted-foreground">{r.value}</kbd>
+                  </Button>
                 );
               })}
             </div>
             {u.rateBusy && <Spinner label="Saving your rating…" />}
-            <div className="btn-row">
+            <div className="flex flex-wrap items-center gap-2">
               <Button kind="secondary" icon={<Archive aria-hidden />} onClick={() => { masterCard(card.id); next(); }}>Mark mastered</Button>
             </div>
-            <p className="key-hints"><span><kbd>1</kbd>–<kbd>4</kbd> rates</span><span><kbd>Enter</kbd> takes the suggestion</span>{u.nextDue ? <span>Next review {dueIn(u.nextDue)}</span> : null}</p>
+            <p className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground"><span><kbd>1</kbd>–<kbd>4</kbd> rates</span><span><kbd>Enter</kbd> takes the suggestion</span>{u.nextDue ? <span>Next review {dueIn(u.nextDue)}</span> : null}</p>
             </div>
           </>
         )}
 
-        <div className="btn-row">
-          <Button kind="tertiary" className="btn--sm-text" onClick={() => go("review")}>Pause and return to Due today</Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button kind="tertiary" className="h-8 px-2 text-sm" onClick={() => go("review")}>Pause and return to Due today</Button>
         </div>
       </div>
 
@@ -932,9 +930,9 @@ function SavedCards() {
   const matchingSentences = new Set(savedRows.map(({ c }) => c.sentenceId)).size;
   const sortHeader = (key: "saved" | "due" | "importance", label: string, hide = false) => (
     <th scope="col" className={hide ? "saved-col-hide" : undefined} aria-sort={ariaSort(key)}>
-      <button type="button" className="saved-sort" onClick={() => toggleSort(key)}>
-        {label} <span aria-hidden className="saved-sort-mark">{sortMark(key)}</span>
-      </button>
+      <Button kind="tertiary" className="h-8 px-2 font-medium" onClick={() => toggleSort(key)}>
+        {label} <span aria-hidden className="text-muted-foreground">{sortMark(key)}</span>
+      </Button>
     </th>
   );
   const forcedBulk = useApp((s) => s.ss["SCR-LIB-02"]);
@@ -946,9 +944,15 @@ function SavedCards() {
   const selectedIds = Object.keys(sel).filter((k) => sel[k]);
   const selSentences = new Set(cards.filter((c) => sel[c.id]).map((c) => c.sentenceId)).size;
 
+  const savedColumns = useMemo<LegacyColumnDef<{ c: LibCard; s?: LibSentence }>[]>(
+    () => [{ id: "french", accessorFn: (row) => row.c.word || row.s?.fr || "", header: "French" }],
+    [],
+  );
+  const savedTable = useLegacyTable({ data: pageRows, columns: savedColumns, getCoreRowModel: getCoreRowModel() });
+
   if (forced === "loading" || lib.state === "loading")
     return (
-      <div className="stack gap-3">
+      <div className="flex flex-col gap-3">
         <Spinner label="Loading your library…" />
         <Skeleton lines={5} />
       </div>
@@ -974,34 +978,43 @@ function SavedCards() {
   };
 
   return (
-    <div className="stack gap-5">
-      <p className="t-meta">Saved cards come back in Review. Favorite is only a bookmark.</p>
-      <div className="filter-bar">
+    <div className="flex flex-col gap-6">
+      <p className="text-xs leading-4 text-muted-foreground">Saved cards come back in Review. Favorite is only a bookmark.</p>
+      <div className="flex flex-wrap items-end gap-3">
         <div style={{ flex: "1 1 220px" }}>
           <FieldText label="Search" name="saved-search" type="search" inputMode="search" value={f.q} onChange={(v) => setF({ q: v })} placeholder="e.g. j’ai failli…" lang="fr" />
         </div>
-        <label className="field" style={{ minWidth: 170 }}>
-          <span className="field-label">Mastered cards</span>
-          <select className="select" value={f.mastered} onChange={(e) => setF({ mastered: e.target.value as typeof f.mastered })}>
-            <option value="hide">Hide mastered</option>
-            <option value="show">Include mastered</option>
-            <option value="only">Only mastered</option>
-          </select>
+        <label className="grid gap-2" style={{ minWidth: 170 }}>
+          <span className="text-sm font-medium">Mastered cards</span>
+          <ChoiceSelect
+            value={f.mastered}
+            onValueChange={(v) => setF({ mastered: v as typeof f.mastered })}
+            options={[
+              { value: "hide", label: "Hide mastered" },
+              { value: "show", label: "Include mastered" },
+              { value: "only", label: "Only mastered" },
+            ]}
+          />
         </label>
-        <label className="field" style={{ minWidth: 210 }}>
-          <span className="field-label" title="Applies to Fill-in word cards only">Importance</span>
-          <select className="select" aria-describedby="imp-filter-note" value={f.minImportance} onChange={(e) => setF({ minImportance: Number(e.target.value) as typeof f.minImportance })}>
-            <option value={0}>Any</option>
-            <option value={3}>3 or more</option>
-            <option value={4}>4 or more</option>
-            <option value={5}>5 only</option>
-          </select>
+        <label className="grid gap-2" style={{ minWidth: 210 }}>
+          <span className="text-sm font-medium" title="Applies to Fill-in word cards only">Importance</span>
+          <ChoiceSelect
+            describedBy="imp-filter-note"
+            value={String(f.minImportance)}
+            onValueChange={(v) => setF({ minImportance: Number(v) as typeof f.minImportance })}
+            options={[
+              { value: "0", label: "Any" },
+              { value: "3", label: "3 or more" },
+              { value: "4", label: "4 or more" },
+              { value: "5", label: "5 only" },
+            ]}
+          />
           <span id="imp-filter-note" className="sr-only">Applies to Fill-in word cards only</span>
         </label>
-        <label className="check check--box"><input type="checkbox" checked={f.favoritesOnly} onChange={(e) => setF({ favoritesOnly: e.target.checked })} /> Favorites only</label>
+        <label className="flex items-center gap-3 py-2"><Checkbox checked={f.favoritesOnly} onCheckedChange={(v) => setF({ favoritesOnly: v === true })} /> Favorites only</label>
       </div>
-      <div className="row row--between">
-        <p className="t-support meta-row" aria-live="polite">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-sm" aria-live="polite">
           <span>Showing {plural(matchingSentences, "sentence")}</span>
           <span>{plural(matchingCards, "card")}</span>
           {(q || f.mastered !== "hide" || f.minImportance || f.favoritesOnly) ? <span>of {nf.format(savedTotal)} saved cards</span> : null}
@@ -1026,17 +1039,17 @@ function SavedCards() {
       ) : (
         <>
           {narrow ? (
-            <ul className="saved-cards">
-              {pageRows.map(({ c, s }) => {
+            <ul className="flex list-none flex-col gap-3">
+              {savedTable.getRowModel().rows.map((row) => { const { c, s } = row.original;
                 const fav = Boolean(favorites[favoriteKey(c)]);
                 const speech = c.word || s?.fr || "";
                 const meaning = [c.meaning, s?.en].find((v) => v && !/\p{Script=Han}/u.test(v)) || "—";
                 return (
-                  <li key={c.id} className="saved-card" data-card-id={c.id}>
-                    <p className="saved-card-fr" lang="fr">{c.word || s?.fr || ""}</p>
-                    <p className="t-support">{meaning}</p>
-                    <p className="meta-row"><span className="meta-k">Due</span><span className="num">{compactDue(c.due)}</span><span className="meta-chip">{c.mastered ? "Mastered" : STATUS_LABEL[c.status]}</span></p>
-                    <div className="saved-action-btns">
+                  <li key={c.id} className="flex flex-col gap-2 rounded-lg border bg-card p-4" data-card-id={c.id}>
+                    <p className="saved-card-fr font-serif text-xl leading-snug wrap-break-word" lang="fr">{c.word || s?.fr || ""}</p>
+                    <p className="text-sm text-muted-foreground">{meaning}</p>
+                    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"><span className="text-xs font-medium text-muted-foreground">Due</span><span className="tabular-nums">{compactDue(c.due)}</span><span className="inline-flex items-baseline gap-1.5 text-sm">{c.mastered ? "Mastered" : STATUS_LABEL[c.status]}</span></p>
+                    <div className="flex gap-1">
                       <Button kind="tertiary" iconOnly aria-label={`Play ${c.word || "sentence"}`} icon={<Play aria-hidden />} onClick={() => sayFrench(speech)} />
                       <Button kind="tertiary" iconOnly aria-pressed={fav} aria-label={fav ? "Remove favorite" : "Favorite"} icon={fav ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />} onClick={() => void setFavorite(speech, !fav)} />
                       <Button kind="tertiary" iconOnly aria-label={c.mastered ? "Restore" : "Mark mastered"} icon={<Archive aria-hidden />} onClick={() => (c.mastered ? void restoreMastered(c.id) : masterCard(c.id))} />
@@ -1046,8 +1059,8 @@ function SavedCards() {
               })}
             </ul>
           ) : (
-          <div className="table-wrap saved-table-wrap">
-            <table className="saved-table">
+          <div className="w-full">
+            <Table className="saved-table">
               <colgroup>
                 {selecting && <col className="saved-col-hide saved-col-check" />}
                 <col className="saved-col-french" />
@@ -1073,7 +1086,7 @@ function SavedCards() {
                 </tr>
               </thead>
               <tbody>
-                {pageRows.map(({ c, s }) => {
+                {savedTable.getRowModel().rows.map((row) => { const { c, s } = row.original;
                   const wordLookups = getCardLookups({ lookups }, c);
                   const fav = Boolean(favorites[favoriteKey(c)]);
                   const speech = c.word || s?.fr || "";
@@ -1081,20 +1094,20 @@ function SavedCards() {
                     <tr key={c.id} data-card-id={c.id} data-saved={c.savedAt}>
                       {selecting && (
                         <td className="saved-col-hide">
-                          {c.saved && <input type="checkbox" aria-label={`Select ${c.kind} card${c.word ? ` for ${c.word}` : ""}`} checked={!!sel[c.id]} onChange={(e) => setSel({ ...sel, [c.id]: e.target.checked })} />}
+                          {c.saved && <Checkbox aria-label={`Select ${c.kind} card${c.word ? ` for ${c.word}` : ""}`} checked={!!sel[c.id]} onCheckedChange={(v) => setSel({ ...sel, [c.id]: v === true })} />}
                         </td>
                       )}
-                      <td className="saved-french" title={c.word || s?.fr || ""}>
-                        <span className="saved-cell">{c.word ? <strong lang="fr">{c.word}</strong> : <span lang="fr" className="saved-sentence">{s?.fr ?? ""}</span>}</span>
+                      <td className="saved-french font-serif wrap-break-word" title={c.word || s?.fr || ""}>
+                        <span className="block wrap-break-word">{c.word ? <strong lang="fr">{c.word}</strong> : <span lang="fr" className="saved-sentence">{s?.fr ?? ""}</span>}</span>
                       </td>
-                      <td className="saved-col-hide"><span className="saved-cell">{c.kind}</span></td>
-                      <td className="saved-col-hide saved-meaning" title={[c.meaning, s?.en].find((v) => v && !/\p{Script=Han}/u.test(v)) || ""}><span className="saved-cell">{[c.meaning, s?.en].find((v) => v && !/\p{Script=Han}/u.test(v)) || "—"}</span></td>
-                      <td className="saved-col-hide"><span className="saved-cell">{c.mastered ? "Mastered" : STATUS_LABEL[c.status]}</span></td>
-                      <td className="num"><span className="saved-cell">{compactDue(c.due)}</span></td>
-                      <td className="saved-col-hide" data-col="imp"><span className="saved-cell">{wordLookups !== null ? <span className="saved-imp"><Importance count={wordLookups} /></span> : "—"}</span></td>
-                      <td className="saved-col-hide num"><span className="saved-cell">{shortSavedDate(c.savedAt)}</span></td>
-                      <td className="saved-actions">
-                        <span className="saved-action-btns">
+                      <td className="saved-col-hide"><span className="block wrap-break-word">{c.kind}</span></td>
+                      <td className="saved-col-hide wrap-break-word" title={[c.meaning, s?.en].find((v) => v && !/\p{Script=Han}/u.test(v)) || ""}><span className="block wrap-break-word">{[c.meaning, s?.en].find((v) => v && !/\p{Script=Han}/u.test(v)) || "—"}</span></td>
+                      <td className="saved-col-hide"><span className="block wrap-break-word">{c.mastered ? "Mastered" : STATUS_LABEL[c.status]}</span></td>
+                      <td className="tabular-nums"><span className="block wrap-break-word">{compactDue(c.due)}</span></td>
+                      <td className="saved-col-hide" data-col="imp"><span className="block wrap-break-word">{wordLookups !== null ? <span className=""><Importance count={wordLookups} /></span> : "—"}</span></td>
+                      <td className="saved-col-hide tabular-nums"><span className="block wrap-break-word">{shortSavedDate(c.savedAt)}</span></td>
+                      <td className="whitespace-nowrap">
+                        <span className="flex gap-1">
                           <Button kind="tertiary" iconOnly aria-label={`Play ${c.word || "sentence"}`} icon={<Play aria-hidden />} onClick={() => sayFrench(speech)} />
                           <Button kind="tertiary" iconOnly aria-pressed={fav} aria-label={fav ? "Remove favorite" : "Favorite"} icon={fav ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />} onClick={() => void setFavorite(speech, !fav)} />
                           <Button kind="tertiary" iconOnly aria-label={c.mastered ? "Restore" : "Mark mastered"} icon={<Archive aria-hidden />} onClick={() => (c.mastered ? void restoreMastered(c.id) : masterCard(c.id))} />
@@ -1104,22 +1117,22 @@ function SavedCards() {
                   );
                 })}
               </tbody>
-            </table>
+            </Table>
           </div>
           )}
-          <div className="saved-pager">
+          <div className="saved-pager mt-3 flex flex-wrap items-center gap-3">
             <Button kind="secondary" icon={<ChevronLeft aria-hidden />} disabledReason={curPage === 0 ? "You are on the first page." : undefined} onClick={() => setPage(curPage - 1)}>Prev</Button>
-            <span className="t-support num" aria-live="polite">Page {curPage + 1} of {pageCount}</span>
+            <span className="text-sm text-muted-foreground tabular-nums" aria-live="polite">Page {curPage + 1} of {pageCount}</span>
             <Button kind="secondary" iconAfter={<ChevronRight aria-hidden />} disabledReason={curPage >= pageCount - 1 ? "You are on the last page." : undefined} onClick={() => setPage(curPage + 1)}>Next</Button>
-            <span className="t-support num">Rows {rowFrom}–{rowTo} of {savedRows.length}</span>
+            <span className="text-sm text-muted-foreground tabular-nums">Rows {rowFrom}–{rowTo} of {savedRows.length}</span>
           </div>
         </>
       )}
       {selecting && (
-        <div className="bulk-bar" role="region" aria-label="Bulk practice">
-          <p className="grow t-strong" aria-live="polite">
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card p-3" role="region" aria-label="Bulk practice">
+          <p className="min-w-0 flex-1 font-medium" aria-live="polite">
             Practise {plural(selectedIds.length, "selected card")} from {nf.format(savedTotal)} library cards
-            {selectedIds.length ? <span className="t-support"> from {plural(selSentences, "sentence")}</span> : null}
+            {selectedIds.length ? <span className="text-sm text-muted-foreground"> from {plural(selSentences, "sentence")}</span> : null}
           </p>
           <Button kind="secondary" onClick={() => { setSelecting(false); setSel({}); }}>Cancel</Button>
           <Button kind="primary" onClick={startBulk} disabledReason={!selectedIds.length ? "Select at least one card." : undefined}>Start practice</Button>
@@ -1159,7 +1172,7 @@ function MasteredList() {
   };
   if (lib.state === "loading" && forced !== "empty")
     return (
-      <div className="stack gap-3">
+      <div className="flex flex-col gap-3">
         <Spinner label="Loading mastered cards…" />
         <Skeleton lines={4} />
       </div>
@@ -1177,30 +1190,30 @@ function MasteredList() {
       </Banner>
     );
   return (
-    <div className="stack gap-4">
-      <p className="t-support">Mastered cards are hidden from your default review. Restore one to bring it back. Nothing here is deleted.</p>
+    <div className="flex flex-col gap-4">
+      <p className="text-sm text-muted-foreground">Mastered cards are hidden from your default review. Restore one to bring it back. Nothing here is deleted.</p>
       <div style={{ maxWidth: 420 }}>
         <FieldText label="Search mastered cards" type="search" value={q} onChange={setQ} lang="fr" />
       </div>
-      <p className="t-support" aria-live="polite">Showing {shown.length} of {plural(mastered.length, "mastered card")}</p>
+      <p className="text-sm text-muted-foreground" aria-live="polite">Showing {shown.length} of {plural(mastered.length, "mastered card")}</p>
       {shown.length === 0 ? (
         <Banner tone="neutral" title="No mastered cards match your search" actions={<Button kind="secondary" onClick={() => setQ("")}>Clear search</Button>} />
       ) : (
-        <ul className="list">
+        <ul className="divide-y overflow-hidden rounded-lg border">
           {shown.slice(0, 30).map((c) => {
             const s = sentences.find((x) => x.id === c.sentenceId)!;
             const st = pending[c.id];
             return (
-              <li key={c.id} className="list-row">
-                <div className="grow stack" style={{ minWidth: 200 }}>
+              <li key={c.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                <div className="min-w-0 flex-1 flex flex-col" style={{ minWidth: 200 }}>
                   <span lang="fr">{s.fr}</span>
-                  <span className="t-support">{c.kind} card{c.word ? ` · ${c.word}` : ""}</span>
+                  <span className="text-sm text-muted-foreground">{c.kind} card{c.word ? ` · ${c.word}` : ""}</span>
                 </div>
                 {st === "done" ? (
                   <Pill tone="success">Restored</Pill>
                 ) : st === "error" ? (
                   <>
-                    <span className="t-support" style={{ color: "var(--error)" }}>Restore failed</span>
+                    <span className="text-sm text-muted-foreground" style={{ color: "var(--error)" }}>Restore failed</span>
                     <Button kind="secondary" icon={<RotateCcw aria-hidden />} onClick={() => restore(c.id)}>Retry</Button>
                   </>
                 ) : (
@@ -1211,7 +1224,7 @@ function MasteredList() {
           })}
         </ul>
       )}
-      {shown.length > 30 && <p className="note"><Search aria-hidden /> Showing the first 30. Search to find others.</p>}
+      {shown.length > 30 && <p className="flex items-start gap-2 text-sm text-muted-foreground"><Search aria-hidden /> Showing the first 30. Search to find others.</p>}
     </div>
   );
 }

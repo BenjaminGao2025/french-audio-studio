@@ -5,7 +5,7 @@ import { stepText } from "../api/study";
 import type { PracticeItem } from "../data/fixtures";
 import { plural } from "../lib/format";
 import { announce, go, set, useApp } from "../state/store";
-import { Banner, Button, DisabledReason, PageHead, Spinner } from "../components/ui";
+import { Banner, Button, Checkbox, DisabledReason, PageHead, RadioGroup, RadioGroupItem, Spinner } from "../components/ui";
 import { Exercise } from "./Exercise";
 
 type Source = "last" | "queue" | "choose";
@@ -69,9 +69,9 @@ export function Launcher({ kind }: { kind: "Recall" | "Dictation" }) {
     : undefined;
 
   return (
-    <div className="page">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <PageHead
-        back={<Button kind="tertiary" className="btn--sm-text" icon={<ChevronLeft aria-hidden />} onClick={() => go("study")} style={{ alignSelf: "flex-start", marginLeft: -12 }}>Study</Button>}
+        back={<Button kind="tertiary" className="h-8 px-2 text-sm" icon={<ChevronLeft aria-hidden />} onClick={() => go("study")} style={{ alignSelf: "flex-start", marginLeft: -12 }}>Study</Button>}
         title={kind}
         desc={
           kind === "Recall"
@@ -79,42 +79,44 @@ export function Launcher({ kind }: { kind: "Recall" | "Dictation" }) {
             : "Listen to practice audio and type what you hear. An English hint is available if you need it."
         }
       />
-      <div className="stack gap-5">
-        <fieldset className="stack gap-2" style={{ border: 0, padding: 0, margin: 0 }}>
-          <legend className="t-section" style={{ marginBottom: 8 }}>What do you want to practise?</legend>
+      <div className="flex flex-col gap-6">
+        <fieldset className="flex flex-col gap-2 border-0 p-0">
+          <legend className="mb-2 text-sm font-medium">Source</legend>
+          <RadioGroup value={src} onValueChange={(v) => setSrc(v as Source)} className="gap-3">
           {(
             [
-              ["last", "Last studied sentence", lastItems.length ? plural(lastItems.length, "sentence") : "None yet — study a text first"],
-              ["queue", "Today’s review queue", queueItems.length ? `${plural(queueItems.length, "sentence")} from cards due today` : "No sentences due today"],
-              ["choose", "Choose sentences", "Pick from your saved sentences"],
+              ["last", "Last studied sentence", lastItems.length ? plural(lastItems.length, "sentence") : "None yet"],
+              ["queue", "Today’s review queue", queueItems.length ? plural(queueItems.length, "sentence") : "None due"],
+              ["choose", "Choose sentences", "Saved sentences"],
             ] as [Source, string, string][]
           ).map(([v, label, sub]) => (
-            <label key={v} className="option">
-              <input type="radio" name={`src-${kind}`} checked={src === v} onChange={() => setSrc(v)} />
-              <span className="stack">
-                <span className="t-strong">{label}</span>
-                <span className="t-support">{sub}</span>
+            <label key={v} className="flex items-start gap-3">
+              <RadioGroupItem value={v} className="mt-1" />
+              <span className="flex flex-col">
+                <span className="font-medium">{label}</span>
+                <span className="text-sm text-muted-foreground">{sub}</span>
               </span>
             </label>
           ))}
+          </RadioGroup>
         </fieldset>
 
         {src === "choose" && (
-          <fieldset className="list" style={{ border: 0, padding: "4px 16px", margin: 0 }}>
+          <fieldset className="divide-y overflow-hidden rounded-lg border" style={{ border: 0, padding: "4px 16px", margin: 0 }}>
             <legend className="sr-only">Saved sentences</legend>
-            {saved.phase === "ready" && !choosable.length && <p className="t-support" style={{ padding: "12px 0" }}>No saved sentences yet. Add a sentence to review from Study first.</p>}
+            {saved.phase === "ready" && !choosable.length && <p className="text-sm text-muted-foreground" style={{ padding: "12px 0" }}>No saved sentences yet. Add a sentence to review from Study first.</p>}
             {choosable.map((c) => (
-              <label key={c.id} className="check">
-                <input type="checkbox" checked={!!picked[c.id]} onChange={(e) => setPicked({ ...picked, [c.id]: e.target.checked })} />
+              <label key={c.id} className="flex items-start gap-3 py-2">
+                <Checkbox checked={!!picked[c.id]} onCheckedChange={(v) => setPicked({ ...picked, [c.id]: v === true })} />
                 <span>{c.label}</span>
               </label>
             ))}
-            <p className="t-meta" style={{ paddingBottom: 12 }}>Sentences are listed by date and length so the French isn’t shown before you practise.</p>
+
           </fieldset>
         )}
 
-        <div className="panel stack gap-2" aria-live="polite">
-          <p className="t-strong">Source: {srcName} · {plural(items.length, "sentence")}</p>
+        <div className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-2" aria-live="polite">
+          <p className="font-medium">Source: {srcName} · {plural(items.length, "sentence")}</p>
         </div>
 
         {src !== "choose" && !items.length && effectivePhase === "idle" && (
@@ -126,8 +128,8 @@ export function Launcher({ kind }: { kind: "Recall" | "Dictation" }) {
           <Banner tone="error" title="Sentences didn’t load" live="assertive">Your choice is kept. Retry to load them again.</Banner>
         )}
         {effectivePhase === "loading" && <Spinner label="Preparing sentences…" />}
-        <div className="stack gap-2">
-          <div className="btn-row">
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button kind="primary" onClick={start} busy={effectivePhase === "loading"} disabledReason={emptyReason}>
               {effectivePhase === "error" ? "Retry" : `Start ${kind.toLowerCase()}`}
             </Button>
@@ -148,7 +150,7 @@ export function RunScreen() {
   const meta = key ? runItems.get(key) : undefined;
   if (!key || (!sess && !meta)) {
     return (
-      <div className="page">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
         <PageHead title="Practice" />
         <Banner tone="neutral" title="No practice in progress" actions={<Button kind="primary" onClick={() => go("study/recall")}>Choose a practice</Button>} />
       </div>
@@ -156,9 +158,9 @@ export function RunScreen() {
   }
   const kind = sess?.kind ?? meta!.kind;
   return (
-    <div className="page page--read">
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
       <h1 className="sr-only" tabIndex={-1} data-page-title>{kind}</h1>
-      <Button kind="tertiary" className="btn--sm-text" icon={<ChevronLeft aria-hidden />} onClick={() => go(kind === "Recall" ? "study/recall" : "study/dictation")} style={{ alignSelf: "flex-start", marginLeft: -12 }}>Change source</Button>
+      <Button kind="tertiary" className="h-8 px-2 text-sm" icon={<ChevronLeft aria-hidden />} onClick={() => go(kind === "Recall" ? "study/recall" : "study/dictation")} style={{ alignSelf: "flex-start", marginLeft: -12 }}>Change source</Button>
       <Exercise sessionKey={key} kind={kind} source={sess?.source ?? meta!.source} items={sess?.items ?? meta!.items} onDone={() => go("study")} />
     </div>
   );

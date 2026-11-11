@@ -34,6 +34,21 @@ import {
 } from "./state/store";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+if (typeof window.matchMedia !== "function") {
+  window.matchMedia = (query: string) =>
+    ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener() {},
+      removeListener() {},
+      addEventListener() {},
+      removeEventListener() {},
+      dispatchEvent() {
+        return false;
+      },
+    }) as MediaQueryList;
+}
 const wait = (ms: number) => act(() => new Promise((r) => setTimeout(r, ms)));
 const TARGET = "J’ai oublié mon rendez-vous";
 
@@ -440,13 +455,13 @@ describe("8. feedback and copy cleanups", () => {
     fake.studyRecords = [studyRecord("r1", ["Le plat du jour est excellent.", "Nous avons pris un café."])];
     await act(async () => go("progress/history?tab=attempts"));
     await wait(200);
-    await act(async () => buttonWith("Nous avons pris un café près de la gare.").click());
+    await act(async () => openHistoryRow("Nous avons pris un café près de la gare.").click());
     await act(async () => buttonWith("Find saved card").click());
     expect(get().libFilters.q).toBe("Nous avons pris un café près de la gare.");
 
     await act(async () => go("progress/history?tab=analyses"));
     await wait(200);
-    await act(async () => buttonWith("Le plat du jour").click());
+    await act(async () => openHistoryRow("Le plat du jour").click());
     await act(async () => buttonWith("Open this analysis in Study").click());
     expect(get().study.sentences.map((x) => x.fr)).toEqual(["Le plat du jour est excellent.", "Nous avons pris un café."]);
     expect(get().route).toBe("study");
@@ -761,7 +776,7 @@ describe("14. History, Progress and Episodes on the server", () => {
     fake.studyRecords = [{ ...studyRecord("r1", []), sentences: undefined, sentenceCount: 3, text: "Texte ancien." }];
     await act(async () => go("progress/history?tab=analyses"));
     await wait(200);
-    await act(async () => buttonWith("Texte ancien.").click());
+    await act(async () => openHistoryRow("Texte ancien.").click());
     expect(document.getElementById("main")!.textContent).toContain("can’t be opened");
     await act(async () => buttonWith("Put the text in Study").click());
     expect(get().study.drafts.text).toBe("Texte ancien.");
@@ -903,7 +918,7 @@ describe("15. Practice, Settings and the exam placeholder on the server", () => 
     };
     await act(async () => buttonWith("Play the clip").click());
     await end();
-    await act(async () => (Array.from(main().querySelectorAll("label")).find((l) => l.textContent === "Most or all of it")!.querySelector("input") as HTMLInputElement).click());
+    await act(async () => (Array.from(main().querySelectorAll("label")).find((l) => l.textContent === "Most or all of it")!.querySelector("button, input") as HTMLElement).click());
     await act(async () => buttonWith("Continue").click());
     await wait(150);
     await act(async () => buttonWith("Show the text").click());
@@ -917,7 +932,7 @@ describe("15. Practice, Settings and the exam placeholder on the server", () => 
     const stages = fake.calls.filter((c) => c.path.endsWith("/relisten")).map((c) => (c.body as { stage: string }).stage);
     expect(stages).toEqual(["slow20", "normal", "normal"]);
     expect(main().textContent).toContain("Où vont-ils ?");
-    await act(async () => (Array.from(main().querySelectorAll("label")).find((l) => l.textContent?.startsWith("Au marché"))!.querySelector("input") as HTMLInputElement).click());
+    await act(async () => (Array.from(main().querySelectorAll("label")).find((l) => l.textContent?.startsWith("Au marché"))!.querySelector("button, input") as HTMLElement).click());
     await act(async () => buttonWith("Check").click());
     await wait(150);
     expect(main().textContent).toContain("Correct");
@@ -983,6 +998,12 @@ describe("15. Practice, Settings and the exam placeholder on the server", () => 
   });
 });
 
+function openHistoryRow(snippet: string): HTMLButtonElement {
+  const row = Array.from(document.querySelectorAll("#main tr")).find((tr) => tr.textContent?.includes(snippet));
+  const btn = row && Array.from(row.querySelectorAll("button")).find((b) => b.textContent?.trim() === "Open");
+  if (!btn) throw new Error(`No Open button in a row containing "${snippet}"`);
+  return btn;
+}
 function buttonWith(text: string): HTMLButtonElement {
   const b = Array.from(document.querySelectorAll<HTMLButtonElement>("#main button, [role=dialog] button")).find((x) => x.textContent?.includes(text));
   if (!b) throw new Error(`No button with "${text}"`);

@@ -18,7 +18,7 @@ import {
 } from "../state/store";
 import { gradeAttempt } from "../api/dictation";
 import { FrText, type FrPick, type FrSegment } from "../components/FrText";
-import { Banner, Button, Dialog, Segmented, Spinner, useNarrow, WordDock } from "../components/ui";
+import { Banner, Button, Dialog, Segmented, Spinner, Textarea, WordDock, useNarrow } from "../components/ui";
 import { WordPanel } from "./WordPopup";
 
 /* ---------------- session helpers ---------------- */
@@ -237,21 +237,21 @@ export function MarkedLine({
   const notes = [...new Set(words.map((w) => inlineTagFor(w, side)).filter((tag): tag is string => Boolean(tag)))];
   const tappable = side === "target" && onPick;
   return (
-    <div className="stack gap-1">
-      <span className="def-label">{label}</span>
+    <div className="flex flex-col gap-1">
+      <span className="text-sm font-medium text-muted-foreground">{label}</span>
       {tappable ? (
-        <FrText segments={targetSegments(words)} className="compare-line" onPick={onPick} />
+        <FrText segments={targetSegments(words)} className="font-serif text-xl leading-9" onPick={onPick} />
       ) : (
-        <p className="compare-line" lang="fr">
+        <p className="font-serif text-xl leading-9" lang="fr">
           {words.map((w, i) => (
             <span key={i}>
-              {w.mark === "ok" ? w.text : <span className={`tok tok--${w.mark}`}>{w.text}</span>}
+              {w.mark === "ok" ? w.text : <span className={`rounded px-0.5 tok--${w.mark}`}>{w.text}</span>}
               {i < words.length - 1 ? " " : ""}
             </span>
           ))}
         </p>
       )}
-      {notes.length > 0 && <p className="compare-note t-meta">{notes.join(" · ")}</p>}
+      {notes.length > 0 && <p className="compare-note text-xs leading-4 text-muted-foreground">{notes.join(" · ")}</p>}
     </div>
   );
 }
@@ -259,11 +259,12 @@ export function MarkedLine({
 export function AccentBar({ target }: { target: React.RefObject<HTMLTextAreaElement | null> }) {
   const chars = ["é", "è", "ê", "à", "â", "ç", "î", "ô", "û", "ù", "œ", "’"];
   return (
-    <div className="accent-bar" role="group" aria-label="Insert a French character">
+    <div className="flex flex-wrap gap-1" role="group" aria-label="Insert a French character">
       {chars.map((c) => (
-        <button
+        <Button
           key={c}
-          type="button"
+          kind="secondary"
+          className="h-8 w-8 px-0"
           aria-label={`Insert ${c === "’" ? "apostrophe" : c}`}
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
@@ -281,7 +282,7 @@ export function AccentBar({ target }: { target: React.RefObject<HTMLTextAreaElem
           }}
         >
           {c}
-        </button>
+        </Button>
       ))}
     </div>
   );
@@ -377,10 +378,10 @@ export function Exercise({
 
   return (
     <section className={compact ? "exercise" : "exercise"} aria-labelledby={`ex-q-${sessionKey}`}>
-      <div className="stack gap-3">
-        <div className="row row--between">
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 id={`ex-q-${sessionKey}`} tabIndex={-1} className={compact ? "t-label" : "t-section"}>{qLabel}</h2>
-          <p className="meta-row t-support">
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-sm text-muted-foreground">
             <span>Question {sess.index + 1} of {sess.items.length}</span>
             {sess.mode === "step" && <span>Step {step + 1} of {stepCount}</span>}
             <span>Source: {sess.source}</span>
@@ -402,19 +403,19 @@ export function Exercise({
         />
       </div>
 
-      <hr className="divider" />
+      <hr className="border-t" />
 
       {/* Prompt — never the French target */}
-      <div className="stack gap-3">
+      <div className="flex flex-col gap-3">
         {kind === "Recall" ? (
           <>
-            <p className="t-support">Write this in French.</p>
-            <p className="prompt-en">{t.en}</p>
+            <p className="text-sm text-muted-foreground">Write this in French.</p>
+            <p className="text-lg font-medium">{t.en}</p>
           </>
         ) : (
           <>
-            <p className="t-support">Listen and type what you hear.</p>
-            <div className="btn-row">
+            <p className="text-sm text-muted-foreground">Listen and type what you hear.</p>
+            <div className="flex flex-wrap items-center gap-2">
               <Button kind="secondary" icon={<Play aria-hidden />} onClick={() => play(false)} aria-label="Play practice audio" busy={myAudio?.status === "loading"}>
                 Play
               </Button>
@@ -422,7 +423,7 @@ export function Exercise({
                 Slow
               </Button>
               {myAudio && myAudio.status !== "error" && (
-                <span className="t-support" aria-live="off">
+                <span className="text-sm text-muted-foreground" aria-live="off">
                   {myAudio.status === "playing" ? `Playing practice audio at ${myAudio.speed}\u00a0×` : myAudio.status === "loading" ? "Loading…" : myAudio.status === "ended" ? "Played" : "Paused"}
                 </span>
               )}
@@ -445,8 +446,8 @@ export function Exercise({
             <Eye aria-hidden />
             <div className="banner-body">
               <p className="banner-title">Answer shown</p>
-              <FrText text={t.fr} className="t-fr-lg" onPick={handlePick} />
-              <div className="btn-row">
+              <FrText text={t.fr} className="font-serif text-2xl leading-snug wrap-break-word" onPick={handlePick} />
+              <div className="flex flex-wrap items-center gap-2">
                 <Button kind="secondary" onClick={tryFromMemory}>Try it now</Button>
               </div>
             </div>
@@ -456,14 +457,14 @@ export function Exercise({
 
       {/* Answer or result */}
       {ui.phase !== "graded" ? (
-        <div className="stack gap-3">
-          <div className="field">
-            <label htmlFor={`ex-input-${sessionKey}`} className="field-label">Your answer in French</label>
-            <textarea
+        <div className="flex flex-col gap-3">
+          <div className="grid gap-2">
+            <label htmlFor={`ex-input-${sessionKey}`} className="text-sm font-medium">Your answer in French</label>
+            <Textarea
               id={`ex-input-${sessionKey}`}
               name="practice-answer"
               ref={inputRef}
-              className="textarea textarea--answer"
+              className="min-h-24"
               lang="fr"
               rows={3}
               value={draft}
@@ -481,9 +482,9 @@ export function Exercise({
               autoCapitalize="off"
               autoComplete="off"
             />
-            <p id={`ex-keys-${sessionKey}`} className="field-help">Enter checks your answer. Shift + Enter adds a new line.</p>
+            <p id={`ex-keys-${sessionKey}`} className="text-sm text-muted-foreground">Enter checks your answer. Shift + Enter adds a new line.</p>
             {ui.emptyError && (
-              <p id={`ex-err-${sessionKey}`} className="field-error" role="alert">Type an answer before checking. No attempt was recorded.</p>
+              <p id={`ex-err-${sessionKey}`} className="text-sm text-destructive" role="alert">Type an answer before checking. No attempt was recorded.</p>
             )}
           </div>
           <AccentBar target={inputRef} />
@@ -493,8 +494,8 @@ export function Exercise({
             </Banner>
           )}
           {busy && <Spinner label="Checking your answer…" />}
-          <div className="sticky-actions">
-            <div className="btn-row">
+          <div className="sticky bottom-0 z-10 bg-background py-3">
+            <div className="flex flex-wrap items-center gap-2">
               <Button kind="primary" busy={busy} onClick={() => submitAnswer(sessionKey)}>
                 {ui.phase === "techfail" ? "Retry check" : busy ? "Checking…" : "Check"}
               </Button>
@@ -590,8 +591,8 @@ function Result({
   const r = attempt.result!;
   const correct = attempt.outcome === "correct";
   return (
-    <div className="stack gap-4">
-      <div id={`ex-result-${sessionKey}`} tabIndex={-1} className="stack gap-3">
+    <div className="flex flex-col gap-4">
+      <div id={`ex-result-${sessionKey}`} tabIndex={-1} className="flex flex-col gap-3">
         {attempt.answerKnown ? (
           <Banner tone="neutral" title="Answer known" />
         ) : correct ? (
@@ -600,17 +601,17 @@ function Result({
           <Banner tone="error" title={`Not quite · ${plural(r.issues.length, "difference")}`} />
         )}
         {correct ? (
-          <div className="result-compact">
-            <span className="def-label">Answer</span>
-            <FrText text={target} className="t-fr-lg" onPick={onPick} />
-            <div className="btn-row">
+          <div className="flex flex-col gap-3 py-2">
+            <span className="text-sm font-medium text-muted-foreground">Answer</span>
+            <FrText text={target} className="font-serif text-2xl leading-snug wrap-break-word" onPick={onPick} />
+            <div className="flex flex-wrap items-center gap-2">
               <Button kind="tertiary" icon={<Play aria-hidden />} onClick={() => startPlayback({ kind: "exercise", label: "Practice audio", route }, Math.max(1, target.length / 13), { texts: [target] })} style={{ marginLeft: -12 }}>
                 Play answer
               </Button>
             </div>
           </div>
         ) : (
-          <div className="compare">
+          <div className="flex flex-col gap-4">
             <MarkedLine label="Your answer" words={r.answer} side="answer" />
             <MarkedLine label="Correct answer" words={r.target} side="target" onPick={onPick} />
           </div>
@@ -620,7 +621,7 @@ function Result({
 
       {isLast && <SessionSummary attempts={sessionAttempts} items={itemsCount} />}
 
-      <div className="btn-row">
+      <div className="flex flex-wrap items-center gap-2">
         {isLast ? (
           <Button kind="primary" onClick={onDone}>{doneLabel}</Button>
         ) : (
@@ -653,10 +654,10 @@ function SessionSummary({ attempts, items }: { attempts: Attempt[]; items: numbe
   const hinted = completed.filter((a) => a.hinted && !a.answerKnown).length;
   const known = completed.filter((a) => a.answerKnown).length;
   return (
-    <section className="stack gap-3" aria-label="Session summary">
-      <hr className="divider" />
-      <h3 className="t-strong">Practice complete</h3>
-      <dl className="stat-grid">
+    <section className="flex flex-col gap-3" aria-label="Session summary">
+      <hr className="border-t" />
+      <h3 className="font-medium">Practice complete</h3>
+      <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
         {[
           ["Sentences", plural(items, "sentence")],
           ["Attempts", plural(attempts.length, "attempt")],
@@ -665,13 +666,13 @@ function SessionSummary({ attempts, items }: { attempts: Attempt[]; items: numbe
           ["Hint used", `${hinted}`],
           ["Answer known", `${known}`],
         ].map(([k, v]) => (
-          <div key={k} className="stat">
-            <dt className="t-support">{k}</dt>
-            <dd className="t-section num" style={{ margin: 0 }}>{v}</dd>
+          <div key={k} className="flex flex-col gap-0.5">
+            <dt className="text-sm text-muted-foreground">{k}</dt>
+            <dd className="text-lg font-semibold text-balance tabular-nums" style={{ margin: 0 }}>{v}</dd>
           </div>
         ))}
       </dl>
-      <p className="t-meta">Hinted and answer-known results are listed separately. No combined accuracy score is shown.</p>
+      <p className="text-xs leading-4 text-muted-foreground">Hinted and answer-known results are listed separately. No combined accuracy score is shown.</p>
     </section>
   );
 }
