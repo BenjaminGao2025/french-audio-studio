@@ -19,11 +19,11 @@ import { importanceFor } from "../lib/lookup";
 import { formatFriendlyPhonetic } from "../lib/phonetic";
 import { cx, nf, plural } from "../lib/format";
 import { announce, get, getCardLookups, go, introduceNewCard, sayFrench, set, useApp, type ReviewUI } from "../state/store";
-import { Checkbox, Dialog, DisabledReason, Importance, PageHead, Progress, Skeleton, Spinner, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Textarea, WordDock, useNarrow } from "../components/ui";
+import { Checkbox, DisabledReason, EntryCard, Importance, PageHead, Progress, Skeleton, Spinner, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Textarea, useNarrow } from "../components/ui";
 import { flexRender } from "@tanstack/react-table";
 import { getCoreRowModel, useLegacyTable, type LegacyColumnDef } from "@tanstack/react-table/legacy";
 import { FrText, tokenizeFrench, type FrPick, type FrSegment } from "../components/FrText";
-import { WordPanel } from "./WordPopup";
+import { WordOverlay, WordPanel } from "./WordPopup";
 import { MarkedLine } from "./Exercise";
 import { runItems } from "./Launcher";
 import { Button } from "../components/ui/button";
@@ -319,7 +319,8 @@ function DueToday() {
       )}
 
       {(state === "active" || state === "offline") && (
-        <section className="flex flex-col gap-6" aria-labelledby="today-h">
+        <Card>
+        <CardContent className="flex flex-col gap-6">
           <div className="flex flex-col gap-2">
             <h2 id="today-h" className="text-xs font-medium text-muted-foreground">Today’s session</h2>
             <p className="text-lg font-semibold tabular-nums">{nf.format(state === "offline" ? 12 : total)}</p>
@@ -366,7 +367,14 @@ function DueToday() {
             <div className="flex flex-col gap-0.5"><dt className="text-sm text-muted-foreground">Your whole library</dt><dd className="text-lg font-semibold text-balance tabular-nums" style={{ margin: 0 }}>{libOk ? <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"><span>{nf.format(sentences)} sentences</span><span>{nf.format(savedCards)} cards</span></span> : "…"}</dd></div>
           </dl>
           <span className="sr-only">Queue pool: {queue.length} cards</span>
-        </section>
+        </CardContent>
+        </Card>
+      )}
+      {state !== "loading" && (
+        <div className="grid gap-3">
+          <EntryCard title="Saved cards" description="Filter and practise from your library" onClick={() => go("review/saved")} />
+          <EntryCard title="Practise my own words" description="Prepare, speak, and archive your own ideas" onClick={() => go("study/personal")} />
+        </div>
       )}
     </div>
   );
@@ -389,7 +397,6 @@ function ReviewSession() {
   const plan = usePlan();
   const forced = useApp((s) => s.ss["SCR-REV-02"]);
   const noAllowance = useApp((s) => s.newUsed >= s.dailyNew);
-  const narrow = useNarrow();
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const card: ReviewCard | undefined = cards[review.index];
   // A learn-ahead re-queue can return the very same id; keying on index:id re-runs the per-show effects.
@@ -601,8 +608,8 @@ function ReviewSession() {
   const hasBack = Boolean(translationZh || translationEn || u.result || isWordCard || dictLine || (hereLine && hereLine !== dictLine) || meta.hook || grammar.length);
 
   return (
-    <div className={cx("mx-auto grid w-full items-start gap-6", pick && !narrow ? "max-w-5xl md:px-6 lg:grid-cols-[minmax(0,36rem)_minmax(280px,360px)]" : "max-w-xl")}>
-      <div className="flex w-full max-w-xl flex-col gap-4 justify-self-center" data-mode={mode} data-card-id={card.id}>
+    <div className="mx-auto flex w-full max-w-xl flex-col gap-4">
+      <div className="flex w-full flex-col gap-4" data-mode={mode} data-card-id={card.id}>
         {review.removedNew > 0 && <p className="text-sm text-muted-foreground" role="status">{plural(review.removedNew, "new card")} removed because you lowered today’s limit.</p>}
         <Card id="rev-q" tabIndex={-1} className="w-full scroll-mt-20">
           <CardHeader className="items-center">
@@ -784,15 +791,10 @@ function ReviewSession() {
         </Card>
       </div>
 
-      {pick && !narrow && (
-        <WordDock label={`Meaning of ${pick.text}`} onClose={() => setPick(null)}>
-          <WordPanel key={`${pick.text}-${pick.wordIndex ?? ""}`} sentence={wpSentence} text={pick.text} wordIndex={pick.wordIndex} occurrence={pick.occurrence} onGrammar={() => setPick(null)} onClose={() => setPick(null)} />
-        </WordDock>
-      )}
-      {pick && narrow && (
-        <Dialog sheet titleHidden title={`Meaning of “${pick.text}”`} onClose={() => setPick(null)}>
+      {pick && (
+        <WordOverlay label={`Meaning of ${pick.text}`} onClose={() => setPick(null)}>
           <WordPanel key={`${pick.text}-${pick.wordIndex ?? ""}`} sentence={wpSentence} text={pick.text} wordIndex={pick.wordIndex} occurrence={pick.occurrence} onGrammar={() => setPick(null)} onClose={() => setPick(null)} inSheet />
-        </Dialog>
+        </WordOverlay>
       )}
     </div>
   );

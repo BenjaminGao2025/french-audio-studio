@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Bookmark, BookmarkCheck, ChevronDown, Volume2, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { ArrowLeft, ChevronDown, Star, Volume2, X } from "lucide-react";
 import { formatFriendlyPhonetic } from "../lib/phonetic";
 import { ApiError } from "../api/client";
 import {
@@ -18,8 +18,10 @@ import type { StudySentence } from "../data/fixtures";
 import { cx } from "../lib/format";
 import { lookupKey } from "../lib/lookup";
 import { announce, get, patchStudy, sayFrench, useApp } from "../state/store";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger, Importance, Skeleton, Spinner } from "../components/ui";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger, Importance, Skeleton, Spinner, useAppWidth } from "../components/ui";
 import { Button } from "../components/ui/button";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "../components/ui/drawer";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "../components/ui/sheet";
 import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
 
 
@@ -194,39 +196,52 @@ export function WordPanel({
   const phraseMeaning = overlapping ? usableMeaning(overlapping.meaning_en, text, sentence.en ?? "") : "";
   const dictEntries = dict?.dictionary_source === "wiktionnaire" ? dict.entries ?? [] : [];
 
+  const source = dictEntries[0];
+
   return (
     <div className="word-card flex flex-col gap-4 wrap-break-word" aria-busy={dictSt === "loading" || ctxSt === "loading"}>
-      <header className="flex flex-col gap-2 border-b pb-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="wp-headword font-serif text-2xl font-medium" lang="fr" data-autofocus tabIndex={-1}>{shown}</span>
-          <Button type="button" variant="ghost" size="icon" aria-label={`Replay “${shown}”`} onClick={() => sayFrench(shown)}>{<Volume2 aria-hidden />}</Button>
-          {ipa && <span className="wp-ipa text-sm text-muted-foreground">{ipa}</span>}
-          {!inSheet && <Button type="button" variant="ghost" size="icon" aria-label="Close word card" className="wp-close" onClick={onClose}>{<X aria-hidden />}</Button>}
+      <header className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="wp-headword font-serif text-2xl" lang="fr" data-autofocus tabIndex={-1}>{shown}</span>
+            <Button type="button" variant="ghost" size="icon" aria-label={`Replay “${shown}”`} onClick={() => sayFrench(shown)}><Volume2 aria-hidden /></Button>
+            {ipa && <span className="wp-ipa text-sm text-muted-foreground">{ipa}</span>}
+          </div>
+          {baseForm && !nested && (
+            <p className="text-xs text-muted-foreground">
+              Base form{" "}
+              <Button type="button" variant="link" className="h-auto p-0 text-xs font-normal text-muted-foreground" lang="fr" onClick={useBaseForm}>{baseForm}</Button>
+            </p>
+          )}
+          {nested && <Button type="button" variant="ghost" className="h-8 justify-start px-0" onClick={() => setNested(null)}><ArrowLeft aria-hidden />Back to {text}</Button>}
         </div>
-        {baseForm && !nested && (
-          <Button type="button" variant="ghost" className="h-auto justify-start px-0 text-primary underline-offset-4 hover:underline" onClick={useBaseForm}>Base form: <span lang="fr">{baseForm}</span></Button>
-        )}
-        {nested && <Button type="button" variant="ghost" onClick={() => setNested(null)}>{<ArrowLeft aria-hidden />}Back to {text}</Button>}
+        <div className="flex shrink-0 items-center">
+          <Button type="button" variant="ghost" size="icon" aria-pressed={fav} aria-label={fav ? "Favorited" : "Favorite"} onClick={() => void setFavorite(text, !fav)}>
+            <Star aria-hidden className={fav ? "fill-current" : undefined} />
+          </Button>
+          {!inSheet && <Button type="button" variant="ghost" size="icon" aria-label="Close word card" className="wp-close" onClick={onClose}><X aria-hidden /></Button>}
+        </div>
       </header>
 
       {!nested && (
-        <section className="flex flex-col gap-2" aria-label="Meaning in this sentence">
-          <h3 className="text-sm font-medium">Meaning in this sentence <span className="text-xs text-muted-foreground">AI</span></h3>
+        <section className="flex flex-col gap-1" aria-label="In this sentence">
+          <h3 className="text-sm font-medium text-muted-foreground">In this sentence</h3>
           {tooLong ? (
-            <p className="text-sm font-medium">Select a word or a short phrase</p>
+            <p className="text-sm text-muted-foreground">Select a word or a short phrase</p>
           ) : meaning ? (
-            <p className="wp-definition font-medium" lang="en">{meaning}</p>
+            <p className="wp-definition text-base" lang="en">{meaning}</p>
           ) : ctxSt === "loading" ? (
             <><Spinner label="Finding the meaning…" /><Skeleton lines={1} /></>
           ) : ctxSt === "error" ? (
             <div className="flex flex-col gap-2"><p className="text-sm text-muted-foreground">Couldn’t load the meaning in this sentence.</p><Button type="button" variant="outline" onClick={loadCtx}>Retry</Button></div>
           ) : (
-            <p className="text-sm font-medium">No meaning for this sentence</p>
+            <p className="text-sm text-muted-foreground">No meaning for this sentence</p>
           )}
           {phraseMeaning && (
             <p className="text-sm text-muted-foreground">
-              <span lang="fr" className="font-medium">{overlapping?.phrase || overlapping?.text}</span>
-              <span className="inline-flex items-baseline gap-1.5 text-sm">{phraseMeaning}</span>
+              <span lang="fr">{overlapping?.phrase || overlapping?.text}</span>
+              {" "}
+              {phraseMeaning}
             </p>
           )}
         </section>
@@ -234,52 +249,23 @@ export function WordPanel({
 
       {!tooLong && (
         <section className="flex flex-col gap-2" aria-label="Dictionary">
-          <h3 className="text-sm font-medium">Dictionary</h3>
+          <h3 className="text-sm font-medium text-muted-foreground">Dictionary</h3>
           {dictSt === "loading" && <Spinner label="Loading dictionary…" />}
           {dictSt === "error" && (
             <Alert variant="destructive"><AlertTitle>Dictionary request failed</AlertTitle><AlertDescription>{englishOnly(dictErr) || "Please try again."}<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={loadDict}>Retry</Button></div></AlertDescription></Alert>
           )}
           {dictSt === "ready" && (dictEntries.length ? (
             <>
-              <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-xs leading-4 text-muted-foreground"><span>Wiktionnaire</span><span>French definitions</span></p>
-              {dictEntries.map((entry, index) => {
-                const entryIpa = formatFriendlyPhonetic(entry.phonetic);
-                const primary = entry.senses.slice(0, 4);
-                const rest = entry.senses.slice(4);
-                return (
-                  <div className="wp-source-entry" key={`${entry.lemma}-${entry.pos}-${index}`}>
-                    <p className="font-medium">
-                      <span lang="fr">{entry.lemma}</span>
-                      <span className="text-sm text-muted-foreground"> {entry.pos}{entryIpa ? ` ${entryIpa}` : ""}</span>
-                    </p>
-                    <ol className="wp-senses" lang="fr">
-                      {primary.map((sense, i) => <li key={i}>{sense}</li>)}
-                    </ol>
-                    {rest.length > 0 && (
-                      <Collapsible>
-                        <CollapsibleTrigger className="flex min-h-11 items-center text-sm text-muted-foreground">{rest.length} more senses</CollapsibleTrigger>
-                        <CollapsibleContent>
-                        <ol className="wp-senses list-decimal pl-5" start={primary.length + 1} lang="fr">
-                          {rest.map((sense, i) => <li key={i}>{sense}</li>)}
-                        </ol>
-                        </CollapsibleContent>
-                      </Collapsible>
-                    )}
-                    <p className="text-xs leading-4 text-muted-foreground">
-                      <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                        <a href={entry.source_url} target="_blank" rel="noopener noreferrer">Source entry</a>
-                        <a href={entry.history_url} target="_blank" rel="noopener noreferrer">Contributors</a>
-                      </span>
-                    </p>
-                  </div>
-                );
-              })}
-              <p className="wp-attribution text-xs leading-4 text-muted-foreground">
-                {dict?.attribution} <a href={dict?.license_url} target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a>
-                {dict?.changes && <span> {dict.changes}</span>}
+              {dictEntries.map((entry, index) => (
+                <DictEntry key={`${entry.lemma}-${entry.pos}-${index}`} entry={entry} />
+              ))}
+              <p className="wp-attribution text-xs text-muted-foreground">
+                {source?.source_url ? <a href={source.source_url} target="_blank" rel="noopener noreferrer">{dict?.attribution || "Wiktionnaire"}</a> : dict?.attribution}
+                {dict?.license_url && <> <a href={dict.license_url} target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a></>}
+                {dict?.changes ? ` ${dict.changes}` : ""}
               </p>
             </>
-          ) : <p className="text-sm font-medium">No dictionary entry</p>)}
+          ) : <p className="text-sm text-muted-foreground">No dictionary entry</p>)}
         </section>
       )}
 
@@ -296,18 +282,73 @@ export function WordPanel({
         </section>
       )}
 
-      <footer className="wp-footer">
-        <div className="wp-actions">
-          <Button type="button" variant="outline" aria-pressed={fav} onClick={() => void setFavorite(text, !fav)}>{fav ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />}{fav ? "Favorited" : "Favorite"}</Button>
-          {count !== undefined && (
-            <div className="wp-importance">
-              <span className="text-sm font-medium">Importance</span>
-              <Importance count={count} lookups="muted" />
-            </div>
-          )}
-        </div>
-        {!nested && <Button type="button" variant="ghost" className="h-auto px-0 text-primary underline-offset-4 hover:underline" onClick={onGrammar}>Sentence grammar</Button>}
+      <footer className="wp-footer flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+        {count !== undefined && (
+          <div className="wp-importance text-muted-foreground">
+            <Importance count={count} lookups="muted" />
+          </div>
+        )}
+        {!nested && <Button type="button" variant="ghost" className="h-8 px-2 text-sm" onClick={onGrammar}>Sentence grammar</Button>}
       </footer>
     </div>
+  );
+}
+
+function DictEntry({ entry }: { entry: NonNullable<DictionaryEntry["entries"]>[number] }) {
+  const [open, setOpen] = useState(false);
+  const entryIpa = formatFriendlyPhonetic(entry.phonetic);
+  const primary = entry.senses.slice(0, 2);
+  const rest = entry.senses.slice(2);
+  const shown = open ? entry.senses : primary;
+  return (
+    <div className="wp-source-entry flex flex-col gap-1">
+      <p className="text-sm">
+        <span className="font-medium" lang="fr">{entry.lemma}</span>
+        <span className="text-muted-foreground"> {entry.pos}{entryIpa ? ` ${entryIpa}` : ""}</span>
+      </p>
+      <ol className="wp-senses list-decimal space-y-1 pl-5 text-sm" lang="fr">
+        {shown.map((sense, i) => <li key={i}>{sense}</li>)}
+      </ol>
+      {rest.length > 0 && !open && (
+        <Button type="button" variant="ghost" className="h-8 self-start px-2 text-sm" onClick={() => setOpen(true)}>
+          Show {rest.length} more
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/** Desktop: right Sheet. Narrow: bottom Drawer. The page column stays full width. */
+export function WordOverlay({ label, onClose, children }: { label: string; onClose: () => void; children: ReactNode }) {
+  const desktop = useAppWidth() >= 768;
+  const focusWord = (event: Event) => {
+    const root = event.currentTarget as HTMLElement | null;
+    const el = root?.querySelector<HTMLElement>("[data-autofocus]");
+    if (!el) return;
+    event.preventDefault();
+    el.focus();
+  };
+  if (desktop) {
+    return (
+      <Sheet open onOpenChange={(open) => { if (!open) onClose(); }}>
+        <SheetContent side="right" className="w-full gap-0 overflow-y-auto sm:max-w-md" onOpenAutoFocus={focusWord} aria-describedby={undefined}>
+          <SheetHeader className="sr-only">
+            <SheetTitle>{label}</SheetTitle>
+          </SheetHeader>
+          <div className="px-4 pb-6">{children}</div>
+        </SheetContent>
+      </Sheet>
+    );
+  }
+  return (
+    <Drawer open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DrawerContent className="max-h-[85vh]" onOpenAutoFocus={focusWord} aria-describedby={undefined}>
+        <DrawerHeader className="flex-row items-center justify-between text-left">
+          <DrawerTitle>{label}</DrawerTitle>
+          <Button type="button" variant="ghost" size="icon" aria-label="Close" onClick={onClose}><X aria-hidden /></Button>
+        </DrawerHeader>
+        <div className="overflow-y-auto px-4 pb-6">{children}</div>
+      </DrawerContent>
+    </Drawer>
   );
 }

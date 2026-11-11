@@ -120,6 +120,23 @@ function player(status: PlayerState["status"], extra: Partial<PlayerState> = {})
   setTimeout(() => updatePlayer({ status, ...extra }), status === "loading" ? 0 : 750);
 }
 
+function reviewFill(revealed: boolean) {
+  online();
+  set((s) => {
+    const sessionCards = computePlannedSessionCards(s.queue, s.dailyNew, s.newUsed);
+    const found = sessionCards.findIndex((c) => c.kind === "Fill-in" || c.mode === "cloze");
+    const cardIndex = found < 0 ? 0 : found;
+    const card = sessionCards[cardIndex];
+    return {
+      review: { ...s.review, phase: "active", index: cardIndex, allowance: 31, sessionCards },
+      reviewUi: card
+        ? { ...s.reviewUi, [card.id]: { draft: "", phase: "answering", hint: false, revealed } as never }
+        : s.reviewUi,
+    };
+  });
+  at("review/session");
+}
+
 function review(p: Record<string, unknown> = {}, cardUi?: (target: string) => Record<string, unknown>, cardIndex = 0) {
   online();
   set((s) => {
@@ -392,6 +409,8 @@ export const REGISTRY: ScreenEntry[] = [
       ["answer", "Answering", () => review({}, () => ({}))],
       ["speak", "Speak card · recording & self-check", () => { const idx = computePlannedSessionCards(get().queue, get().dailyNew, get().newUsed).findIndex((c) => c.kind === "Speak"); review({}, () => ({}), Math.max(0, idx)); }],
       ["revealed", "Answer shown", () => review({}, () => ({ revealed: true }))],
+      ["fillin", "Fill-in card", () => reviewFill(false)],
+      ["fillin-revealed", "Fill-in answer shown", () => reviewFill(true)],
       ["correct", "Correct result", () => review({}, (t) => ({ draft: t, phase: "graded", result: grade(t, t) }))],
       ["incorrect", "Incorrect result", () => review({}, (t) => ({ draft: "le", phase: "graded", result: grade(t, "le") }))],
       ["techfail", "Grading failure", () => review({}, (t) => ({ draft: t, phase: "techfail" }))],

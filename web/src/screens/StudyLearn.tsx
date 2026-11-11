@@ -19,11 +19,11 @@ import {
   updatePlayer,
   useApp,
 } from "../state/store";
-import { Checkbox, Dialog, Popover, Progress, Skeleton, Spinner, useNarrow, WordDock } from "../components/ui";
+import { Card, CardContent, Checkbox, Dialog, Popover, Progress, Skeleton, Spinner, useNarrow } from "../components/ui";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "../components/ui/dropdown-menu";
 import { Toggle } from "../components/ui/toggle";
 import { FrText, stepSegments, type FrPick } from "../components/FrText";
-import { WordPanel } from "./WordPopup";
+import { WordOverlay, WordPanel } from "./WordPopup";
 import { Exercise } from "./Exercise";
 import { ExplainPanel, GrammarSave, ShadowingPanel, SoundsPanel, StructurePanel, StudyNavigation, WordsPanel } from "./StudyTools";
 import { Button } from "../components/ui/button";
@@ -61,7 +61,6 @@ export function StudyLearn() {
   const [pick, setPick] = useState<Pick | null>(null);
   const [srcOpen, setSrcOpen] = useState(study.sourceOpen);
   const sentRef = useRef<HTMLDivElement>(null);
-  const narrow = useNarrow();
 
   // Demo-state forcing: open the card for a word chosen through the Demo states navigator.
   useEffect(() => {
@@ -102,7 +101,6 @@ export function StudyLearn() {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 study-workspace">
       <h1 className="sr-only" tabIndex={-1} data-page-title>Study</h1>
-      <div className={cx("grid items-start gap-6", pick && !narrow && "lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]")}>
       <div className="flex flex-col gap-4 min-w-0">
         {!!study.analysis.failedParts && <Alert variant="default"><AlertTitle>Some text could not be analysed</AlertTitle><AlertDescription>{study.analysis.failedParts} parts failed. Your original text is kept. Open New text to retry the missing parts.</AlertDescription></Alert>}
         {!practising && s.raw?.accent_fixed_from && <Alert variant="default"><AlertTitle>Accents corrected</AlertTitle><AlertDescription>Original: <span lang="fr">{s.raw.accent_fixed_from}</span>. The sentence below uses corrected French accents.</AlertDescription></Alert>}
@@ -141,13 +139,14 @@ export function StudyLearn() {
 
         {practising && pager}
 
-        {!practising && <section className="flex flex-col gap-3" aria-labelledby="current-sentence-heading">
+        {!practising && <Card>
+          <CardContent className="flex flex-col gap-4" aria-labelledby="current-sentence-heading">
           <h2 id="current-sentence-heading" tabIndex={-1} className="sr-only">
             {total > 1 ? `Sentence ${study.index + 1} of ${total}` : "Current sentence"}
           </h2>
           <div ref={sentRef} className="max-w-3xl">
             <FrText segments={s.segments} className="sentence-fr font-serif text-3xl leading-snug tracking-tight wrap-break-word" onPick={onPick} />
-            <p className="max-w-prose text-muted-foreground">{s.en}</p>
+            <p className="text-sm text-muted-foreground">{s.en}</p>
           </div>
           <StudyPlayer
             practising={practising}
@@ -157,7 +156,8 @@ export function StudyLearn() {
             onNext={() => goSentence(study.index + 1)}
             addReview={<AddToReview sentence={s} />}
           />
-        </section>}
+          </CardContent>
+        </Card>}
 
         <div className="flex flex-col gap-4 border-t pt-4">
           <StudyNavigation value={study.tab} onChange={(tab) => {
@@ -196,22 +196,8 @@ export function StudyLearn() {
           </div>
         </div>
       </div>
-      {pick && !narrow && (
-        <WordDock label={`Meaning of ${pick.text}`} onClose={() => setPick(null)}>
-          <WordPanel
-            key={`${pick.text}-${pick.wordIndex ?? ""}`}
-            sentence={s}
-            text={pick.text}
-            wordIndex={pick.wordIndex}
-            occurrence={pick.occurrence}
-            onGrammar={() => { setPick(null); patchStudy({ tab: "grammar" }); }}
-            onClose={() => setPick(null)}
-          />
-        </WordDock>
-      )}
-      </div>
-      {pick && narrow && (
-        <Dialog sheet titleHidden title={`Meaning of “${pick.text}”`} onClose={() => setPick(null)}>
+      {pick && (
+        <WordOverlay label={`Meaning of ${pick.text}`} onClose={() => setPick(null)}>
           <WordPanel
             key={`${pick.text}-${pick.wordIndex ?? ""}`}
             sentence={s}
@@ -222,7 +208,7 @@ export function StudyLearn() {
             onClose={() => setPick(null)}
             inSheet
           />
-        </Dialog>
+        </WordOverlay>
       )}
     </div>
   );

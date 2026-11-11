@@ -497,7 +497,7 @@ describe("8. feedback and copy cleanups", () => {
     expect(fake.calls.filter((c) => c.path === "/api/dictation/attempts")).toHaveLength(2);
   });
 
-  it("responsive widths (320, 390, 768, desktop): word popup is a sheet on narrow widths and a popover on desktop", async () => {
+  it("responsive widths (320, 390, 768, desktop): word card is a bottom drawer below md and a right sheet from md up", async () => {
     await act(async () => resetDemo());
     await act(async () => REGISTRY.find((r) => r.id === "SCR-STU-02")!.states.find((s) => s.key === "single")!.apply());
     const host = document.createElement("div");
@@ -514,9 +514,11 @@ describe("8. feedback and copy cleanups", () => {
         });
         const wordBtn = host.querySelector<HTMLElement>('[data-word="failli"]')!;
         await act(async () => wordBtn.click());
-        expect(document.querySelector(".overlay--sheet")).toBeTruthy();
-        const closeBtn = document.querySelector<HTMLElement>('.overlay--sheet button[aria-label="Close"]')!;
+        expect(document.querySelector("[data-slot=drawer-content] .word-card")).toBeTruthy();
+        expect(host.querySelector(".sentence-fr")).toBeTruthy();
+        const closeBtn = document.querySelector<HTMLElement>('[data-slot=drawer-content] button[aria-label="Close"]')!;
         await act(async () => closeBtn.click());
+        expect(document.querySelector("[data-slot=drawer-content]")).toBeNull();
       }
       for (const w of [768, 1200]) {
         await act(async () => {
@@ -528,7 +530,9 @@ describe("8. feedback and copy cleanups", () => {
         });
         const wordBtn = host.querySelector<HTMLElement>('[data-word="failli"]')!;
         await act(async () => wordBtn.click());
-        expect(document.querySelector(".popover")).toBeTruthy();
+        expect(document.querySelector("[data-slot=sheet-content] .word-card")).toBeTruthy();
+        expect(document.querySelector(".word-dock, .popover")).toBeNull();
+        expect(host.querySelector(".sentence-fr")).toBeTruthy();
         await act(async () => wordBtn.click());
       }
     } finally {
