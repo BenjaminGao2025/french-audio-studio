@@ -19,7 +19,7 @@ import { LANE_LABEL, loadDays, type DayTime, type Lane } from "../api/time";
 import { fmtDuration, plural } from "../lib/format";
 import { openAnalysisInStudy } from "../state/study";
 import { announce, clearAttemptHistory, go, patchStudy, set, useApp } from "../state/store";
-import { Crumbs, Dialog, DisabledReason, PageHead, Skeleton, Spinner, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui";
+import { Crumbs, Dialog, DisabledReason, PageHead, Skeleton, Spinner, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, pageFrame } from "../components/ui";
 import { Button } from "../components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
 import { Badge } from "../components/ui/badge";
@@ -54,7 +54,7 @@ export function HistoryScreen() {
   const asked = params.get("tab") as Tab;
   const tab: Tab = TABS.includes(asked) ? asked : "analyses";
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+    <div className={pageFrame(undefined, true)}>
       <PageHead
         back={<Crumbs items={[{ label: "Progress", onClick: () => go("progress") }, { label: "History" }]} />}
         title="History"

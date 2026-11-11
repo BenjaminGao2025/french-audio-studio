@@ -7,7 +7,7 @@ import { saveReviewSettings } from "../api/review";
 import { initials } from "../components/Shell";
 import { SPEEDS, announce, get, go, routeUrl, set, setDailyNew, setPlaybackPrefs, setSessionSize, stopPlayback, useApp } from "../state/store";
 import { fmtWhen } from "../api/history";
-import { Checkbox, Dialog, PageHead, Spinner } from "../components/ui";
+import { Checkbox, Dialog, PageHead, Spinner, pageFrame } from "../components/ui";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Slider } from "../components/ui/slider";
 import { Switch } from "../components/ui/switch";
@@ -160,7 +160,7 @@ export function SettingsScreen({ sub }: { sub?: string }) {
     if (route.includes("signout")) setSignOut(true);
   }, [sub, route]);
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className={pageFrame()}>
       <PageHead title="Settings" />
       <div className="flex flex-col gap-4">
         <Card>

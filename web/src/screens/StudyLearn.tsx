@@ -19,7 +19,7 @@ import {
   updatePlayer,
   useApp,
 } from "../state/store";
-import { Card, CardContent, Checkbox, Dialog, Popover, Progress, Skeleton, Spinner, useNarrow } from "../components/ui";
+import { Card, CardContent, Checkbox, Dialog, Popover, Progress, Skeleton, Spinner, pageFrame, useNarrow } from "../components/ui";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "../components/ui/dropdown-menu";
 import { Toggle } from "../components/ui/toggle";
 import { FrText, stepSegments, type FrPick } from "../components/FrText";
@@ -99,7 +99,7 @@ export function StudyLearn() {
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 study-workspace">
+    <div className={pageFrame("study-workspace", true)}>
       <h1 className="sr-only" tabIndex={-1} data-page-title>Study</h1>
       <div className="flex flex-col gap-4 min-w-0">
         {!!study.analysis.failedParts && <Alert variant="default"><AlertTitle>Some text could not be analysed</AlertTitle><AlertDescription>{study.analysis.failedParts} parts failed. Your original text is kept. Open New text to retry the missing parts.</AlertDescription></Alert>}

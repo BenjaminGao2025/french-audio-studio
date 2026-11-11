@@ -108,6 +108,11 @@ export function EntryCard({
   );
 }
 
+/** Centered page column. Wide is for tables and the sentence workspace. */
+export function pageFrame(extra?: string, wide = false) {
+  return cn("mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-6", wide && "max-w-6xl", extra);
+}
+
 export function PageHead({ title, eyebrow, desc, actions, back }: { title: string; eyebrow?: ReactNode; desc?: ReactNode; actions?: ReactNode; back?: ReactNode }) {
   return (
     <header className="flex flex-col gap-4">

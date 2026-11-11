@@ -23,7 +23,7 @@ import {
 } from "../api/practice";
 import { fmtWhen } from "../api/history";
 import { announce, go, set, useApp } from "../state/store";
-import { PageHead, Spinner, Textarea } from "../components/ui";
+import { PageHead, Spinner, Textarea, pageFrame } from "../components/ui";
 import { AiLabel, Checklist, ErrorHints, Round2 } from "./PracticeFeedback";
 import { BackTo } from "./Practice";
 
@@ -187,7 +187,7 @@ export function Write() {
 
   if (!data) {
     return (
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+      <div className={pageFrame()}>
         <PageHead back={<BackTo label="Practice" to="practice" />} title="Write" />
         {loadErr ? <Alert variant="destructive" role="alert"><AlertTitle>Couldn’t load the writing tasks</AlertTitle><AlertDescription>{loadErr}<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={load}>Retry</Button></div></AlertDescription></Alert> : <Spinner label="Loading tasks…" />}
       </div>
@@ -200,7 +200,7 @@ export function Write() {
   const n = wordCount(editing ? draft : revision);
   const over = spec ? n > spec.max_words : false;
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className={pageFrame()}>
       <PageHead back={<BackTo label="Practice" to="practice" />} title="Write" eyebrow="Expression écrite" />
       <div className="flex flex-col gap-6">
         {editing && !attempt && (

@@ -3,7 +3,7 @@ import { getGrammarMap, getGrammarSentences, type GrammarBlock } from "../api/le
 import { listStudyRecords } from "../api/history";
 import { openAnalysisInStudy } from "../state/study";
 import { get, go, patchStudy, sayFrench, useApp } from "../state/store";
-import { Crumbs, PageHead, Spinner } from "../components/ui";
+import { Crumbs, PageHead, Spinner, pageFrame } from "../components/ui";
 import { Button } from "../components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
 import { cn } from "cn";
@@ -51,7 +51,7 @@ export function StudyGrammar() {
     } catch (e) { setError(e instanceof Error ? e.message : "Couldn’t open this sentence."); }
     finally { setOpening(false); }
   };
-  return <div className="mx-auto flex w-full max-w-3xl flex-col gap-6"><PageHead title="My grammar map" back={<Crumbs items={[{ label: "Study", onClick: () => go("study") }, { label: "My grammar map" }]} />} />
+  return <div className={pageFrame()}><PageHead title="My grammar map" back={<Crumbs items={[{ label: "Study", onClick: () => go("study") }, { label: "My grammar map" }]} />} />
     <div className="flex flex-col gap-6">
       {loading && <Spinner label="Loading grammar map…" />}
       {error && <Alert variant="destructive"><AlertTitle>Couldn’t load grammar</AlertTitle><AlertDescription>{error}<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={() => setAttempt((n) => n + 1)}>Retry</Button></div></AlertDescription></Alert>}

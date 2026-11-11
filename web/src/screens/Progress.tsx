@@ -15,7 +15,7 @@ import {
 } from "../api/time";
 import { fmtDuration, nf, plural } from "../lib/format";
 import { announce, go } from "../state/store";
-import { Card, CardDescription, CardHeader, CardTitle, Checkbox, Crumbs, Input, PageHead, Progress, Skeleton, Spinner, Stat } from "../components/ui";
+import { Card, CardContent, CardHeader, CardTitle, Checkbox, Crumbs, Input, PageHead, Progress, Skeleton, Spinner, pageFrame } from "../components/ui";
 import { Button } from "../components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
@@ -70,7 +70,7 @@ function Overview() {
   const { summary, game, setGame, state, error, reload } = useProgress();
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className={pageFrame()}>
       <PageHead
         title="Progress"
         actions={<Button type="button" variant="ghost" onClick={() => go("progress/history?tab=time")}>{<HistoryIcon aria-hidden />}History</Button>}
@@ -86,13 +86,23 @@ function Overview() {
           <Alert variant="destructive" role="alert"><AlertTitle>Your progress didn’t load</AlertTitle><AlertDescription>{error || "The server didn’t respond."} Your study time is safe.<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={reload}>Retry</Button></div></AlertDescription></Alert>
         )}
         {state === "ok" && summary && game && (
-          <>
-            <Goal s={summary} />
+          <div className="flex flex-col gap-4">
+            <Journey s={summary} />
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              <StatCard title="Today" value={fmtDuration(summary.today_seconds / 60)} />
+              <StatCard title="This week" value={fmtDuration(summary.week_seconds / 60)} />
+              <StatCard title="Remaining" value={summary.remaining_seconds === 0 ? "0 h" : fmtDuration(summary.remaining_seconds / 60)} />
+              <StatCard title="Weekly average" value={fmtDuration(summary.average_week_seconds / 60)} />
+            </div>
+            <div className={cn("grid gap-4", game.streak_days > 0 && "md:grid-cols-2")}>
+              <Estimate s={summary} />
+              {game.streak_days > 0 && <StreakCard g={game} />}
+            </div>
             <Level g={game} />
             <Today g={game} onChange={setGame} />
             <Week g={game} />
             <LogTime g={game} onChange={setGame} />
-          </>
+          </div>
         )}
 
         <Button type="button" variant="ghost" className="h-8 self-start px-2 text-sm" onClick={() => go("progress/devices")}>Devices and background listening</Button>
@@ -101,75 +111,97 @@ function Overview() {
   );
 }
 
-function Goal({ s }: { s: StudySummary }) {
+function StatCard({ title, value }: { title: string; value: string }) {
+  return (
+    <Card size="sm">
+      <CardHeader>
+        <CardTitle className="text-xs! font-medium text-muted-foreground">{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-2xl font-semibold tabular-nums leading-none">{value}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function Journey({ s }: { s: StudySummary }) {
   const hours = s.total_seconds / 3600;
   const pct = Math.min(100, s.progress * 100);
-  const finish = s.projected_finish ? new Date(`${s.projected_finish}T12:00:00Z`) : null;
   return (
-    <>
-      <section className="journey flex flex-col gap-3" aria-labelledby="goal-h">
-        <h2 id="goal-h" className="text-xs font-medium text-muted-foreground">1,000-hour journey</h2>
-        <p className="text-lg font-semibold tabular-nums">{s.total_seconds < 60 ? "0 h" : fmtDuration(s.total_seconds / 60)}</p>
-        <dl className="grid grid-cols-3 gap-4">
-          <Stat label="Goal" value={`${nf.format(s.goal_hours)} h`} />
-          <Stat label="Done" value={`${pct.toFixed(1)}%`} />
-        </dl>
-        <Progress value={pct} aria-label={`${pct.toFixed(1)} percent of the ${nf.format(s.goal_hours)}-hour goal`} />
+    <Card className="journey" aria-labelledby="goal-h">
+      <CardHeader>
+        <CardTitle id="goal-h" className="text-sm font-medium">1,000-hour journey</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <p className="text-2xl font-semibold tabular-nums">{s.total_seconds < 60 ? "0 h" : fmtDuration(s.total_seconds / 60)}</p>
+        <div className="flex flex-col gap-2">
+          <p className="text-right text-xs tabular-nums text-muted-foreground">{pct.toFixed(1)}% of {nf.format(s.goal_hours)} h</p>
+          <Progress value={pct} aria-label={`${pct.toFixed(1)} percent of the ${nf.format(s.goal_hours)}-hour goal`} />
+        </div>
         {hours >= s.goal_hours && <Alert variant="default"><AlertTitle>You’ve reached 1,000 hours</AlertTitle></Alert>}
         {s.total_seconds === 0 && (
           <Alert variant="default"><AlertTitle>No study time yet</AlertTitle><AlertDescription><div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={() => go("study/new")}>Start studying</Button></div></AlertDescription></Alert>
         )}
-      </section>
+      </CardContent>
+    </Card>
+  );
+}
 
-      <dl className="grid grid-cols-3 gap-4 sm:grid-cols-4">
-        <Stat label="Today" value={fmtDuration(s.today_seconds / 60)} hint="Since 4:00" />
-        <Stat label="This week" value={fmtDuration(s.week_seconds / 60)} hint="Since Monday" />
-        <Stat label="Remaining to 1,000 hours" value={s.remaining_seconds === 0 ? "0 h" : fmtDuration(s.remaining_seconds / 60)} hint="Goal minus total" />
-        <Stat label="Weekly average" value={fmtDuration(s.average_week_seconds / 60)} hint="Over the last 4 weeks" />
-      </dl>
+function Estimate({ s }: { s: StudySummary }) {
+  const finish = s.projected_finish ? new Date(`${s.projected_finish}T12:00:00Z`) : null;
+  const value = s.remaining_seconds === 0
+    ? "Goal reached. No estimate needed."
+    : finish && finish.getUTCFullYear() > new Date().getUTCFullYear() + 20
+      ? "More than 20 years away"
+      : finish
+        ? `Around ${finish.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" })}`
+        : "No estimate yet";
+  return (
+    <Card aria-labelledby="eta-h">
+      <CardHeader>
+        <CardTitle id="eta-h" className="text-sm font-medium">Estimated finish</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-2xl font-semibold text-balance">{value}</p>
+      </CardContent>
+    </Card>
+  );
+}
 
-      <section className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-2" aria-labelledby="eta-h">
-        <h2 id="eta-h" className="text-sm font-medium">Estimated finish</h2>
-        {s.remaining_seconds === 0 ? (
-          <p>Goal reached. No estimate needed.</p>
-        ) : finish && finish.getUTCFullYear() > new Date().getUTCFullYear() + 20 ? (
-          <p>More than 20 years away</p>
-        ) : finish ? (
-          <p className="text-lg font-semibold text-balance">Around {finish.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" })}</p>
-        ) : (
-          <p>No estimate yet</p>
-        )}
-      </section>
-    </>
+function StreakCard({ g }: { g: GameState }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-sm font-medium">Streak</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-1">
+        <p className="text-2xl font-semibold tabular-nums">{nf.format(g.streak_days)}</p>
+        <p className="text-xs text-muted-foreground">{plural(g.streak_days, "weekday")} in a row</p>
+      </CardContent>
+    </Card>
   );
 }
 
 function Level({ g }: { g: GameState }) {
   const toNext = g.next_level_xp === null ? 0 : g.next_level_xp - g.xp;
   return (
-    <>
-    {g.streak_days > 0 && (
-      <Card size="sm">
-        <CardHeader>
-          <CardTitle>Streak</CardTitle>
-          <CardDescription>{plural(g.streak_days, "weekday")} in a row</CardDescription>
-        </CardHeader>
-      </Card>
-    )}
-    <section className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-3" aria-labelledby="lvl-h">
-      <h2 id="lvl-h" className="text-sm font-medium">Level</h2>
-      <p>
-        <span className="text-lg font-semibold tabular-nums">{nf.format(g.level)}</span> <span className="text-sm text-muted-foreground">of {nf.format(g.max_level)}</span>
-      </p>
-      <Progress value={g.progress * 100} aria-label={`${Math.round(g.progress * 100)} percent of the way to level ${g.level + 1}`} />
-      <p className="text-sm text-muted-foreground tabular-nums">
-        {g.next_level_xp === null ? "Top level reached." : `${nf.format(toNext)} XP to level ${nf.format(g.level + 1)}`} · {nf.format(g.xp)} XP in all · studied on {g.days_studied_7d} of the last 7 days
-      </p>
-      {(g.today.kills > 0 || g.today.best_combo > 1) && (
-        <p className="text-sm text-muted-foreground tabular-nums">Today’s review: {plural(g.today.kills, "correct answer")} · best run {g.today.best_combo}</p>
-      )}
-    </section>
-    </>
+    <Card aria-labelledby="lvl-h">
+      <CardHeader>
+        <CardTitle id="lvl-h" className="text-sm font-medium">Level</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <p className="text-2xl font-semibold tabular-nums">
+          {nf.format(g.level)} <span className="text-sm font-normal text-muted-foreground">of {nf.format(g.max_level)}</span>
+        </p>
+        <Progress value={g.progress * 100} aria-label={`${Math.round(g.progress * 100)} percent of the way to level ${g.level + 1}`} />
+        <p className="text-sm text-muted-foreground tabular-nums">
+          {g.next_level_xp === null ? "Top level reached." : `${nf.format(toNext)} XP to level ${nf.format(g.level + 1)}`} · {nf.format(g.xp)} XP in all · studied on {g.days_studied_7d} of the last 7 days
+        </p>
+        {(g.today.kills > 0 || g.today.best_combo > 1) && (
+          <p className="text-sm text-muted-foreground tabular-nums">Today’s review: {plural(g.today.kills, "correct answer")} · best run {g.today.best_combo}</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -178,8 +210,11 @@ function Today({ g, onChange }: { g: GameState; onChange: (g: GameState) => void
   const t = g.today;
   const pct = t.target ? Math.min(100, (t.minutes / t.target) * 100) : 100;
   return (
-    <section className="flex flex-col gap-3" aria-labelledby="today-h">
-      <h2 id="today-h" className="text-lg font-semibold text-balance">Today</h2>
+    <Card aria-labelledby="today-h">
+      <CardHeader>
+        <CardTitle id="today-h" className="text-sm font-medium">Today</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
       {t.family_day ? (
         <p className="tabular-nums">{fmtDuration(t.minutes)} today</p>
       ) : t.target ? (
@@ -210,7 +245,8 @@ function Today({ g, onChange }: { g: GameState; onChange: (g: GameState) => void
         />
         <span>Family day</span>
       </label>
-    </section>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -218,10 +254,13 @@ function Week({ g }: { g: GameState }) {
   const w = g.week;
   const rows = LANES.filter((l) => (w.lane_targets[l] ?? 0) > 0 || (w.by_lane[l] ?? 0) > 0);
   return (
-    <section className="flex flex-col gap-3" aria-labelledby="week-h">
-      <h2 id="week-h" className="text-lg font-semibold text-balance">{w.number > 0 ? `Week ${w.number}` : "This week"}</h2>
-      <p className="text-sm text-muted-foreground tabular-nums">
-        {fmtDuration(w.minutes)} of {fmtDuration(w.target)}
+    <Card aria-labelledby="week-h">
+      <CardHeader>
+        <CardTitle id="week-h" className="text-sm font-medium">{w.number > 0 ? `Week ${w.number}` : "This week"}</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+      <p className="text-2xl font-semibold tabular-nums">
+        {fmtDuration(w.minutes)} <span className="text-sm font-normal text-muted-foreground">of {fmtDuration(w.target)}</span>
       </p>
       {rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">Nothing yet this week.</p>
@@ -249,7 +288,8 @@ function Week({ g }: { g: GameState }) {
       {w.focus_skill?.target > 0 && w.focus_skill.minutes < w.focus_skill.target && (
         <p className="text-sm text-muted-foreground">Furthest behind this week: {SKILL_NAME[w.focus_skill.skill] ?? w.focus_skill.skill}.</p>
       )}
-    </section>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -264,8 +304,11 @@ function LogTime({ g, onChange }: { g: GameState; onChange: (g: GameState) => vo
   const n = Number(minutes);
   const valid = Number.isInteger(n) && n >= 1 && n <= 300;
   return (
-    <section className="flex flex-col gap-3" aria-labelledby="log-h">
-      <h2 id="log-h" className="text-lg font-semibold text-balance">Log study away from the app</h2>
+    <Card aria-labelledby="log-h">
+      <CardHeader>
+        <CardTitle id="log-h" className="text-sm font-medium">Log study away from the app</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
       <div className="flex flex-wrap items-end gap-3">
         <label className="grid gap-2" style={{ width: 200 }}>
           <span className="text-sm font-medium">What</span>
@@ -316,14 +359,15 @@ function LogTime({ g, onChange }: { g: GameState; onChange: (g: GameState) => vo
           ))}
         </ul>
       )}
-    </section>
+      </CardContent>
+    </Card>
   );
 }
 
 /* SCR-PRO-02 */
 function Devices() {
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className={pageFrame()}>
       <PageHead
         back={<Crumbs items={[{ label: "Progress", onClick: () => go("progress") }, { label: "Devices" }]} />}
         title="Devices and background listening"

@@ -17,9 +17,9 @@ import { grade } from "../lib/grading";
 import { gradeFeedback } from "../lib/feedback";
 import { importanceFor } from "../lib/lookup";
 import { formatFriendlyPhonetic } from "../lib/phonetic";
-import { cx, nf, plural } from "../lib/format";
+import { nf, plural } from "../lib/format";
 import { announce, get, getCardLookups, go, introduceNewCard, sayFrench, set, useApp, type ReviewUI } from "../state/store";
-import { Checkbox, DisabledReason, EntryCard, Importance, PageHead, Progress, Skeleton, Spinner, Stat, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Textarea, useNarrow } from "../components/ui";
+import { Checkbox, DisabledReason, EntryCard, Importance, PageHead, Progress, Skeleton, Spinner, Stat, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Textarea, pageFrame, useNarrow } from "../components/ui";
 import { flexRender } from "@tanstack/react-table";
 import { getCoreRowModel, useLegacyTable, type LegacyColumnDef } from "@tanstack/react-table/legacy";
 import { FrText, tokenizeFrench, type FrPick, type FrSegment } from "../components/FrText";
@@ -178,7 +178,7 @@ export function ReviewScreen({ sub }: { sub: string }) {
     );
   }
   return (
-    <div className={cx("mx-auto flex w-full max-w-3xl flex-col gap-6", tab === "saved" && "max-w-6xl!")}>
+    <div className={pageFrame(undefined, tab === "saved")}>
       <PageHead title="Review" />
       <div className="flex flex-col gap-6">
         <Tabs value={tab} onValueChange={(next) => ((v) => go(`review/${v}`, { focus: false }))(next)}><TabsList aria-label={"Review sections"} className="h-auto max-w-full flex-wrap justify-start">{(TABS).map((t) => (<TabsTrigger key={t.value} id={`review-tab-${t.value}`} value={t.value}>{t.label}</TabsTrigger>))}</TabsList></Tabs>
@@ -351,10 +351,24 @@ function DueToday() {
                   <Stat label="New" value={newAssigned} />
                 </>
               )}
-              <Stat label="Daily new-card limit" value={`${dailyNew} cards`} />
-              <Stat label="New cards introduced today" value={newUsed} />
-              <Stat className="col-span-3" label="Your whole library" value={libOk ? `${nf.format(sentences)} sentences · ${nf.format(savedCards)} cards` : "…"} />
             </dl>
+            <p className="text-xs text-muted-foreground">
+              <span>New today </span>
+              <span>
+                <dt className="sr-only">New cards introduced today</dt>
+                <dd className="inline tabular-nums">{newUsed}</dd>
+              </span>
+              <span> / </span>
+              <span>
+                <dt className="sr-only">Daily new-card limit</dt>
+                <dd className="inline tabular-nums">{dailyNew}<span className="sr-only"> cards</span></dd>
+              </span>
+              <span> · Library </span>
+              <span>
+                <dt className="sr-only">Your whole library</dt>
+                <dd className="inline tabular-nums">{libOk ? `${nf.format(sentences)} sentences, ${nf.format(savedCards)} cards` : "…"}</dd>
+              </span>
+            </p>
             <div className="flex flex-col gap-2">
               <div className="flex items-baseline justify-between gap-3">
                 <span className="text-xs text-muted-foreground">Session progress</span>
@@ -616,10 +630,10 @@ function ReviewSession() {
               <Badge variant={card.group === "new" ? "secondary" : "outline"}>{groupLabel}</Badge>
               <Badge variant="outline">{MODE_LABEL[mode]}</Badge>
             </div>
-            <CardAction>
+            <CardAction className="row-span-1 self-center">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button type="button" variant="ghost" size="icon" aria-label="Card actions"><MoreHorizontal aria-hidden /></Button>
+                  <Button type="button" variant="ghost" size="icon-sm" aria-label="Card actions"><MoreHorizontal aria-hidden /></Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-64">
                   <DropdownMenuItem onSelect={() => { masterCard(card.id); next(); }}><Archive aria-hidden />Mark mastered</DropdownMenuItem>

@@ -1,7 +1,7 @@
 import { ArrowRight, LogIn } from "lucide-react";
 import { loginUrl } from "../api/client";
 import { go, useApp } from "../state/store";
-import { PageHead } from "../components/ui";
+import { PageHead, pageFrame } from "../components/ui";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
 
@@ -19,7 +19,7 @@ export function Gate({ dest }: { dest: string }) {
   const route = useApp((s) => s.route);
   const b = BENEFITS[dest] ?? BENEFITS.review;
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+    <div className={pageFrame()}>
       <PageHead title={b.title} />
       <Card>
         <CardContent className="flex flex-col items-start gap-4">
@@ -34,7 +34,7 @@ export function Gate({ dest }: { dest: string }) {
 /* Unknown /app path */
 export function NotFound() {
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className={pageFrame()}>
       <PageHead title="Page not found" desc="There is no page at this address." />
       <div className="flex flex-wrap items-center gap-2">
         <Button type="button" variant="default" onClick={() => go("study")}>Continue to Study{<ArrowRight aria-hidden />}</Button>
@@ -46,7 +46,7 @@ export function NotFound() {
 /* SCR-LEG-01 */
 export function Legacy() {
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className={pageFrame()}>
       <PageHead title="This page has moved" />
       <div className="flex flex-col gap-6" style={{ maxWidth: 640 }}>
         <div className="flex flex-wrap items-center gap-2">

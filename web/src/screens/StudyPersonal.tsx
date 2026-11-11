@@ -4,7 +4,7 @@ import { fmtWhen } from "../api/history";
 import { StudySpeakingTimer } from "../components/StudySpeakingTimer";
 import { PrivateAudio } from "../components/PrivateAudio";
 import { StudyRecorder } from "../components/StudyRecorder";
-import { Badge, Checkbox, Crumbs, PageHead, Separator, Spinner, Textarea } from "../components/ui";
+import { Badge, Checkbox, Crumbs, PageHead, Separator, Spinner, Textarea, pageFrame } from "../components/ui";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { get, go, patchStudy, stopPlayback } from "../state/store";
 import { Button } from "../components/ui/button";
@@ -66,7 +66,7 @@ export function StudyPersonal() {
     if (entry) reflections.set(entry.id, { text, recalled: checked });
   };
   const stages = ["Prepare", "First attempt", "Practise & recall", "Reflect", "Archived"];
-  return <div className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-6 personal-practice"><PageHead title="Practise my own words" back={<Crumbs items={[{ label: "Study", onClick: () => go("study/new") }, { label: "Practise my own words" }]} />} />
+  return <div className={pageFrame("personal-practice")}><PageHead title="Practise my own words" back={<Crumbs items={[{ label: "Study", onClick: () => go("study/new") }, { label: "Practise my own words" }]} />} />
     <div className="flex min-w-0 flex-col gap-6">
       <div className="min-w-0 overflow-x-auto">
         <ol className="flex w-max min-w-full list-none flex-nowrap items-center gap-2 p-0" aria-label="Practice stages">{stages.map((label, i) => <li key={label} className="flex items-center gap-2" aria-current={stage === i ? "step" : undefined} aria-label={label}><Badge variant={stage === i ? "default" : "outline"}>{i + 1}</Badge><span className={cn("text-sm whitespace-nowrap", i !== stage && "max-sm:sr-only")}>{label}</span>{i < stages.length - 1 && <Separator className="mx-1 hidden h-px w-6 sm:block" />}</li>)}</ol>

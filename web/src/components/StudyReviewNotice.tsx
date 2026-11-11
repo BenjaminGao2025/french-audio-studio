@@ -34,6 +34,7 @@ export function StudyReviewNotice() {
         <dl className="grid grid-cols-3 gap-4">
           <Stat label="Cards" value={counts.total} />
           <Stat label="To revisit" value={revisit} />
+          <Stat label="New" value={counts.new} />
         </dl>
       </CardContent>
       <CardFooter className="border-t">

@@ -9,7 +9,7 @@ import { Download, Pause, Play, Loader2 } from "lucide-react";
 import { type TransformLevel, type TransformStyle, VOICES, makeSpeech, transformToFrench } from "../api/practice";
 import { fmtClock } from "../lib/format";
 import { announce, go, patchStudy, retryPlayback, set, startPlayback, updatePlayer, useApp } from "../state/store";
-import { PageHead, Spinner, Textarea } from "../components/ui";
+import { PageHead, Spinner, Textarea, pageFrame } from "../components/ui";
 import { BackTo } from "./Practice";
 
 const STYLES: { value: TransformStyle; label: string }[] = [
@@ -83,7 +83,7 @@ export function Studio() {
 
   const stale = !!audio && audio.text !== french.trim();
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className={pageFrame()}>
       <PageHead
         back={<BackTo label="Practice" to="practice" />}
         title="Audio Studio"
