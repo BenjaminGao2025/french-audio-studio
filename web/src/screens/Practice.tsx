@@ -1,6 +1,6 @@
-import { ChevronLeft, Headphones, Mic, PenSquare, Radio, AudioLines, GraduationCap } from "lucide-react";
+import { ChevronRight, Headphones, Mic, PenSquare, Radio, AudioLines, GraduationCap } from "lucide-react";
 import { go } from "../state/store";
-import { Card, CardDescription, CardHeader, CardTitle, PageHead } from "../components/ui";
+import { Card, CardDescription, CardHeader, CardTitle, Crumbs, PageHead, pageFrame } from "../components/ui";
 import { EpisodeList, EpisodePlayer } from "./Episodes";
 import { Listen } from "./PracticeListen";
 import { Speak } from "./PracticeSpeak";
@@ -22,9 +22,7 @@ export function PracticeScreen({ parts }: { parts: string[] }) {
 }
 
 export function BackTo({ label, to }: { label: string; to: string }) {
-  return (
-    <Button type="button" variant="ghost" className="h-8 self-start px-2 text-sm md:-ml-3" onClick={() => go(to)}>{<ChevronLeft aria-hidden />}{label}</Button>
-  );
+  return <Crumbs items={[{ label, onClick: () => go(to) }]} />;
 }
 
 /* SCR-PRA-01 */
@@ -38,15 +36,15 @@ function Hub() {
     { to: "practice/exams", icon: <GraduationCap aria-hidden />, title: "Exam practice", text: "Planned" },
   ];
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+    <div className={pageFrame()}>
       <PageHead title="Practice" />
       <div className="grid gap-4 sm:grid-cols-2">
         {dest.map((d) => (
           <Card key={d.to} className="py-0">
-            <Button type="button" variant="ghost" className="h-auto w-full justify-start whitespace-normal rounded-xl px-0 py-0 text-left" onClick={() => go(d.to)}><CardHeader className="w-full">
+            <Button type="button" variant="ghost" className="h-auto w-full justify-between whitespace-normal rounded-xl px-0 py-0 text-left" onClick={() => go(d.to)}><CardHeader className="w-full">
                 <CardTitle className="flex items-center gap-2 text-base">{d.icon}{d.title}</CardTitle>
                 <CardDescription>{d.text}</CardDescription>
-              </CardHeader></Button>
+              </CardHeader><ChevronRight className="mr-4 size-4 shrink-0 text-muted-foreground" aria-hidden /></Button>
           </Card>
         ))}
       </div>
@@ -57,8 +55,8 @@ function Hub() {
 /* SCR-EXM-01: the exam module is planned; nothing here is a real TCF test yet. */
 function ExamPlaceholder() {
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-      <PageHead back={<BackTo label="Practice" to="practice" />} title="Exam practice" eyebrow={<Badge variant="outline">Planned · questions not yet verified</Badge>} />
+    <div className={pageFrame()}>
+      <PageHead back={<Crumbs items={[{ label: "Practice", onClick: () => go("practice") }, { label: "Exam practice" }]} />} title="Exam practice" eyebrow={<Badge variant="outline">Planned · questions not yet verified</Badge>} />
       <div className="flex flex-col gap-4">
         <Alert variant="default"><AlertTitle>Not available yet</AlertTitle></Alert>
         <div className="flex flex-wrap items-center gap-2">

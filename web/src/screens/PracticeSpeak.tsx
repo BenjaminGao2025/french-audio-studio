@@ -23,7 +23,7 @@ import {
 } from "../api/practice";
 import { fmtClock } from "../lib/format";
 import { announce, go, set, startPlayback, useApp } from "../state/store";
-import { PageHead, Spinner, Textarea } from "../components/ui";
+import { PageHead, Spinner, Textarea, pageFrame } from "../components/ui";
 import { Recorder, type Recording } from "../components/Recorder";
 import { AiLabel, Checklist, ErrorHints, Round2 } from "./PracticeFeedback";
 import { BackTo } from "./Practice";
@@ -191,7 +191,7 @@ export function Speak() {
 
   if (!data) {
     return (
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+      <div className={pageFrame()}>
         <PageHead back={<BackTo label="Practice" to="practice" />} title="Speak" />
         {loadErr ? <Alert variant="destructive" role="alert"><AlertTitle>Couldn’t load the speaking tasks</AlertTitle><AlertDescription>{loadErr}<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={load}>Retry</Button></div></AlertDescription></Alert> : <Spinner label="Loading tasks…" />}
       </div>
@@ -201,7 +201,7 @@ export function Speak() {
   const builtIns = data.subjects[task] ?? [];
   const answering = phase === "answer" || phase === "wait1";
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className={pageFrame()}>
       <PageHead
         back={<BackTo label="Practice" to="practice" />}
         title="Speak"

@@ -235,7 +235,11 @@ describe("2. Review queue spacing and Speak card speaking flow", () => {
     await act(async () => REGISTRY.find((r) => r.id === "SCR-REV-02")!.states.find((s) => s.key === "speak")!.apply());
     await wait(50);
     const main = document.getElementById("main")!;
-    expect(main.textContent).toContain("Say this in French out loud");
+    const speakCard = get().review.sessionCards![get().review.index];
+    expect(speakCard.kind).toBe("Speak");
+    expect(speakCard.prompt.length).toBeGreaterThan(0);
+    expect(main.textContent).toContain(speakCard.prompt);
+    expect(main.querySelector("[data-slot=card]")).toBeTruthy();
     expect(document.querySelector("#rev-input")).toBeNull();
 
     const showBtn = Array.from(main.querySelectorAll("button")).find((b) => b.textContent === "Show answer")!;
@@ -493,7 +497,7 @@ describe("8. feedback and copy cleanups", () => {
     expect(fake.calls.filter((c) => c.path === "/api/dictation/attempts")).toHaveLength(2);
   });
 
-  it("responsive widths (320, 390, 768, desktop): word popup is a sheet on narrow widths and a popover on desktop", async () => {
+  it("responsive widths (320, 390, 768, desktop): word card is a bottom drawer below md and a right sheet from md up", async () => {
     await act(async () => resetDemo());
     await act(async () => REGISTRY.find((r) => r.id === "SCR-STU-02")!.states.find((s) => s.key === "single")!.apply());
     const host = document.createElement("div");
@@ -510,9 +514,11 @@ describe("8. feedback and copy cleanups", () => {
         });
         const wordBtn = host.querySelector<HTMLElement>('[data-word="failli"]')!;
         await act(async () => wordBtn.click());
-        expect(document.querySelector(".overlay--sheet")).toBeTruthy();
-        const closeBtn = document.querySelector<HTMLElement>('.overlay--sheet button[aria-label="Close"]')!;
+        expect(document.querySelector("[data-slot=drawer-content] .word-card")).toBeTruthy();
+        expect(host.querySelector(".sentence-fr")).toBeTruthy();
+        const closeBtn = document.querySelector<HTMLElement>('[data-slot=drawer-content] button[aria-label="Close"]')!;
         await act(async () => closeBtn.click());
+        expect(document.querySelector("[data-slot=drawer-content]")).toBeNull();
       }
       for (const w of [768, 1200]) {
         await act(async () => {
@@ -524,7 +530,9 @@ describe("8. feedback and copy cleanups", () => {
         });
         const wordBtn = host.querySelector<HTMLElement>('[data-word="failli"]')!;
         await act(async () => wordBtn.click());
-        expect(document.querySelector(".popover")).toBeTruthy();
+        expect(document.querySelector("[data-slot=sheet-content] .word-card")).toBeTruthy();
+        expect(document.querySelector(".word-dock, .popover")).toBeNull();
+        expect(host.querySelector(".sentence-fr")).toBeTruthy();
         await act(async () => wordBtn.click());
       }
     } finally {
@@ -679,7 +687,8 @@ describe("12. changing limits mid-session", () => {
     expect(r.review.sessionCards).toHaveLength(9 + used); // shown cards stay
     expect(r.review.removedNew).toBe(31 - used);
     expect(r.newUsed).toBe(used); // no allowance moved
-    expect(mainText()).toContain(`Card 1 of ${9 + used}`);
+    expect(mainText()).toContain(`1 / ${9 + used}`);
+    expect(mainText()).not.toContain(`Card 1 of ${9 + used}`);
     expect(mainText()).toContain(`${31 - used} new cards removed because you lowered today’s limit.`);
   });
 

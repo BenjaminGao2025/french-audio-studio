@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Camera, ChevronLeft, Image as ImageIcon, Mic2, PenLine, Trash2, X, Headphones, Loader2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Camera, Image as ImageIcon, Mic2, PenLine, Trash2, X, Headphones, Loader2 } from "lucide-react";
 import { StudyReviewNotice } from "../components/StudyReviewNotice";
 import { ApiError } from "../api/client";
 import { photoExtract, photoToDataUrl } from "../api/study";
@@ -8,10 +8,11 @@ import { EXAMPLE_TEXT, IDEAS_EXAMPLE, OCR_LIMIT } from "../data/fixtures";
 import { nf, plural } from "../lib/format";
 import { LIMITS, STAGES, cancelAnalysis, openAnalysisInStudy, runAnalysis, validate } from "../state/study";
 import { announce, get, go, patchStudy, useApp } from "../state/store";
-import { Checkbox, Collapsible, CollapsibleContent, CollapsibleTrigger, Dialog, DisabledReason, Input, PageHead, Spinner, Textarea } from "../components/ui";
+import { Checkbox, Collapsible, CollapsibleContent, CollapsibleTrigger, Crumbs, Dialog, DisabledReason, EntryCard, Input, PageHead, Spinner, Textarea, pageFrame } from "../components/ui";
 import { Button } from "../components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
-import { ToggleGroup, ToggleGroupItem } from "../components/ui/toggle-group";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { cn } from "cn";
 
 /* After a reload nothing is open in Study: offer the newest saved analysis once per visit. */
@@ -76,20 +77,23 @@ export function StudyInput() {
         : undefined;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 study-home">
-      <header className="mb-6 flex flex-col gap-2">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <h1 className="text-xl font-semibold tracking-tight text-balance" tabIndex={-1} data-page-title>Study</h1>
-          {study.sentences.length > 0 && !busy && <Button type="button" variant="ghost" onClick={() => go("study")}>Back to current sentence</Button>}
-        </div>
-      </header>
+    <div className={pageFrame("study-home")}>
+      <PageHead
+        title="Study"
+        actions={study.sentences.length > 0 && !busy ? <Button type="button" variant="outline" onClick={() => go("study")}>Current sentence</Button> : undefined}
+      />
       <div className="flex flex-col gap-4">
-        <section className="flex flex-col gap-4 rounded-xl border bg-card p-4" aria-labelledby="start-h">
-          <h2 id="start-h" className="text-lg font-semibold text-balance">Start</h2>
-          <ToggleGroup type="single" variant="outline" value={mode} onValueChange={(next) => { if (next === "text" || next === "ideas") patchStudy({ mode: next }); }} aria-label="Input mode" className="flex w-full">{([
-              { value: "text", label: "Study French text" },
-              { value: "ideas", label: "Practise my own ideas" },
-            ]).map((o) => (<ToggleGroupItem key={o.value} value={o.value} className="flex-1">{o.label}</ToggleGroupItem>))}</ToggleGroup>
+        <Card aria-labelledby="start-h">
+          <CardHeader>
+            <CardTitle id="start-h">Start</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+          <Tabs value={mode} onValueChange={(next) => { if (next === "text" || next === "ideas") patchStudy({ mode: next }); }}>
+            <TabsList aria-label="Input mode" className="w-full">
+              <TabsTrigger value="text" className="min-w-0 flex-1">French text</TabsTrigger>
+              <TabsTrigger value="ideas" className="min-w-0 flex-1">My own ideas</TabsTrigger>
+            </TabsList>
+          </Tabs>
           <div className="grid gap-2">
             <label htmlFor="study-input" className="text-sm font-medium">
               {mode === "text" ? "French text" : "Your idea"}
@@ -148,28 +152,27 @@ export function StudyInput() {
             </div>
             {v === "over" && !busy && <DisabledReason>{reason}</DisabledReason>}
           </div>
-        </section>
+          </CardContent>
+        </Card>
 
-        <div className="grid gap-3 md:grid-cols-2">
-          {last.record && !busy && (
-            <section className="flex flex-col items-start gap-2 rounded-xl border bg-card p-4" aria-label="Continue">
-              <p className="text-xs font-medium text-muted-foreground">Continue</p>
-              <p className="font-medium">{plural(sentenceCount(last.record), "sentence")} saved</p>
-              <p className="inline-flex items-baseline gap-1.5 text-sm">{fmtWhen(last.record.created_at)}</p>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button type="button" variant="outline" onClick={() => last.record && openAnalysisInStudy(last.record)}>Continue</Button>
-                <Button type="button" variant="ghost" onClick={last.dismiss}>Dismiss</Button>
-              </div>
-            </section>
-          )}
-          <StudyReviewNotice />
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="ghost" onClick={() => go("study/personal")}>Practise my own words</Button>
-          <Button type="button" variant="ghost" onClick={() => go("study/grammar")}>My grammar map</Button>
+        {last.record && !busy && (
+          <section className="flex flex-col items-start gap-2 rounded-xl border bg-card p-4" aria-label="Continue">
+            <p className="text-xs font-medium text-muted-foreground">Continue</p>
+            <p className="font-medium">{plural(sentenceCount(last.record), "sentence")} saved</p>
+            <p className="inline-flex items-baseline gap-1.5 text-sm">{fmtWhen(last.record.created_at)}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="outline" onClick={() => last.record && openAnalysisInStudy(last.record)}>Continue</Button>
+              <Button type="button" variant="ghost" onClick={last.dismiss}>Dismiss</Button>
+            </div>
+          </section>
+        )}
+        <StudyReviewNotice />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <EntryCard title="Practise my own words" description="Prepare, speak, and archive your own ideas" onClick={() => go("study/personal")} />
+          <EntryCard title="My grammar map" description="Patterns from the sentences you have saved" onClick={() => go("study/grammar")} />
         </div>
         {(study.restored || forced === "restored") && draft.trim() && (
-          <Alert variant="default"><AlertTitle>Draft restored</AlertTitle><AlertDescription>Your earlier text is still here, in “{mode === "ideas" ? "Practise my own ideas" : "Study French text"}”. Each mode keeps its own draft.<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="ghost" onClick={() => patchStudy({ restored: false })}>Dismiss</Button></div></AlertDescription></Alert>
+          <Alert variant="default"><AlertTitle>Draft restored</AlertTitle><AlertDescription>Your earlier text is still here, in “{mode === "ideas" ? "My own ideas" : "French text"}”. Each mode keeps its own draft.<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="ghost" onClick={() => patchStudy({ restored: false })}>Dismiss</Button></div></AlertDescription></Alert>
         )}
 
         <Collapsible className="rounded-lg border px-4">
@@ -198,7 +201,7 @@ export function StudyInput() {
           }
         >
           <p>
-            This clears the text in “{mode === "ideas" ? "Practise my own ideas" : "Study French text"}” only. Your other draft, saved cards and history stay the same.
+            This clears the text in “{mode === "ideas" ? "My own ideas" : "French text"}” only. Your other draft, saved cards and history stay the same.
           </p>
         </Dialog>
       )}
@@ -239,7 +242,7 @@ function AnalysisStatus() {
     );
   if (a.status === "nofrench")
     return (
-      <Alert variant="default" role="status"><AlertTitle>No usable French sentences found</AlertTitle><AlertDescription>No French sentences were found in this text. Check that it’s in French, or switch to “Practise my own ideas” to start from English.</AlertDescription></Alert>
+      <Alert variant="default" role="status"><AlertTitle>No usable French sentences found</AlertTitle><AlertDescription>No French sentences were found in this text. Check that it’s in French, or switch to “My own ideas” to start from English.</AlertDescription></Alert>
     );
   return null;
 }
@@ -317,15 +320,13 @@ export function StudyPhoto() {
     announce("Import cancelled. Your photo is kept.");
   };
 
-  const back = (
-    <Button type="button" variant="ghost" className="h-8 self-start px-2 text-sm md:-ml-3" onClick={() => go("study/new")}>{<ChevronLeft aria-hidden />}Back to text input</Button>
-  );
+  const back = <Crumbs items={[{ label: "Study", onClick: () => go("study/new") }, { label: "Import from photo" }]} />;
 
   if (ocr.phase === "results") return <OcrResults back={back} photoTitle={photo?.file.name ?? "your photo"} />;
 
   const busy = ocr.phase === "processing";
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className={pageFrame()}>
       <PageHead
         back={back}
         title="Import from photo"
@@ -409,7 +410,7 @@ function OcrResults({ back, photoTitle }: { back: React.ReactNode; photoTitle: s
   const reason = !selected.length ? "Select at least one sentence." : textOver ? "Shorten the selected text to 15,000 characters or fewer." : over ? `Select ${OCR_LIMIT} or fewer sentences. Deselect ${selected.length - OCR_LIMIT} to continue.` : undefined;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className={pageFrame()}>
       <PageHead back={back} title="Check the text we found" desc={photoTitle} />
       <h2 id="ocr-results-h" tabIndex={-1} className="sr-only">Recognised sentences</h2>
       <div className="flex flex-col gap-4">

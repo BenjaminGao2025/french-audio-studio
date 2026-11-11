@@ -19,7 +19,7 @@ import {
 import { audioJumped } from "../api/time";
 import { fmtClock } from "../lib/format";
 import { announce, go, retryPlayback, startPlayback, stopPlayback, updatePlayer, useApp } from "../state/store";
-import { Dialog, Input, PageHead, Skeleton, Spinner } from "../components/ui";
+import { Dialog, Input, PageHead, Skeleton, Spinner, pageFrame } from "../components/ui";
 import { Slider } from "../components/ui/slider";
 import { BackTo } from "./Practice";
 import { Button } from "../components/ui/button";
@@ -84,7 +84,7 @@ export function EpisodeList() {
   const pos = (e: ServerEpisode) => positions[e.id] ?? 0;
   const cont = list.find((e) => e.status === "ready" && pos(e) > 5 && pos(e) < (e.duration ?? 0) - 5);
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className={pageFrame()}>
       <PageHead
         back={<BackTo label="Practice" to="practice" />}
         title="Episodes"
@@ -231,7 +231,7 @@ export function EpisodePlayer({ id }: { id: string }) {
   const e = data?.episodes.find((x) => x.id === id);
   if (state === "loading")
     return (
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+      <div className={pageFrame()}>
         <PageHead back={<BackTo label="Episodes" to="practice/episodes" />} title="Episode" />
         <Spinner label="Loading the episode…" />
         <Skeleton lines={4} />
@@ -239,7 +239,7 @@ export function EpisodePlayer({ id }: { id: string }) {
     );
   if (state === "error" || !e || e.status !== "ready")
     return (
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+      <div className={pageFrame()}>
         <PageHead back={<BackTo label="Episodes" to="practice/episodes" />} title={e ? episodeTitle(e) : "Episode"} />
         {state === "error" ? (
           <Alert variant="destructive" role="alert"><AlertTitle>The episode didn’t load</AlertTitle><AlertDescription>{error || "The server didn’t respond."}<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={reload}>Retry</Button></div></AlertDescription></Alert>
@@ -305,7 +305,7 @@ function Player({ e }: { e: ServerEpisode }) {
   const current = cues ? cues.reduce((acc, c, i) => (c.at <= position ? i : acc), -1) : -1;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className={pageFrame()}>
       <PageHead
         back={<BackTo label="Episodes" to="practice/episodes" />}
         eyebrow={`Episode${levelOf(e) ? ` · ${levelOf(e)}` : ""} · ${minutesOf(e)} min`}

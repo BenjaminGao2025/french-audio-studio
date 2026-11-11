@@ -20,7 +20,7 @@ import { ApiError } from "../api/client";
 import { fmtClock } from "../lib/format";
 import { formatFriendlyPhonetic } from "../lib/phonetic";
 import { announce, get, go, retryPlayback, set, startPlayback, updatePlayer, useApp } from "../state/store";
-import { PageHead, RadioGroup, RadioGroupItem, Spinner } from "../components/ui";
+import { PageHead, RadioGroup, RadioGroupItem, Spinner, pageFrame } from "../components/ui";
 import { BackTo } from "./Practice";
 
 const SELF = ["Almost nothing", "Some of it", "Most or all of it"] as const;
@@ -80,7 +80,7 @@ export function Listen() {
 
   if (!s) {
     return (
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+      <div className={pageFrame()}>
         {head}
         <div className="flex flex-col gap-4">
           {state === "loading" && <Spinner label="Preparing a clip from your sentences…" />}
@@ -103,7 +103,7 @@ export function Listen() {
   const q = s.material.question;
   const step = answered ? 5 : done >= 3 ? 4 : s.revealed ? 3 : s.blind_self !== null ? 2 : 1;
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className={pageFrame()}>
       {head}
       <div className="flex flex-col gap-6">
         <p className="flex flex-wrap items-center gap-2">

@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Star, X } from "lucide-react";
+import { ChevronRight, Loader2, Star, X } from "lucide-react";
 import { cn } from "cn";
 import { importanceFor, importanceLabel } from "../../lib/lookup";
 import { Button } from "./button";
@@ -20,6 +20,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "./dialog";
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "./breadcrumb";
+import { Card, CardHeader, CardTitle } from "./card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "./sheet";
 import { Skeleton as ShadSkeleton } from "./skeleton";
 
@@ -55,18 +57,76 @@ export function Skeleton({ lines = 3 }: { lines?: number }) {
   );
 }
 
+export function Crumbs({ items }: { items: { label: string; onClick?: () => void }[] }) {
+  return (
+    <Breadcrumb>
+      <BreadcrumbList>
+        {items.map((item, i) => (
+          <span key={`${item.label}-${i}`} className="contents">
+            {i > 0 && <BreadcrumbSeparator />}
+            <BreadcrumbItem>
+              {item.onClick ? (
+                <BreadcrumbLink asChild>
+                  <Button type="button" variant="link" className="h-auto p-0 text-sm font-normal text-muted-foreground" onClick={item.onClick}>
+                    {item.label}
+                  </Button>
+                </BreadcrumbLink>
+              ) : (
+                <BreadcrumbPage>{item.label}</BreadcrumbPage>
+              )}
+            </BreadcrumbItem>
+          </span>
+        ))}
+      </BreadcrumbList>
+    </Breadcrumb>
+  );
+}
+
+export function EntryCard({
+  title,
+  description,
+  onClick,
+  icon,
+}: {
+  title: string;
+  description?: string;
+  onClick: () => void;
+  icon?: ReactNode;
+}) {
+  return (
+    <Card className="py-0 transition-colors hover:bg-accent">
+      <Button type="button" variant="ghost" className="h-auto w-full justify-between gap-3 whitespace-normal rounded-xl px-4 py-4 text-left" onClick={onClick}>
+        <span className="flex min-w-0 flex-col gap-1">
+          <CardHeader className="w-full p-0">
+            <CardTitle className="flex items-center gap-2 text-base">{icon}{title}</CardTitle>
+          </CardHeader>
+          {description && <span className="text-sm font-normal text-muted-foreground">{description}</span>}
+        </span>
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+      </Button>
+    </Card>
+  );
+}
+
+/** Centered page column. Wide is for tables and the sentence workspace. */
+export function pageFrame(extra?: string, wide = false) {
+  return cn("mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-6", wide && "max-w-6xl", extra);
+}
+
 export function PageHead({ title, eyebrow, desc, actions, back }: { title: string; eyebrow?: ReactNode; desc?: ReactNode; actions?: ReactNode; back?: ReactNode }) {
   return (
-    <header className="mb-6 flex flex-col gap-2">
-      {back && <div className="self-start">{back}</div>}
-      {eyebrow && <div className="text-sm text-muted-foreground">{eyebrow}</div>}
+    <header className="flex flex-col gap-4">
+      {back}
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <h1 className="text-xl font-semibold tracking-tight text-balance" tabIndex={-1} data-page-title>
-          {title}
-        </h1>
+        <div className="min-w-0 space-y-1">
+          {eyebrow && <div className="text-sm text-muted-foreground">{eyebrow}</div>}
+          <h1 className="text-2xl font-semibold tracking-tight" tabIndex={-1} data-page-title>
+            {title}
+          </h1>
+          {desc && <p className="text-sm text-muted-foreground">{desc}</p>}
+        </div>
         {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
       </div>
-      {desc && <div className="max-w-prose text-sm text-muted-foreground">{desc}</div>}
     </header>
   );
 }
@@ -309,12 +369,13 @@ export function Importance({ count, lookups = "inline" }: { count: number; looku
   );
 }
 
-export function Stat({ label, value, sub }: { label: string; value: ReactNode; sub?: ReactNode }) {
+/** Label above a tabular value. The value stays the label's next sibling. */
+export function Stat({ label, value, hint, className }: { label: string; value: ReactNode; hint?: ReactNode; className?: string }) {
   return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="text-lg font-semibold tabular-nums">{value}</span>
-      {sub && <span className="text-xs text-muted-foreground">{sub}</span>}
+    <div className={cn("flex min-w-0 flex-col justify-end gap-1", className)}>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="text-lg font-semibold tabular-nums leading-tight">{value}</dd>
+      {hint ? <dd className="text-xs text-muted-foreground">{hint}</dd> : null}
     </div>
   );
 }
@@ -328,6 +389,7 @@ export { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 export { Progress } from "./progress";
 export { Toggle } from "./toggle";
 export { Separator } from "./separator";
-export { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./card";
+export { Badge } from "./badge";
+export { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "./card";
 export { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./table";
 export { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./collapsible";

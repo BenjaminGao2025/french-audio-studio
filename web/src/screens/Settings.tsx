@@ -7,7 +7,8 @@ import { saveReviewSettings } from "../api/review";
 import { initials } from "../components/Shell";
 import { SPEEDS, announce, get, go, routeUrl, set, setDailyNew, setPlaybackPrefs, setSessionSize, stopPlayback, useApp } from "../state/store";
 import { fmtWhen } from "../api/history";
-import { Checkbox, Dialog, PageHead, Separator, Spinner } from "../components/ui";
+import { Checkbox, Dialog, PageHead, Spinner, pageFrame } from "../components/ui";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Slider } from "../components/ui/slider";
 import { Switch } from "../components/ui/switch";
 import { animationOn, feedbackPrefs, prefersReducedMotion, saveFeedback, subscribeFeedback } from "../lib/feedback";
@@ -153,36 +154,37 @@ export function SessionSizeField() {
 export function SettingsScreen({ sub }: { sub?: string }) {
   const route = useApp((s) => s.route);
   const [signOut, setSignOut] = useState(route.includes("signout"));
-  const accountRef = useRef<HTMLElement>(null);
+  const accountRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (sub === "account") requestAnimationFrame(() => accountRef.current?.scrollIntoView({ block: "start" }));
     if (route.includes("signout")) setSignOut(true);
   }, [sub, route]);
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className={pageFrame()}>
       <PageHead title="Settings" />
-      <div className="flex flex-col gap-12">
-        <section className="flex flex-col gap-6" aria-labelledby="pref-h">
-          <h2 id="pref-h" className="text-lg font-semibold text-balance">Review</h2>
-          <DailyLimitField />
-          <SessionSizeField />
-        </section>
-        <Separator />
+      <div className="flex flex-col gap-4">
+        <Card>
+          <CardHeader><CardTitle id="pref-h">Review</CardTitle></CardHeader>
+          <CardContent className="flex flex-col gap-6">
+            <DailyLimitField />
+            <SessionSizeField />
+          </CardContent>
+        </Card>
         <Playback />
-        <Separator />
         <FeedbackSettings />
-        <Separator />
-        <section ref={accountRef} className="flex flex-col gap-6" aria-labelledby="acct-h" style={{ scrollMarginTop: 16 }}>
-          <h2 id="acct-h" className="text-lg font-semibold text-balance">Account</h2>
-          <Account onSignOut={() => setSignOut(true)} />
-        </section>
-        <Separator />
+        <Card ref={accountRef} className="scroll-mt-4" aria-labelledby="acct-h">
+          <CardHeader><CardTitle id="acct-h">Account</CardTitle></CardHeader>
+          <CardContent>
+            <Account onSignOut={() => setSignOut(true)} />
+          </CardContent>
+        </Card>
         <Devices />
-        <Separator />
-        <section className="flex flex-col gap-3" aria-labelledby="dev-h">
-          <h2 id="dev-h" className="text-lg font-semibold text-balance">Background listening</h2>
-          <Button type="button" variant="outline" style={{ alignSelf: "flex-start" }} onClick={() => go("progress/devices")}>Devices and background listening{<ArrowRight aria-hidden />}</Button>
-        </section>
+        <Card>
+          <CardHeader><CardTitle id="dev-h">Background listening</CardTitle></CardHeader>
+          <CardContent>
+            <Button type="button" variant="outline" onClick={() => go("progress/devices")}>Devices and background listening{<ArrowRight aria-hidden />}</Button>
+          </CardContent>
+        </Card>
       </div>
       {signOut && <SignOutDialog onClose={() => { setSignOut(false); if (get().route.includes("signout")) history.replaceState(null, "", routeUrl("settings/account")); }} />}
     </div>
@@ -193,8 +195,9 @@ export function SettingsScreen({ sub }: { sub?: string }) {
 function Playback() {
   const settings = useApp((s) => s.settings);
   return (
-    <section className="flex flex-col gap-4" aria-labelledby="play-h">
-      <h2 id="play-h" className="text-lg font-semibold text-balance">Playback on this device</h2>
+    <Card>
+    <CardHeader><CardTitle id="play-h">Playback on this device</CardTitle></CardHeader>
+    <CardContent className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2 gap-4" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
         <label className="grid gap-2" style={{ width: 200 }}>
           <span className="text-sm font-medium">Default playback speed</span>
@@ -205,7 +208,8 @@ function Playback() {
         </label>
       </div>
       <p className="text-sm text-muted-foreground">This device · {settings.timezone}</p>
-    </section>
+    </CardContent>
+    </Card>
   );
 }
 
@@ -223,8 +227,9 @@ function FeedbackSettings() {
   );
   const volume = Math.round(prefs.volume * 100);
   return (
-    <section className="flex flex-col gap-4" aria-labelledby="feedback-h">
-      <h2 id="feedback-h" className="text-lg font-semibold text-balance">Practice feedback</h2>
+    <Card>
+    <CardHeader><CardTitle id="feedback-h">Practice feedback</CardTitle></CardHeader>
+    <CardContent className="flex flex-col gap-4">
       <ul className="divide-y border-y">
         <li>
           <label className="flex min-h-11 w-full items-center justify-between gap-4 py-2">
@@ -260,7 +265,8 @@ function FeedbackSettings() {
         </li>
       </ul>
       {reduced && prefs.animation && !animationOn(prefs, reduced) && <p className="text-xs leading-4 text-muted-foreground">Animation stays off while this device asks for reduced motion.</p>}
-    </section>
+    </CardContent>
+    </Card>
   );
 }
 
@@ -316,8 +322,9 @@ function Devices() {
     }
   };
   return (
-    <section className="flex flex-col gap-3" aria-labelledby="devices-h">
-      <h2 id="devices-h" className="text-lg font-semibold text-balance">Signed-in devices</h2>
+    <Card>
+      <CardHeader><CardTitle id="devices-h">Signed-in devices</CardTitle></CardHeader>
+      <CardContent className="flex flex-col gap-3">
       {!list && !error && <Spinner label="Loading devices…" />}
       {error && <Alert variant="destructive" role="alert"><AlertTitle>Something went wrong</AlertTitle><AlertDescription>{error}<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={load}>Retry</Button></div></AlertDescription></Alert>}
       {list && (
@@ -337,7 +344,8 @@ function Devices() {
           <p className="text-xs leading-4 text-muted-foreground">Up to {list.max} devices can be signed in at once; signing in on another one signs out the one used least recently.</p>
         </>
       )}
-    </section>
+      </CardContent>
+    </Card>
   );
 }
 

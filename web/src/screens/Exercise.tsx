@@ -18,8 +18,8 @@ import {
 } from "../state/store";
 import { gradeAttempt } from "../api/dictation";
 import { FrText, type FrPick, type FrSegment } from "../components/FrText";
-import { Dialog, Spinner, Textarea, WordDock, useNarrow } from "../components/ui";
-import { WordPanel } from "./WordPopup";
+import { Spinner, Textarea, useNarrow } from "../components/ui";
+import { WordOverlay, WordPanel } from "./WordPopup";
 import { Button } from "../components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
 import { ToggleGroup, ToggleGroupItem } from "../components/ui/toggle-group";
@@ -519,12 +519,12 @@ export function Exercise({
   );
 }
 
-function ExerciseWord({ sentence, pick, narrow, onClose }: { sentence: StudySentence; pick: FrPick; narrow: boolean; onClose: () => void }) {
-  const panel = (
-    <WordPanel sentence={sentence} text={pick.text} occurrence={pick.occurrence} onGrammar={onClose} onClose={onClose} inSheet={narrow} />
+function ExerciseWord({ sentence, pick, onClose }: { sentence: StudySentence; pick: FrPick; narrow: boolean; onClose: () => void }) {
+  return (
+    <WordOverlay label={`Meaning of ${pick.text}`} onClose={onClose}>
+      <WordPanel sentence={sentence} text={pick.text} occurrence={pick.occurrence} onGrammar={onClose} onClose={onClose} inSheet />
+    </WordOverlay>
   );
-  if (narrow) return <Dialog sheet titleHidden title={`Meaning of “${pick.text}”`} onClose={onClose}>{panel}</Dialog>;
-  return <WordDock label={`Meaning of ${pick.text}`} onClose={onClose}>{panel}</WordDock>;
 }
 
 function Result({

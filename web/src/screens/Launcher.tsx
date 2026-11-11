@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { ChevronLeft, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { queueSentences, savedSentences, type SavedSentence } from "../api/srs";
 import { stepText } from "../api/study";
 import type { PracticeItem } from "../data/fixtures";
 import { plural } from "../lib/format";
 import { announce, go, set, useApp } from "../state/store";
-import { Checkbox, DisabledReason, PageHead, RadioGroup, RadioGroupItem, Spinner } from "../components/ui";
+import { Checkbox, Crumbs, DisabledReason, PageHead, RadioGroup, RadioGroupItem, Spinner, pageFrame } from "../components/ui";
 import { Exercise } from "./Exercise";
 import { Button } from "../components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
@@ -72,9 +72,9 @@ export function Launcher({ kind }: { kind: "Recall" | "Dictation" }) {
     : undefined;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div className={pageFrame()}>
       <PageHead
-        back={<Button type="button" variant="ghost" className="h-8 self-start px-2 text-sm md:-ml-3" onClick={() => go("study")}>{<ChevronLeft aria-hidden />}Study</Button>}
+        back={<Crumbs items={[{ label: "Study", onClick: () => go("study") }, { label: kind }]} />}
         title={kind}
       />
       <div className="flex flex-col gap-6">
@@ -144,7 +144,7 @@ export function RunScreen() {
   const meta = key ? runItems.get(key) : undefined;
   if (!key || (!sess && !meta)) {
     return (
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+      <div className={pageFrame()}>
         <PageHead title="Practice" />
         <Alert variant="default"><AlertTitle>No practice in progress</AlertTitle><AlertDescription><div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="default" onClick={() => go("study/recall")}>Choose a practice</Button></div></AlertDescription></Alert>
       </div>
@@ -152,9 +152,9 @@ export function RunScreen() {
   }
   const kind = sess?.kind ?? meta!.kind;
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+    <div className={pageFrame()}>
       <h1 className="sr-only" tabIndex={-1} data-page-title>{kind}</h1>
-      <Button type="button" variant="ghost" className="h-8 self-start px-2 text-sm md:-ml-3" onClick={() => go(kind === "Recall" ? "study/recall" : "study/dictation")}>{<ChevronLeft aria-hidden />}Change source</Button>
+      <Crumbs items={[{ label: kind, onClick: () => go(kind === "Recall" ? "study/recall" : "study/dictation") }, { label: "Session" }]} />
       <Exercise sessionKey={key} kind={kind} source={sess?.source ?? meta!.source} items={sess?.items ?? meta!.items} onDone={() => go("study")} />
     </div>
   );

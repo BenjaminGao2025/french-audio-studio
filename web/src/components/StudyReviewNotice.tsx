@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api/client";
 import { go, useApp } from "../state/store";
+import { Stat } from "./ui";
 import { Button } from "./ui/button";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "./ui/card";
 
 
 type Counts = { total: number; review: number; learning: number; new: number; reviewed_today: number };
@@ -24,13 +26,20 @@ export function StudyReviewNotice() {
   if (!counts?.total) return null;
   const revisit = counts.review + counts.learning;
   return (
-    <aside className="flex flex-col items-start gap-2 rounded-xl border bg-card p-4">
-      <h2 className="text-xs font-medium text-muted-foreground">Due today</h2>
-      <dl className="flex flex-wrap gap-6">
-        <div><dt>Cards</dt><dd>{counts.total}</dd></div>
-        <div><dt>To revisit</dt><dd>{revisit}</dd></div>
-      </dl>
-      <Button type="button" variant="outline" onClick={() => go("review/due")}>Review today’s cards</Button>
-    </aside>
+    <Card>
+      <CardHeader>
+        <CardTitle>Due today</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <dl className="grid grid-cols-3 gap-4">
+          <Stat label="Cards" value={counts.total} />
+          <Stat label="To revisit" value={revisit} />
+          <Stat label="New" value={counts.new} />
+        </dl>
+      </CardContent>
+      <CardFooter className="border-t">
+        <Button type="button" className="w-full sm:w-auto" onClick={() => go("review/due")}>Review today’s cards</Button>
+      </CardFooter>
+    </Card>
   );
 }

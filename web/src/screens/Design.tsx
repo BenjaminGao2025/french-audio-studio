@@ -1,7 +1,7 @@
 import { Bookmark, BookmarkCheck, Loader2, AlertCircle } from "lucide-react";
 import { grade } from "../lib/grading";
 import { countLookup, importanceFor, lookupKey, type LookupCounter } from "../lib/lookup";
-import { Importance, PageHead } from "../components/ui";
+import { Importance, PageHead, pageFrame } from "../components/ui";
 import { REGISTRY } from "./registry";
 import { Button } from "../components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
@@ -77,7 +77,7 @@ export function DesignReference() {
     ["Lookup keys keep failli ≠ faillir", lookupKey("failli") !== lookupKey("faillir")],
   ];
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+    <div className={pageFrame(undefined, true)}>
       <PageHead title="Design reference" eyebrow="SCR-DSN-01 · for reviewers" desc="Tokens, component roles, accessibility specifications, adopted defaults and screen coverage for this prototype. Part of the same project as the app." />
       <div className="flex flex-col gap-12">
         <section className="flex flex-col gap-3" aria-labelledby="dsn-color">
