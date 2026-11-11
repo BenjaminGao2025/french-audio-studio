@@ -108,3 +108,11 @@ Re-checked `rc-after-word-card-1440.png`, `rc-after-word-card-390.png`, `rc-afte
 - On the review session card, the New/Listen (or Fill-in) badges and the `...` menu share one `CardHeader` row. `CardAction` is `self-center`. At 390 both centers sit at y=112.
 - Study home modes are a full-width `TabsList`. At 390 each trigger is 152×53, so “Practise my own ideas” wraps inside an equal cell.
 - Re-checked progress, review home, study home, practice, review session, and review fill-in at 1440 and 390, plus settings and own words for width. The word-card pass in the same set stayed at sentence x=296 w=768 and sheet x=1056 w=384 at 1440, and sentence x=40 w=310 and drawer x=0 w=390 at 390. Every after shot logged EDGE-OK. Audit `className_uses` is 1310. Raw controls stay 0. Web tests 364 passed, build passed, Python 25 passed.
+
+### Word card column, study modes, and progress values
+
+- On `md` and up, while the word sheet is open, the study reading column gets `pr-96` (24rem), the same width as the sheet. At 1440 the sheet is x=1056 w=384. The sentence ends at x=1032, the player ends at x=1032 with no inner overflow, and the Understand / Listen & speak / Check yourself row ends at x=1056. Nothing crosses the sheet, and the page does not scroll sideways. At 390 the card is still a bottom drawer; the sentence stays x=40 w=310.
+- Study home mode tabs read “French text” and “My own ideas”, one line each. At 390 both are 152×29. No test asserted the old labels.
+- “Due today” is a full-width card. At 1440 it is x=464 w=768, the same column as the page title. At 390 it is x=16 w=358.
+- The four progress stat values stay on one line. Remaining reads “997 h” with a muted “42 min” beside it, at `text-xl`. The same at 390.
+- Re-checked word card, study home, and progress at 1440 and 390. Page overflow stayed 0. Audit `className_uses` is 1311. Raw controls stay 0. Web tests 364 passed, build passed, Python 25 passed.

@@ -89,9 +89,9 @@ export function StudyInput() {
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
           <Tabs value={mode} onValueChange={(next) => { if (next === "text" || next === "ideas") patchStudy({ mode: next }); }}>
-            <TabsList aria-label="Input mode" className="h-auto! w-full items-stretch">
-              <TabsTrigger value="text" className="h-auto! min-h-8 min-w-0 flex-1 whitespace-normal px-2 py-1.5 text-center leading-snug">Study French text</TabsTrigger>
-              <TabsTrigger value="ideas" className="h-auto! min-h-8 min-w-0 flex-1 whitespace-normal px-2 py-1.5 text-center leading-snug">Practise my own ideas</TabsTrigger>
+            <TabsList aria-label="Input mode" className="w-full">
+              <TabsTrigger value="text" className="min-w-0 flex-1">French text</TabsTrigger>
+              <TabsTrigger value="ideas" className="min-w-0 flex-1">My own ideas</TabsTrigger>
             </TabsList>
           </Tabs>
           <div className="grid gap-2">
@@ -155,26 +155,24 @@ export function StudyInput() {
           </CardContent>
         </Card>
 
-        <div className="grid gap-3 md:grid-cols-2">
-          {last.record && !busy && (
-            <section className="flex flex-col items-start gap-2 rounded-xl border bg-card p-4" aria-label="Continue">
-              <p className="text-xs font-medium text-muted-foreground">Continue</p>
-              <p className="font-medium">{plural(sentenceCount(last.record), "sentence")} saved</p>
-              <p className="inline-flex items-baseline gap-1.5 text-sm">{fmtWhen(last.record.created_at)}</p>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button type="button" variant="outline" onClick={() => last.record && openAnalysisInStudy(last.record)}>Continue</Button>
-                <Button type="button" variant="ghost" onClick={last.dismiss}>Dismiss</Button>
-              </div>
-            </section>
-          )}
-          <StudyReviewNotice />
-        </div>
+        {last.record && !busy && (
+          <section className="flex flex-col items-start gap-2 rounded-xl border bg-card p-4" aria-label="Continue">
+            <p className="text-xs font-medium text-muted-foreground">Continue</p>
+            <p className="font-medium">{plural(sentenceCount(last.record), "sentence")} saved</p>
+            <p className="inline-flex items-baseline gap-1.5 text-sm">{fmtWhen(last.record.created_at)}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="outline" onClick={() => last.record && openAnalysisInStudy(last.record)}>Continue</Button>
+              <Button type="button" variant="ghost" onClick={last.dismiss}>Dismiss</Button>
+            </div>
+          </section>
+        )}
+        <StudyReviewNotice />
         <div className="grid gap-3 sm:grid-cols-2">
           <EntryCard title="Practise my own words" description="Prepare, speak, and archive your own ideas" onClick={() => go("study/personal")} />
           <EntryCard title="My grammar map" description="Patterns from the sentences you have saved" onClick={() => go("study/grammar")} />
         </div>
         {(study.restored || forced === "restored") && draft.trim() && (
-          <Alert variant="default"><AlertTitle>Draft restored</AlertTitle><AlertDescription>Your earlier text is still here, in “{mode === "ideas" ? "Practise my own ideas" : "Study French text"}”. Each mode keeps its own draft.<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="ghost" onClick={() => patchStudy({ restored: false })}>Dismiss</Button></div></AlertDescription></Alert>
+          <Alert variant="default"><AlertTitle>Draft restored</AlertTitle><AlertDescription>Your earlier text is still here, in “{mode === "ideas" ? "My own ideas" : "French text"}”. Each mode keeps its own draft.<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="ghost" onClick={() => patchStudy({ restored: false })}>Dismiss</Button></div></AlertDescription></Alert>
         )}
 
         <Collapsible className="rounded-lg border px-4">
@@ -203,7 +201,7 @@ export function StudyInput() {
           }
         >
           <p>
-            This clears the text in “{mode === "ideas" ? "Practise my own ideas" : "Study French text"}” only. Your other draft, saved cards and history stay the same.
+            This clears the text in “{mode === "ideas" ? "My own ideas" : "French text"}” only. Your other draft, saved cards and history stay the same.
           </p>
         </Dialog>
       )}
@@ -244,7 +242,7 @@ function AnalysisStatus() {
     );
   if (a.status === "nofrench")
     return (
-      <Alert variant="default" role="status"><AlertTitle>No usable French sentences found</AlertTitle><AlertDescription>No French sentences were found in this text. Check that it’s in French, or switch to “Practise my own ideas” to start from English.</AlertDescription></Alert>
+      <Alert variant="default" role="status"><AlertTitle>No usable French sentences found</AlertTitle><AlertDescription>No French sentences were found in this text. Check that it’s in French, or switch to “My own ideas” to start from English.</AlertDescription></Alert>
     );
   return null;
 }

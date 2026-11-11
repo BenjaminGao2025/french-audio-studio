@@ -89,10 +89,10 @@ function Overview() {
           <div className="flex flex-col gap-4">
             <Journey s={summary} />
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-              <StatCard title="Today" value={fmtDuration(summary.today_seconds / 60)} />
-              <StatCard title="This week" value={fmtDuration(summary.week_seconds / 60)} />
-              <StatCard title="Remaining" value={summary.remaining_seconds === 0 ? "0 h" : fmtDuration(summary.remaining_seconds / 60)} />
-              <StatCard title="Weekly average" value={fmtDuration(summary.average_week_seconds / 60)} />
+              <StatCard title="Today" {...durationParts(summary.today_seconds)} />
+              <StatCard title="This week" {...durationParts(summary.week_seconds)} />
+              <StatCard title="Remaining" {...(summary.remaining_seconds === 0 ? { value: "0 h" } : durationParts(summary.remaining_seconds))} />
+              <StatCard title="Weekly average" {...durationParts(summary.average_week_seconds)} />
             </div>
             <div className={cn("grid gap-4", game.streak_days > 0 && "md:grid-cols-2")}>
               <Estimate s={summary} />
@@ -111,14 +111,26 @@ function Overview() {
   );
 }
 
-function StatCard({ title, value }: { title: string; value: string }) {
+/** Hours on the value line, leftover minutes beside them, so a long total stays one line. */
+function durationParts(seconds: number): { value: string; detail?: string } {
+  const m = Math.round(seconds / 60);
+  if (m < 60) return { value: `${m} min` };
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  return r ? { value: `${nf.format(h)} h`, detail: `${r} min` } : { value: `${nf.format(h)} h` };
+}
+
+function StatCard({ title, value, detail }: { title: string; value: string; detail?: string }) {
   return (
     <Card size="sm">
       <CardHeader>
         <CardTitle className="text-xs! font-medium text-muted-foreground">{title}</CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="text-2xl font-semibold tabular-nums leading-none">{value}</p>
+        <p className="whitespace-nowrap text-xl font-semibold tabular-nums leading-none">
+          {value}
+          {detail ? <span className="text-sm font-normal text-muted-foreground"> {detail}</span> : null}
+        </p>
       </CardContent>
     </Card>
   );

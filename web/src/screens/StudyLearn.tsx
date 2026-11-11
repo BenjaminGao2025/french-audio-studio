@@ -99,6 +99,8 @@ export function StudyLearn() {
   );
 
   return (
+    // The desktop sheet is 24rem (sm:max-w-sm). Keep this column in the space to its left.
+    <div className={cn("w-full min-w-0", pick && "md:pr-96")}>
     <div className={pageFrame("study-workspace", true)}>
       <h1 className="sr-only" tabIndex={-1} data-page-title>Study</h1>
       <div className="flex flex-col gap-4 min-w-0">
@@ -210,6 +212,7 @@ export function StudyLearn() {
           />
         </WordOverlay>
       )}
+    </div>
     </div>
   );
 }

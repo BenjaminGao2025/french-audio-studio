@@ -323,7 +323,7 @@ const keepPage = (event: Event) => {
   event.preventDefault();
 };
 
-/** Desktop: right Sheet. Narrow: bottom Drawer. The page column stays full width. */
+/** Desktop: right Sheet, 24rem. Narrow: bottom Drawer. The reading column reserves that width from md up. */
 export function WordOverlay({ label, onClose, children }: { label: string; onClose: () => void; children: ReactNode }) {
   const desktop = useAppWidth() >= 768;
   const focusWord = (event: Event) => {
