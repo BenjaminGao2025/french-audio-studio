@@ -12,7 +12,9 @@ services:
       AGY_MODEL: ${AGY_MODEL:-gemini-3.8-flash}
       MAX_TEXT_CHARS: "15000"
       FRENCH_DICTIONARY_PATH: /app/dictionary/french.sqlite
+      ENGLISH_DICTIONARY_PATH: /app/dictionary/english-french.sqlite
     volumes:
       - ./outputs:/app/outputs
       - ./models:/app/models:ro
       - /home/mgacai/tts-dictionary-data/french-v1.sqlite:/app/dictionary/french.sqlite:ro
+      - /home/mgacai/tts-dictionary-data/english-french-v1.sqlite:/app/dictionary/english-french.sqlite:ro
