@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bookmark, BookmarkCheck, Eye, Play, Search, CloudOff, Archive, RotateCcw, Volume2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Bookmark, BookmarkCheck, Eye, Play, Search, CloudOff, Archive, RotateCcw, Volume2, ChevronLeft, ChevronRight, Loader2, ChevronDown } from "lucide-react";
 import {
   DEFAULT_SESSION_SIZE,
   planSession,
@@ -19,13 +19,23 @@ import { importanceFor } from "../lib/lookup";
 import { formatFriendlyPhonetic } from "../lib/phonetic";
 import { cx, nf, plural } from "../lib/format";
 import { announce, get, getCardLookups, go, introduceNewCard, sayFrench, set, useApp, type ReviewUI } from "../state/store";
-import { Banner, Button, Checkbox, ChoiceSelect, Collapsible, CollapsibleContent, CollapsibleTrigger, Dialog, DisabledReason, Disclosure, FieldText, Importance, PageHead, Pill, Progress, Skeleton, Spinner, Table, Tabs, Textarea, WordDock, useNarrow } from "../components/ui";
+import { Checkbox, Dialog, DisabledReason, Importance, PageHead, Progress, Skeleton, Spinner, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, Textarea, WordDock, useNarrow } from "../components/ui";
+import { flexRender } from "@tanstack/react-table";
 import { getCoreRowModel, useLegacyTable, type LegacyColumnDef } from "@tanstack/react-table/legacy";
 import { FrText, tokenizeFrench, type FrPick, type FrSegment } from "../components/FrText";
 import { WordPanel } from "./WordPopup";
 import { MarkedLine } from "./Exercise";
 import { runItems } from "./Launcher";
 import { DailyLimitField } from "./Settings";
+import { Button } from "../components/ui/button";
+import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
+import { Badge } from "../components/ui/badge";
+import { Label } from "../components/ui/label";
+import { Input } from "../components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "../components/ui/collapsible";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { cn } from "cn";
 
 /** Design reference states set this so Due today shows their sample queue instead of loading the learner's. */
 export const SAMPLE_QUEUE = "sample-queue";
@@ -168,7 +178,7 @@ export function ReviewScreen({ sub }: { sub: string }) {
     <div className={cx("mx-auto flex w-full max-w-3xl flex-col gap-6", tab === "saved" && "max-w-6xl!")}>
       <PageHead title="Review" />
       <div className="flex flex-col gap-6">
-        <Tabs label="Review sections" idBase="review" value={tab} tabs={TABS} onChange={(v) => go(`review/${v}`, { focus: false })} />
+        <Tabs value={tab} onValueChange={(next) => ((v) => go(`review/${v}`, { focus: false }))(next)}><TabsList aria-label={"Review sections"} className="h-auto max-w-full flex-wrap justify-start">{(TABS).map((t) => (<TabsTrigger key={t.value} id={`review-tab-${t.value}`} value={t.value}>{t.label}</TabsTrigger>))}</TabsList></Tabs>
         <div id="review-panel" role="tabpanel" aria-labelledby={`review-tab-${tab}`}>
           {tab === "due" ? <DueToday /> : tab === "saved" ? <SavedCards /> : <MasteredList />}
         </div>
@@ -313,39 +323,22 @@ function DueToday() {
         </div>
       )}
       {state === "error" && (
-        <Banner tone="error" title="Today’s cards didn’t load" live="assertive" actions={<Button kind="secondary" onClick={() => setN(n + 1)}>Retry</Button>}>
-          Your cards and progress are safe. {loadError || "The server didn’t respond."}
-        </Banner>
+        <Alert variant="destructive" role="alert"><AlertTitle>Today’s cards didn’t load</AlertTitle><AlertDescription>Your cards and progress are safe. {loadError || "The server didn’t respond."}<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={() => setN(n + 1)}>Retry</Button></div></AlertDescription></Alert>
       )}
       {state === "nocards" && (
-        <Banner tone="neutral" title="You haven’t saved any cards yet" actions={<Button kind="primary" onClick={() => go("study")}>Go to Study</Button>}>
-          In Study, choose “Add to review” on a sentence to save its cards here.
-        </Banner>
+        <Alert variant="default"><AlertTitle>You haven’t saved any cards yet</AlertTitle><AlertDescription><div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="default" onClick={() => go("study")}>Go to Study</Button></div></AlertDescription></Alert>
       )}
       {state === "nodue" && (
-        <Banner tone="neutral" title="No cards are due right now">
-          {libOk ? `Your library has ${plural(savedCards, "saved card")}, but none` : "None of your cards"} are due today and no new cards are assigned. Come back tomorrow, or practise with Recall or Dictation.
-        </Banner>
+        <Alert variant="default"><AlertTitle>No cards are due right now</AlertTitle></Alert>
       )}
       {state === "complete" && (
-        <Banner
-          tone="success"
-          title={plan.cards.length ? "This session is complete" : "Today’s review is complete"}
-          actions={
-            <>
-              {plan.cards.length > 0 && <Button kind="primary" onClick={startNextSession}>Start another session ({plan.cards.length} cards)</Button>}
-              <Button kind="secondary" onClick={() => go("review/saved")}>Open saved cards</Button>
-            </>
-          }
-        >
-          {nf.format(review.completed)} of {nf.format(total)} cards in this session completed.{" "}
-          {plan.cards.length ? "Due cards or new-card allowances remain today." : "Tomorrow’s cards will appear here."}
-        </Banner>
+        <Alert variant="default"><AlertTitle>{plan.cards.length ? "This session is complete" : "Today’s review is complete"}</AlertTitle><AlertDescription>{nf.format(review.completed)} of {nf.format(total)} cards completed.<div className="mt-3 flex flex-wrap items-center gap-2"><>
+              {plan.cards.length > 0 && <Button type="button" variant="default" onClick={startNextSession}>Start another session ({plan.cards.length} cards)</Button>}
+              <Button type="button" variant="outline" onClick={() => go("review/saved")}>Open saved cards</Button>
+            </></div></AlertDescription></Alert>
       )}
       {state === "offline" && (
-        <Banner tone="warning" title="You’re offline (simulated)">
-          You can continue the 12 cards already assigned to this device. New cards need a connection before they can be assigned.
-        </Banner>
+        <Alert variant="default"><AlertTitle>You’re offline (simulated)</AlertTitle><AlertDescription>You can continue the 12 cards already assigned to this device. New cards need a connection before they can be assigned.</AlertDescription></Alert>
       )}
 
       {(state === "active" || state === "offline") && (
@@ -373,7 +366,7 @@ function DueToday() {
             {state !== "offline" && (
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm text-muted-foreground">Cards per review session: <span className="tabular-nums">{sessionSize}</span></span>
-                <Button kind="tertiary" className="h-8 px-2 text-sm" aria-label="Change cards per review session in Settings" onClick={() => go("settings")}>Change</Button>
+                <Button type="button" variant="ghost" aria-label="Change cards per review session in Settings" className="h-8 px-2 text-sm" onClick={() => go("settings")}>Change</Button>
               </div>
             )}
             {locked && review.removedNew > 0 && (
@@ -388,9 +381,7 @@ function DueToday() {
             <Progress value={(review.completed / Math.max(1, total)) * 100} aria-label="Session progress" />
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button kind="primary" onClick={start} disabledReason={total === 0 ? "No cards are assigned today." : undefined}>
-              {review.phase === "active" ? "Continue review" : "Start review"}
-            </Button>
+            <Button type="button" variant="default" aria-disabled={(!!(total === 0 ? "No cards are assigned today." : undefined)) || undefined} className={cn((!!(total === 0 ? "No cards are assigned today." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(total === 0 ? "No cards are assigned today." : undefined)) { event.preventDefault(); return; } (start)(); }}>{review.phase === "active" ? "Continue review" : "Start review"}{(total === 0 ? "No cards are assigned today." : undefined) ? <span className="sr-only">{total === 0 ? "No cards are assigned today." : undefined}</span> : null}</Button>
           </div>
           <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
             <div className="flex flex-col gap-0.5"><dt className="text-sm text-muted-foreground">Daily new-card limit</dt><dd className="text-lg font-semibold text-balance tabular-nums" style={{ margin: 0 }}>{dailyNew} cards</dd></div>
@@ -624,14 +615,12 @@ function ReviewSession() {
   if (review.phase === "complete" || forced === "complete" || !card) {
     return (
       <div className="flex flex-col gap-4">
-        <Banner tone="success" title="Review complete" live="polite">
-          {review.completed} of {cards.length} cards in this session completed. Each review updated that card’s schedule.
-        </Banner>
+        <Alert variant="default" role="status"><AlertTitle>Review complete</AlertTitle><AlertDescription>{review.completed} of {cards.length} cards in this session completed. Each review updated that card’s schedule.</AlertDescription></Alert>
         {review.removedNew > 0 && <p className="text-sm text-muted-foreground">{plural(review.removedNew, "new card")} removed because you lowered today’s limit.</p>}
         <div className="flex flex-wrap items-center gap-2">
-          {plan.cards.length > 0 && <Button kind="primary" onClick={startNextSession}>Start another session ({plan.cards.length} cards)</Button>}
-          <Button kind={plan.cards.length ? "secondary" : "primary"} onClick={() => go("review")}>Done — back to Due today</Button>
-          <Button kind="secondary" onClick={() => go("review/saved")}>Open saved cards</Button>
+          {plan.cards.length > 0 && <Button type="button" variant="default" onClick={startNextSession}>Start another session ({plan.cards.length} cards)</Button>}
+          <Button type="button" variant={plan.cards.length ? "outline" : "default"} onClick={() => go("review")}>Done — back to Due today</Button>
+          <Button type="button" variant="outline" onClick={() => go("review/saved")}>Open saved cards</Button>
         </div>
       </div>
     );
@@ -675,9 +664,8 @@ function ReviewSession() {
         </div>
         {review.removedNew > 0 && <p className="text-sm text-muted-foreground" role="status">{plural(review.removedNew, "new card")} removed because you lowered today’s limit.</p>}
         <div className="flex flex-wrap items-center gap-2">
-          <Pill tone={card.group === "new" ? "info" : undefined}>{groupLabel}</Pill>
-          <Pill>{MODE_LABEL[mode]}</Pill>
-          {card.group === "new" && <span className="text-sm text-muted-foreground">First introduction. Uses 1 of today’s new-card allowances.</span>}
+          <Badge variant={card.group === "new" ? "secondary" : "outline"}>{groupLabel}</Badge>
+          <Badge variant="outline">{MODE_LABEL[mode]}</Badge>
         </div>
         <hr className="border-t" />
 
@@ -688,8 +676,8 @@ function ReviewSession() {
               <div className="rev-listen flex flex-col gap-3">
                 <p className="rev-lead">Listen, then say what it means.</p>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Button kind="secondary" className="" iconOnly icon={<Play aria-hidden />} aria-label="Play the sentence" onClick={() => sayFrench(sentenceFr)} />
-                  <Button kind="secondary" icon={<Volume2 aria-hidden />} onClick={() => sayFrench(sentenceFr, 0.75)}>Slow 0.75&nbsp;×</Button>
+                  <Button type="button" variant="outline" size="icon" aria-label="Play the sentence" className="" onClick={() => sayFrench(sentenceFr)}>{<Play aria-hidden />}</Button>
+                  <Button type="button" variant="outline" onClick={() => sayFrench(sentenceFr, 0.75)}>{<Volume2 aria-hidden />}Slow 0.75&nbsp;×</Button>
                 </div>
               </div>
             )}
@@ -697,8 +685,8 @@ function ReviewSession() {
               <div className="flex flex-col gap-3">
                 <p className="rev-lead">Say this in French out loud.</p>
                 <p className="rev-prompt-zh" lang={translationZh ? "zh" : undefined}>{translationZh || translationEn || "No translation yet."}</p>
-                {showEnglish && <Disclosure summary="Show English"><p className="text-sm text-muted-foreground">{translationEn}</p></Disclosure>}
-                <Disclosure summary="Show initials"><p className="rev-initials" lang="fr">{initialsHint(sentenceFr)}</p></Disclosure>
+                {showEnglish && <Collapsible className="border-t"><CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between gap-2 py-2 text-left text-sm font-medium"><span>Show English</span><ChevronDown className="size-4 shrink-0" aria-hidden /></CollapsibleTrigger><CollapsibleContent className="pb-3 text-sm"><p className="text-sm text-muted-foreground">{translationEn}</p></CollapsibleContent></Collapsible>}
+                <Collapsible className="border-t"><CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between gap-2 py-2 text-left text-sm font-medium"><span>Show initials</span><ChevronDown className="size-4 shrink-0" aria-hidden /></CollapsibleTrigger><CollapsibleContent className="pb-3 text-sm"><p className="rev-initials" lang="fr">{initialsHint(sentenceFr)}</p></CollapsibleContent></Collapsible>
               </div>
             )}
             {mode === "recognize" && (
@@ -706,14 +694,14 @@ function ReviewSession() {
                 <FrText segments={tokenizeFrench(card.target)} className="font-serif text-2xl leading-snug wrap-break-word" onPick={onWordPick} />
                 <p className="rev-lead">What does it mean?</p>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Button kind="secondary" className="" iconOnly icon={<Play aria-hidden />} aria-label="Play the word" onClick={() => sayFrench(card.target)} />
-                  <Button kind="secondary" icon={<Volume2 aria-hidden />} onClick={() => sayFrench(card.target, 0.75)}>Slow 0.75&nbsp;×</Button>
+                  <Button type="button" variant="outline" size="icon" aria-label="Play the word" className="" onClick={() => sayFrench(card.target)}>{<Play aria-hidden />}</Button>
+                  <Button type="button" variant="outline" onClick={() => sayFrench(card.target, 0.75)}>{<Volume2 aria-hidden />}Slow 0.75&nbsp;×</Button>
                 </div>
               </div>
             )}
             {typed && (
               <div className="flex flex-col gap-3">
-                {mode === "grammar" && meta.rule && <Pill>{meta.rule}</Pill>}
+                {mode === "grammar" && meta.rule && <Badge variant="outline">{meta.rule}</Badge>}
                 {card.kind === "Recall" ? (
                   <p className="text-lg font-medium">{card.prompt}</p>
                 ) : (
@@ -726,7 +714,7 @@ function ReviewSession() {
                 )}
                 {card.kind === "Fill-in" && (meta.meaning_zh || meta.meaning_en) && <p className="text-sm text-muted-foreground">Blank means: {meta.meaning_zh || meta.meaning_en}</p>}
                 {mode === "grammar" && meta.hint && <p className="text-sm text-muted-foreground">Hint: {meta.hint}</p>}
-                <Disclosure summary="Show initials"><p className="rev-initials" lang="fr">{initialsHint(card.target)}</p></Disclosure>
+                <Collapsible className="border-t"><CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between gap-2 py-2 text-left text-sm font-medium"><span>Show initials</span><ChevronDown className="size-4 shrink-0" aria-hidden /></CollapsibleTrigger><CollapsibleContent className="pb-3 text-sm"><p className="rev-initials" lang="fr">{initialsHint(card.target)}</p></CollapsibleContent></Collapsible>
               </div>
             )}
 
@@ -756,8 +744,8 @@ function ReviewSession() {
             )}
             <div className="sticky bottom-0 z-10 bg-background py-3">
               <div className="flex flex-wrap items-center gap-2">
-                {typed && <Button kind="primary" onClick={check}>Check</Button>}
-                <Button kind={typed ? "secondary" : "primary"} icon={<Eye aria-hidden />} onClick={() => reveal()}>Show answer</Button>
+                {typed && <Button type="button" variant="default" onClick={check}>Check</Button>}
+                <Button type="button" variant={typed ? "outline" : "default"} onClick={() => reveal()}>{<Eye aria-hidden />}Show answer</Button>
               </div>
             </div>
             <p className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground"><span><kbd>Space</kbd> shows the answer</span><span><kbd>R</kbd> replays</span></p>
@@ -769,8 +757,8 @@ function ReviewSession() {
               <div className="rev-answer-row" data-sentence={sentenceFr}>
                 <FrText segments={backSegments} className={isWordCard ? "t-fr-lg" : "sentence-fr"} onPick={onWordPick} />
                 <div className="flex flex-wrap items-center gap-2">
-                  <Button kind="secondary" icon={<Play aria-hidden />} onClick={() => sayFrench(cardSpeech(card))}>Play</Button>
-                  <Button kind="secondary" icon={<Volume2 aria-hidden />} onClick={() => sayFrench(cardSpeech(card), 0.75)}>Slow 0.75&nbsp;×</Button>
+                  <Button type="button" variant="outline" onClick={() => sayFrench(cardSpeech(card))}>{<Play aria-hidden />}Play</Button>
+                  <Button type="button" variant="outline" onClick={() => sayFrench(cardSpeech(card), 0.75)}>{<Volume2 aria-hidden />}Slow 0.75&nbsp;×</Button>
                 </div>
               </div>
               {(translationZh || translationEn) && (
@@ -803,7 +791,7 @@ function ReviewSession() {
                 </div>
               )}
               {grammar.length > 0 && (
-                <Disclosure summary={`Grammar notes (${grammar.length})`}>
+                <Collapsible className="border-t"><CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between gap-2 py-2 text-left text-sm font-medium"><span>{`Grammar notes (${grammar.length})`}</span><ChevronDown className="size-4 shrink-0" aria-hidden /></CollapsibleTrigger><CollapsibleContent className="pb-3 text-sm">
                   <ul className="flex flex-col gap-2">
                     {grammar.map((g, i) => (
                       <li key={i} className="flex flex-col gap-1">
@@ -813,38 +801,27 @@ function ReviewSession() {
                       </li>
                     ))}
                   </ul>
-                </Disclosure>
+                </CollapsibleContent></Collapsible>
               )}
             </div>
 
             {u.techfail && (
-              <Banner tone="error" title="Saving your rating failed" live="assertive" actions={<Button kind="secondary" onClick={() => rate((suggested ?? 3) as 1 | 2 | 3 | 4)}>Retry</Button>}>
-                This is not a wrong answer. Your answer is kept and nothing was recorded.
-              </Banner>
+              <Alert variant="destructive" role="alert"><AlertTitle>Saving your rating failed</AlertTitle><AlertDescription>This is not a wrong answer. Your answer is kept and nothing was recorded.<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={() => rate((suggested ?? 3) as 1 | 2 | 3 | 4)}>Retry</Button></div></AlertDescription></Alert>
             )}
             <div className="rev-actionbar">
             <div className="rev-ratings" role="group" aria-label="How well did you remember?">
               {RATINGS.map((r) => {
                 const text = intervalText(r.value);
                 return (
-                  <Button
-                    key={r.value}
-                    kind="secondary"
-                    className={cx("rev-rate h-auto flex-col gap-0 px-3 py-2", suggested === r.value && "rev-rate--suggested")}
-                    data-rating={r.value}
-                    disabled={u.rateBusy || u.rated}
-                    onClick={() => rate(r.value)}
-                  >
-                    <span className="rev-rate-name">{r.label}</span>
+                  <Button type="button" variant="outline" aria-disabled={(!!(u.rateBusy || u.rated)) || undefined} key={r.value} data-rating={r.value} className={cn((!!(u.rateBusy || u.rated)) ? "opacity-50" : "", cx("rev-rate h-auto flex-col gap-0 px-3 py-2", suggested === r.value && "rev-rate--suggested"))} onClick={(event) => { if (!!(u.rateBusy || u.rated)) { event.preventDefault(); return; } (() => rate(r.value))(); }}><span className="rev-rate-name">{r.label}</span>
                     <span className="rev-rate-interval tabular-nums">{text}</span>
-                    <kbd className="text-xs text-muted-foreground">{r.value}</kbd>
-                  </Button>
+                    <kbd className="text-xs text-muted-foreground">{r.value}</kbd></Button>
                 );
               })}
             </div>
             {u.rateBusy && <Spinner label="Saving your rating…" />}
             <div className="flex flex-wrap items-center gap-2">
-              <Button kind="secondary" icon={<Archive aria-hidden />} onClick={() => { masterCard(card.id); next(); }}>Mark mastered</Button>
+              <Button type="button" variant="outline" onClick={() => { masterCard(card.id); next(); }}>{<Archive aria-hidden />}Mark mastered</Button>
             </div>
             <p className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground"><span><kbd>1</kbd>–<kbd>4</kbd> rates</span><span><kbd>Enter</kbd> takes the suggestion</span>{u.nextDue ? <span>Next review {dueIn(u.nextDue)}</span> : null}</p>
             </div>
@@ -852,7 +829,7 @@ function ReviewSession() {
         )}
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button kind="tertiary" className="h-8 px-2 text-sm" onClick={() => go("review")}>Pause and return to Due today</Button>
+          <Button type="button" variant="ghost" className="h-8 px-2 text-sm" onClick={() => go("review")}>Pause and return to Due today</Button>
         </div>
       </div>
 
@@ -927,13 +904,9 @@ function SavedCards() {
   const sortMark = (key: "saved" | "due" | "importance") => (savedSort.key !== key ? "↕" : savedSort.dir === "asc" ? "↑" : "↓");
   useEffect(() => setPage(0), [q, f.mastered, f.minImportance, f.favoritesOnly, savedSort.key, savedSort.dir]); // eslint-disable-line react-hooks/exhaustive-deps
   const matchingCards = savedRows.length;
-  const matchingSentences = new Set(savedRows.map(({ c }) => c.sentenceId)).size;
-  const sortHeader = (key: "saved" | "due" | "importance", label: string, hide = false) => (
-    <th scope="col" className={hide ? "saved-col-hide" : undefined} aria-sort={ariaSort(key)}>
-      <Button kind="tertiary" className="h-8 px-2 font-medium" onClick={() => toggleSort(key)}>
-        {label} <span aria-hidden className="text-muted-foreground">{sortMark(key)}</span>
-      </Button>
-    </th>
+  const filtered = Boolean(q || f.mastered !== "hide" || f.minImportance || f.favoritesOnly);
+  const sortButton = (key: "saved" | "due" | "importance", label: string) => (
+    <Button type="button" variant="ghost" className="h-8 px-2 font-medium whitespace-nowrap" onClick={() => toggleSort(key)}>{label} <span aria-hidden className="text-muted-foreground">{sortMark(key)}</span></Button>
   );
   const forcedBulk = useApp((s) => s.ss["SCR-LIB-02"]);
   useEffect(() => {
@@ -944,10 +917,72 @@ function SavedCards() {
   const selectedIds = Object.keys(sel).filter((k) => sel[k]);
   const selSentences = new Set(cards.filter((c) => sel[c.id]).map((c) => c.sentenceId)).size;
 
-  const savedColumns = useMemo<LegacyColumnDef<{ c: LibCard; s?: LibSentence }>[]>(
-    () => [{ id: "french", accessorFn: (row) => row.c.word || row.s?.fr || "", header: "French" }],
-    [],
-  );
+  const savedColumns: LegacyColumnDef<{ c: LibCard; s?: LibSentence }>[] = [
+    ...(selecting
+      ? [{
+          id: "select",
+          header: () => <span className="sr-only">Select</span>,
+          cell: ({ row }) => {
+            const c = row.original.c;
+            return c.saved ? (
+              <Checkbox
+                aria-label={`Select ${c.kind} card${c.word ? ` for ${c.word}` : ""}`}
+                checked={!!sel[c.id]}
+                onCheckedChange={(v) => setSel({ ...sel, [c.id]: v === true })}
+              />
+            ) : null;
+          },
+        } satisfies LegacyColumnDef<{ c: LibCard; s?: LibSentence }>]
+      : []),
+    {
+      id: "french",
+      header: "French",
+      cell: ({ row }) => {
+        const { c, s } = row.original;
+        return c.word ? <strong lang="fr">{c.word}</strong> : <span lang="fr" className="saved-sentence">{s?.fr ?? ""}</span>;
+      },
+    },
+    { id: "type", header: "Type", cell: ({ row }) => row.original.c.kind },
+    {
+      id: "meaning",
+      header: "Meaning",
+      cell: ({ row }) => {
+        const { c, s } = row.original;
+        return [c.meaning, s?.en].find((v) => v && !/\p{Script=Han}/u.test(v)) || "—";
+      },
+    },
+    {
+      id: "status",
+      header: "Status",
+      cell: ({ row }) => (row.original.c.mastered ? "Mastered" : STATUS_LABEL[row.original.c.status]),
+    },
+    { id: "due", header: () => sortButton("due", "Due"), cell: ({ row }) => <span className="tabular-nums">{compactDue(row.original.c.due)}</span> },
+    {
+      id: "importance",
+      header: () => sortButton("importance", "Importance"),
+      cell: ({ row }) => {
+        const wordLookups = getCardLookups({ lookups }, row.original.c);
+        return wordLookups !== null ? <Importance count={wordLookups} lookups="muted" /> : "—";
+      },
+    },
+    { id: "saved", header: () => sortButton("saved", "Saved"), cell: ({ row }) => <span className="tabular-nums">{shortSavedDate(row.original.c.savedAt)}</span> },
+    {
+      id: "actions",
+      header: () => <span className="sr-only">Actions</span>,
+      cell: ({ row }) => {
+        const { c, s } = row.original;
+        const fav = Boolean(favorites[favoriteKey(c)]);
+        const speech = c.word || s?.fr || "";
+        return (
+          <span className="flex gap-1">
+            <Button type="button" variant="ghost" size="icon" aria-label={`Play ${c.word || "sentence"}`} onClick={() => sayFrench(speech)}>{<Play aria-hidden />}</Button>
+            <Button type="button" variant="ghost" size="icon" aria-pressed={fav} aria-label={fav ? "Remove favorite" : "Favorite"} onClick={() => void setFavorite(speech, !fav)}>{fav ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />}</Button>
+            <Button type="button" variant="ghost" size="icon" aria-label={c.mastered ? "Restore" : "Mark mastered"} onClick={() => (c.mastered ? void restoreMastered(c.id) : masterCard(c.id))}>{<Archive aria-hidden />}</Button>
+          </span>
+        );
+      },
+    },
+  ];
   const savedTable = useLegacyTable({ data: pageRows, columns: savedColumns, getCoreRowModel: getCoreRowModel() });
 
   if (forced === "loading" || lib.state === "loading")
@@ -959,9 +994,7 @@ function SavedCards() {
     );
   if (lib.state === "error")
     return (
-      <Banner tone="error" title="Your library didn’t load" live="assertive" actions={<Button kind="secondary" onClick={lib.retry}>Retry</Button>}>
-        Your cards are safe. {lib.error || "The server didn’t respond."}
-      </Banner>
+      <Alert variant="destructive" role="alert"><AlertTitle>Your library didn’t load</AlertTitle><AlertDescription>Your cards are safe. {lib.error || "The server didn’t respond."}<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={lib.retry}>Retry</Button></div></AlertDescription></Alert>
     );
 
   const startBulk = () => {
@@ -979,63 +1012,42 @@ function SavedCards() {
 
   return (
     <div className="flex flex-col gap-6">
-      <p className="text-xs leading-4 text-muted-foreground">Saved cards come back in Review. Favorite is only a bookmark.</p>
       <div className="flex flex-wrap items-end gap-3">
         <div style={{ flex: "1 1 220px" }}>
-          <FieldText label="Search" name="saved-search" type="search" inputMode="search" value={f.q} onChange={(v) => setF({ q: v })} placeholder="e.g. j’ai failli…" lang="fr" />
+          <div className="grid gap-2"><Label htmlFor="search-saved-search">Search</Label><Input id="search-saved-search" value={f.q} onChange={(e) => setF({ q: e.target.value })} type="search" inputMode="search" lang="fr" placeholder="e.g. j’ai failli…" name="saved-search" autoComplete="off" /></div>
         </div>
         <label className="grid gap-2" style={{ minWidth: 170 }}>
           <span className="text-sm font-medium">Mastered cards</span>
-          <ChoiceSelect
-            value={f.mastered}
-            onValueChange={(v) => setF({ mastered: v as typeof f.mastered })}
-            options={[
+          <Select value={f.mastered} onValueChange={(v) => setF({ mastered: v as typeof f.mastered })}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent>{([
               { value: "hide", label: "Hide mastered" },
               { value: "show", label: "Include mastered" },
               { value: "only", label: "Only mastered" },
-            ]}
-          />
+            ]).map((o) => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}</SelectContent></Select>
         </label>
         <label className="grid gap-2" style={{ minWidth: 210 }}>
           <span className="text-sm font-medium" title="Applies to Fill-in word cards only">Importance</span>
-          <ChoiceSelect
-            describedBy="imp-filter-note"
-            value={String(f.minImportance)}
-            onValueChange={(v) => setF({ minImportance: Number(v) as typeof f.minImportance })}
-            options={[
+          <Select value={String(f.minImportance)} onValueChange={(v) => setF({ minImportance: Number(v) as typeof f.minImportance })}><SelectTrigger aria-describedby={"imp-filter-note"} className="w-full"><SelectValue /></SelectTrigger><SelectContent>{([
               { value: "0", label: "Any" },
               { value: "3", label: "3 or more" },
               { value: "4", label: "4 or more" },
               { value: "5", label: "5 only" },
-            ]}
-          />
+            ]).map((o) => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}</SelectContent></Select>
           <span id="imp-filter-note" className="sr-only">Applies to Fill-in word cards only</span>
         </label>
         <label className="flex items-center gap-3 py-2"><Checkbox checked={f.favoritesOnly} onCheckedChange={(v) => setF({ favoritesOnly: v === true })} /> Favorites only</label>
-      </div>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-sm" aria-live="polite">
-          <span>Showing {plural(matchingSentences, "sentence")}</span>
-          <span>{plural(matchingCards, "card")}</span>
-          {(q || f.mastered !== "hide" || f.minImportance || f.favoritesOnly) ? <span>of {nf.format(savedTotal)} saved cards</span> : null}
+        <p className="pb-2 text-sm tabular-nums text-muted-foreground" aria-live="polite">
+          {plural(matchingCards, "card")}
+          {filtered ? ` of ${nf.format(savedTotal)}` : ""}
         </p>
         {!selecting ? (
-          <Button kind="secondary" onClick={() => setSelecting(true)} disabledReason={!matchingCards ? "No cards to select." : undefined}>Select cards to practise</Button>
+          <Button type="button" variant="outline" aria-disabled={(!!(!matchingCards ? "No cards to select." : undefined)) || undefined} className={cn((!!(!matchingCards ? "No cards to select." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(!matchingCards ? "No cards to select." : undefined)) { event.preventDefault(); return; } (() => setSelecting(true))(); }}>Select cards to practise{(!matchingCards ? "No cards to select." : undefined) ? <span className="sr-only">{!matchingCards ? "No cards to select." : undefined}</span> : null}</Button>
         ) : (
-          <Button kind="tertiary" onClick={() => setSel(Object.fromEntries(savedRows.map(({ c }) => c).filter((c) => c.saved).map((c) => [c.id, true])))}>
-            Select all {plural(savedRows.map(({ c }) => c).filter((c) => c.saved).length, "matching saved card")}
-          </Button>
+          <Button type="button" variant="ghost" onClick={() => setSel(Object.fromEntries(savedRows.map(({ c }) => c).filter((c) => c.saved).map((c) => [c.id, true])))}>Select all {plural(savedRows.map(({ c }) => c).filter((c) => c.saved).length, "matching saved card")}</Button>
         )}
       </div>
 
       {matchingCards === 0 ? (
-        <Banner
-          tone="neutral"
-          title="No cards match these filters"
-          actions={<Button kind="secondary" onClick={() => setF({ q: "", savedOnly: false, mastered: "hide", minImportance: 0, favoritesOnly: false })}>Clear filters</Button>}
-        >
-          Your library still has {nf.format(savedTotal)} saved cards. Try fewer filters or a different search.
-        </Banner>
+        <Alert variant="default"><AlertTitle>No cards match these filters</AlertTitle><AlertDescription><div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={() => setF({ q: "", savedOnly: false, mastered: "hide", minImportance: 0, favoritesOnly: false })}>Clear filters</Button></div></AlertDescription></Alert>
       ) : (
         <>
           {narrow ? (
@@ -1050,9 +1062,9 @@ function SavedCards() {
                     <p className="text-sm text-muted-foreground">{meaning}</p>
                     <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"><span className="text-xs font-medium text-muted-foreground">Due</span><span className="tabular-nums">{compactDue(c.due)}</span><span className="inline-flex items-baseline gap-1.5 text-sm">{c.mastered ? "Mastered" : STATUS_LABEL[c.status]}</span></p>
                     <div className="flex gap-1">
-                      <Button kind="tertiary" iconOnly aria-label={`Play ${c.word || "sentence"}`} icon={<Play aria-hidden />} onClick={() => sayFrench(speech)} />
-                      <Button kind="tertiary" iconOnly aria-pressed={fav} aria-label={fav ? "Remove favorite" : "Favorite"} icon={fav ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />} onClick={() => void setFavorite(speech, !fav)} />
-                      <Button kind="tertiary" iconOnly aria-label={c.mastered ? "Restore" : "Mark mastered"} icon={<Archive aria-hidden />} onClick={() => (c.mastered ? void restoreMastered(c.id) : masterCard(c.id))} />
+                      <Button type="button" variant="ghost" size="icon" aria-label={`Play ${c.word || "sentence"}`} onClick={() => sayFrench(speech)}>{<Play aria-hidden />}</Button>
+                      <Button type="button" variant="ghost" size="icon" aria-pressed={fav} aria-label={fav ? "Remove favorite" : "Favorite"} onClick={() => void setFavorite(speech, !fav)}>{fav ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />}</Button>
+                      <Button type="button" variant="ghost" size="icon" aria-label={c.mastered ? "Restore" : "Mark mastered"} onClick={() => (c.mastered ? void restoreMastered(c.id) : masterCard(c.id))}>{<Archive aria-hidden />}</Button>
                     </div>
                   </li>
                 );
@@ -1061,69 +1073,43 @@ function SavedCards() {
           ) : (
           <div className="w-full">
             <Table className="saved-table">
-              <colgroup>
-                {selecting && <col className="saved-col-hide saved-col-check" />}
-                <col className="saved-col-french" />
-                <col className="saved-col-hide saved-col-type" />
-                <col className="saved-col-hide saved-col-meaning" />
-                <col className="saved-col-hide saved-col-status" />
-                <col className="saved-col-due" />
-                <col className="saved-col-hide saved-col-imp" />
-                <col className="saved-col-hide saved-col-saved" />
-                <col className="saved-col-actions" />
-              </colgroup>
-              <thead>
-                <tr>
-                  {selecting && <th scope="col" className="saved-col-hide"><span className="sr-only">Select</span></th>}
-                  <th scope="col">French</th>
-                  <th scope="col" className="saved-col-hide">Type</th>
-                  <th scope="col" className="saved-col-hide">Meaning</th>
-                  <th scope="col" className="saved-col-hide">Status</th>
-                  {sortHeader("due", "Due")}
-                  {sortHeader("importance", "Importance", true)}
-                  {sortHeader("saved", "Saved", true)}
-                  <th scope="col"><span className="sr-only">Actions</span></th>
-                </tr>
-              </thead>
-              <tbody>
-                {savedTable.getRowModel().rows.map((row) => { const { c, s } = row.original;
-                  const wordLookups = getCardLookups({ lookups }, c);
-                  const fav = Boolean(favorites[favoriteKey(c)]);
-                  const speech = c.word || s?.fr || "";
-                  return (
-                    <tr key={c.id} data-card-id={c.id} data-saved={c.savedAt}>
-                      {selecting && (
-                        <td className="saved-col-hide">
-                          {c.saved && <Checkbox aria-label={`Select ${c.kind} card${c.word ? ` for ${c.word}` : ""}`} checked={!!sel[c.id]} onCheckedChange={(v) => setSel({ ...sel, [c.id]: v === true })} />}
-                        </td>
-                      )}
-                      <td className="saved-french font-serif wrap-break-word" title={c.word || s?.fr || ""}>
-                        <span className="block wrap-break-word">{c.word ? <strong lang="fr">{c.word}</strong> : <span lang="fr" className="saved-sentence">{s?.fr ?? ""}</span>}</span>
-                      </td>
-                      <td className="saved-col-hide"><span className="block wrap-break-word">{c.kind}</span></td>
-                      <td className="saved-col-hide wrap-break-word" title={[c.meaning, s?.en].find((v) => v && !/\p{Script=Han}/u.test(v)) || ""}><span className="block wrap-break-word">{[c.meaning, s?.en].find((v) => v && !/\p{Script=Han}/u.test(v)) || "—"}</span></td>
-                      <td className="saved-col-hide"><span className="block wrap-break-word">{c.mastered ? "Mastered" : STATUS_LABEL[c.status]}</span></td>
-                      <td className="tabular-nums"><span className="block wrap-break-word">{compactDue(c.due)}</span></td>
-                      <td className="saved-col-hide" data-col="imp"><span className="block wrap-break-word">{wordLookups !== null ? <span className=""><Importance count={wordLookups} /></span> : "—"}</span></td>
-                      <td className="saved-col-hide tabular-nums"><span className="block wrap-break-word">{shortSavedDate(c.savedAt)}</span></td>
-                      <td className="whitespace-nowrap">
-                        <span className="flex gap-1">
-                          <Button kind="tertiary" iconOnly aria-label={`Play ${c.word || "sentence"}`} icon={<Play aria-hidden />} onClick={() => sayFrench(speech)} />
-                          <Button kind="tertiary" iconOnly aria-pressed={fav} aria-label={fav ? "Remove favorite" : "Favorite"} icon={fav ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />} onClick={() => void setFavorite(speech, !fav)} />
-                          <Button kind="tertiary" iconOnly aria-label={c.mastered ? "Restore" : "Mark mastered"} icon={<Archive aria-hidden />} onClick={() => (c.mastered ? void restoreMastered(c.id) : masterCard(c.id))} />
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
+              <TableHeader>
+                {savedTable.getHeaderGroups().map((group) => (
+                  <TableRow key={group.id}>
+                    {group.headers.map((header) => (
+                      <TableHead
+                        key={header.id}
+                        className="whitespace-nowrap"
+                        aria-sort={header.column.id === "due" || header.column.id === "importance" || header.column.id === "saved" ? ariaSort(header.column.id as "due" | "importance" | "saved") : undefined}
+                      >
+                        {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableHeader>
+              <TableBody>
+                {savedTable.getRowModel().rows.map((row) => (
+                  <TableRow key={row.id} data-card-id={row.original.c.id} data-saved={row.original.c.savedAt}>
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell
+                        key={cell.id}
+                        data-col={cell.column.id === "importance" ? "imp" : undefined}
+                        className={cell.column.id === "french" ? "saved-french min-w-48 whitespace-normal align-top font-serif wrap-break-word" : cell.column.id === "meaning" ? "max-w-md whitespace-normal align-top wrap-break-word" : "whitespace-nowrap align-middle"}
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
             </Table>
           </div>
           )}
           <div className="saved-pager mt-3 flex flex-wrap items-center gap-3">
-            <Button kind="secondary" icon={<ChevronLeft aria-hidden />} disabledReason={curPage === 0 ? "You are on the first page." : undefined} onClick={() => setPage(curPage - 1)}>Prev</Button>
+            <Button type="button" variant="outline" aria-disabled={(!!(curPage === 0 ? "You are on the first page." : undefined)) || undefined} className={cn((!!(curPage === 0 ? "You are on the first page." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(curPage === 0 ? "You are on the first page." : undefined)) { event.preventDefault(); return; } (() => setPage(curPage - 1))(); }}>{<ChevronLeft aria-hidden />}Prev{(curPage === 0 ? "You are on the first page." : undefined) ? <span className="sr-only">{curPage === 0 ? "You are on the first page." : undefined}</span> : null}</Button>
             <span className="text-sm text-muted-foreground tabular-nums" aria-live="polite">Page {curPage + 1} of {pageCount}</span>
-            <Button kind="secondary" iconAfter={<ChevronRight aria-hidden />} disabledReason={curPage >= pageCount - 1 ? "You are on the last page." : undefined} onClick={() => setPage(curPage + 1)}>Next</Button>
+            <Button type="button" variant="outline" aria-disabled={(!!(curPage >= pageCount - 1 ? "You are on the last page." : undefined)) || undefined} className={cn((!!(curPage >= pageCount - 1 ? "You are on the last page." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(curPage >= pageCount - 1 ? "You are on the last page." : undefined)) { event.preventDefault(); return; } (() => setPage(curPage + 1))(); }}>Next{<ChevronRight aria-hidden />}{(curPage >= pageCount - 1 ? "You are on the last page." : undefined) ? <span className="sr-only">{curPage >= pageCount - 1 ? "You are on the last page." : undefined}</span> : null}</Button>
             <span className="text-sm text-muted-foreground tabular-nums">Rows {rowFrom}–{rowTo} of {savedRows.length}</span>
           </div>
         </>
@@ -1134,8 +1120,8 @@ function SavedCards() {
             Practise {plural(selectedIds.length, "selected card")} from {nf.format(savedTotal)} library cards
             {selectedIds.length ? <span className="text-sm text-muted-foreground"> from {plural(selSentences, "sentence")}</span> : null}
           </p>
-          <Button kind="secondary" onClick={() => { setSelecting(false); setSel({}); }}>Cancel</Button>
-          <Button kind="primary" onClick={startBulk} disabledReason={!selectedIds.length ? "Select at least one card." : undefined}>Start practice</Button>
+          <Button type="button" variant="outline" onClick={() => { setSelecting(false); setSel({}); }}>Cancel</Button>
+          <Button type="button" variant="default" aria-disabled={(!!(!selectedIds.length ? "Select at least one card." : undefined)) || undefined} className={cn((!!(!selectedIds.length ? "Select at least one card." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(!selectedIds.length ? "Select at least one card." : undefined)) { event.preventDefault(); return; } (startBulk)(); }}>Start practice{(!selectedIds.length ? "Select at least one card." : undefined) ? <span className="sr-only">{!selectedIds.length ? "Select at least one card." : undefined}</span> : null}</Button>
           {!selectedIds.length && <DisabledReason>Select at least one card.</DisabledReason>}
         </div>
       )}
@@ -1179,25 +1165,20 @@ function MasteredList() {
     );
   if (lib.state === "error" && forced !== "empty")
     return (
-      <Banner tone="error" title="Mastered cards didn’t load" live="assertive" actions={<Button kind="secondary" onClick={lib.retry}>Retry</Button>}>
-        {lib.error || "The server didn’t respond."}
-      </Banner>
+      <Alert variant="destructive" role="alert"><AlertTitle>Mastered cards didn’t load</AlertTitle><AlertDescription>{lib.error || "The server didn’t respond."}<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={lib.retry}>Retry</Button></div></AlertDescription></Alert>
     );
   if (!mastered.length)
     return (
-      <Banner tone="neutral" title="No mastered cards">
-        Cards you mark as mastered are hidden from your default review and listed here. Nothing is ever deleted.
-      </Banner>
+      <Alert variant="default"><AlertTitle>No mastered cards</AlertTitle></Alert>
     );
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm text-muted-foreground">Mastered cards are hidden from your default review. Restore one to bring it back. Nothing here is deleted.</p>
       <div style={{ maxWidth: 420 }}>
-        <FieldText label="Search mastered cards" type="search" value={q} onChange={setQ} lang="fr" />
+        <div className="grid gap-2"><Label htmlFor={"search-mastered-cards"}>Search mastered cards</Label><Input id="search-mastered-cards" value={q} onChange={(e) => setQ(e.target.value)} type="search" lang="fr" autoComplete="off" /></div>
       </div>
       <p className="text-sm text-muted-foreground" aria-live="polite">Showing {shown.length} of {plural(mastered.length, "mastered card")}</p>
       {shown.length === 0 ? (
-        <Banner tone="neutral" title="No mastered cards match your search" actions={<Button kind="secondary" onClick={() => setQ("")}>Clear search</Button>} />
+        <Alert variant="default"><AlertTitle>No mastered cards match your search</AlertTitle><AlertDescription><div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={() => setQ("")}>Clear search</Button></div></AlertDescription></Alert>
       ) : (
         <ul className="divide-y overflow-hidden rounded-lg border">
           {shown.slice(0, 30).map((c) => {
@@ -1210,14 +1191,14 @@ function MasteredList() {
                   <span className="text-sm text-muted-foreground">{c.kind} card{c.word ? ` · ${c.word}` : ""}</span>
                 </div>
                 {st === "done" ? (
-                  <Pill tone="success">Restored</Pill>
+                  <Badge variant="secondary">Restored</Badge>
                 ) : st === "error" ? (
                   <>
                     <span className="text-sm text-muted-foreground" style={{ color: "var(--error)" }}>Restore failed</span>
-                    <Button kind="secondary" icon={<RotateCcw aria-hidden />} onClick={() => restore(c.id)}>Retry</Button>
+                    <Button type="button" variant="outline" onClick={() => restore(c.id)}>{<RotateCcw aria-hidden />}Retry</Button>
                   </>
                 ) : (
-                  <Button kind="secondary" busy={st === "pending"} onClick={() => restore(c.id)}>{st === "pending" ? "Restoring…" : "Restore"}</Button>
+                  <Button type="button" variant="outline" aria-disabled={(!!(st === "pending")) || undefined} aria-busy={st === "pending" || undefined} className={cn((!!(st === "pending")) ? "opacity-50" : "")} onClick={(event) => { if (!!(st === "pending")) { event.preventDefault(); return; } (() => restore(c.id))(); }}>{st === "pending" ? <Loader2 className="animate-spin" aria-hidden /> : null}{st === "pending" ? "Restoring…" : "Restore"}</Button>
                 )}
               </li>
             );

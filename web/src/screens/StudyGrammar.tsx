@@ -3,7 +3,10 @@ import { getGrammarMap, getGrammarSentences, type GrammarBlock } from "../api/le
 import { listStudyRecords } from "../api/history";
 import { openAnalysisInStudy } from "../state/study";
 import { get, go, patchStudy, sayFrench, useApp } from "../state/store";
-import { Banner, Button, PageHead, Spinner } from "../components/ui";
+import { PageHead, Spinner } from "../components/ui";
+import { Button } from "../components/ui/button";
+import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
+import { cn } from "cn";
 
 type Example = Awaited<ReturnType<typeof getGrammarSentences>>["sentences"][number];
 export function StudyGrammar() {
@@ -48,15 +51,15 @@ export function StudyGrammar() {
     } catch (e) { setError(e instanceof Error ? e.message : "Couldn’t open this sentence."); }
     finally { setOpening(false); }
   };
-  return <div className="mx-auto flex w-full max-w-3xl flex-col gap-6"><PageHead title="My grammar map" back={<Button kind="tertiary" onClick={() => go("study")}>Back to Study</Button>} />
+  return <div className="mx-auto flex w-full max-w-3xl flex-col gap-6"><PageHead title="My grammar map" back={<Button type="button" variant="ghost" onClick={() => go("study")}>Back to Study</Button>} />
     <div className="flex flex-col gap-6">
       {loading && <Spinner label="Loading grammar map…" />}
-      {error && <Banner tone="error" title="Couldn’t load grammar" actions={<Button kind="secondary" onClick={() => setAttempt((n) => n + 1)}>Retry</Button>}>{error}</Banner>}
+      {error && <Alert variant="destructive"><AlertTitle>Couldn’t load grammar</AlertTitle><AlertDescription>{error}<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={() => setAttempt((n) => n + 1)}>Retry</Button></div></AlertDescription></Alert>}
       {!loading && <p className="text-sm text-muted-foreground">{seen} grammar points encountered</p>}
       {!!pointId && <section className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-3" aria-labelledby="grammar-point-detail"><h2 id="grammar-point-detail" tabIndex={-1} className="text-lg font-semibold text-balance">{point?.en ?? pointId}</h2>{point && <p className="text-sm text-muted-foreground"><span lang="fr">{point.fr}</span> · {point.level}</p>}
-        {pending ? <Spinner label="Finding your sentences…" /> : examples.length ? <ul className="divide-y overflow-hidden rounded-lg border">{examples.map((s, i) => <li key={i} className="flex flex-col gap-2 border-b p-4 last:border-b-0 flex flex-col gap-2"><p lang="fr">{s.sentence}</p>{s.translation_en && <p>{s.translation_en}</p>}<div className="flex flex-wrap items-center gap-2"><Button kind="secondary" onClick={() => sayFrench(s.sentence)}>Listen</Button><Button kind="tertiary" disabled={opening} onClick={() => void study(s)}>Study this sentence</Button></div></li>)}</ul> : !error && <p>No saved examples yet. Analyse French text to grow your map.</p>}
+        {pending ? <Spinner label="Finding your sentences…" /> : examples.length ? <ul className="divide-y overflow-hidden rounded-lg border">{examples.map((s, i) => <li key={i} className="flex flex-col gap-2 border-b p-4 last:border-b-0 flex flex-col gap-2"><p lang="fr">{s.sentence}</p>{s.translation_en && <p>{s.translation_en}</p>}<div className="flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={() => sayFrench(s.sentence)}>Listen</Button><Button type="button" variant="ghost" aria-disabled={(!!(opening)) || undefined} className={cn((!!(opening)) ? "opacity-50" : "")} onClick={(event) => { if (!!(opening)) { event.preventDefault(); return; } (() => void study(s))(); }}>Study this sentence</Button></div></li>)}</ul> : !error && <p className="text-sm font-medium">No saved examples yet</p>}
       </section>}
-      {blocks.map((block) => <section key={block.id} className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-3"><h2 className={`rounded-md border-l-2 border-primary bg-muted px-3 py-2 structure-${block.id}`}>{block.en}</h2><div className="grid gap-2 sm:grid-cols-2">{block.points.map((p) => <Button key={p.id} kind={p.id === pointId ? "primary" : "secondary"} aria-pressed={p.id === pointId} onClick={() => go(`study/grammar?point=${encodeURIComponent(p.id)}`)}>{p.en} · {p.count}{p.focus ? " · Core pattern" : ""}</Button>)}</div></section>)}
+      {blocks.map((block) => <section key={block.id} className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-3"><h2 className={`rounded-md border-l-2 border-primary bg-muted px-3 py-2 structure-${block.id}`}>{block.en}</h2><div className="grid gap-2 sm:grid-cols-2">{block.points.map((p) => <Button type="button" variant={p.id === pointId ? "default" : "outline"} key={p.id} aria-pressed={p.id === pointId} onClick={() => go(`study/grammar?point=${encodeURIComponent(p.id)}`)}>{p.en} · {p.count}{p.focus ? " · Core pattern" : ""}</Button>)}</div></section>)}
     </div>
   </div>;
 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Pause, Play, Repeat, RotateCcw, History as HistoryIcon, PencilLine, Plus, Check } from "lucide-react";
+import { ChevronLeft, ChevronRight, MoreHorizontal, Pause, Play, Repeat, RotateCcw, History as HistoryIcon, Plus, Check, Loader2 } from "lucide-react";
 import { ApiError } from "../api/client";
 import { lookupWord } from "../api/lookup";
 import { cardKey, saveNote, useSavedCards, type NoteTarget } from "../api/srs";
@@ -19,12 +19,17 @@ import {
   updatePlayer,
   useApp,
 } from "../state/store";
-import { Banner, Button, Checkbox, ChoiceSelect, Collapsible, CollapsibleContent, CollapsibleTrigger, Dialog, Popover, Progress, Skeleton, Spinner, useNarrow, WordDock } from "../components/ui";
+import { Checkbox, Dialog, Popover, Progress, Skeleton, Spinner, useNarrow, WordDock } from "../components/ui";
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "../components/ui/dropdown-menu";
 import { Toggle } from "../components/ui/toggle";
 import { FrText, stepSegments, type FrPick } from "../components/FrText";
 import { WordPanel } from "./WordPopup";
 import { Exercise } from "./Exercise";
 import { ExplainPanel, GrammarSave, ShadowingPanel, SoundsPanel, StructurePanel, StudyNavigation, WordsPanel } from "./StudyTools";
+import { Button } from "../components/ui/button";
+import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { cn } from "cn";
 
 
 interface Pick {
@@ -55,7 +60,7 @@ export function StudyLearn() {
   const practising = study.tab === "recall" || study.tab === "dictation";
   const [pick, setPick] = useState<Pick | null>(null);
   const [srcOpen, setSrcOpen] = useState(study.sourceOpen);
-  const [moreOpen, setMoreOpen] = useState(study.sourceOpen);
+  const addReviewRef = useRef<HTMLDivElement>(null);
   const sentRef = useRef<HTMLDivElement>(null);
   const narrow = useNarrow();
 
@@ -89,9 +94,9 @@ export function StudyLearn() {
 
   const pager = total > 1 && (
     <div className="flex items-center gap-1">
-      <Button kind="secondary" iconOnly icon={<ChevronLeft aria-hidden />} aria-label="Previous sentence" disabledReason={study.index === 0 ? "This is the first sentence." : undefined} onClick={() => goSentence(study.index - 1)} />
+      <Button type="button" variant="outline" size="icon" aria-disabled={(!!(study.index === 0 ? "This is the first sentence." : undefined)) || undefined} aria-label="Previous sentence" className={cn((!!(study.index === 0 ? "This is the first sentence." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(study.index === 0 ? "This is the first sentence." : undefined)) { event.preventDefault(); return; } (() => goSentence(study.index - 1))(); }}>{<ChevronLeft aria-hidden />}{(study.index === 0 ? "This is the first sentence." : undefined) ? <span className="sr-only">{study.index === 0 ? "This is the first sentence." : undefined}</span> : null}</Button>
       <span className="min-w-14 text-center text-sm tabular-nums text-muted-foreground">{study.index + 1} of {total}</span>
-      <Button kind="secondary" iconOnly icon={<ChevronRight aria-hidden />} aria-label="Next sentence" disabledReason={study.index === total - 1 ? "This is the last sentence." : undefined} onClick={() => goSentence(study.index + 1)} />
+      <Button type="button" variant="outline" size="icon" aria-disabled={(!!(study.index === total - 1 ? "This is the last sentence." : undefined)) || undefined} aria-label="Next sentence" className={cn((!!(study.index === total - 1 ? "This is the last sentence." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(study.index === total - 1 ? "This is the last sentence." : undefined)) { event.preventDefault(); return; } (() => goSentence(study.index + 1))(); }}>{<ChevronRight aria-hidden />}{(study.index === total - 1 ? "This is the last sentence." : undefined) ? <span className="sr-only">{study.index === total - 1 ? "This is the last sentence." : undefined}</span> : null}</Button>
     </div>
   );
 
@@ -100,37 +105,39 @@ export function StudyLearn() {
       <h1 className="sr-only" tabIndex={-1} data-page-title>Study</h1>
       <div className={cx("grid items-start gap-6", pick && !narrow && "lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]")}>
       <div className="flex flex-col gap-4 min-w-0">
-        {!!study.analysis.failedParts && <Banner tone="warning" title="Some text could not be analysed">{study.analysis.failedParts} parts failed. Your original text is kept. Open New text to retry the missing parts.</Banner>}
-        {!practising && s.raw?.accent_fixed_from && <Banner tone="info" title="Accents corrected">Original: <span lang="fr">{s.raw.accent_fixed_from}</span>. The sentence below uses corrected French accents.</Banner>}
+        {!!study.analysis.failedParts && <Alert variant="default"><AlertTitle>Some text could not be analysed</AlertTitle><AlertDescription>{study.analysis.failedParts} parts failed. Your original text is kept. Open New text to retry the missing parts.</AlertDescription></Alert>}
+        {!practising && s.raw?.accent_fixed_from && <Alert variant="default"><AlertTitle>Accents corrected</AlertTitle><AlertDescription>Original: <span lang="fr">{s.raw.accent_fixed_from}</span>. The sentence below uses corrected French accents.</AlertDescription></Alert>}
         {!practising && (
-          <Collapsible open={moreOpen || srcOpen} onOpenChange={(open) => { setMoreOpen(open); if (!open) setSrcOpen(false); }} className="rounded-lg border px-4">
-            <CollapsibleTrigger className="flex min-h-11 w-full items-center text-sm font-medium">More</CollapsibleTrigger>
-            <CollapsibleContent className="flex flex-col gap-3 pb-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <Button kind="tertiary" icon={<HistoryIcon aria-hidden />} onClick={() => go("progress/history?tab=analyses")}>Analyses in History</Button>
-              <Button kind="tertiary" icon={<Plus aria-hidden />} onClick={() => go("study/new")}>New text</Button>
-              <Button
-                kind="tertiary"
-                icon={<PencilLine aria-hidden />}
-                aria-expanded={srcOpen}
-                aria-controls="source-panel"
-                onClick={() => setSrcOpen(!srcOpen)}
-              >
-                {srcOpen ? "Hide source" : "Edit source"}
-              </Button>
-            </div>
+          <div className="flex flex-col gap-3">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="outline" aria-label="More sentence actions" className="self-start">
+                  <MoreHorizontal aria-hidden /> More
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                <DropdownMenuItem onSelect={() => go("progress/history?tab=analyses")}>
+                  <HistoryIcon aria-hidden /> Analyses in History
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => go("study/new")}>
+                  <Plus aria-hidden /> New text
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setSrcOpen((open) => !open)}>
+                  {srcOpen ? "Hide source" : "Edit source"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             {srcOpen && (
               <div id="source-panel" className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-3">
                 <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"><span>{study.analysis.source}</span><span>{plural(total, "sentence")}</span></p>
                 <p lang="fr">{study.analysis.input}</p>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Button kind="secondary" onClick={() => go("study/new")}>Edit text and analyse again</Button>
-                  <Button kind="tertiary" onClick={() => setSrcOpen(false)}>Cancel</Button>
+                  <Button type="button" variant="outline" onClick={() => go("study/new")}>Edit text and analyse again</Button>
+                  <Button type="button" variant="ghost" onClick={() => setSrcOpen(false)}>Cancel</Button>
                 </div>
               </div>
             )}
-            </CollapsibleContent>
-          </Collapsible>
+          </div>
         )}
 
         {practising && pager}
@@ -143,10 +150,25 @@ export function StudyLearn() {
             <FrText segments={s.segments} className="sentence-fr font-serif text-3xl leading-snug tracking-tight wrap-break-word" onPick={onPick} />
             <p className="max-w-prose text-muted-foreground">{s.en}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2 border-t pt-3 min-[1100px]:flex-nowrap">
-            {pager}
-            <StudyPlayer practising={practising} />
-            <AddToReview sentence={s} />
+          <div data-sentence-player className={cx("flex items-center gap-2 border-t pt-3", narrow ? "flex-nowrap" : "flex-wrap min-[1100px]:flex-nowrap")}>
+            {narrow ? (
+              <StudyPlayer
+                practising={practising}
+                compact
+                index={study.index}
+                total={total}
+                onPrev={() => goSentence(study.index - 1)}
+                onNext={() => goSentence(study.index + 1)}
+                onAddToReview={() => addReviewRef.current?.querySelector("button")?.click()}
+              />
+            ) : (
+              <>
+                {pager}
+                <StudyPlayer practising={practising} />
+                <AddToReview sentence={s} />
+              </>
+            )}
+            {narrow && <div className="hidden" ref={addReviewRef}><AddToReview sentence={s} /></div>}
           </div>
         </section>}
 
@@ -220,7 +242,23 @@ export function StudyLearn() {
 }
 
 /* ---------------- SCR-AUD-01: the sentence player ---------------- */
-function StudyPlayer({ practising }: { practising: boolean }) {
+function StudyPlayer({
+  practising,
+  compact,
+  index = 0,
+  total = 1,
+  onPrev,
+  onNext,
+  onAddToReview,
+}: {
+  practising: boolean;
+  compact?: boolean;
+  index?: number;
+  total?: number;
+  onPrev?: () => void;
+  onNext?: () => void;
+  onAddToReview?: () => void;
+}) {
   const study = useApp((s) => s.study);
   const p = useApp((s) => s.player);
   const label = `Sentence ${study.index + 1}`;
@@ -274,36 +312,54 @@ function StudyPlayer({ practising }: { practising: boolean }) {
   const repeatOn = mine?.repeat ?? false;
   const toggleRepeat = () => (mine ? updatePlayer({ repeat: !mine.repeat }) : set((st) => ({ settings: { ...st.settings, repeat: !st.settings.repeat } })));
   const pct = mine && mine.duration ? Math.min(100, (mine.position / mine.duration) * 100) : 0;
+  const playButton = (
+    <Button type="button" variant="outline" size="icon" aria-disabled={(!!(loading)) || undefined} aria-busy={loading || undefined} aria-label={`${playing ? "Pause" : errored ? "Retry" : "Play"} ${label}`} className={cn((!!(loading)) ? "opacity-50" : "")} onClick={(event) => { if (!!(loading)) { event.preventDefault(); return; } (toggle)(); }}>{loading ? <Loader2 className="animate-spin" aria-hidden /> : (playing ? <Pause aria-hidden /> : errored ? <RotateCcw aria-hidden /> : <Play aria-hidden />)}</Button>
+  );
+  if (compact) {
+    return (
+      <>
+        <Button type="button" variant="outline" size="icon" aria-disabled={(!!(index === 0 ? "This is the first sentence." : undefined)) || undefined} aria-label="Previous sentence" className={cn((!!(index === 0 ? "This is the first sentence." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(index === 0 ? "This is the first sentence." : undefined)) { event.preventDefault(); return; } onPrev?.(); }}>{<ChevronLeft aria-hidden />}{(index === 0 ? "This is the first sentence." : undefined) ? <span className="sr-only">{index === 0 ? "This is the first sentence." : undefined}</span> : null}</Button>
+        {playButton}
+        <Button type="button" variant="outline" size="icon" aria-disabled={(!!(index >= total - 1 ? "This is the last sentence." : undefined)) || undefined} aria-label="Next sentence" className={cn((!!(index >= total - 1 ? "This is the last sentence." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(index >= total - 1 ? "This is the last sentence." : undefined)) { event.preventDefault(); return; } onNext?.(); }}>{<ChevronRight aria-hidden />}{(index >= total - 1 ? "This is the last sentence." : undefined) ? <span className="sr-only">{index >= total - 1 ? "This is the last sentence." : undefined}</span> : null}</Button>
+        <span className="min-w-0 shrink text-sm tabular-nums text-muted-foreground">{index + 1}/{total}</span>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" variant="outline" size="icon" aria-label="More playback controls">
+              <MoreHorizontal aria-hidden />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuLabel className="tabular-nums">{fmtClock(mine?.position ?? 0)} / {fmtClock(mine?.duration ?? dur(wanted))}</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Speed</DropdownMenuLabel>
+            <DropdownMenuRadioGroup value={speed} onValueChange={setSpeed}>
+              {[0.75, 1, 1.25, 1.5, 2].map((v) => (
+                <DropdownMenuRadioItem key={v} value={String(v)}>{v}×</DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuCheckboxItem checked={repeatOn} onCheckedChange={() => toggleRepeat()}>Repeat</DropdownMenuCheckboxItem>
+            <DropdownMenuItem onSelect={() => toggleAll()}>{allPlaying ? "Pause all sentences" : "Play all sentences"}</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onAddToReview?.()}>Add to review</DropdownMenuItem>
+            {errored && <DropdownMenuItem onSelect={() => retryPlayback()}>Retry</DropdownMenuItem>}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </>
+    );
+  }
   return (
     <>
-      <Button
-        kind="secondary"
-        iconOnly
-        busy={loading}
-        aria-label={`${playing ? "Pause" : errored ? "Retry" : "Play"} ${label}`}
-        icon={playing ? <Pause aria-hidden /> : errored ? <RotateCcw aria-hidden /> : <Play aria-hidden />}
-        onClick={toggle}
-      />
+      {playButton}
       <Progress value={pct} className="w-28 sm:w-40" aria-label={`${statusText}. ${fmtClock(mine?.position ?? 0)} of ${fmtClock(mine?.duration ?? dur(wanted))}`} />
       <span className="text-sm tabular-nums text-muted-foreground">{fmtClock(mine?.position ?? 0)} / {fmtClock(mine?.duration ?? dur(wanted))}</span>
-      <ChoiceSelect
-        ariaLabel="Speed"
-        className="w-[5.5rem]"
-        value={speed}
-        onValueChange={setSpeed}
-        options={[0.75, 1, 1.25, 1.5, 2].map((v) => ({ value: String(v), label: `${v}×` }))}
-      />
+      <Select value={speed} onValueChange={setSpeed}><SelectTrigger aria-label={"Speed"} className={cn("w-full", "w-[5.5rem]")}><SelectValue /></SelectTrigger><SelectContent>{([0.75, 1, 1.25, 1.5, 2].map((v) => ({ value: String(v), label: `${v}×` }))).map((o) => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}</SelectContent></Select>
       <Toggle variant="outline" pressed={repeatOn} onPressedChange={toggleRepeat} aria-label={repeatOn ? "Repeat on" : "Repeat off"}>
         <Repeat aria-hidden /> Repeat
       </Toggle>
-      <Button kind="secondary" icon={allPlaying ? <Pause aria-hidden /> : <Play aria-hidden />} onClick={toggleAll}>
-        {allPlaying ? "Pause all sentences" : "Play all sentences"}
-      </Button>
+      <Button type="button" variant="outline" onClick={toggleAll}>{allPlaying ? <Pause aria-hidden /> : <Play aria-hidden />}{allPlaying ? "Pause all sentences" : "Play all sentences"}</Button>
       {mine?.status === "error" && (
         <div className="basis-full">
-          <Banner tone="error" title="Audio couldn’t play" live="assertive" actions={<Button kind="secondary" onClick={retryPlayback}>Retry</Button>}>
-            The voice didn’t load. Your place in the sentence is kept.
-          </Banner>
+          <Alert variant="destructive" role="alert"><AlertTitle>Audio couldn’t play</AlertTitle><AlertDescription><div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={retryPlayback}>Retry</Button></div></AlertDescription></Alert>
         </div>
       )}
     </>
@@ -350,11 +406,9 @@ function StepsPanel({ sentence, onPick }: { sentence: StudySentence; onPick: (p:
   return (
     <div className="flex flex-col gap-3">
       <div className="study-step-tools flex flex-wrap items-center gap-2">
-        <Button kind={blind ? "primary" : "secondary"} aria-pressed={blind} onClick={() => { setBlind(!blind); setRevealed([]); }}>{blind ? "Show all words" : "Test me"}</Button>
-        <Button kind="secondary" icon={allStepsPlaying ? <Pause aria-hidden /> : <Play aria-hidden />} onClick={playAllSteps}>
-          {allStepsPlaying ? "Pause all steps" : "Play all steps"}
-        </Button>
-        {blind && <Button kind="tertiary" onClick={() => setRevealed(revealed.length ? [] : sentence.steps.map((_, i) => i))}>{revealed.length ? "Hide again" : "Reveal all"}</Button>}
+        <Button type="button" variant={blind ? "default" : "outline"} aria-pressed={blind} onClick={() => { setBlind(!blind); setRevealed([]); }}>{blind ? "Show all words" : "Test me"}</Button>
+        <Button type="button" variant="outline" onClick={playAllSteps}>{allStepsPlaying ? <Pause aria-hidden /> : <Play aria-hidden />}{allStepsPlaying ? "Pause all steps" : "Play all steps"}</Button>
+        {blind && <Button type="button" variant="ghost" onClick={() => setRevealed(revealed.length ? [] : sentence.steps.map((_, i) => i))}>{revealed.length ? "Hide again" : "Reveal all"}</Button>}
       </div>
       <ol className="divide-y overflow-hidden rounded-lg border" style={{ padding: "0 16px" }}>
         {sentence.steps.map((st, i) => {
@@ -371,27 +425,19 @@ function StepsPanel({ sentence, onPick }: { sentence: StudySentence; onPick: (p:
             >
               <span className="grid size-8 place-items-center rounded-full border text-sm font-medium" aria-hidden>{i + 1}</span>
               <div className="flex flex-col gap-2">
-                {blind && !revealed.includes(i) ? <p className="step-fr font-serif text-xl leading-snug wrap-break-word" lang="fr">{st.parts.map((part, j) => part.added || i === 0 ? <Button key={j} kind="secondary" className="h-9 border-dashed px-3" aria-label={`Reveal new words in step ${i + 1}`} onClick={(e) => { e.stopPropagation(); setRevealed([...revealed, i]); }}>…</Button> : <span key={j}>{part.t}</span>)}</p> : <FrText segments={stepSegments(st.parts)} className="step-fr font-serif text-xl leading-snug wrap-break-word" onPick={onPick} />}
+                {blind && !revealed.includes(i) ? <p className="step-fr font-serif text-xl leading-snug wrap-break-word" lang="fr">{st.parts.map((part, j) => part.added || i === 0 ? <Button type="button" variant="outline" key={j} aria-label={`Reveal new words in step ${i + 1}`} className="h-9 border-dashed px-3" onClick={(e) => { e.stopPropagation(); setRevealed([...revealed, i]); }}>…</Button> : <span key={j}>{part.t}</span>)}</p> : <FrText segments={stepSegments(st.parts)} className="step-fr font-serif text-xl leading-snug wrap-break-word" onPick={onPick} />}
                 <p className="text-sm text-muted-foreground">{st.en}</p>
                 {(!blind || revealed.includes(i)) && <p className="text-base">
                   <span className="font-medium">{/[.!?…]$/.test(st.addedLabel) ? st.addedLabel : `${st.addedLabel}.`}</span>
                   {st.how && ` ${st.how}`}
                 </p>}
-                <Button
-                  kind="tertiary"
-                  className="h-8 px-2 text-sm"
-                  style={{ alignSelf: "flex-start", marginLeft: -12 }}
-                  icon={isPlaying ? <Pause aria-hidden /> : <Play aria-hidden />}
-                  onClick={(e) => { e.stopPropagation(); playStep(i); }}
-                >
-                  {isPlaying ? `Pause step ${i + 1}` : `Play step ${i + 1}`}
-                </Button>
+                <Button type="button" variant="ghost" style={{ alignSelf: "flex-start", marginLeft: -12 }} className="h-8 px-2 text-sm" onClick={(e) => { e.stopPropagation(); playStep(i); }}>{isPlaying ? <Pause aria-hidden /> : <Play aria-hidden />}{isPlaying ? `Pause step ${i + 1}` : `Play step ${i + 1}`}</Button>
                 <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                  <Button kind="tertiary" aria-pressed={!!player?.repeat && liveLabel === STEP_LABEL(i + 1)} onClick={() => {
+                  <Button type="button" variant="ghost" aria-pressed={!!player?.repeat && liveLabel === STEP_LABEL(i + 1)} onClick={() => {
                     if (liveLabel === STEP_LABEL(i + 1) && player?.repeat) stopPlayback();
                     else startPlayback({ kind: "study", label: STEP_LABEL(i + 1), route: "study" }, estimate(stepText(st)), { texts: [stepText(st)], repeat: true });
                   }}>Repeat this step</Button>
-                  <Button kind="secondary" aria-expanded={recordStep === i} onClick={() => setRecordStep(recordStep === i ? null : i)}>{recordStep === i ? "Close recorder" : "Say this step"}</Button>
+                  <Button type="button" variant="outline" aria-expanded={recordStep === i} onClick={() => setRecordStep(recordStep === i ? null : i)}>{recordStep === i ? "Close recorder" : "Say this step"}</Button>
                 </div>
                 {recordStep === i && <div onClick={(e) => e.stopPropagation()}><ShadowingPanel key={i} id={`shadow:${sentence.id}:step:${i}`} text={stepText(st)} compact onPick={onPick} /></div>}
               </div>
@@ -414,22 +460,16 @@ function GrammarPanel({ sentence }: { sentence: StudySentence }) {
   return (
     <div className="flex flex-col gap-4" aria-busy={state === "loading"}>
       <StructurePanel sentence={sentence} />
-      <p className="text-sm text-muted-foreground">Grammar for this sentence. Your place is kept: sentence {index + 1}.</p>
+      <p className="text-sm text-muted-foreground">Sentence {index + 1}</p>
       {state === "loading" && (
         <>
           <Spinner label="Loading grammar notes…" />
           <Skeleton lines={4} />
         </>
       )}
-      {state === "none" && (
-        <Banner tone="neutral" title="No grammar explanation for this sentence">
-          The words here follow patterns you’ve likely seen. Use the word meanings and Steps instead.
-        </Banner>
-      )}
+      {state === "none" && <Alert variant="default"><AlertTitle>No grammar explanation for this sentence</AlertTitle></Alert>}
       {state === "error" && (
-        <Banner tone="error" title="Grammar notes didn’t load" live="assertive" actions={<Button kind="secondary" onClick={() => setRetried(true)}>Retry</Button>}>
-          Your place in the sentence is kept.
-        </Banner>
+        <Alert variant="destructive" role="alert"><AlertTitle>Grammar notes didn’t load</AlertTitle><AlertDescription>Your place in the sentence is kept.<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={() => setRetried(true)}>Retry</Button></div></AlertDescription></Alert>
       )}
       {state === "content" && (
         <ul className="divide-y overflow-hidden rounded-lg border">
@@ -449,7 +489,7 @@ function GrammarPanel({ sentence }: { sentence: StudySentence }) {
         </ul>
       )}
       <div className="flex flex-wrap items-center gap-2">
-        <Button kind="secondary" onClick={() => patchStudy({ tab: "steps" })}>Back to Steps</Button>
+        <Button type="button" variant="outline" onClick={() => patchStudy({ tab: "steps" })}>Back to Steps</Button>
       </div>
     </div>
   );
@@ -559,14 +599,11 @@ function AddToReview({ sentence }: { sentence: StudySentence }) {
   const label = allSaved ? `Already saved · ${plural(savedCount, "card")}` : savedCount ? `Add to review · ${savedCount} saved` : "Add to review";
   const body =
     phase === "added" ? (
-      <Banner tone="success" title={`${plural(count, "card")} added to your library`} live="polite">
-        They’ll appear in Review as new cards. Adding them didn’t use today’s new-card limit.
-      </Banner>
+      <Alert variant="default" role="status"><AlertTitle>{`${plural(count, "card")} added to your library`}</AlertTitle></Alert>
     ) : allSaved ? (
-      <Banner tone="neutral" title="Already saved">All {plural(options.length, "card")} from this sentence are already in your library. Nothing will be duplicated.</Banner>
+      <Alert variant="default"><AlertTitle>Already saved</AlertTitle></Alert>
     ) : (
       <>
-        <p className="text-sm text-muted-foreground">Save selected cards to your library. Saving does not use today’s new-card limit.</p>
         <fieldset style={{ border: 0, margin: 0, padding: 0 }}>
           <legend className="sr-only">Cards from this sentence</legend>
           {options.map((c) => (
@@ -583,37 +620,24 @@ function AddToReview({ sentence }: { sentence: StudySentence }) {
             </label>
           ))}
         </fieldset>
-        {!picked?.length && <p className="text-xs leading-4 text-muted-foreground">Look up a word in the sentence to add a Fill-in card for it.</p>}
         {phase === "failed" && (
-          <Banner tone="error" title="Couldn’t save" live="assertive">
-            {error || "The server didn’t respond."} Nothing was added. Your selection is kept — try again.
-          </Banner>
+          <Alert variant="destructive" role="alert"><AlertTitle>Couldn’t save</AlertTitle><AlertDescription>{error || "The server didn’t respond."} Nothing was added. Your selection is kept — try again.</AlertDescription></Alert>
         )}
       </>
     );
   const footer =
     phase === "added" || allSaved ? (
       <>
-        <Button kind="secondary" onClick={() => { setOpen(false); go("review/saved"); }}>View saved cards</Button>
-        <Button kind="primary" onClick={() => setOpen(false)} data-autofocus>Done</Button>
+        <Button type="button" variant="outline" onClick={() => { setOpen(false); go("review/saved"); }}>View saved cards</Button>
+        <Button type="button" variant="default" data-autofocus onClick={() => setOpen(false)}>Done</Button>
       </>
     ) : (
-      <Button kind="primary" busy={phase === "saving"} onClick={save} disabledReason={!chosen.length ? "Select at least one card." : undefined}>
-        {phase === "failed" ? "Retry" : phase === "saving" ? "Saving…" : `Save ${plural(chosen.length, "card")}`}
-      </Button>
+      <Button type="button" variant="default" aria-disabled={(!!(phase === "saving") || !!(!chosen.length ? "Select at least one card." : undefined)) || undefined} aria-busy={phase === "saving" || undefined} className={cn((!!(phase === "saving") || !!(!chosen.length ? "Select at least one card." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(phase === "saving") || !!(!chosen.length ? "Select at least one card." : undefined)) { event.preventDefault(); return; } (save)(); }}>{phase === "saving" ? <Loader2 className="animate-spin" aria-hidden /> : null}{phase === "failed" ? "Retry" : phase === "saving" ? "Saving…" : `Save ${plural(chosen.length, "card")}`}{(!chosen.length ? "Select at least one card." : undefined) ? <span className="sr-only">{!chosen.length ? "Select at least one card." : undefined}</span> : null}</Button>
     );
 
   return (
     <div ref={wrap} style={{ position: "relative" }}>
-      <Button
-        kind="secondary"
-        icon={allSaved ? <Check aria-hidden /> : <Plus aria-hidden />}
-        aria-expanded={open}
-        aria-haspopup="dialog"
-        onClick={() => setOpen(!open)}
-      >
-        {label}
-      </Button>
+      <Button type="button" variant="outline" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen(!open)}>{allSaved ? <Check aria-hidden /> : <Plus aria-hidden />}{label}</Button>
       {open &&
         (narrow ? (
           <Dialog sheet title="Add to review" onClose={() => setOpen(false)} footer={footer}>

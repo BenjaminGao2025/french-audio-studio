@@ -18,7 +18,9 @@ import type { StudySentence } from "../data/fixtures";
 import { cx } from "../lib/format";
 import { lookupKey } from "../lib/lookup";
 import { announce, get, patchStudy, sayFrench, useApp } from "../state/store";
-import { Banner, Button, Collapsible, CollapsibleContent, CollapsibleTrigger, Importance, Skeleton, Spinner } from "../components/ui";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger, Importance, Skeleton, Spinner } from "../components/ui";
+import { Button } from "../components/ui/button";
+import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
 
 
 /** Server limits from word_context.py: a long free selection is spoken but not looked up. */
@@ -197,29 +199,29 @@ export function WordPanel({
       <header className="flex flex-col gap-2 border-b pb-3">
         <div className="flex flex-wrap items-center gap-2">
           <span className="wp-headword font-serif text-2xl font-medium" lang="fr" data-autofocus tabIndex={-1}>{shown}</span>
-          <Button kind="tertiary" iconOnly aria-label={`Replay “${shown}”`} icon={<Volume2 aria-hidden />} onClick={() => sayFrench(shown)} />
+          <Button type="button" variant="ghost" size="icon" aria-label={`Replay “${shown}”`} onClick={() => sayFrench(shown)}>{<Volume2 aria-hidden />}</Button>
           {ipa && <span className="wp-ipa text-sm text-muted-foreground">{ipa}</span>}
-          {!inSheet && <Button kind="tertiary" iconOnly className="wp-close" aria-label="Close word card" icon={<X aria-hidden />} onClick={onClose} />}
+          {!inSheet && <Button type="button" variant="ghost" size="icon" aria-label="Close word card" className="wp-close" onClick={onClose}>{<X aria-hidden />}</Button>}
         </div>
         {baseForm && !nested && (
-          <Button kind="tertiary" className="h-auto justify-start px-0 text-primary underline-offset-4 hover:underline" onClick={useBaseForm}>Base form: <span lang="fr">{baseForm}</span></Button>
+          <Button type="button" variant="ghost" className="h-auto justify-start px-0 text-primary underline-offset-4 hover:underline" onClick={useBaseForm}>Base form: <span lang="fr">{baseForm}</span></Button>
         )}
-        {nested && <Button kind="tertiary" icon={<ArrowLeft aria-hidden />} onClick={() => setNested(null)}>Back to {text}</Button>}
+        {nested && <Button type="button" variant="ghost" onClick={() => setNested(null)}>{<ArrowLeft aria-hidden />}Back to {text}</Button>}
       </header>
 
       {!nested && (
         <section className="flex flex-col gap-2" aria-label="Meaning in this sentence">
           <h3 className="text-sm font-medium">Meaning in this sentence <span className="text-xs text-muted-foreground">AI</span></h3>
           {tooLong ? (
-            <p className="text-sm text-muted-foreground">Select a word or a short phrase to see its meaning.</p>
+            <p className="text-sm font-medium">Select a word or a short phrase</p>
           ) : meaning ? (
             <p className="wp-definition font-medium" lang="en">{meaning}</p>
           ) : ctxSt === "loading" ? (
             <><Spinner label="Finding the meaning…" /><Skeleton lines={1} /></>
           ) : ctxSt === "error" ? (
-            <div className="flex flex-col gap-2"><p className="text-sm text-muted-foreground">Couldn’t load the meaning in this sentence.</p><Button kind="secondary" onClick={loadCtx}>Retry</Button></div>
+            <div className="flex flex-col gap-2"><p className="text-sm text-muted-foreground">Couldn’t load the meaning in this sentence.</p><Button type="button" variant="outline" onClick={loadCtx}>Retry</Button></div>
           ) : (
-            <p className="text-sm text-muted-foreground">No English meaning available for this sentence.</p>
+            <p className="text-sm font-medium">No meaning for this sentence</p>
           )}
           {phraseMeaning && (
             <p className="text-sm text-muted-foreground">
@@ -235,9 +237,7 @@ export function WordPanel({
           <h3 className="text-sm font-medium">Dictionary</h3>
           {dictSt === "loading" && <Spinner label="Loading dictionary…" />}
           {dictSt === "error" && (
-            <Banner tone="error" title="Dictionary request failed" actions={<Button kind="secondary" onClick={loadDict}>Retry</Button>}>
-              {englishOnly(dictErr) || "Please try again."}
-            </Banner>
+            <Alert variant="destructive"><AlertTitle>Dictionary request failed</AlertTitle><AlertDescription>{englishOnly(dictErr) || "Please try again."}<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={loadDict}>Retry</Button></div></AlertDescription></Alert>
           )}
           {dictSt === "ready" && (dictEntries.length ? (
             <>
@@ -279,7 +279,7 @@ export function WordPanel({
                 {dict?.changes && <span> {dict.changes}</span>}
               </p>
             </>
-          ) : <p className="text-sm text-muted-foreground">No dictionary entry found. The meaning in this sentence is shown above.</p>)}
+          ) : <p className="text-sm font-medium">No dictionary entry</p>)}
         </section>
       )}
 
@@ -298,9 +298,7 @@ export function WordPanel({
 
       <footer className="wp-footer">
         <div className="wp-actions">
-          <Button kind="secondary" aria-pressed={fav} icon={fav ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />} onClick={() => void setFavorite(text, !fav)}>
-            {fav ? "Favorited" : "Favorite"}
-          </Button>
+          <Button type="button" variant="outline" aria-pressed={fav} onClick={() => void setFavorite(text, !fav)}>{fav ? <BookmarkCheck aria-hidden /> : <Bookmark aria-hidden />}{fav ? "Favorited" : "Favorite"}</Button>
           {count !== undefined && (
             <div className="wp-importance">
               <span className="text-sm font-medium">Importance</span>
@@ -308,7 +306,7 @@ export function WordPanel({
             </div>
           )}
         </div>
-        {!nested && <Button kind="tertiary" className="h-auto px-0 text-primary underline-offset-4 hover:underline" onClick={onGrammar}>Sentence grammar</Button>}
+        {!nested && <Button type="button" variant="ghost" className="h-auto px-0 text-primary underline-offset-4 hover:underline" onClick={onGrammar}>Sentence grammar</Button>}
       </footer>
     </div>
   );

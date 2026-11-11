@@ -1,10 +1,13 @@
 /* Feedback blocks shared by Write and Speak: round 1 (hints only) and round 2 (corrections). */
+import { Button } from "../components/ui/button";
+import { Badge } from "../components/ui/badge";
+import { cn } from "cn";
 import { useState } from "react";
-import { Check, Plus, X } from "lucide-react";
+import { Check, Plus, X, Loader2 } from "lucide-react";
 import type { Feedback2 } from "../api/practice";
 import { saveNote } from "../api/srs";
 import { announce } from "../state/store";
-import { Button, Pill } from "../components/ui";
+
 
 export function AiLabel() {
   return (
@@ -22,9 +25,9 @@ export function Checklist({ items }: { items?: { point: string; covered: boolean
       <ul className="divide-y overflow-hidden rounded-lg border">
         {items.map((c, i) => (
           <li key={i} className="flex flex-wrap items-center gap-3 px-4 py-3 items-start">
-            <Pill tone={c.covered ? "success" : "warning"} icon={c.covered ? <Check aria-hidden width={12} height={12} /> : <X aria-hidden width={12} height={12} />}>
+            <Badge variant={c.covered ? "secondary" : "outline"}>{c.covered ? <Check aria-hidden width={12} height={12} /> : <X aria-hidden width={12} height={12} />}
               {c.covered ? "Covered" : "Missing"}
-            </Pill>
+            </Badge>
             <span className="min-w-0 flex-1 flex flex-col">
               <span>{c.point}</span>
               {c.note && <span className="text-sm text-muted-foreground">{c.note}</span>}
@@ -65,7 +68,7 @@ export function Round2({ fb, correctedLabel }: { fb: Feedback2; correctedLabel: 
           <ul className="divide-y overflow-hidden rounded-lg border">
             {fb.fixed_errors.map((e, i) => (
               <li key={i} className="flex flex-wrap items-center gap-3 px-4 py-3 items-start">
-                <Pill tone={e.fixed ? "success" : "warning"}>{e.fixed ? "Fixed" : "Not yet"}</Pill>
+                <Badge variant={e.fixed ? "secondary" : "outline"}>{e.fixed ? "Fixed" : "Not yet"}</Badge>
                 <span className="min-w-0 flex-1 flex flex-col">
                   <span lang="fr">{e.span}</span>
                   {e.comment && <span className="text-sm text-muted-foreground">{e.comment}</span>}
@@ -152,9 +155,9 @@ function SentenceRow({ s }: { s: { original: string; corrected: string; explanat
         {state === "failed" && <span className="text-sm text-destructive" role="alert">Couldn’t add it. Try again.</span>}
       </span>
       {state === "saved" ? (
-        <Pill tone="success" icon={<Check aria-hidden width={12} height={12} />}>In Review</Pill>
+        <Badge variant="secondary">{<Check aria-hidden width={12} height={12} />}In Review</Badge>
       ) : (
-        <Button kind="secondary" icon={<Plus aria-hidden />} busy={state === "saving"} onClick={() => void add()}>Add to review</Button>
+        <Button type="button" variant="outline" aria-disabled={(!!(state === "saving")) || undefined} aria-busy={state === "saving" || undefined} className={cn((!!(state === "saving")) ? "opacity-50" : "")} onClick={(event) => { if (!!(state === "saving")) { event.preventDefault(); return; } (() => void add())(); }}>{state === "saving" ? <Loader2 className="animate-spin" aria-hidden /> : (<Plus aria-hidden />)}Add to review</Button>
       )}
     </li>
   );

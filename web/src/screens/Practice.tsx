@@ -1,11 +1,14 @@
 import { ChevronLeft, Headphones, Mic, PenSquare, Radio, AudioLines, GraduationCap } from "lucide-react";
 import { go } from "../state/store";
-import { Banner, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, PageHead, Pill } from "../components/ui";
+import { Card, CardDescription, CardHeader, CardTitle, PageHead } from "../components/ui";
 import { EpisodeList, EpisodePlayer } from "./Episodes";
 import { Listen } from "./PracticeListen";
 import { Speak } from "./PracticeSpeak";
 import { Studio } from "./PracticeStudio";
 import { Write } from "./PracticeWrite";
+import { Button } from "../components/ui/button";
+import { Alert, AlertTitle } from "../components/ui/alert";
+import { Badge } from "../components/ui/badge";
 
 export function PracticeScreen({ parts }: { parts: string[] }) {
   const [a, b] = parts;
@@ -20,9 +23,7 @@ export function PracticeScreen({ parts }: { parts: string[] }) {
 
 export function BackTo({ label, to }: { label: string; to: string }) {
   return (
-    <Button kind="tertiary" className="h-8 px-2 text-sm" icon={<ChevronLeft aria-hidden />} onClick={() => go(to)} style={{ alignSelf: "flex-start", marginLeft: -12 }}>
-      {label}
-    </Button>
+    <Button type="button" variant="ghost" style={{ alignSelf: "flex-start", marginLeft: -12 }} className="h-8 px-2 text-sm" onClick={() => go(to)}>{<ChevronLeft aria-hidden />}{label}</Button>
   );
 }
 
@@ -41,14 +42,11 @@ function Hub() {
       <PageHead title="Practice" />
       <div className="grid gap-4 sm:grid-cols-2">
         {dest.map((d) => (
-          <Card key={d.to}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">{d.icon}{d.title}</CardTitle>
-              <CardDescription>{d.text}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button kind="secondary" onClick={() => go(d.to)}>Open</Button>
-            </CardContent>
+          <Card key={d.to} className="py-0">
+            <Button type="button" variant="ghost" className="h-auto w-full justify-start whitespace-normal rounded-xl px-0 py-0 text-left" onClick={() => go(d.to)}><CardHeader className="w-full">
+                <CardTitle className="flex items-center gap-2 text-base">{d.icon}{d.title}</CardTitle>
+                <CardDescription>{d.text}</CardDescription>
+              </CardHeader></Button>
           </Card>
         ))}
       </div>
@@ -60,15 +58,13 @@ function Hub() {
 function ExamPlaceholder() {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-      <PageHead back={<BackTo label="Practice" to="practice" />} title="Exam practice" eyebrow={<Pill>Planned · questions not yet verified</Pill>} desc="Full TCF Canada-style mock tests are planned." />
+      <PageHead back={<BackTo label="Practice" to="practice" />} title="Exam practice" eyebrow={<Badge variant="outline">Planned · questions not yet verified</Badge>} />
       <div className="flex flex-col gap-4">
-        <Banner tone="info" title="Not available yet">
-          We won’t publish mock tests until the questions have been checked against the real exam format. Until then, practise each skill on its own.
-        </Banner>
+        <Alert variant="default"><AlertTitle>Not available yet</AlertTitle></Alert>
         <div className="flex flex-wrap items-center gap-2">
-          <Button kind="secondary" onClick={() => go("practice/write")}>Write</Button>
-          <Button kind="secondary" onClick={() => go("practice/speak")}>Speak</Button>
-          <Button kind="secondary" onClick={() => go("practice/listen")}>Listen</Button>
+          <Button type="button" variant="outline" onClick={() => go("practice/write")}>Write</Button>
+          <Button type="button" variant="outline" onClick={() => go("practice/speak")}>Speak</Button>
+          <Button type="button" variant="outline" onClick={() => go("practice/listen")}>Listen</Button>
         </div>
       </div>
     </div>

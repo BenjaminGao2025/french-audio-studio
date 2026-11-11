@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api/client";
 import { go, useApp } from "../state/store";
-import { Button } from "./ui";
+import { Button } from "./ui/button";
+
 
 type Counts = { total: number; review: number; learning: number; new: number; reviewed_today: number };
 export function StudyReviewNotice() {
@@ -29,7 +30,7 @@ export function StudyReviewNotice() {
         <div><dt>Cards</dt><dd>{counts.total}</dd></div>
         <div><dt>To revisit</dt><dd>{revisit}</dd></div>
       </dl>
-      <Button kind="secondary" onClick={() => go("review/due")}>Review today’s cards</Button>
+      <Button type="button" variant="outline" onClick={() => go("review/due")}>Review today’s cards</Button>
     </aside>
   );
 }

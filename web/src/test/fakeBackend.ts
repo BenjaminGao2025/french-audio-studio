@@ -230,7 +230,9 @@ function route(method: string, url: URL, body: Record<string, unknown>): Respons
   if (p === "/api/lookup") {
     const word = url.searchParams.get("word") ?? "";
     if (fake.failNext.delete("dictionary")) return json(503, { detail: { message: "Dictionary temporarily unavailable." } });
-    return json(200, { token: word, lemma: word, pos: "noun", phonetic: "", explanation_cn: "", explanation_en: "", dictionary_source: "wiktionnaire", dictionary_state: "found", entries: [{ lemma: word, pos: "noun", phonetic: "", senses: [`Définition de ${word}.`], source_url: `https://fr.wiktionary.org/wiki/${encodeURIComponent(word)}#fr`, history_url: `https://fr.wiktionary.org/w/index.php?title=${encodeURIComponent(word)}&action=history` }], attribution: "Wiktionnaire contributors; extraction by Kaikki.", license_url: "https://creativecommons.org/licenses/by-sa/4.0/" });
+    // Raw IPA keeps syllable dots so formatFriendlyPhonetic can drop them: /tɔ̃.be/ -> [tɔ̃be].
+    const phonetic = ({ failli: "/fa.ji/", tombé: "/tɔ̃.be/", tomber: "/tɔ̃.be/", oublier: "/u.bli.je/", "rendez-vous": "/ʁɑ̃.de.vu/" } as Record<string, string>)[word.toLowerCase()] ?? "";
+    return json(200, { token: word, lemma: word, pos: "noun", phonetic, explanation_cn: "", explanation_en: "", dictionary_source: "wiktionnaire", dictionary_state: "found", entries: [{ lemma: word, pos: "noun", phonetic, senses: [`Définition de ${word}.`], source_url: `https://fr.wiktionary.org/wiki/${encodeURIComponent(word)}#fr`, history_url: `https://fr.wiktionary.org/w/index.php?title=${encodeURIComponent(word)}&action=history` }], attribution: "Wiktionnaire contributors; extraction by Kaikki.", license_url: "https://creativecommons.org/licenses/by-sa/4.0/" });
   }
   if (p === "/api/srs/lookups" && method === "POST") {
     const k = lookupKey(String(body.word));

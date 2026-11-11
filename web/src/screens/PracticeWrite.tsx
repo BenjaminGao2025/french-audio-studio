@@ -1,4 +1,11 @@
 /* SCR-PRA-02 Writing practice: TCF Canada tasks, two feedback rounds (hints, then corrections). */
+import { Button } from "../components/ui/button";
+import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
+import { Badge } from "../components/ui/badge";
+import { ToggleGroup, ToggleGroupItem } from "../components/ui/toggle-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { cn } from "cn";
+import { Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import {
@@ -16,7 +23,7 @@ import {
 } from "../api/practice";
 import { fmtWhen } from "../api/history";
 import { announce, go, set, useApp } from "../state/store";
-import { Banner, Button, ChoiceSelect, PageHead, Pill, Segmented, Spinner, Textarea } from "../components/ui";
+import { PageHead, Spinner, Textarea } from "../components/ui";
 import { AiLabel, Checklist, ErrorHints, Round2 } from "./PracticeFeedback";
 import { BackTo } from "./Practice";
 
@@ -182,7 +189,7 @@ export function Write() {
     return (
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
         <PageHead back={<BackTo label="Practice" to="practice" />} title="Write" />
-        {loadErr ? <Banner tone="error" title="Couldn’t load the writing tasks" live="assertive" actions={<Button kind="secondary" onClick={load}>Retry</Button>}>{loadErr}</Banner> : <Spinner label="Loading tasks…" />}
+        {loadErr ? <Alert variant="destructive" role="alert"><AlertTitle>Couldn’t load the writing tasks</AlertTitle><AlertDescription>{loadErr}<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={load}>Retry</Button></div></AlertDescription></Alert> : <Spinner label="Loading tasks…" />}
       </div>
     );
   }
@@ -198,29 +205,19 @@ export function Write() {
       <div className="flex flex-col gap-6">
         {editing && !attempt && (
           <div className="flex flex-col gap-3">
-            <Segmented
-              label="Task"
-              value={task}
-              onChange={(t) => { setTask(t); setSubject(data.subjects[t]?.[0] ?? null); setGenErr(""); }}
-              options={TASKS.map((t) => ({ value: t, label: t === data.recommended_task ? `${t} · suggested` : t }))}
-            />
+            <ToggleGroup type="single" variant="outline" value={task} onValueChange={(next) => { if (next && (TASKS as readonly string[]).includes(next)) { const t = next as ExamTask; setTask(t); setSubject(data.subjects[t]?.[0] ?? null); setGenErr(""); } }} aria-label="Task">{(TASKS.map((t) => ({ value: t, label: t === data.recommended_task ? `${t} · suggested` : t }))).map((o) => (<ToggleGroupItem key={o.value} value={o.value}>{o.label}</ToggleGroupItem>))}</ToggleGroup>
             <div className="flex flex-wrap items-center gap-2 gap-3" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
               <label className="grid gap-2" style={{ minWidth: 0, flex: "1 1 260px", maxWidth: 480 }}>
                 <span className="text-sm font-medium">Subject</span>
-                <ChoiceSelect
-                  ariaLabel="Subject"
-                  value={subj && builtIns.some((s) => s.id === subj.id) ? subj.id : "custom"}
-                  onValueChange={(v) => { const s = builtIns.find((x) => x.id === v); if (s) setSubject(s); }}
-                  options={[
+                <Select value={subj && builtIns.some((s) => s.id === subj.id) ? subj.id : "custom"} onValueChange={(v) => { const s = builtIns.find((x) => x.id === v); if (s) setSubject(s); }}><SelectTrigger aria-label={"Subject"} className="w-full"><SelectValue /></SelectTrigger><SelectContent>{([
                     ...builtIns.map((s) => ({ value: s.id, label: s.title })),
                     ...(subj && !builtIns.some((s) => s.id === subj.id) ? [{ value: "custom", label: `${subj.title} (new)` }] : []),
-                  ]}
-                />
+                  ]).map((o) => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}</SelectContent></Select>
               </label>
-              <Button kind="tertiary" busy={genBusy} onClick={() => void generate()}>New subject</Button>
+              <Button type="button" variant="ghost" aria-disabled={(!!(genBusy)) || undefined} aria-busy={genBusy || undefined} className={cn((!!(genBusy)) ? "opacity-50" : "")} onClick={(event) => { if (!!(genBusy)) { event.preventDefault(); return; } (() => void generate())(); }}>{genBusy ? <Loader2 className="animate-spin" aria-hidden /> : null}New subject</Button>
             </div>
             {genBusy && <Spinner label="Writing a new subject…" />}
-            {genErr && <Banner tone="error" title="Couldn’t make a new subject" live="assertive">{genErr}</Banner>}
+            {genErr && <Alert variant="destructive" role="alert"><AlertTitle>Couldn’t make a new subject</AlertTitle><AlertDescription>{genErr}</AlertDescription></Alert>}
           </div>
         )}
 
@@ -235,11 +232,11 @@ export function Write() {
                 {n} {n === 1 ? "word" : "words"}{spec ? ` · target ${spec.min_words}–${spec.max_words}` : ""}
               </p>
             </div>
-            {error && <Banner tone="error" title="Feedback didn’t load" live="assertive">{error} Your text is kept.</Banner>}
+            {error && <Alert variant="destructive" role="alert"><AlertTitle>Feedback didn’t load</AlertTitle><AlertDescription>{error} Your text is kept.</AlertDescription></Alert>}
             {phase === "wait1" && <Spinner label="Reading your text… this usually takes 10–40 seconds." />}
             <div className="sticky bottom-0 z-10 bg-background py-3">
               <div className="flex flex-wrap items-center gap-2">
-                <Button kind="primary" busy={phase === "wait1"} onClick={() => void submit1()}>{error ? "Retry" : "Get feedback"}</Button>
+                <Button type="button" variant="default" aria-disabled={(!!(phase === "wait1")) || undefined} aria-busy={phase === "wait1" || undefined} className={cn((!!(phase === "wait1")) ? "opacity-50" : "")} onClick={(event) => { if (!!(phase === "wait1")) { event.preventDefault(); return; } (() => void submit1())(); }}>{phase === "wait1" ? <Loader2 className="animate-spin" aria-hidden /> : null}{error ? "Retry" : "Get feedback"}</Button>
               </div>
             </div>
           </>
@@ -263,26 +260,21 @@ export function Write() {
                     <p lang="fr" style={{ whiteSpace: "pre-wrap" }}>{attempt.text_2}</p>
                   </div>
                   <Round2 fb={attempt.feedback_2} correctedLabel="Corrected text" />
-                  <Banner tone="success" title="Writing practice complete" actions={<><Button kind="primary" onClick={reset}>Write another</Button><Button kind="secondary" onClick={() => go("practice")}>Back to Practice</Button></>}>
-                    Saved to your writing attempts.
-                  </Banner>
+                  <Alert variant="default"><AlertTitle>Writing practice complete</AlertTitle><AlertDescription>Saved to your writing attempts.<div className="mt-3 flex flex-wrap items-center gap-2"><><Button type="button" variant="default" onClick={reset}>Write another</Button><Button type="button" variant="outline" onClick={() => go("practice")}>Back to Practice</Button></></div></AlertDescription></Alert>
                 </div>
               ) : (
                 <div className="flex flex-col gap-3">
                   <p className="text-lg font-semibold text-balance">Round 2 · fix it yourself</p>
-                  <p className="text-sm text-muted-foreground">Use the hints above to correct your text, then send it for the corrections.</p>
                   <div className="grid gap-2">
                     <label htmlFor="write-rev" className="text-sm font-medium">Your revised text</label>
                     <Textarea id="write-rev" lang="fr" rows={10} value={revision} readOnly={phase === "wait2"} onChange={(e) => { setRevision(e.target.value); setError(""); }} />
                     <p className={over ? "text-sm text-destructive" : "text-sm text-muted-foreground"}>{n} {n === 1 ? "word" : "words"}</p>
                   </div>
-                  {error && <Banner tone="error" title="Corrections didn’t load" live="assertive">{error} Your revision is kept.</Banner>}
+                  {error && <Alert variant="destructive" role="alert"><AlertTitle>Corrections didn’t load</AlertTitle><AlertDescription>{error} Your revision is kept.</AlertDescription></Alert>}
                   {phase === "wait2" && <Spinner label="Checking your revision…" />}
                   <div className="flex flex-wrap items-center gap-2">
-                    <Button kind="primary" busy={phase === "wait2"} disabledReason={!revision.trim() ? "Write your revision first." : undefined} onClick={() => void submit2()}>
-                      {error ? "Retry" : "Get corrections"}
-                    </Button>
-                    <Button kind="tertiary" onClick={reset}>Start over</Button>
+                    <Button type="button" variant="default" aria-disabled={(!!(phase === "wait2") || !!(!revision.trim() ? "Write your revision first." : undefined)) || undefined} aria-busy={phase === "wait2" || undefined} className={cn((!!(phase === "wait2") || !!(!revision.trim() ? "Write your revision first." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(phase === "wait2") || !!(!revision.trim() ? "Write your revision first." : undefined)) { event.preventDefault(); return; } (() => void submit2())(); }}>{phase === "wait2" ? <Loader2 className="animate-spin" aria-hidden /> : null}{error ? "Retry" : "Get corrections"}{(!revision.trim() ? "Write your revision first." : undefined) ? <span className="sr-only">{!revision.trim() ? "Write your revision first." : undefined}</span> : null}</Button>
+                    <Button type="button" variant="ghost" onClick={reset}>Start over</Button>
                   </div>
                 </div>
               )}
@@ -326,19 +318,19 @@ function Round1({ a }: { a: WriteAttempt }) {
       {fb.praise && <p><span className="font-medium">What works · </span>{fb.praise}</p>}
       {fb.word_count && (
         <p className="flex flex-wrap items-center gap-2 gap-2">
-          <Pill tone={fb.word_count.in_range ? "success" : "warning"}>{fb.word_count.in_range ? "Length OK" : "Length"}</Pill>
+          <Badge variant={fb.word_count.in_range ? "secondary" : "outline"}>{fb.word_count.in_range ? "Length OK" : "Length"}</Badge>
           <span className="text-sm text-muted-foreground">{fb.word_count.note}</span>
         </p>
       )}
       {fb.register?.note && (
         <p className="flex flex-wrap items-center gap-2 gap-2">
-          <Pill tone={fb.register.fits ? "success" : "warning"}>Register · {fb.register.choice}</Pill>
+          <Badge variant={fb.register.fits ? "secondary" : "outline"}>Register · {fb.register.choice}</Badge>
           <span className="text-sm text-muted-foreground">{fb.register.note}</span>
         </p>
       )}
       {fb.t3_comparison && (
         <p className="flex flex-wrap items-center gap-2 gap-2">
-          <Pill tone={fb.t3_comparison.compared && fb.t3_comparison.position_clear ? "success" : "warning"}>Comparison and position</Pill>
+          <Badge variant={fb.t3_comparison.compared && fb.t3_comparison.position_clear ? "secondary" : "outline"}>Comparison and position</Badge>
           <span className="text-sm text-muted-foreground">{fb.t3_comparison.note}</span>
         </p>
       )}
@@ -356,12 +348,10 @@ function PastAttempts({ attempts, onOpen }: { attempts: WriteAttempt[]; onOpen: 
       <ul className="divide-y overflow-hidden rounded-lg border">
         {attempts.slice(0, 5).map((a) => (
           <li key={a.id}>
-            <Button kind="tertiary" className="h-auto w-full justify-start whitespace-normal px-4 py-3 text-left" onClick={() => onOpen(a)}>
-              <span className="min-w-0 flex-1 flex flex-col">
+            <Button type="button" variant="ghost" className="h-auto w-full justify-start whitespace-normal px-4 py-3 text-left" onClick={() => onOpen(a)}><span className="min-w-0 flex-1 flex flex-col">
                 <span lang="fr" className="font-medium">{a.subject?.title || a.task}</span>
                 <span className="text-sm font-normal text-muted-foreground">{a.task} · {fmtWhen(a.created_at)} · {a.status === "failed" ? "Feedback failed" : a.text_2 ? "Both rounds" : a.status === "ready" ? "Round 1 done" : "In progress"}</span>
-              </span>
-            </Button>
+              </span></Button>
           </li>
         ))}
       </ul>

@@ -1,10 +1,13 @@
 /* Microphone recorder: MediaRecorder → /api/transcribe (local Whisper on the server). */
+import { Button } from "./ui/button";
+import { Alert, AlertTitle, AlertDescription } from "./ui/alert";
+import { cn } from "cn";
 import { useEffect, useRef, useState } from "react";
-import { Mic, Pause, Play, Square } from "lucide-react";
+import { Mic, Pause, Play, Square, Loader2 } from "lucide-react";
 import { transcribe } from "../api/practice";
 import { fmtClock } from "../lib/format";
 import { announce } from "../state/store";
-import { Banner, Button, Spinner } from "./ui";
+import { Spinner } from "./ui";
 
 /** The server rejects long uploads; stop well before that. */
 export const MAX_RECORD_SECONDS = 180;
@@ -158,23 +161,19 @@ export function Recorder({ label, onText, disabled }: { label: string; onText: (
     <div className="flex flex-col gap-3" role="group" aria-label={label}>
       <div className="flex flex-wrap items-center gap-2">
         {phase === "recording" ? (
-          <Button kind="primary" icon={<Square aria-hidden />} onClick={stop}>Stop recording</Button>
+          <Button type="button" variant="default" onClick={stop}>{<Square aria-hidden />}Stop recording</Button>
         ) : (
-          <Button kind="secondary" icon={<Mic aria-hidden />} busy={busy} disabled={disabled} onClick={() => void start()}>
-            {phase === "done" || phase === "error" ? "Record again" : "Start recording"}
-          </Button>
+          <Button type="button" variant="outline" aria-disabled={(!!(disabled) || !!(busy)) || undefined} aria-busy={busy || undefined} className={cn((!!(disabled) || !!(busy)) ? "opacity-50" : "")} onClick={(event) => { if (!!(disabled) || !!(busy)) { event.preventDefault(); return; } (() => void start())(); }}>{busy ? <Loader2 className="animate-spin" aria-hidden /> : (<Mic aria-hidden />)}{phase === "done" || phase === "error" ? "Record again" : "Start recording"}</Button>
         )}
         {url && phase !== "recording" && (
-          <Button kind="tertiary" icon={playing ? <Pause aria-hidden /> : <Play aria-hidden />} onClick={togglePlay}>
-            {playing ? "Pause my recording" : "Play my recording"}
-          </Button>
+          <Button type="button" variant="ghost" onClick={togglePlay}>{playing ? <Pause aria-hidden /> : <Play aria-hidden />}{playing ? "Pause my recording" : "Play my recording"}</Button>
         )}
         <span className="text-sm text-muted-foreground tabular-nums" aria-live="off">
           {phase === "recording" ? `Recording · ${fmtClock(secs)} / ${fmtClock(MAX_RECORD_SECONDS)}` : phase === "asking" ? "Waiting for the microphone…" : ""}
         </span>
       </div>
       {phase === "transcribing" && <Spinner label="Transcribing…" />}
-      {phase === "error" && <Banner tone="error" title="Recording didn’t work" live="assertive">{error}</Banner>}
+      {phase === "error" && <Alert variant="destructive" role="alert"><AlertTitle>Recording didn’t work</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
     </div>
   );
 }

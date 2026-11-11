@@ -1,6 +1,12 @@
 /* SCR-PRA-03 Speaking practice: record → transcript → hints → say it again → corrections. */
+import { Button } from "../components/ui/button";
+import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
+import { Badge } from "../components/ui/badge";
+import { ToggleGroup, ToggleGroupItem } from "../components/ui/toggle-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { cn } from "cn";
 import { useEffect, useRef, useState } from "react";
-import { Volume2 } from "lucide-react";
+import { Volume2, Loader2 } from "lucide-react";
 import {
   type ExamTask,
   type SpeakAttempt,
@@ -17,7 +23,7 @@ import {
 } from "../api/practice";
 import { fmtClock } from "../lib/format";
 import { announce, go, set, startPlayback, useApp } from "../state/store";
-import { Banner, Button, ChoiceSelect, PageHead, Pill, Segmented, Spinner, Textarea } from "../components/ui";
+import { PageHead, Spinner, Textarea } from "../components/ui";
 import { Recorder, type Recording } from "../components/Recorder";
 import { AiLabel, Checklist, ErrorHints, Round2 } from "./PracticeFeedback";
 import { BackTo } from "./Practice";
@@ -186,8 +192,8 @@ export function Speak() {
   if (!data) {
     return (
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-        <PageHead back={<BackTo label="Practice" to="practice" />} title="Speak" desc="TCF Canada speaking tasks: answer out loud, then fix it with feedback." />
-        {loadErr ? <Banner tone="error" title="Couldn’t load the speaking tasks" live="assertive" actions={<Button kind="secondary" onClick={load}>Retry</Button>}>{loadErr}</Banner> : <Spinner label="Loading tasks…" />}
+        <PageHead back={<BackTo label="Practice" to="practice" />} title="Speak" />
+        {loadErr ? <Alert variant="destructive" role="alert"><AlertTitle>Couldn’t load the speaking tasks</AlertTitle><AlertDescription>{loadErr}<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={load}>Retry</Button></div></AlertDescription></Alert> : <Spinner label="Loading tasks…" />}
       </div>
     );
   }
@@ -200,25 +206,14 @@ export function Speak() {
         back={<BackTo label="Practice" to="practice" />}
         title="Speak"
         eyebrow="Expression orale · practice"
-        desc="Expression orale"
       />
       <div className="flex flex-col gap-6">
         {answering && !attempt && (
           <div className="flex flex-col gap-3">
-            <Segmented
-              label="Task"
-              value={task}
-              onChange={(t) => { setTask(t); setSubject(data.subjects[t]?.[0] ?? null); setTurns([]); }}
-              options={TASKS.map((t) => ({ value: t, label: t === data.recommended_task ? `${t} · suggested` : t }))}
-            />
+            <ToggleGroup type="single" variant="outline" value={task} onValueChange={(next) => { if (next && (TASKS as readonly string[]).includes(next)) { const t = next as ExamTask; setTask(t); setSubject(data.subjects[t]?.[0] ?? null); setTurns([]); } }} aria-label="Task">{(TASKS.map((t) => ({ value: t, label: t === data.recommended_task ? `${t} · suggested` : t }))).map((o) => (<ToggleGroupItem key={o.value} value={o.value}>{o.label}</ToggleGroupItem>))}</ToggleGroup>
             <label className="grid gap-2" style={{ maxWidth: 480 }}>
               <span className="text-sm font-medium">Subject</span>
-              <ChoiceSelect
-                ariaLabel="Subject"
-                value={subj && builtIns.some((s) => s.id === subj.id) ? subj.id : (builtIns[0]?.id ?? "subject")}
-                onValueChange={(v) => { const s = builtIns.find((x) => x.id === v); if (s) { setSubject(s); setTurns([]); } }}
-                options={builtIns.map((s) => ({ value: s.id, label: s.title }))}
-              />
+              <Select value={subj && builtIns.some((s) => s.id === subj.id) ? subj.id : (builtIns[0]?.id ?? "subject")} onValueChange={(v) => { const s = builtIns.find((x) => x.id === v); if (s) { setSubject(s); setTurns([]); } }}><SelectTrigger aria-label={"Subject"} className="w-full"><SelectValue /></SelectTrigger><SelectContent>{(builtIns.map((s) => ({ value: s.id, label: s.title }))).map((o) => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}</SelectContent></Select>
             </label>
           </div>
         )}
@@ -233,14 +228,14 @@ export function Speak() {
                 {subj.questions.map((q, i) => (
                   <li key={i} lang="fr">
                     {q}{" "}
-                    <Button kind="tertiary" iconOnly icon={<Volume2 aria-hidden />} aria-label={`Listen to question ${i + 1}`} onClick={() => say(q)} />
+                    <Button type="button" variant="ghost" size="icon" aria-label={`Listen to question ${i + 1}`} onClick={() => say(q)}>{<Volume2 aria-hidden />}</Button>
                   </li>
                 ))}
               </ol>
             )}
             {task === "T2" && !!subj.target_points?.length && <p className="text-sm text-muted-foreground">Find out about: <span lang="fr">{subj.target_points.join(" · ")}</span></p>}
             {task === "T3" && !!subj.structure_hints?.length && <p className="text-sm text-muted-foreground">Plan: <span lang="fr">{subj.structure_hints.join(" · ")}</span></p>}
-            <p className="text-xs leading-4 text-muted-foreground">About {fmtClock(spec.timer_seconds)} in the exam. {spec.desc_en}</p>
+            <p className="text-xs leading-4 text-muted-foreground tabular-nums">About {fmtClock(spec.timer_seconds)}</p>
           </section>
         )}
 
@@ -248,20 +243,18 @@ export function Speak() {
           <>
             {task === "T2" && turns.length > 0 && <Dialogue turns={turns} />}
             {replyBusy && <Spinner label="The examiner is answering…" />}
-            {replyErr && <Banner tone="warning" title="The examiner didn’t answer">{replyErr} Ask your next question or send what you have.</Banner>}
+            {replyErr && <Alert variant="default"><AlertTitle>The examiner didn’t answer</AlertTitle><AlertDescription>{replyErr} Ask your next question or send what you have.</AlertDescription></Alert>}
             <Recorder label={task === "T2" ? "Ask the examiner a question" : "Record your answer"} onText={(r) => void onTake(r)} disabled={phase === "wait1"} />
             <div className="grid gap-2">
               <label htmlFor="speak-ta" className="text-sm font-medium">Transcript (you can correct it or type)</label>
               <Textarea id="speak-ta" lang="fr" rows={6} value={transcript} readOnly={phase === "wait1"} onChange={(e) => { setTranscript(e.target.value); setError(""); }} />
               <p className="text-sm tabular-nums text-muted-foreground">{wordCount(transcript)} words{audioSecs ? ` · ${fmtClock(audioSecs)} recorded` : ""}</p>
             </div>
-            {error && <Banner tone="error" title="Feedback didn’t load" live="assertive">{error}</Banner>}
+            {error && <Alert variant="destructive" role="alert"><AlertTitle>Feedback didn’t load</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
             {phase === "wait1" && <Spinner label="Listening to your answer… this usually takes 10–40 seconds." />}
             <div className="flex flex-wrap items-center gap-2">
-              <Button kind="primary" busy={phase === "wait1"} disabledReason={!transcript.trim() ? "Record or type your answer first." : undefined} onClick={() => void submit1()}>
-                {error ? "Retry" : "Get feedback"}
-              </Button>
-              {(transcript || turns.length > 0) && phase === "answer" && <Button kind="tertiary" onClick={reset}>Clear</Button>}
+              <Button type="button" variant="default" aria-disabled={(!!(phase === "wait1") || !!(!transcript.trim() ? "Record or type your answer first." : undefined)) || undefined} aria-busy={phase === "wait1" || undefined} className={cn((!!(phase === "wait1") || !!(!transcript.trim() ? "Record or type your answer first." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(phase === "wait1") || !!(!transcript.trim() ? "Record or type your answer first." : undefined)) { event.preventDefault(); return; } (() => void submit1())(); }}>{phase === "wait1" ? <Loader2 className="animate-spin" aria-hidden /> : null}{error ? "Retry" : "Get feedback"}{(!transcript.trim() ? "Record or type your answer first." : undefined) ? <span className="sr-only">{!transcript.trim() ? "Record or type your answer first." : undefined}</span> : null}</Button>
+              {(transcript || turns.length > 0) && phase === "answer" && <Button type="button" variant="ghost" onClick={reset}>Clear</Button>}
             </div>
           </>
         ) : (
@@ -284,26 +277,21 @@ export function Speak() {
                     <p lang="fr" style={{ whiteSpace: "pre-wrap" }}>{attempt.transcript_2}</p>
                   </div>
                   <Round2 fb={attempt.feedback_2} correctedLabel="Corrected transcript" />
-                  <Banner tone="success" title="Speaking practice complete" actions={<><Button kind="primary" onClick={reset}>Speak again</Button><Button kind="secondary" onClick={() => go("practice")}>Back to Practice</Button></>}>
-                    Saved to your speaking attempts.
-                  </Banner>
+                  <Alert variant="default"><AlertTitle>Speaking practice complete</AlertTitle><AlertDescription>Saved to your speaking attempts.<div className="mt-3 flex flex-wrap items-center gap-2"><><Button type="button" variant="default" onClick={reset}>Speak again</Button><Button type="button" variant="outline" onClick={() => go("practice")}>Back to Practice</Button></></div></AlertDescription></Alert>
                 </div>
               ) : (
                 <div className="flex flex-col gap-3">
                   <p className="text-lg font-semibold text-balance">Round 2 · say it again</p>
-                  <p className="text-sm text-muted-foreground">Use the hints above and answer again out loud. Then send your second take for corrections.</p>
                   <Recorder label="Record your second take" onText={(r) => { setRetakeSecs((s) => s + r.seconds); setRetake(retake ? `${retake} ${r.text}` : r.text); }} disabled={phase === "wait2"} />
                   <div className="grid gap-2">
                     <label htmlFor="speak-rev" className="text-sm font-medium">Second take transcript</label>
                     <Textarea id="speak-rev" lang="fr" rows={6} value={retake} readOnly={phase === "wait2"} onChange={(e) => { setRetake(e.target.value); setError(""); }} />
                   </div>
-                  {error && <Banner tone="error" title="Corrections didn’t load" live="assertive">{error}</Banner>}
+                  {error && <Alert variant="destructive" role="alert"><AlertTitle>Corrections didn’t load</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
                   {phase === "wait2" && <Spinner label="Checking your second take…" />}
                   <div className="flex flex-wrap items-center gap-2">
-                    <Button kind="primary" busy={phase === "wait2"} disabledReason={!retake.trim() ? "Record or type your second take first." : undefined} onClick={() => void submit2()}>
-                      {error ? "Retry" : "Get corrections"}
-                    </Button>
-                    <Button kind="tertiary" onClick={reset}>Start over</Button>
+                    <Button type="button" variant="default" aria-disabled={(!!(phase === "wait2") || !!(!retake.trim() ? "Record or type your second take first." : undefined)) || undefined} aria-busy={phase === "wait2" || undefined} className={cn((!!(phase === "wait2") || !!(!retake.trim() ? "Record or type your second take first." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(phase === "wait2") || !!(!retake.trim() ? "Record or type your second take first." : undefined)) { event.preventDefault(); return; } (() => void submit2())(); }}>{phase === "wait2" ? <Loader2 className="animate-spin" aria-hidden /> : null}{error ? "Retry" : "Get corrections"}{(!retake.trim() ? "Record or type your second take first." : undefined) ? <span className="sr-only">{!retake.trim() ? "Record or type your second take first." : undefined}</span> : null}</Button>
+                    <Button type="button" variant="ghost" onClick={reset}>Start over</Button>
                   </div>
                 </div>
               )}
@@ -323,9 +311,9 @@ function Dialogue({ turns }: { turns: Turn[] }) {
     <ol className="divide-y overflow-hidden rounded-lg border" aria-label="Role-play so far">
       {turns.map((t, i) => (
         <li key={i} className="flex flex-wrap items-center gap-3 px-4 py-3 items-start">
-          <Pill tone={t.role === "user" ? "info" : undefined}>{t.role === "user" ? "You" : "Examiner"}</Pill>
+          <Badge variant={t.role === "user" ? "secondary" : "outline"}>{t.role === "user" ? "You" : "Examiner"}</Badge>
           <span lang="fr" className="min-w-0 flex-1">{t.content}</span>
-          {t.role === "assistant" && <Button kind="tertiary" iconOnly icon={<Volume2 aria-hidden />} aria-label="Listen again" onClick={() => say(t.content)} />}
+          {t.role === "assistant" && <Button type="button" variant="ghost" size="icon" aria-label="Listen again" onClick={() => say(t.content)}>{<Volume2 aria-hidden />}</Button>}
         </li>
       ))}
     </ol>
@@ -341,19 +329,19 @@ function Round1({ a }: { a: SpeakAttempt }) {
       {fb.praise && <p><span className="font-medium">What works · </span>{fb.praise}</p>}
       {fb.stats && (
         <p className="flex flex-wrap items-center gap-2 gap-2">
-          <Pill>{Math.round(fb.stats.wpm)} words/min</Pill>
+          <Badge variant="outline">{Math.round(fb.stats.wpm)} words/min</Badge>
           <span className="text-sm text-muted-foreground">{fb.stats.pace_note}</span>
         </p>
       )}
       {fb.t2_questions && (
         <p className="flex flex-wrap items-center gap-2 gap-2">
-          <Pill tone={fb.t2_questions.forms_ok ? "success" : "warning"}>{fb.t2_questions.count} questions asked</Pill>
+          <Badge variant={fb.t2_questions.forms_ok ? "secondary" : "outline"}>{fb.t2_questions.count} questions asked</Badge>
           <span className="text-sm text-muted-foreground">{fb.t2_questions.note}</span>
         </p>
       )}
       {t3 && (
         <p className="flex flex-wrap items-center gap-2 gap-2">
-          {(["opinion", "arguments", "example", "conclusion"] as const).map((k) => <Pill key={k} tone={t3[k] ? "success" : "warning"}>{k}</Pill>)}
+          {(["opinion", "arguments", "example", "conclusion"] as const).map((k) => <Badge variant={t3[k] ? "secondary" : "outline"}>{k}</Badge>)}
           <span className="text-sm text-muted-foreground">{t3.note}</span>
         </p>
       )}

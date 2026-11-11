@@ -1,8 +1,13 @@
-import { Bookmark, BookmarkCheck } from "lucide-react";
+import { Bookmark, BookmarkCheck, Loader2, AlertCircle } from "lucide-react";
 import { grade } from "../lib/grading";
 import { countLookup, importanceFor, lookupKey, type LookupCounter } from "../lib/lookup";
-import { Banner, Button, DemoNote, FieldText, Importance, PageHead, Pill } from "../components/ui";
+import { Importance, PageHead } from "../components/ui";
 import { REGISTRY } from "./registry";
+import { Button } from "../components/ui/button";
+import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
+import { Badge } from "../components/ui/badge";
+import { Label } from "../components/ui/label";
+import { Input } from "../components/ui/input";
 
 function lum(hex: string) {
   const c = hex.replace("#", "").match(/.{2}/g)!.map((x) => parseInt(x, 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
@@ -90,7 +95,7 @@ export function DesignReference() {
                       <th scope="row" style={{ fontWeight: 500 }}>{name}<br /><span className="code text-muted-foreground">{fg} on {bg}</span></th>
                       <td><span style={{ background: bg, color: fg, padding: "4px 10px", borderRadius: 6, border: "1px solid #E3DACB", fontWeight: 500 }}>Aa Ég œ</span></td>
                       <td className="tabular-nums">{r.toFixed(2)}:1</td>
-                      <td>{need ? <Pill tone={r >= need ? "success" : "error"}>{r >= need ? `Pass ≥ ${need}:1` : `Fails ${need}:1`}</Pill> : <Pill>Decorative, no requirement</Pill>}</td>
+                      <td>{need ? <Badge variant={r >= need ? "secondary" : "destructive"}>{r >= need ? `Pass ≥ ${need}:1` : `Fails ${need}:1`}</Badge> : <Badge variant="outline">Decorative, no requirement</Badge>}</td>
                     </tr>
                   );
                 })}
@@ -135,14 +140,14 @@ export function DesignReference() {
           <h2 id="dsn-btn" className="text-lg font-semibold text-balance">Button roles</h2>
           <p className="text-sm text-muted-foreground">Exactly four roles. Each screen or dialog has at most one Primary action. Show answer and Try again are never Primary next to Check, Next or Done.</p>
           <div className="flex flex-wrap items-center gap-2">
-            <Button kind="primary">Primary</Button>
-            <Button kind="secondary">Secondary</Button>
-            <Button kind="tertiary">Tertiary</Button>
-            <Button kind="destructive">Destructive</Button>
+            <Button type="button" variant="default">Primary</Button>
+            <Button type="button" variant="outline">Secondary</Button>
+            <Button type="button" variant="ghost">Tertiary</Button>
+            <Button type="button" variant="destructive">Destructive</Button>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button kind="primary" disabledReason="Example disabled reason.">Primary disabled</Button>
-            <Button kind="primary" busy>Busy</Button>
+            <Button type="button" variant="default" aria-disabled className="opacity-50" onClick={(event) => event.preventDefault()}>Primary disabled<span className="sr-only">Example disabled reason.</span></Button>
+            <Button type="button" variant="default" aria-disabled aria-busy className="opacity-50" onClick={(event) => event.preventDefault()}><Loader2 className="animate-spin" aria-hidden />Busy</Button>
           </div>
           <p className="text-sm text-muted-foreground">Disabled buttons stay focusable and announce their reason. Minimum target 44 × 44 px.</p>
         </section>
@@ -151,23 +156,23 @@ export function DesignReference() {
           <h2 id="dsn-comp" className="text-lg font-semibold text-balance">Components</h2>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="flex flex-col gap-2">
-              <Banner tone="success" title="Success">Text plus icon, never colour alone.</Banner>
-              <Banner tone="error" title="Error">Announced assertively; always offers a recovery.</Banner>
-              <Banner tone="warning" title="Warning">Offline, partial or limited states.</Banner>
-              <Banner tone="info" title="Info">Neutral guidance and pending sync.</Banner>
+              <Alert variant="default"><AlertTitle>Success</AlertTitle><AlertDescription>Text plus icon, never colour alone.</AlertDescription></Alert>
+              <Alert variant="destructive"><AlertTitle>Error</AlertTitle><AlertDescription>Announced assertively; always offers a recovery.</AlertDescription></Alert>
+              <Alert variant="default"><AlertTitle>Warning</AlertTitle><AlertDescription>Offline, partial or limited states.</AlertDescription></Alert>
+              <Alert variant="default"><AlertTitle>Info</AlertTitle><AlertDescription>Neutral guidance and pending sync.</AlertDescription></Alert>
             </div>
             <div className="flex flex-col gap-3">
-              <FieldText label="Field label" help="Help text sits between label and input." value="" onChange={() => {}} />
-              <FieldText label="Field with error" value="250" onChange={() => {}} error="Enter a whole number from 0 to 200." />
-              <div className="flex flex-wrap items-center gap-2"><Pill>Neutral</Pill><Pill tone="success">Success</Pill><Pill tone="warning">Warning</Pill><Pill tone="error">Error</Pill><Pill tone="demo">Demo</Pill></div>
-              <DemoNote>Simulated capability label</DemoNote>
+              <div className="grid gap-2"><Label htmlFor="field-label">Field label</Label><p id="field-label-help" className="text-sm text-muted-foreground">Help text sits between label and input.</p><Input id="field-label" value="" onChange={() => {}} autoComplete="off" aria-describedby="field-label-help" /></div>
+              <div className="grid gap-2"><Label htmlFor="field-with-error">Field with error</Label><Input id="field-with-error" value="250" onChange={() => {}} autoComplete="off" aria-describedby="field-with-error-err" aria-invalid={true} /><p id="field-with-error-err" className="flex items-start gap-1.5 text-sm text-destructive"><AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden /><span>Enter a whole number from 0 to 200.</span></p></div>
+              <div className="flex flex-wrap items-center gap-2"><Badge variant="outline">Neutral</Badge><Badge variant="secondary">Success</Badge><Badge variant="outline">Warning</Badge><Badge variant="destructive">Error</Badge><Badge variant="outline">Demo</Badge></div>
+              <Badge variant="outline">Simulated capability label</Badge>
             </div>
           </div>
           <div className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-2">
             <p className="font-medium">Favorite vs importance — two separate controls</p>
             <div className="flex flex-wrap items-center gap-2 gap-4">
-              <Button kind="tertiary" aria-pressed={false} icon={<Bookmark aria-hidden />}>Favorite</Button>
-              <Button kind="tertiary" aria-pressed icon={<BookmarkCheck aria-hidden />}>Favorited</Button>
+              <Button type="button" variant="ghost" aria-pressed={false}>{<Bookmark aria-hidden />}Favorite</Button>
+              <Button type="button" variant="ghost" aria-pressed>{<BookmarkCheck aria-hidden />}Favorited</Button>
             </div>
             {[0, 4, 5, 6, 9, 10].map((n) => <Importance key={n} count={n} />)}
             <p className="text-sm text-muted-foreground">Importance is read-only: 0–4 lookups → {importanceFor(4)}/5, 5–9 → {importanceFor(5)}/5, 10+ → {importanceFor(10)}/5. Favorite never changes it.</p>
@@ -201,7 +206,7 @@ export function DesignReference() {
             <p className="text-sm text-muted-foreground">Lookup events at 0, 4, 4.999, 5.000, 6, 9, 11 s → counts {seq.map(([, n]) => n).join(", ")}.</p>
             <ul className="divide-y overflow-hidden rounded-lg border">
               {checks.map(([k, ok]) => (
-                <li key={k} className="flex flex-wrap items-center gap-3 px-4 py-3"><span className="min-w-0 flex-1" lang="fr">{k}</span><Pill tone={ok ? "success" : "error"}>{ok ? "Holds" : "Fails"}</Pill></li>
+                <li key={k} className="flex flex-wrap items-center gap-3 px-4 py-3"><span className="min-w-0 flex-1" lang="fr">{k}</span><Badge variant={ok ? "secondary" : "destructive"}>{ok ? "Holds" : "Fails"}</Badge></li>
               ))}
             </ul>
           </div>
@@ -222,9 +227,7 @@ export function DesignReference() {
                     <td>
                       <div className="dn-states">
                         {r.states.map((s) => (
-                          <Button key={s.key} kind="tertiary" className="h-8 px-2" aria-label={`Open ${r.id}/${s.key}: ${s.label}`} onClick={() => s.apply()}>
-                            <span className="font-mono text-xs">/{s.key}</span>&nbsp;{s.label}
-                          </Button>
+                          <Button type="button" variant="ghost" key={s.key} aria-label={`Open ${r.id}/${s.key}: ${s.label}`} className="h-8 px-2" onClick={() => s.apply()}><span className="font-mono text-xs">/{s.key}</span>&nbsp;{s.label}</Button>
                         ))}
                       </div>
                     </td>

@@ -6,8 +6,12 @@ export const APP_VERSION = version;
 export const RELEASES = [
   {
     version: APP_VERSION,
-    date: "2026-11-10",
+    date: "2026-11-11",
     changes: [
+      "Empty states are a short title and at most one action. Instructional filler is gone.",
+      "Sentence More is a labelled menu. On a phone the player is one row: previous, play, next, place, and more.",
+      "Saved cards use the stock data table. Importance stays on one line. French still wraps.",
+      "Streak is a card. Practice destinations are the cards themselves.",
       "The app now uses stock shadcn/ui: sidebar, buttons, forms, dialogs, tables, and toasts.",
       "Warm paper, olive, and bronze stay as theme colors. French text stays in Source Serif 4.",
       "Saved cards and History are data tables. Settings is a stacked form. The login screen is a card.",

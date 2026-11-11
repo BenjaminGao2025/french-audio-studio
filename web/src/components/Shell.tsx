@@ -1,22 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import {
-  BarChart3,
-  BookOpen,
-  CloudOff,
-  Dumbbell,
-  Layers,
-  LogOut,
-  Pause,
-  Play,
-  RefreshCw,
-  RotateCcw,
-  Settings as SettingsIcon,
-  Square,
-  CheckCircle2,
-  AlertCircle,
-  Clock,
-  User,
-} from "lucide-react";
+import { BarChart3, BookOpen, CloudOff, Dumbbell, Layers, LogOut, Pause, Play, RefreshCw, RotateCcw, Settings as SettingsIcon, Square, CheckCircle2, AlertCircle, Clock, User, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useSession } from "../api/auth";
 import { undoMastered } from "../api/review";
@@ -35,7 +18,7 @@ import {
   updatePlayer,
   useApp,
 } from "../state/store";
-import { Banner, Button, Pill, WidthContext } from "./ui";
+import { WidthContext } from "./ui";
 import { Brand } from "./Brand";
 import { VersionInfo } from "./VersionInfo";
 import { Progress } from "./ui/progress";
@@ -66,6 +49,10 @@ import {
 } from "./ui/dropdown-menu";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage } from "./ui/breadcrumb";
 import { Separator } from "./ui/separator";
+import { Button } from "./ui/button";
+import { Alert, AlertTitle, AlertDescription } from "./ui/alert";
+import { Badge } from "./ui/badge";
+import { cn } from "cn";
 
 export const NAV = [
   { key: "study", label: "Study", icon: BookOpen },
@@ -170,7 +157,7 @@ function FocusBar() {
     const total = review.sessionCards?.length ?? 0;
     return (
       <div className="flex min-w-0 flex-1 items-center gap-3">
-        <Button kind="tertiary" onClick={() => go("review")}>Exit</Button>
+        <Button type="button" variant="ghost" onClick={() => go("review")}>Exit</Button>
         <span className="font-medium">Review</span>
         {total > 0 && <span className="ml-auto text-sm tabular-nums text-muted-foreground">{review.index + 1} of {total}</span>}
       </div>
@@ -179,7 +166,7 @@ function FocusBar() {
   const back = kind === "Dictation" ? "study/dictation" : kind === "Recall" ? "study/recall" : "study";
   return (
     <div className="flex min-w-0 flex-1 items-center gap-3">
-      <Button kind="tertiary" onClick={() => go(back)}>Exit</Button>
+      <Button type="button" variant="ghost" onClick={() => go(back)}>Exit</Button>
       <span className="font-medium">{kind ?? "Practice"}</span>
     </div>
   );
@@ -224,9 +211,7 @@ export function Shell({ children }: { children: ReactNode }) {
           </header>
           {!isConnected(route) && (
             <div className="mx-auto w-full max-w-3xl mx-auto w-full max-w-3xl px-4 pt-4">
-              <Banner tone="warning" title="Demo data — not connected yet">
-                You are signed in for real, but this screen still shows sample data. Nothing you do here is saved to your account yet.
-              </Banner>
+              <Alert variant="default"><AlertTitle>Demo data — not connected yet</AlertTitle><AlertDescription>You are signed in for real, but this screen still shows sample data. Nothing you do here is saved to your account yet.</AlertDescription></Alert>
             </div>
           )}
           <div className="flex flex-1 flex-col">{children}</div>
@@ -248,16 +233,14 @@ function AccountSlot() {
   const email = user?.email ?? "";
   return (
     <>
-      {offline && <Pill tone="warning" icon={<CloudOff aria-hidden />}>Offline, simulated</Pill>}
+      {offline && <Badge variant="outline">{<CloudOff aria-hidden />}Offline, simulated</Badge>}
       {auth === "in" && !isConnected(route) && <SyncIndicator sync={sync} offline={offline} />}
       {auth === "in" ? (
         <DropdownMenu open={menuOpen} onOpenChange={(open) => set(() => ({ menuOpen: open }))}>
           <DropdownMenuTrigger asChild>
-            <Button kind="tertiary" iconOnly aria-label={`Account menu, ${email}`}>
-              <span className="flex size-7 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground" aria-hidden>
+            <Button type="button" variant="ghost" size="icon" aria-label={`Account menu, ${email}`}><span className="flex size-7 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground" aria-hidden>
                 {initials(email)}
-              </span>
-            </Button>
+              </span></Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel className="font-normal">{email}</DropdownMenuLabel>
@@ -273,7 +256,7 @@ function AccountSlot() {
           </DropdownMenuContent>
         </DropdownMenu>
       ) : (
-        <Pill>Signed out</Pill>
+        <Badge variant="outline">Signed out</Badge>
       )}
     </>
   );
@@ -287,19 +270,15 @@ function SyncIndicator({ sync, offline }: { sync: string; offline: boolean }) {
   if (sync === "synced")
     return (
       <span className="hidden items-center gap-1 md:inline-flex">
-        <Pill tone="success" icon={<CheckCircle2 aria-hidden />}>Synced · simulated</Pill>
+        <Badge variant="secondary">{<CheckCircle2 aria-hidden />}Synced · simulated</Badge>
       </span>
     );
   if (sync === "pending")
     return (
-      <Button kind="tertiary" onClick={() => go("settings/account")}>
-        <Clock aria-hidden /> {offline ? "Changes waiting for connection" : "Sync pending"}
-      </Button>
+      <Button type="button" variant="ghost" onClick={() => go("settings/account")}><Clock aria-hidden /> {offline ? "Changes waiting for connection" : "Sync pending"}</Button>
     );
   return (
-    <Button kind="destructive" onClick={() => syncChange()}>
-      <AlertCircle aria-hidden /> Sync failed · Retry
-    </Button>
+    <Button type="button" variant="destructive" onClick={() => syncChange()}><AlertCircle aria-hidden /> Sync failed · Retry</Button>
   );
 }
 
@@ -321,18 +300,11 @@ function GlobalPlayer() {
   return (
     <section className="sticky bottom-0 z-20 flex flex-wrap items-center gap-3 border-t bg-background px-4 py-2 pb-safe" aria-label={`Player: ${p.owner.label}`}>
       {p.status === "error" ? (
-        <Button kind="secondary" iconOnly aria-label={`Retry ${p.owner.label}`} icon={<RotateCcw aria-hidden />} onClick={retryPlayback} />
+        <Button type="button" variant="outline" size="icon" aria-label={`Retry ${p.owner.label}`} onClick={retryPlayback}>{<RotateCcw aria-hidden />}</Button>
       ) : p.status === "playing" || p.status === "buffering" ? (
-        <Button kind="secondary" iconOnly aria-label={`Pause ${p.owner.label}`} icon={<Pause aria-hidden />} onClick={() => updatePlayer({ status: "paused" })} />
+        <Button type="button" variant="outline" size="icon" aria-label={`Pause ${p.owner.label}`} onClick={() => updatePlayer({ status: "paused" })}>{<Pause aria-hidden />}</Button>
       ) : (
-        <Button
-          kind="secondary"
-          iconOnly
-          aria-label={`Play ${p.owner.label}`}
-          icon={<Play aria-hidden />}
-          busy={p.status === "loading"}
-          onClick={() => updatePlayer(p.status === "ended" ? { status: "playing", position: 0 } : { status: "playing" })}
-        />
+        <Button type="button" variant="outline" size="icon" aria-disabled={(!!(p.status === "loading")) || undefined} aria-busy={p.status === "loading" || undefined} aria-label={`Play ${p.owner.label}`} className={cn((!!(p.status === "loading")) ? "opacity-50" : "")} onClick={(event) => { if (!!(p.status === "loading")) { event.preventDefault(); return; } (() => updatePlayer(p.status === "ended" ? { status: "playing", position: 0 } : { status: "playing" }))(); }}>{p.status === "loading" ? <Loader2 className="animate-spin" aria-hidden /> : (<Play aria-hidden />)}</Button>
       )}
       <div className="min-w-40 flex-1">
         <p className="truncate text-sm font-medium">{p.owner.label}</p>
@@ -341,10 +313,8 @@ function GlobalPlayer() {
         </p>
         <Progress value={pct} className="mt-1" />
       </div>
-      <Button kind="tertiary" onClick={() => go(p.owner.route)}>
-        {p.owner.kind === "episode" ? "Return to episode" : p.owner.kind === "exercise" ? "Return to practice" : "Return to source"}
-      </Button>
-      <Button kind="tertiary" iconOnly aria-label={`Stop ${p.owner.label}`} icon={<Square aria-hidden />} onClick={stopPlayback} />
+      <Button type="button" variant="ghost" onClick={() => go(p.owner.route)}>{p.owner.kind === "episode" ? "Return to episode" : p.owner.kind === "exercise" ? "Return to practice" : "Return to source"}</Button>
+      <Button type="button" variant="ghost" size="icon" aria-label={`Stop ${p.owner.label}`} onClick={stopPlayback}>{<Square aria-hidden />}</Button>
     </section>
   );
 }
@@ -403,14 +373,7 @@ export function MasteryToast() {
                 {kindLabel} marked mastered · hidden from your default review. Nothing was deleted.{" "}
                 <span aria-hidden className="tabular-nums">({left} s to undo)</span>
               </span>
-              <Button
-                kind="tertiary"
-                aria-label={`Undo mastered: ${cardName}`}
-                onClick={() => undoMastered(m.id)}
-                data-autofocus={idx === 0 || undefined}
-              >
-                Undo
-              </Button>
+              <Button type="button" variant="ghost" aria-label={`Undo mastered: ${cardName}`} data-autofocus={idx === 0 || undefined} onClick={() => undoMastered(m.id)}>Undo</Button>
             </>
           );
         else if (m.state === "undone")
@@ -419,7 +382,7 @@ export function MasteryToast() {
           body = (
             <>
               <span className="min-w-0 flex-1 text-sm">The 6-second Undo window has ended ({kindLabel.toLowerCase()}). You can restore this card from Mastered at any time.</span>
-              <Button kind="tertiary" onClick={() => go("review/mastered")}>Open Mastered</Button>
+              <Button type="button" variant="ghost" onClick={() => go("review/mastered")}>Open Mastered</Button>
             </>
           );
         else if (m.state === "queued")
@@ -436,8 +399,8 @@ export function MasteryToast() {
               <span className="min-w-0 flex-1 text-sm">
                 Your Undo was on time, but this card was marked mastered again later on another device (simulated). The later decision is kept.
               </span>
-              <Button kind="tertiary" onClick={() => go("review/mastered")}>Review card</Button>
-              <Button kind="tertiary" onClick={() => setDismissed((d) => ({ ...d, [`${m.id}:${m.state}`]: true }))}>Dismiss</Button>
+              <Button type="button" variant="ghost" onClick={() => go("review/mastered")}>Review card</Button>
+              <Button type="button" variant="ghost" onClick={() => setDismissed((d) => ({ ...d, [`${m.id}:${m.state}`]: true }))}>Dismiss</Button>
             </>
           );
         return (

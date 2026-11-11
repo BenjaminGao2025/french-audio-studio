@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { mediaRequest } from "../api/learning";
 import { useApp } from "../state/store";
 import { EXCLUSIVE_AUDIO, takeAudioFocus } from "./StudyRecorder";
-import { Button, Spinner } from "./ui";
+import { Spinner } from "./ui";
+import { Button } from "./ui/button";
 
 /** Fetch private audio with authentication, then release its local URL on navigation. */
 export function PrivateAudio({ path, label }: { path: string; label: string }) {
@@ -30,6 +31,6 @@ export function PrivateAudio({ path, label }: { path: string; label: string }) {
   return <div className="flex flex-col gap-2"><p className="text-sm font-medium">{label}</p>
     {url && <audio ref={player} aria-label={label} controls src={url} onPlay={() => takeAudioFocus(player.current)} onError={() => setError("Couldn’t play this audio. Try loading it again.")} />}
     {!url && !error && <Spinner label="Loading audio…" />}
-    {error && <><p role="alert" className="text-sm text-destructive">{error}</p><Button kind="secondary" onClick={() => setAttempt((n) => n + 1)}>Retry audio</Button></>}
+    {error && <><p role="alert" className="text-sm text-destructive">{error}</p><Button type="button" variant="outline" onClick={() => setAttempt((n) => n + 1)}>Retry audio</Button></>}
   </div>;
 }

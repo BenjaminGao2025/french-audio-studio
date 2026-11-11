@@ -2,22 +2,16 @@ import {
   createContext,
   useContext,
   useEffect,
-  useId,
   useLayoutEffect,
   useRef,
   useState,
-  type ButtonHTMLAttributes,
   type ReactNode,
-  type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
-import { AlertCircle, ChevronDown, Loader2, Star, X } from "lucide-react";
+import { Loader2, Star, X } from "lucide-react";
 import { cn } from "cn";
 import { importanceFor, importanceLabel } from "../../lib/lookup";
-import { Alert, AlertDescription, AlertTitle } from "./alert";
-import { Badge } from "./badge";
-import { Button as ShadButton } from "./button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./collapsible";
+import { Button } from "./button";
 import {
   Dialog as ShadDialog,
   DialogContent,
@@ -26,75 +20,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "./dialog";
-import { Input } from "./input";
-import { Label } from "./label";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "./sheet";
 import { Skeleton as ShadSkeleton } from "./skeleton";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select";
-import { Tabs as ShadTabs, TabsList, TabsTrigger } from "./tabs";
-import { ToggleGroup, ToggleGroupItem } from "./toggle-group";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./tooltip";
 
 export const WidthContext = createContext(1200);
 export const useAppWidth = () => useContext(WidthContext);
 export const useNarrow = () => useAppWidth() < 640;
 export const OverlayRootContext = createContext<HTMLElement | null>(null);
-
-export type ButtonRole = "primary" | "secondary" | "tertiary" | "destructive";
-interface BtnProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "role"> {
-  kind?: ButtonRole;
-  icon?: ReactNode;
-  iconAfter?: ReactNode;
-  busy?: boolean;
-  disabledReason?: string;
-  block?: boolean;
-  iconOnly?: boolean;
-}
-const BUTTON_VARIANT = { primary: "default", secondary: "outline", tertiary: "ghost", destructive: "destructive" } as const;
-
-/** Stock Button. `kind` only picks a stock variant. */
-export function Button({ kind = "secondary", icon, iconAfter, busy, disabledReason, block, iconOnly, className, children, onClick, disabled, ...rest }: BtnProps) {
-  const reasonId = useId();
-  const off = disabled || !!disabledReason || busy;
-  const label = typeof rest["aria-label"] === "string" ? rest["aria-label"] : undefined;
-  const control = (
-    <ShadButton
-      type="button"
-      variant={BUTTON_VARIANT[kind]}
-      size={iconOnly ? "icon" : "default"}
-      {...rest}
-      className={cn(block && "w-full", off && "opacity-50", className)}
-      aria-disabled={off || undefined}
-      aria-busy={busy || undefined}
-      aria-describedby={disabledReason ? reasonId : rest["aria-describedby"]}
-      onClick={(e) => {
-        if (off) {
-          e.preventDefault();
-          return;
-        }
-        onClick?.(e);
-      }}
-    >
-      {busy ? <Loader2 className="animate-spin" aria-hidden /> : icon}
-      {children}
-      {iconAfter}
-      {disabledReason && (
-        <span id={reasonId} className="sr-only">
-          {disabledReason}
-        </span>
-      )}
-    </ShadButton>
-  );
-  if (!iconOnly || !label) return control;
-  return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>{control}</TooltipTrigger>
-        <TooltipContent>{label}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-}
 
 export function DisabledReason({ children }: { children: ReactNode }) {
   return (
@@ -102,57 +34,6 @@ export function DisabledReason({ children }: { children: ReactNode }) {
       {children}
     </p>
   );
-}
-
-type Tone = "info" | "success" | "error" | "warning" | "neutral";
-
-export function Banner({
-  tone = "neutral",
-  title,
-  children,
-  actions,
-  live,
-  id,
-  tabIndex,
-}: {
-  tone?: Tone;
-  title?: ReactNode;
-  children?: ReactNode;
-  actions?: ReactNode;
-  live?: "polite" | "assertive";
-  id?: string;
-  tabIndex?: number;
-}) {
-  return (
-    <Alert
-      id={id}
-      tabIndex={tabIndex}
-      variant={tone === "error" ? "destructive" : "default"}
-      role={live === "assertive" ? "alert" : live === "polite" ? "status" : undefined}
-    >
-      {title && <AlertTitle>{title}</AlertTitle>}
-      {(children || actions) && (
-        <AlertDescription>
-          {children}
-          {actions && <div className="mt-3 flex flex-wrap items-center gap-2">{actions}</div>}
-        </AlertDescription>
-      )}
-    </Alert>
-  );
-}
-
-export function Pill({ tone, children, icon }: { tone?: "success" | "error" | "warning" | "info" | "demo"; children: ReactNode; icon?: ReactNode }) {
-  const variant = tone === "error" ? "destructive" : tone === "success" || tone === "info" ? "secondary" : "outline";
-  return (
-    <Badge variant={variant}>
-      {icon}
-      {children}
-    </Badge>
-  );
-}
-
-export function DemoNote({ children }: { children: ReactNode }) {
-  return <Badge variant="outline">{children}</Badge>;
 }
 
 export function Spinner({ label }: { label: string }) {
@@ -187,136 +68,6 @@ export function PageHead({ title, eyebrow, desc, actions, back }: { title: strin
       </div>
       {desc && <div className="max-w-prose text-sm text-muted-foreground">{desc}</div>}
     </header>
-  );
-}
-
-export function FieldText({
-  label,
-  help,
-  error,
-  value,
-  onChange,
-  type = "text",
-  inputMode,
-  id: idProp,
-  inputRef,
-  lang,
-  onKeyDown,
-  width,
-  placeholder,
-  autoComplete,
-  name,
-  spellCheck,
-}: {
-  label: string;
-  help?: ReactNode;
-  error?: ReactNode;
-  value: string;
-  onChange: (v: string) => void;
-  type?: string;
-  inputMode?: "numeric" | "text" | "search";
-  id?: string;
-  inputRef?: RefObject<HTMLInputElement | null>;
-  lang?: string;
-  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
-  width?: number;
-  placeholder?: string;
-  autoComplete?: string;
-  name?: string;
-  spellCheck?: boolean;
-}) {
-  const auto = useId();
-  const id = idProp ?? auto;
-  return (
-    <div className="grid gap-2" style={width ? { maxWidth: width } : undefined}>
-      <Label htmlFor={id}>{label}</Label>
-      {help && (
-        <p id={`${id}-help`} className="text-sm text-muted-foreground">
-          {help}
-        </p>
-      )}
-      <Input
-        id={id}
-        ref={inputRef}
-        type={type}
-        inputMode={inputMode}
-        lang={lang}
-        value={value}
-        name={name}
-        placeholder={placeholder}
-        autoComplete={autoComplete ?? "off"}
-        spellCheck={spellCheck}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={[help ? `${id}-help` : "", error ? `${id}-err` : ""].filter(Boolean).join(" ") || undefined}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={onKeyDown}
-      />
-      {error && (
-        <p id={`${id}-err`} className="flex items-start gap-1.5 text-sm text-destructive">
-          <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
-          <span>{error}</span>
-        </p>
-      )}
-    </div>
-  );
-}
-
-export function Segmented<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-  block,
-}: {
-  label: string;
-  value: T;
-  options: { value: T; label: string }[];
-  onChange: (v: T) => void;
-  block?: boolean;
-}) {
-  return (
-    <ToggleGroup
-      type="single"
-      variant="outline"
-      value={value}
-      onValueChange={(next) => {
-        if (next) onChange(next as T);
-      }}
-      aria-label={label}
-      className={cn(block && "flex w-full")}
-    >
-      {options.map((o) => (
-        <ToggleGroupItem key={o.value} value={o.value} className={cn(block && "flex-1")}>
-          {o.label}
-        </ToggleGroupItem>
-      ))}
-    </ToggleGroup>
-  );
-}
-
-export function Tabs<T extends string>({
-  label,
-  value,
-  tabs,
-  onChange,
-  idBase,
-}: {
-  label: string;
-  value: T;
-  tabs: { value: T; label: string }[];
-  onChange: (v: T) => void;
-  idBase: string;
-}) {
-  return (
-    <ShadTabs value={value} onValueChange={(next) => onChange(next as T)}>
-      <TabsList aria-label={label} className="h-auto max-w-full flex-wrap justify-start">
-        {tabs.map((t) => (
-          <TabsTrigger key={t.value} id={`${idBase}-tab-${t.value}`} value={t.value}>
-            {t.label}
-          </TabsTrigger>
-        ))}
-      </TabsList>
-    </ShadTabs>
   );
 }
 
@@ -355,7 +106,7 @@ export function Dialog({
 }: {
   title: string;
   onClose: () => void;
-  children: ReactNode;
+  children?: ReactNode;
   footer?: ReactNode;
   sheet?: boolean;
   wide?: boolean;
@@ -377,7 +128,7 @@ export function Dialog({
   }, [dismissible, onClose]);
   const close = (
     dismissible ? (
-      <Button kind="tertiary" iconOnly aria-label={closeLabel} icon={<X aria-hidden />} onClick={onClose} />
+      <Button type="button" variant="ghost" size="icon" aria-label={closeLabel} onClick={onClose}><X aria-hidden /></Button>
     ) : null
   );
   if (sheet) {
@@ -558,18 +309,6 @@ export function Importance({ count, lookups = "inline" }: { count: number; looku
   );
 }
 
-export function Disclosure({ summary, children, defaultOpen }: { summary: ReactNode; children: ReactNode; defaultOpen?: boolean }) {
-  return (
-    <Collapsible defaultOpen={defaultOpen} className="border-t">
-      <CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between gap-2 py-2 text-left text-sm font-medium">
-        <span>{summary}</span>
-        <ChevronDown className="size-4 shrink-0" aria-hidden />
-      </CollapsibleTrigger>
-      <CollapsibleContent className="pb-3 text-sm">{children}</CollapsibleContent>
-    </Collapsible>
-  );
-}
-
 export function Stat({ label, value, sub }: { label: string; value: ReactNode; sub?: ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5">
@@ -592,37 +331,3 @@ export { Separator } from "./separator";
 export { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./card";
 export { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./table";
 export { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./collapsible";
-
-/** Stock Select with a flat option list. Option values must be non-empty strings. */
-export function ChoiceSelect({
-  id,
-  value,
-  onValueChange,
-  options,
-  disabled,
-  describedBy,
-  className,
-  ariaLabel,
-}: {
-  id?: string;
-  value: string;
-  onValueChange: (value: string) => void;
-  options: { value: string; label: ReactNode }[];
-  disabled?: boolean;
-  describedBy?: string;
-  className?: string;
-  ariaLabel?: string;
-}) {
-  return (
-    <Select value={value} onValueChange={onValueChange} disabled={disabled}>
-      <SelectTrigger id={id} aria-describedby={describedBy} aria-label={ariaLabel} className={cn("w-full", className)}>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {options.map((o) => (
-          <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
