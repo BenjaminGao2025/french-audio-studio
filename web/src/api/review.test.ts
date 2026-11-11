@@ -32,8 +32,8 @@ describe("toReviewCard", () => {
     expect(
       toReviewCard(card({ id: "g", mode: "grammar", target: "passé composé", target_meta: { prompt_fr: "Hier, il ____ parti.", answer: "est" } })),
     ).toMatchObject({ kind: "Fill-in", prompt: "Hier, il ____ parti.", target: "est", sentenceFr: "Hier, il est parti." });
-    // A word that isn't in the sentence becomes a whole-sentence Recall from the meaning.
-    expect(toReviewCard(card({ id: "x", mode: "cloze", target: "chat" }))).toMatchObject({ kind: "Recall", prompt: "I forgot my appointment.", target: "J’ai oublié mon rendez-vous." });
+    // A nested word keeps its target even when the sentence cannot supply a blank.
+    expect(toReviewCard(card({ id: "x", mode: "cloze", target: "chat" }))).toMatchObject({ kind: "Recall", prompt: "I forgot my appointment.", target: "chat" });
   });
 
   it("keeps a recognize target even when its lemma is absent from the sentence", () => {

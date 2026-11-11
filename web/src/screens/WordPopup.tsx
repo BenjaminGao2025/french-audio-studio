@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, Bookmark, ChevronDown, Volume2, X } from "lucide-react";
+import { ArrowLeft, ChevronDown, Volume2, X } from "lucide-react";
 import { formatFriendlyPhonetic } from "../lib/phonetic";
 import { ApiError } from "../api/client";
 import {
@@ -14,14 +14,15 @@ import {
   type WordContextHints,
   type WordContextResult,
 } from "../api/lookup";
-import { loadFavorites, setFavorite } from "../api/review";
+import { loadLibrary } from "../api/review";
+import { WordDeckStar } from "../components/WordDeckStar";
+import { Phonetic } from "../components/Phonetic";
 import type { StudySentence } from "../data/fixtures";
 import { askQuestion } from "../api/learning";
 import { WordNotes } from "./WordNotes";
 import { FrText } from "../components/FrText";
 import { Input } from "../components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent } from "../components/ui/popover";
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "../components/ui/tooltip";
 import { lookupKey } from "../lib/lookup";
 import { announce, get, patchStudy, sayFrench, useApp } from "../state/store";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger, Importance, Skeleton, Spinner, useAppWidth } from "../components/ui";
@@ -88,6 +89,7 @@ export function WordPanel({
   onGrammar,
   onClose,
   inSheet,
+  compact = false,
 }: {
   sentence: StudySentence;
   /** The clicked word or the free selection. */
@@ -99,6 +101,7 @@ export function WordPanel({
   onGrammar?: () => void;
   onClose: () => void;
   inSheet?: boolean;
+  compact?: boolean;
 }) {
   const w = wordIndex !== undefined ? sentence.raw?.words?.[wordIndex] : undefined;
   // A long free selection is still spoken, but the server rejects it: show a hint instead of asking
@@ -116,13 +119,15 @@ export function WordPanel({
   const tooLong = w === undefined && (shown.length > WORD_MAX_CHARS || (shown.split(" ").length - 1) >= MAX_CHUNK_SPACES);
   const headword = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    if (compact) return;
     const el = headword.current;
     const scroller = el?.closest<HTMLElement>('[data-slot="popover-content"]') ?? el?.closest(".word-card")?.parentElement;
     if (scroller) scroller.scrollTop = 0;
     el?.focus({ preventScroll: true });
-  }, [shown]);
-  const count = useLookupCount(shown);
-  const fav = useApp((s) => Boolean(s.favorites[lookupKey(shown)]));
+  }, [shown, compact]);
+  const liveCount = useLookupCount(shown);
+  const storedCount = useApp(s => s.lookups[lookupKey(shown)]?.count ?? 0);
+  const count = liveCount ?? storedCount;
   const drill = (word: string) => { if (lookupKey(word) !== lookupKey(shown)) { sayFrench(word); setStack(prev => [...prev, word]); recordLookup(word).catch(() => undefined); } };
   const french = (value: string, className = "text-sm") => <FrText text={value} className={className} onPick={p => drill(p.text)} />;
   const [dict, setDict] = useState<DictionaryEntry | null>(null);
@@ -145,7 +150,7 @@ export function WordPanel({
   useEffect(() => {
     // StrictMode's simulated unmount aborts the initial controller; recreate a live one on (each) mount.
     abort.current = new AbortController();
-    loadFavorites().catch(() => undefined);
+    loadLibrary().catch(() => undefined);
     return () => abort.current.abort();
   }, []);
 
@@ -189,17 +194,22 @@ export function WordPanel({
     loadDict();
   }, [loadDict]);
 
+  const countedOpen = useRef("");
   useEffect(() => {
     setStack([]);
     setPhrases([]);
-    recordLookup(text).catch(() => undefined);
-    if (wordIndex !== undefined) pick(sentence.id, wordIndex);
+    const openKey = JSON.stringify([sentence.id, text, wordIndex]);
+    if (!compact && countedOpen.current !== openKey) {
+      countedOpen.current = openKey;
+      recordLookup(text).catch(() => undefined);
+    }
+    if (!compact && wordIndex !== undefined) pick(sentence.id, wordIndex);
     // Phrase context is cached per sentence for the page, so it is fetched without this card's
     // abort signal (closing a card must not forget the shared answer).
     phraseContext(sentence.fr, translation_zh).then((r) => {
       if (alive()) setPhrases(r.phrases ?? []);
     }).catch(() => undefined);
-  }, [text, sentence.id, wordIndex, sentence.fr, translation_zh]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [text, sentence.id, wordIndex, sentence.fr, translation_zh, compact]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { loadCtx(); }, [loadCtx]);
 
@@ -215,9 +225,9 @@ export function WordPanel({
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex flex-col gap-1">
           <div className="flex flex-wrap items-center gap-2">
-            <div ref={headword} className="wp-headword font-serif text-2xl" lang="fr" data-autofocus tabIndex={-1}>{french(shown, "text-2xl")}</div>
+            <div ref={headword} className="wp-headword font-serif text-2xl" lang="fr" data-autofocus={compact ? undefined : true} tabIndex={-1}>{french(shown, "text-2xl")}</div>
             <Button type="button" variant="ghost" size="icon" aria-label={`Replay “${shown}”`} onClick={() => sayFrench(shown)}><Volume2 aria-hidden /></Button>
-            {ipa && <span className="wp-ipa text-sm text-muted-foreground">{ipa}</span>}
+            <Phonetic word={shown} ipa={ipa} className="wp-ipa" />
           </div>
           {baseForm && !nested && (
             <p className="text-xs text-muted-foreground">
@@ -229,14 +239,12 @@ export function WordPanel({
           {wordChars(shown).length > 1 && <div className="flex flex-wrap gap-1" aria-label="Component words">{wordChars(shown).map((part, i) => <Button key={i} variant="ghost" size="sm" onClick={() => drill(part)}>{part}</Button>)}</div>}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <TooltipProvider><Tooltip><TooltipTrigger asChild><Button type="button" variant="ghost" size="icon" aria-pressed={fav} aria-label={fav ? "Saved" : "Save word"} onClick={() => void setFavorite(shown, !fav)}>
-            <Bookmark aria-hidden className={fav ? "fill-current" : undefined} />
-          </Button></TooltipTrigger><TooltipContent>{fav ? "Saved" : "Save word"}</TooltipContent></Tooltip></TooltipProvider>
-          <Button type="button" variant="ghost" size="icon" aria-label={inSheet ? "Close" : "Close word card"} className={inSheet ? undefined : "wp-close"} onClick={onClose}><X aria-hidden /></Button>
+          <WordDeckStar key={shown} word={shown} sentence={sentence} details={!nested && w ? w : { meaning, ipa, lemma: dict?.lemma || shown, type: dict?.pos || "" }} />
+          {!compact && <Button type="button" variant="ghost" size="icon" aria-label={inSheet ? "Close" : "Close word card"} className={inSheet ? undefined : "wp-close"} onClick={onClose}><X aria-hidden /></Button>}
         </div>
       </header>
 
-      <Module title="In this sentence" defaultOpen>
+      <Module key={`context-${sentence.id}-${shown}`} title="In this sentence" defaultOpen>
           {tooLong ? (
             <p className="text-sm text-muted-foreground">Select a word or a short phrase</p>
           ) : meaning ? (
@@ -258,23 +266,22 @@ export function WordPanel({
           {!nested && why && <p className="text-sm text-muted-foreground"><French value={why} onWord={drill} language="en" /></p>}
       </Module>
 
-      <Module title="Dictionary" defaultOpen>
+      <Module key={`dictionary-${sentence.id}-${shown}`} title="Dictionary" defaultOpen>
           {dictSt === "loading" && <Spinner label="Loading dictionary…" />}
           {dictSt === "error" && (
             <Alert variant="destructive"><AlertTitle>Dictionary request failed</AlertTitle><AlertDescription>{englishOnly(dictErr) || "Please try again."}<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={loadDict}>Retry</Button></div></AlertDescription></Alert>
           )}
           {dictSt === "ready" && dict && <DictionaryResult result={dict} onWord={drill} />}
       </Module>
-      <Module key={`origin-${shown}`} title="Word origin"><Origin key={shown} word={shown} lemma={dict?.lemma || shown} /></Module>
+      {!compact && <><Module key={`origin-${shown}`} title="Word origin"><Origin key={shown} word={shown} lemma={dict?.lemma || shown} /></Module>
       <Module key={`ask-${shown}`} title="Ask AI"><Ask key={shown} sentence={sentence} word={shown} /></Module>
-      <Module key={`notes-${shown}`} title="Notes"><WordNotes key={shown} word={shown} /></Module>
+      <Module key={`notes-${shown}`} title="Notes"><WordNotes key={shown} word={shown} /></Module></>}
+      {compact && <WordNotes key={shown} word={shown} compact />}
 
       <footer className="wp-footer flex flex-wrap items-center justify-between gap-2 border-t pt-3">
-        {count !== undefined && (
-          <div className="wp-importance flex items-center gap-2 text-muted-foreground"><span className="text-xs">Importance</span>
-            <Importance count={count} lookups="muted" />
-          </div>
-        )}
+        <div className="wp-importance flex items-center gap-2 text-muted-foreground"><span className="text-xs">Importance</span>
+            <Importance count={count ?? 0} lookups="muted" />
+        </div>
         {!nested && onGrammar && <Button type="button" variant="ghost" className="h-8 px-2 text-sm" onClick={onGrammar}>See grammar in this sentence</Button>}
       </footer>
     </div>
@@ -312,7 +319,7 @@ function DictEntry({ entry, onWord }: { entry: NonNullable<DictionaryEntry["entr
     <div className="wp-source-entry flex flex-col gap-1">
       <p className="text-sm">
         <French value={entry.lemma} onWord={onWord} />
-        <span className="text-muted-foreground"> {entry.pos}{entryIpa ? ` ${entryIpa}` : ""}</span>
+        <span className="text-muted-foreground"> {entry.pos} </span><Phonetic word={entry.lemma} ipa={entryIpa} />
       </p>
       <ol className="wp-senses list-decimal space-y-1 pl-5 text-sm" lang={entry.language ?? "fr"}>
         {shown.map((sense, i) => <li key={i}>{entry.language === "en" ? sense : <French value={sense} onWord={onWord} />}</li>)}
@@ -350,6 +357,6 @@ function Ask({ sentence, word }: { sentence: StudySentence; word: string }) {
 export function WordOverlay({ label, anchor, onClose, children }: { label: string; anchor?: HTMLElement; onClose: () => void; children: ReactNode }) {
   const desktop = useAppWidth() >= 768;
   const focusWord = (event: Event) => { event.preventDefault(); requestAnimationFrame(() => document.querySelector<HTMLElement>(".word-card [data-autofocus]")?.focus()); };
-  if (desktop) return <Popover open onOpenChange={open => { if (!open) onClose(); }}><PopoverAnchor virtualRef={{ current: { getBoundingClientRect: () => anchor?.getBoundingClientRect() ?? new DOMRect(100, 100, 1, 1) } }} /><PopoverContent aria-label={label} align="start" side="bottom" sideOffset={8} collisionPadding={16} onOpenAutoFocus={focusWord} className="w-[28rem] max-w-[calc(100vw-2rem)] max-h-[min(80vh,var(--radix-popover-content-available-height))] overflow-y-auto p-4">{children}</PopoverContent></Popover>;
+  if (desktop) return <Popover open onOpenChange={open => { if (!open) onClose(); }}><PopoverAnchor virtualRef={{ current: { getBoundingClientRect: () => (anchor?.closest(".sentence-fr") ?? anchor?.closest("[lang=fr]") ?? anchor)?.getBoundingClientRect() ?? new DOMRect(100, 100, 1, 1) } }} /><PopoverContent aria-label={label} align="start" side="bottom" sideOffset={16} avoidCollisions sticky="always" collisionPadding={16} onOpenAutoFocus={focusWord} className="w-[28rem] max-w-[calc(100vw-2rem)] max-h-[min(80vh,var(--radix-popover-content-available-height))] overflow-y-auto p-4">{children}</PopoverContent></Popover>;
   return <Drawer open modal={false} onOpenChange={open => { if (!open) onClose(); }}><DrawerContent className="max-h-[85vh] gap-4" onOpenAutoFocus={focusWord} aria-describedby={undefined}><DrawerHeader className="sr-only"><DrawerTitle>{label}</DrawerTitle></DrawerHeader><div className="overflow-y-auto p-4">{children}</div></DrawerContent></Drawer>;
 }

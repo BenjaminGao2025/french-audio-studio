@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, MoreHorizontal, Pause, Play, Repeat, RotateCcw, History as HistoryIcon, Plus, Check, Loader2 } from "lucide-react";
 import { ApiError } from "../api/client";
-import { lookupWord } from "../api/lookup";
-import { cardKey, saveNote, useSavedCards, type NoteTarget } from "../api/srs";
+import { cardKey, clozeTarget, saveNote, useSavedCards } from "../api/srs";
 import { stepText, type ApiWord } from "../api/study";
 import type { DerivedCard, StudySentence } from "../data/fixtures";
 import { cx, fmtClock, plural } from "../lib/format";
@@ -502,24 +501,6 @@ function saveOptions(sentence: StudySentence, picked: number[]): SaveOption[] {
     opts.push({ key, kind: "Fill-in", label: `Fill-in card · ${w.fr}`, word: w, text: w.fr });
   }
   return opts;
-}
-
-async function clozeTarget(w: ApiWord): Promise<NoteTarget> {
-  // The dictionary entry is already cached from the lookup that made this word a choice.
-  const dict = await lookupWord(w.lemma || w.fr).catch(() => null);
-  const meta: Record<string, string> = {
-    meaning_en: w.meaning,
-    meaning_zh: w.meaning_zh,
-    lemma: w.lemma,
-    pos: w.type,
-    ipa: w.ipa,
-    ctx_en: w.meaning,
-    ctx_zh: w.meaning_zh,
-    dict_en: dict?.explanation_en ?? "",
-    dict_zh: dict?.explanation_cn ?? "",
-    snap: "1",
-  };
-  return { text: w.fr, mode: "cloze", meta: Object.fromEntries(Object.entries(meta).filter(([, v]) => v)) };
 }
 
 function AddToReview({ sentence }: { sentence: StudySentence }) {

@@ -85,7 +85,7 @@ export function toReviewCard(c: ServerCard): ReviewCard {
   // Cloze and grammar without its example: blank the word in the sentence.
   const blanked = blankOut(fr, c.target);
   if (blanked) return { ...shared, kind: "Fill-in", prompt: blanked, target: c.target.trim() };
-  return { ...shared, kind: "Recall", prompt: meaning, target: fr };
+  return { ...shared, kind: "Recall", prompt: meta.meaning_en || meaning, target: c.target.trim() };
 }
 
 const savedLabel = (iso: string) => {
@@ -115,6 +115,7 @@ export function toLibrary(cards: ServerCard[]): { sentences: LibSentence[]; card
         id: c.id,
         sentenceId: c.note_id,
         kind: KIND[c.mode],
+        mode: c.mode,
         word: c.mode === "listen" || c.mode === "speak" ? undefined : (c.mode === "grammar" ? c.target_meta?.answer : undefined) || c.target || undefined,
         savedAt: Date.parse(c.created_at) || 0,
         status: STATUS[c.state],
@@ -188,20 +189,18 @@ let libraryLoad: Promise<void> | null = null;
 
 export const libraryReady = () => libraryState === "ready";
 
-/** Loads every card with its sentence, the favorites and the lookup counts. `force` reloads a loaded library. */
+/** Loads every card with its sentence and lookup counts. `force` reloads a loaded library. */
 export function loadLibrary(force = false): Promise<void> {
   if (libraryState === "ready" && !force) return Promise.resolve();
   libraryLoad ??= (libraryState = "loading",
   Promise.all([
     apiFetch<{ cards: ServerCard[] }>("/api/srs/cards?limit=5000"),
-    apiFetch<{ words: string[] }>("/api/srs/favorites"),
     apiFetch<{ counts: Record<string, number> }>("/api/srs/lookups"),
   ]))
-    .then(([c, f, l]) => {
+    .then(([c, l]) => {
       const lib = toLibrary(c.cards ?? []);
       set(() => ({
         ...lib,
-        favorites: Object.fromEntries((f.words ?? []).map((w) => [lookupKey(w), true])),
         lookups: Object.fromEntries(Object.entries(l.counts ?? {}).map(([w, n]) => [lookupKey(w), { count: n, lastCounted: null }])),
       }));
       libraryState = "ready";
@@ -240,7 +239,7 @@ let favoritesLoaded = false;
 
 /** The word popup only needs the favorites, not the whole library. */
 export async function loadFavorites(): Promise<void> {
-  if (favoritesLoaded || libraryReady()) return;
+  if (favoritesLoaded) return;
   const f = await apiFetch<{ words: string[] }>("/api/srs/favorites");
   set((s) => ({ favorites: { ...s.favorites, ...Object.fromEntries((f.words ?? []).map((w) => [lookupKey(w), true])) } }));
   favoritesLoaded = true;

@@ -27,6 +27,7 @@ router = APIRouter()
 # Spaced repetition (sentence notes + FSRS cards), per logged-in user
 # ---------------------------------------------------------------------------
 class SrsTarget(BaseModel):
+    exact_target: bool = False
     text: str = Field(min_length=1, max_length=200)
     mode: Literal["cloze", "recognize", "grammar"] = "cloze"
     importance: int = Field(default=3, ge=1, le=5)

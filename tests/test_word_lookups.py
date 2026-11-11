@@ -80,6 +80,12 @@ class RecordLookupTests(unittest.TestCase):
             )
         self.assertEqual((result["count"], result["importance"]), (9, 4))
 
+    def test_en_debounce_does_not_slide_and_count_persists(self):
+        for seconds, count, incremented in [(0, 1, True), (1, 1, False), (4, 1, False), (5, 2, True), (9, 2, False), (10, 3, True)]:
+            result = srs.record_word_lookup(self.user_id, "en", now=self.now + datetime.timedelta(seconds=seconds))
+            self.assertEqual((result["count"], result["incremented"]), (count, incremented))
+            self.assertEqual(srs.lookup_counts(self.user_id)["en"], count)
+
     def test_empty_word_is_rejected(self):
         with self.assertRaises(ValueError):
             srs.record_word_lookup(self.user_id, "   ")

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StudySentence } from "../data/fixtures";
@@ -7,6 +7,8 @@ import { StudyLearn } from "../screens/StudyLearn";
 import { WordPanel } from "./WordPopup";
 import { fake, installFakeBackend } from "../test/fakeBackend";
 import { resetLookupCaches, type DictionaryEntry } from "../api/lookup";
+import { resetReviewCache } from "../api/review";
+import { resetSavedCards, useSavedCards, cardKey } from "../api/srs";
 import * as lookupApi from "../api/lookup";
 import { get, resetDemo, set, updatePlayer } from "../state/store";
 import * as store from "../state/store";
@@ -76,6 +78,8 @@ beforeAll(() => {
 
 beforeEach(async () => {
   fake.reset();
+  resetReviewCache();
+  resetSavedCards();
   resetLookupCaches();
   window.getSelection()?.removeAllRanges();
   host = document.createElement("div");
@@ -187,7 +191,7 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(host.querySelector(".wp-headword")?.textContent).toBe("machine à laver");
   });
 
-  it("fills the bookmark when saved and keeps importance distinct", async () => {
+  it("fills the deck star when saved and keeps importance distinct", async () => {
     await act(async () => root.render(<WordPanel sentence={SENTENCE} text="madame" onClose={() => {}} />));
     await wait(100);
     await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Save word"]')!.click());
@@ -196,6 +200,92 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(saved?.getAttribute("aria-pressed")).toBe("true");
     expect(saved?.querySelector("svg.fill-current")).toBeTruthy();
     expect(host.querySelector(".wp-importance")?.textContent).toContain("Importance");
+  });
+
+  it("plays headword and dictionary phonetics without drilling or counting another lookup", async () => {
+    const audio = vi.spyOn(store, "sayFrench").mockImplementation(() => {});
+    const entry = { lemma: "canadien", pos: "adj", phonetic: "kanadjɛ̃", language: "en" as const, senses: ["Canadian"], source_url: "https://en.wiktionary.org", history_url: "" };
+    vi.spyOn(lookupApi, "lookupWord").mockResolvedValue({ token: "canadien", lemma: "canadien", pos: "adj", phonetic: "kanadjɛ̃", dictionary_source: "wiktionnaire", explanation_en: "Canadian", explanation_cn: "", entries: [entry, { ...entry, language: "fr", senses: ["Du Canada."] }] });
+    await act(async () => root.render(<WordPanel sentence={SENTENCE} text="canadien" onClose={() => {}} />));
+    await wait(100);
+    await act(async () => findButton("French definitions").click());
+    const ipa = host.querySelectorAll<HTMLButtonElement>('[aria-label="Pronounce “canadien”"]');
+    expect(ipa).toHaveLength(3);
+    for (const button of ipa) await act(async () => button.click());
+    expect(audio.mock.calls).toEqual([["canadien"], ["canadien"], ["canadien"]]);
+    expect(host.querySelector(".wp-headword")?.textContent).toBe("canadien");
+    expect(fake.calls.filter(c => c.path === "/api/srs/lookups" && c.method === "POST")).toHaveLength(1);
+  });
+
+  it("resets the open modules on another word, nested drill, back and reopen", async () => {
+    const render = (text: string) => act(async () => root.render(<WordPanel sentence={SENTENCE} text={text} onClose={() => {}} />));
+    await render("machine à laver");
+    await wait(100);
+    const checkOpen = () => { for (const name of ["In this sentence", "Dictionary"]) expect(host.querySelector(`[aria-label="${name}"] button`)?.getAttribute("aria-expanded")).toBe("true"); };
+    const collapse = async () => { for (const name of ["In this sentence", "Dictionary"]) await act(async () => findButton(name).click()); };
+    await collapse();
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Component words"] button')!.click());
+    checkOpen();
+    await collapse();
+    await act(async () => findButton("Back to machine à laver").click());
+    checkOpen();
+    await collapse();
+    await render("madame");
+    checkOpen();
+    await act(async () => root.render(null));
+    await render("madame");
+    checkOpen();
+    for (const name of ["Word origin", "Ask AI", "Notes"]) expect(host.querySelector(`[aria-label="${name}"] button`)?.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("saves exact cloze metadata and unsaves only this word across sentences", async () => {
+    fake.srs.favorites.add("madame"); // A historical bookmark alone is not membership.
+    function SavedStatus() { return <span data-saved={useSavedCards(SENTENCE.fr).has(cardKey("cloze", "madame"))} />; }
+    await act(async () => root.render(<><WordPanel sentence={SENTENCE} text="madame" onClose={() => {}} /><SavedStatus /></>));
+    await wait(100);
+    expect(host.querySelector('[aria-label="Save word"]')).toBeTruthy();
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Save word"]')!.click());
+    await wait(150);
+    const request = fake.calls.find(c => c.path === "/api/srs/notes" && c.method === "POST");
+    expect(request?.body).toMatchObject({ sentence: SENTENCE.fr, modes: [], targets: [{ text: "madame", mode: "cloze", exact_target: true, meta: { snap: "1" } }] });
+    expect(host.querySelector('[data-saved]')?.getAttribute("data-saved")).toBe("true");
+    const own = get().cards.find(c => c.word === "madame")!;
+    await act(async () => set(s => ({ cards: [...s.cards, { ...own, id: "other-context", sentenceId: "other-note" }, { ...own, id: "not-cloze", mode: "recognize" }] })));
+    const remaining = get().cards.filter(c => c.word !== "madame" || c.mode !== "cloze").map(c => c.id);
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Saved"]')!.click());
+    await wait(150);
+    expect(get().cards.map(c => c.id)).toEqual(remaining);
+    expect(fake.calls.filter(c => c.method === "DELETE").map(c => c.path)).toEqual([`/api/srs/cards/${own.id}`, "/api/srs/cards/other-context"]);
+    expect(host.querySelector('[data-saved]')?.getAttribute("data-saved")).toBe("false");
+    expect(host.querySelector('[aria-label="Save word"]')).toBeTruthy();
+    expect(fake.calls.some(c => c.path === "/api/srs/favorites" && c.method === "PUT")).toBe(false);
+  });
+
+  it("rolls the optimistic star back on save and delete failure", async () => {
+    await act(async () => root.render(<WordPanel sentence={SENTENCE} text="madame" onClose={() => {}} />));
+    await wait(100);
+    fake.failNext.add("/api/srs/notes");
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Save word"]')!.click());
+    expect(host.querySelector('[aria-label="Saved"]')).toBeTruthy();
+    await wait(150);
+    expect(host.querySelector('[aria-label="Save word"]')).toBeTruthy();
+    expect(get().announce.msg).toContain("Couldn’t update");
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Save word"]')!.click());
+    await wait(150);
+    fake.failNext.add("/api/srs/cards/");
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Saved"]')!.click());
+    expect(host.querySelector('[aria-label="Save word"]')).toBeTruthy();
+    await wait(150);
+    expect(host.querySelector('[aria-label="Saved"]')).toBeTruthy();
+  });
+
+  it("counts one initial request under StrictMode and one per nested drill", async () => {
+    await act(async () => root.render(<StrictMode><WordPanel sentence={SENTENCE} text="machine à laver" onClose={() => {}} /></StrictMode>));
+    await wait(150);
+    expect(fake.calls.filter(c => c.path === "/api/srs/lookups" && c.method === "POST")).toHaveLength(1);
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Component words"] button')!.click());
+    await wait(100);
+    expect(fake.calls.filter(c => c.path === "/api/srs/lookups" && c.method === "POST").map(c => c.body)).toEqual([{ word: "machine à laver" }, { word: "machine" }]);
   });
 
   it("adds, edits and deletes multiple notes, and asks AI with sentence context", async () => {

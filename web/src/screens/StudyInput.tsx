@@ -171,12 +171,12 @@ export function StudyInput() {
           </Card>
         )}
         <StudyReviewNotice />
-        <div className="grid gap-3 sm:grid-cols-2">
-          <EntryCard title="History" description="Analyses and practice attempts" onClick={() => go("progress/history?tab=attempts")} />
-          <EntryCard title="Practise my own words" description="Prepare, speak, and archive your own ideas" onClick={() => go("study/personal")} />
-          <EntryCard title="My grammar map" description="Patterns from the sentences you have saved" onClick={() => go("study/grammar")} />
-          <EntryCard title="Recall" description="Saved sentences, from memory" onClick={() => go("study/recall")} />
-          <EntryCard title="Dictation" description="Saved sentences, from audio" onClick={() => go("study/dictation")} />
+        <div className="grid gap-3 sm:grid-cols-6">
+          <div className="sm:col-span-2"><EntryCard title="History" description="Analyses and practice attempts" onClick={() => go("progress/history?tab=attempts")} /></div>
+          <div className="sm:col-span-2"><EntryCard title="Practise my own words" description="Prepare, speak, and archive your own ideas" onClick={() => go("study/personal")} /></div>
+          <div className="sm:col-span-2"><EntryCard title="My grammar map" description="Patterns from the sentences you have saved" onClick={() => go("study/grammar")} /></div>
+          <div className="sm:col-span-3"><EntryCard title="Recall" description="Saved sentences, from memory" onClick={() => go("study/recall")} /></div>
+          <div className="sm:col-span-3"><EntryCard title="Dictation" description="Saved sentences, from audio" onClick={() => go("study/dictation")} /></div>
         </div>
         {(study.restored || forced === "restored") && draft.trim() && (
           <Alert variant="default"><AlertTitle>Draft restored</AlertTitle><AlertDescription>Your earlier text is still here, in “{mode === "ideas" ? "My own ideas" : "French text"}”. Each mode keeps its own draft.<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="ghost" onClick={() => patchStudy({ restored: false })}>Dismiss</Button></div></AlertDescription></Alert>

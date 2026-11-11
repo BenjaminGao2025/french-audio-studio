@@ -249,8 +249,9 @@ function route(method: string, url: URL, body: Record<string, unknown>): Respons
     const id = `note-${++seq}`;
     const cards = [
       ...((body.modes as string[]) ?? []).map((m) => ({ id: `c-${++seq}`, note_id: id, mode: m, target: "", target_meta: {}, archived: false })),
-      ...((body.targets as { text: string }[]) ?? []).map((t) => ({ id: `c-${++seq}`, note_id: id, mode: "cloze", target: t.text, target_meta: {}, archived: false })),
+      ...((body.targets as { text: string }[]) ?? []).map((t) => ({ id: `c-${++seq}`, note_id: id, mode: "cloze", target: t.text, target_meta: (t as { meta?: Record<string, string> }).meta ?? {}, archived: false })),
     ];
+    fake.srs.cards.push(...cards.map(c => ({ ...c, mode: c.mode as ServerCard["mode"], importance: 3, state: "new" as const, due: new Date().toISOString(), created_at: new Date().toISOString(), note: { id, sentence: String(body.sentence), translation_en: String(body.translation_en ?? ""), translation_zh: String(body.translation_zh ?? "") } })));
     return json(200, { id, sentence: body.sentence, translation_en: body.translation_en, translation_zh: body.translation_zh, cards });
   }
   if (p === "/api/history" && method === "POST") {
@@ -352,6 +353,10 @@ function srsRoute(method: string, url: URL, body: Record<string, unknown>): Resp
     if (typeof body.new_limit === "number") out.new_limit = db.newLimit = body.new_limit;
     if (typeof body.session_size === "number") out.session_size = db.sessionSize = body.session_size;
     return json(200, out);
+  }
+  if (p.startsWith("/api/srs/cards/") && method === "DELETE") {
+    db.cards = db.cards.filter(c => c.id !== p.split("/").at(-1));
+    return json(200, { deleted: true });
   }
   if (p === "/api/srs/cards") return json(200, { cards: db.cards });
   if (p === "/api/srs/favorites" && method === "GET") return json(200, { words: [...db.favorites] });

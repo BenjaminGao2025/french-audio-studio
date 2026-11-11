@@ -312,7 +312,7 @@ export const REGISTRY: ScreenEntry[] = [
     ),
   },
   {
-    id: "SCR-WRD-02", title: "Meaning, Favorite, importance", area: "Study",
+    id: "SCR-WRD-02", title: "Meaning, word deck, importance", area: "Study",
     states: states(
       ["c0", "0 lookups", () => setCount(0)],
       ["c4", "4 lookups", () => setCount(4)],
@@ -320,7 +320,7 @@ export const REGISTRY: ScreenEntry[] = [
       ["c6", "6 lookups", () => setCount(6)],
       ["c9", "9 lookups", () => setCount(9)],
       ["c10", "10 lookups", () => setCount(10)],
-      ["fav", "Favorited (importance unchanged)", () => { set((s) => ({ favorites: { ...s.favorites, [lookupKey("failli")]: true } })); setCount(4); }],
+      ["fav", "Historical bookmark (not deck membership)", () => { set((s) => ({ favorites: { ...s.favorites, [lookupKey("failli")]: true } })); setCount(4); }],
     ),
   },
   {
@@ -424,7 +424,7 @@ export const REGISTRY: ScreenEntry[] = [
       ["search", "Search", () => { set((s) => ({ libFilters: { ...s.libFilters, q: "musée" } })); at("review/saved"); }],
       ["nomatch", "No matches", () => { set((s) => ({ libFilters: { ...s.libFilters, q: "zzzz" } })); at("review/saved"); }],
       ["combined", "Saved + mastered + importance 4+", () => { set(() => ({ libFilters: { q: "", savedOnly: true, mastered: "show", minImportance: 4, favoritesOnly: false } })); at("review/saved"); }],
-      ["favorites", "Favorites only", () => { set((s) => ({ libFilters: { ...s.libFilters, q: "", favoritesOnly: true } })); at("review/saved"); }],
+      ["favorites", "Saved cards (legacy filter ignored)", () => { set((s) => ({ libFilters: { ...s.libFilters, q: "", favoritesOnly: true } })); at("review/saved"); }],
       ["loading", "Loading", () => at("review/saved", "SCR-LIB-01", "loading")],
     ),
   },

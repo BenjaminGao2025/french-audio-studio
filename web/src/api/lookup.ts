@@ -1,6 +1,7 @@
 /* Word lookups: the offline dictionary entry (routers/tutor.py) and the per-user lookup count (routers/srs.py). */
 import { useSyncExternalStore } from "react";
 import { apiFetch } from "./client";
+import { set } from "../state/store";
 import { lookupKey } from "../lib/lookup";
 
 export interface DictionaryEntry {
@@ -70,6 +71,7 @@ export async function recordLookup(word: string): Promise<LookupCount> {
   const res = await apiFetch<LookupCount>("/api/srs/lookups", { body: { word } });
   counts = { ...counts, [lookupKey(word)]: res.count };
   listeners.forEach((l) => l());
+  set(s => ({ lookups: { ...s.lookups, [lookupKey(word)]: { count: res.count, lastCounted: null } } }));
   return res;
 }
 

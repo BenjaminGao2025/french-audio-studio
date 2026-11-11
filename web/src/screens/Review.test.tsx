@@ -275,15 +275,22 @@ describe("Task C — revealed result and optional repetitions", () => {
     expect(host.querySelector("#rev-result-heading")?.textContent).toBe("Result");
     const practice = await typeInput("#rev-retype", "avon");
     await enterInput(practice);
-    expect(host.textContent).toContain("Try again");
+    expect(host.querySelectorAll('[aria-label="Answer comparison"]')).toHaveLength(2);
+    expect(host.textContent).not.toMatch(/Different word: you wrote|Accent: you wrote/);
     expect(host.textContent).toContain("0/3");
-    for (let i = 1; i <= 3; i++) {
+    for (let i = 1; i <= 4; i++) {
       await typeInput("#rev-retype", "avons");
       await enterInput(practice);
       expect(host.textContent).toContain(`${i}/3`);
       expect(practice.value).toBe("");
     }
-    expect(sound).toHaveBeenCalledTimes(3);
+    expect(sound).toHaveBeenCalledTimes(4);
+    expect(practice.readOnly).toBe(false);
+    expect(practice.disabled).toBe(false);
+    expect(document.activeElement).toBe(practice);
+    await typeInput("#rev-retype", "avon");
+    await enterInput(practice);
+    expect(host.querySelectorAll('[aria-label="Answer comparison"]')).toHaveLength(2);
     expect(fake.calls.filter((c) => /\/review$/.test(c.path))).toHaveLength(0);
     expect(store.get().review.completed).toBe(0);
     // Grading is available even while the practice input still has focus.
@@ -307,12 +314,14 @@ describe("Task C — revealed result and optional repetitions", () => {
     await mount(card({ target: "tout de suite" }));
     await enterInput(await typeInput("#rev-input", "suite"));
     spy.mockClear();
-    const phraseButtons = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).filter((b) => b.textContent === "tout de suite");
-    expect(phraseButtons).toHaveLength(2);
-    for (const phrase of phraseButtons) await act(async () => phrase.click());
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Correct answer"]')!.click());
     await act(async () => button("Word/phrase").click());
-    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Pronounce tout de suite"]')!.click());
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Replay “tout de suite”"]')!.click());
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Pronounce “tout de suite”"]')!.click());
     expect(spy.mock.calls).toEqual(Array.from({ length: 4 }, () => ["tout de suite"]));
+    for (const title of ["In this sentence", "Dictionary"]) expect(host.querySelector(`[aria-label="${title}"] button`)?.getAttribute("aria-expanded")).toBe("true");
+    expect(host.querySelector("textarea")).toBeNull();
+    expect(fake.calls.filter(c => c.path === "/api/srs/lookups" && c.method === "POST")).toHaveLength(0);
   });
 
   it("grading before any repetitions and the Enter suggestion still work", async () => {
@@ -337,6 +346,26 @@ describe("Task C — revealed result and optional repetitions", () => {
 });
 
 describe("Task C — Saved as a table", () => {
+  it("the saved star removes only matching cloze cards and there is no bookmark filter", async () => {
+    fake.delay = 0;
+    const template = fake.srs.cards[0];
+    fake.srs.cards = [
+      { ...template, id: "star-word", mode: "cloze", target: "chat", archived: false },
+      { ...template, id: "keep-listen", mode: "listen", target: "", archived: false },
+      { ...template, id: "keep-speak", mode: "speak", target: "", archived: false },
+      { ...template, id: "keep-other-word", mode: "cloze", target: "chien", archived: false },
+    ];
+    await act(async () => { store.resetDemo(); await loadLibrary(true); root.render(<ReviewScreen sub="saved" />); });
+    await wait(50);
+    expect(host.textContent).not.toContain("Favorites only");
+    expect(host.querySelector('[aria-label="Favorite"]')).toBeNull();
+    const row = host.querySelector('[data-card-id="star-word"]')!;
+    await act(async () => row.querySelector<HTMLButtonElement>('[aria-label="Saved"]')!.click());
+    await wait(50);
+    expect(fake.calls.filter(c => c.method === "DELETE").map(c => c.path)).toEqual(["/api/srs/cards/star-word"]);
+    expect(store.get().cards.map(c => c.id)).toEqual(["keep-listen", "keep-speak", "keep-other-word"]);
+    expect(host.querySelector('[data-card-id="star-word"]')).toBeNull();
+  });
   it("shows at most 50 tbody rows plus a pager, and a sentence card's Importance cell is —", async () => {
     await act(async () => {
       store.resetDemo();
