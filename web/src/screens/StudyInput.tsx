@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Camera, Image as ImageIcon, Mic2, PenLine, Trash2, X, Headphones, Loader2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Camera, Image as ImageIcon, Mic2, Trash2, X, Loader2 } from "lucide-react";
 import { StudyReviewNotice } from "../components/StudyReviewNotice";
 import { ApiError } from "../api/client";
 import { photoExtract, photoToDataUrl } from "../api/study";
@@ -8,10 +8,10 @@ import { EXAMPLE_TEXT, IDEAS_EXAMPLE, OCR_LIMIT } from "../data/fixtures";
 import { nf, plural } from "../lib/format";
 import { LIMITS, STAGES, cancelAnalysis, openAnalysisInStudy, runAnalysis, validate } from "../state/study";
 import { announce, get, go, patchStudy, useApp } from "../state/store";
-import { Checkbox, Collapsible, CollapsibleContent, CollapsibleTrigger, Crumbs, Dialog, DisabledReason, EntryCard, Input, PageHead, Spinner, Textarea, pageFrame } from "../components/ui";
+import { Checkbox, Crumbs, Dialog, DisabledReason, EntryCard, Input, PageHead, Spinner, Textarea, pageFrame } from "../components/ui";
 import { Button } from "../components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { cn } from "cn";
 
@@ -156,32 +156,31 @@ export function StudyInput() {
         </Card>
 
         {last.record && !busy && (
-          <section className="flex flex-col items-start gap-2 rounded-xl border bg-card p-4" aria-label="Continue">
-            <p className="text-xs font-medium text-muted-foreground">Continue</p>
-            <p className="font-medium">{plural(sentenceCount(last.record), "sentence")} saved</p>
-            <p className="inline-flex items-baseline gap-1.5 text-sm">{fmtWhen(last.record.created_at)}</p>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" variant="outline" onClick={() => last.record && openAnalysisInStudy(last.record)}>Continue</Button>
-              <Button type="button" variant="ghost" onClick={last.dismiss}>Dismiss</Button>
-            </div>
-          </section>
+          <Card aria-label="Continue">
+            <CardHeader>
+              <CardTitle>Continue</CardTitle>
+              <CardDescription>{fmtWhen(last.record.created_at)}</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col items-start gap-3">
+              <p className="font-medium">{plural(sentenceCount(last.record), "sentence")} saved</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" variant="outline" onClick={() => last.record && openAnalysisInStudy(last.record)}>Continue</Button>
+                <Button type="button" variant="ghost" onClick={last.dismiss}>Dismiss</Button>
+              </div>
+            </CardContent>
+          </Card>
         )}
         <StudyReviewNotice />
         <div className="grid gap-3 sm:grid-cols-2">
+          <EntryCard title="History" description="Analyses and practice attempts" onClick={() => go("progress/history?tab=attempts")} />
           <EntryCard title="Practise my own words" description="Prepare, speak, and archive your own ideas" onClick={() => go("study/personal")} />
           <EntryCard title="My grammar map" description="Patterns from the sentences you have saved" onClick={() => go("study/grammar")} />
+          <EntryCard title="Recall" description="Saved sentences, from memory" onClick={() => go("study/recall")} />
+          <EntryCard title="Dictation" description="Saved sentences, from audio" onClick={() => go("study/dictation")} />
         </div>
         {(study.restored || forced === "restored") && draft.trim() && (
           <Alert variant="default"><AlertTitle>Draft restored</AlertTitle><AlertDescription>Your earlier text is still here, in “{mode === "ideas" ? "My own ideas" : "French text"}”. Each mode keeps its own draft.<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="ghost" onClick={() => patchStudy({ restored: false })}>Dismiss</Button></div></AlertDescription></Alert>
         )}
-
-        <Collapsible className="rounded-lg border px-4">
-          <CollapsibleTrigger id="prl-h" className="flex min-h-11 w-full items-center text-sm font-medium">Practise without new text</CollapsibleTrigger>
-          <CollapsibleContent className="flex flex-wrap items-center gap-2 pb-4">
-            <Button type="button" variant="outline" onClick={() => go("study/recall")}>{<PenLine aria-hidden />}Recall</Button>
-            <Button type="button" variant="outline" onClick={() => go("study/dictation")}>{<Headphones aria-hidden />}Dictation</Button>
-          </CollapsibleContent>
-        </Collapsible>
       </div>
 
       {confirmClear && (

@@ -1,4 +1,4 @@
-"""Read-only French corpus lookup. Dataset licensing is independent of application code."""
+"""Read-only French and English-gloss corpus lookup. Dataset licensing is independent of application code."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 SCHEMA_VERSION = 1
-SELECTION_VERSION = 3
+SELECTION_VERSION = 4
 
 
 class DictionaryUnavailable(Exception):
@@ -54,8 +54,8 @@ def fingerprint(value) -> str:
     ).hexdigest()
 
 
-def index_path():
-    value = os.getenv("FRENCH_DICTIONARY_PATH", "")
+def index_path(env="FRENCH_DICTIONARY_PATH"):
+    value = os.getenv(env, "")
     if not value:
         return None
     p = Path(value)
@@ -65,17 +65,90 @@ def index_path():
     return p
 
 
-def lookup(word: str):
-    """Bounded per-process positive/negative cache, invalidated by an atomic index replacement."""
-    word = normalize(word)
-    p = index_path()
-    if p is None:
-        raise DictionaryUnavailable("Dictionary index is not configured")
+def _read(p, word):
     try:
         st = p.stat()
-        return copy.deepcopy(_lookup(str(p), st.st_ino, st.st_mtime_ns, st.st_size, normalize(word)))
+        return copy.deepcopy(_lookup(str(p), st.st_ino, st.st_mtime_ns, st.st_size, word))
     except (OSError, sqlite3.Error, ValueError, KeyError, TypeError) as exc:
         raise DictionaryUnavailable("Dictionary index is unavailable") from exc
+
+
+def related_candidates(word):
+    """Conservative, bounded spelling rules; these are related words, never definitions."""
+    candidates = []
+    for prefix in ("re-", "ré-", "dé-", "in-", "im-", "re", "ré", "dé", "in", "im"):
+        if word.startswith(prefix) and len(word) - len(prefix) >= 4:
+            candidates.append(word[len(prefix):])
+    for suffix, replacement in (("s", ""), ("aux", "al"), ("ées", "er"), ("és", "er"),
+                                ("ée", "er"), ("é", "er"), ("ement", ""), ("ments", "")):
+        if word.endswith(suffix) and len(word) - len(suffix) >= 4:
+            candidates.append(word[:-len(suffix)] + replacement)
+    return list(dict.fromkeys(candidates))
+
+
+STOPWORDS = set("le la les un une des de du à au aux et ou en pour par sur ce ces se ne pas l d".split())
+
+
+def lookup(word: str):
+    """English first, French second; explicit related and component fallbacks, without AI."""
+    word = normalize(word)
+    if not word or len(word) > 200:
+        return None
+    paths = {lang: index_path(env) for lang, env in
+             (("en", "ENGLISH_DICTIONARY_PATH"), ("fr", "FRENCH_DICTIONARY_PATH"))}
+    if not any(paths.values()):
+        raise DictionaryUnavailable("Dictionary index is not configured")
+
+    def exact(token):
+        results = {lang: _read(path, token) if path else None for lang, path in paths.items()}
+        if not any(results.values()):
+            return None
+        # A lemma supplied by either corpus can provide the other corpus's senses.
+        for lang, result in list(results.items()):
+            if result:
+                other = "fr" if lang == "en" else "en"
+                if paths[other] and not results[other]:
+                    results[other] = _read(paths[other], normalize(result["lemma"]))
+        result = copy.deepcopy(results["en"] or results["fr"])
+        result["token"] = token
+        for lang in ("en", "fr"):
+            result["entries_" + lang] = [dict(e, language=lang) for e in
+                                               (results[lang] or {}).get("entries", [])]
+        result["entries"] = result["entries_en"] + result["entries_fr"]
+        result["attribution"] = " ".join(r["attribution"] for r in results.values() if r)
+        result["datasets"] = {lang: r["dataset"] for lang, r in results.items() if r}
+        result["match_type"] = "exact"
+        return result
+
+    def resolve(token):
+        result = exact(token)
+        if result:
+            return result
+        for candidate in related_candidates(token):
+            result = exact(candidate)
+            if result:
+                result.update(token=token, match_type="related", related=result["lemma"], phonetic="")
+                return result
+        return None
+
+    result = resolve(word)
+    if result or " " not in word:
+        return result
+    parts = []
+    for token in dict.fromkeys(re.findall(r"[^\W_]+(?:['-][^\W_]+)*", word, re.UNICODE)[:32]):
+        part = resolve(token)
+        if part:
+            parts.append(part)
+        elif token not in STOPWORDS:
+            parts.append(dict(token=token, lemma=token, pos="", phonetic="", explanation_cn="",
+                              explanation_en="", entries=[], entries_en=[], entries_fr=[], dictionary_state="not_found"))
+    if not any(p["entries"] for p in parts):
+        return None
+    result = copy.deepcopy(next(p for p in parts if p["entries"]))
+    result.update(token=word, lemma=word, phonetic="", match_type="components", components=parts,
+                  entries=[], entries_en=[], entries_fr=[])
+    result.pop("related", None)
+    return result
 
 
 @functools.lru_cache(maxsize=2048)
@@ -150,6 +223,11 @@ def _lookup(path, inode, mtime, size, word):
                 break
         if not entries:
             return None
+        language = meta.get("gloss_language", "fr")
+        if language == "en":
+            for entry in entries:
+                entry["source_url"] = "https://en.wiktionary.org/wiki/" + quote(entry["lemma"], safe="") + "#French"
+                entry["history_url"] = "https://en.wiktionary.org/w/index.php?title=" + quote(entry["lemma"], safe="") + "&action=history"
         first = entries[0]
         result = dict(
             token=word,
@@ -165,10 +243,11 @@ def _lookup(path, inode, mtime, size, word):
             explanation_en="",
             dictionary_source="wiktionnaire",
             dictionary_state="found",
-            source_language="fr",
-            source_name="Wiktionnaire",
-            attribution="Wiktionnaire contributors; extracted by Tatu Ylonen / Kaikki. Lexique 3.83 by Boris New, Christophe Pallier and contributors.",
-            changes="French-only selection, normalized search and Lexique metadata; definitions are not AI-generated or translated.",
+            source_language=language,
+            source_name="English Wiktionary" if language == "en" else "Wiktionnaire",
+            attribution=("English Wiktionary contributors; extracted by Tatu Ylonen / Kaikki." if language == "en" else
+                         "Wiktionnaire contributors; extracted by Tatu Ylonen / Kaikki. Lexique 3.83 by Boris New, Christophe Pallier and contributors."),
+            changes="French-only selection, bounded source senses and normalized search; French monolingual entries use Lexique metadata. Definitions are not AI-generated or translated.",
             entries=entries,
             dataset=meta["dataset"],
             license_url=LICENSE_URL,

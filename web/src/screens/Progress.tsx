@@ -73,7 +73,7 @@ function Overview() {
     <div className={pageFrame()}>
       <PageHead
         title="Progress"
-        actions={<Button type="button" variant="ghost" onClick={() => go("progress/history?tab=time")}>{<HistoryIcon aria-hidden />}History</Button>}
+        actions={<Button type="button" variant="outline" onClick={() => go("progress/history?tab=time")}>{<HistoryIcon aria-hidden />}History</Button>}
       />
       <div className="flex flex-col gap-8">
         {state === "loading" && (

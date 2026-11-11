@@ -231,9 +231,11 @@ export function MarkedLine({
   label,
   side = label === "Your answer" ? "answer" : "target",
   onPick,
+  onPlay,
 }: {
   words: DisplayWord[];
   label: string;
+  onPlay?: () => void;
   side?: "answer" | "target";
   /** Correct-answer French uses the same tappable text as the study sentence. */
   onPick?: (p: FrPick) => void;
@@ -243,7 +245,11 @@ export function MarkedLine({
   return (
     <div className="flex flex-col gap-1">
       <span className="text-sm font-medium text-muted-foreground">{label}</span>
-      {tappable ? (
+      {onPlay ? (
+        <Button type="button" variant="link" onClick={onPlay} className="h-auto justify-start self-start whitespace-normal p-0 text-left font-serif text-xl leading-9" lang="fr">
+          <span>{words.map((w, i) => <span key={i}>{i > 0 ? " " : ""}{w.mark === "ok" ? w.text : <span className={`rounded px-0.5 tok--${w.mark}`}>{w.text}</span>}</span>)}</span>
+        </Button>
+      ) : tappable ? (
         <FrText segments={targetSegments(words)} className="font-serif text-xl leading-9" onPick={onPick} />
       ) : (
         <p className="font-serif text-xl leading-9" lang="fr">

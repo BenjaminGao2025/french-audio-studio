@@ -184,6 +184,8 @@ export const fake = {
   noListening: false,
   devices: demoDevices(),
   /** The next N /api/etymology requests fail with a 503 (for Retry-state tests). */
+  notes: [] as import("../api/wordNotes").WordNote[],
+  nextNote: 1,
   etymologyFails: 0,
   reset() {
     this.practice = new Map();
@@ -196,6 +198,8 @@ export const fake = {
     this.episodes = demoEpisodes();
     this.heartbeats = {};
     this.lookups = {};
+    this.notes = [];
+    this.nextNote = 1;
     this.etymologyFails = 0;
     this.failNext.clear();
     this.saveFails = 0;
@@ -293,6 +297,19 @@ function route(method: string, url: URL, body: Record<string, unknown>): Respons
     });
   }
   if (p === "/api/phrase-context" && method === "POST") return json(200, { phrases: [], cached: true });
+  if (p === "/api/word-notes" && method === "GET") return json(200, { notes: fake.notes.filter(n => n.word_key === lookupKey(url.searchParams.get("word") || "")) });
+  if (p === "/api/word-notes" && method === "POST") {
+    const now = new Date().toISOString();
+    const note = { id: fake.nextNote++, word_key: lookupKey(String(body.word)), text: String(body.text), created_at: now, updated_at: now };
+    fake.notes.push(note); return json(201, note);
+  }
+  if (p.startsWith("/api/word-notes/")) {
+    const id = Number(p.split("/").at(-1)); const note = fake.notes.find(n => n.id === id);
+    if (!note) return json(404, { detail: "Note not found" });
+    if (method === "DELETE") { fake.notes = fake.notes.filter(n => n.id !== id); return json(200, { success: true }); }
+    if (method === "PATCH") { note.text = String(body.text); note.updated_at = new Date().toISOString(); return json(200, note); }
+  }
+  if (p === "/api/ask" && method === "POST") return json(200, { answer: "This word’s meaning follows its use in the sentence. The surrounding words give the context." });
   if (p === "/api/etymology" && method === "POST") {
     if (fake.etymologyFails > 0) {
       fake.etymologyFails--;

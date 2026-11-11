@@ -8,6 +8,7 @@ import { loadLibrary, resetReviewCache, toReviewCard } from "../api/review";
 import { resetLookupCaches } from "../api/lookup";
 import { fake, installFakeBackend } from "../test/fakeBackend";
 import * as store from "../state/store";
+import * as feedback from "../lib/feedback";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -243,7 +244,95 @@ describe("Task C — Anki-style review card", () => {
     expect(host.querySelector("[data-slot=card-footer] .rev-ratings")).toBeTruthy();
     expect(rates[2].getAttribute("data-variant")).toBe("default");
     expect(rates.filter((b) => b.getAttribute("data-variant") === "outline")).toHaveLength(3);
-    expect(host.querySelector("[data-slot=separator]")).toBeTruthy();
+    expect(host.querySelector(`[data-sentence="${FR}"]`)).toBeTruthy();
+    expect(host.querySelector("#rev-result [aria-label=Play]")).toBeTruthy();
+  });
+});
+
+const typeInput = async (selector: string, value: string) => {
+  const input = host.querySelector<HTMLInputElement>(selector)!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  return input;
+};
+const enterInput = async (input: HTMLInputElement) => {
+  await act(async () => {
+    input.focus();
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+  });
+};
+
+describe("Task C — revealed result and optional repetitions", () => {
+  it("Enter in the compact answer checks; three correct repetitions never grade", async () => {
+    const sound = vi.spyOn(feedback, "practiceFeedback").mockImplementation(() => {});
+    await mount(card({ id: fake.srs.cards[0].id }));
+    const answer = await typeInput("#rev-input", "avon");
+    expect(answer.tagName).toBe("INPUT");
+    await enterInput(answer);
+    expect(host.querySelector('[aria-label="Incorrect"]')).toBeTruthy();
+    expect(host.querySelector("#rev-result-heading")?.textContent).toBe("Result");
+    const practice = await typeInput("#rev-retype", "avon");
+    await enterInput(practice);
+    expect(host.textContent).toContain("Try again");
+    expect(host.textContent).toContain("0/3");
+    for (let i = 1; i <= 3; i++) {
+      await typeInput("#rev-retype", "avons");
+      await enterInput(practice);
+      expect(host.textContent).toContain(`${i}/3`);
+      expect(practice.value).toBe("");
+    }
+    expect(sound).toHaveBeenCalledTimes(3);
+    expect(fake.calls.filter((c) => /\/review$/.test(c.path))).toHaveLength(0);
+    expect(store.get().review.completed).toBe(0);
+    // Grading is available even while the practice input still has focus.
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-rating="1"]')!.click());
+    await wait(200);
+    expect(fake.calls.filter((c) => /\/review$/.test(c.path))).toHaveLength(1);
+  });
+
+  it("a correct Check has a check mark and no repetition input", async () => {
+    await mount(card());
+    await enterInput(await typeInput("#rev-input", "avons"));
+    expect(host.querySelector('[aria-label="Correct"]')).toBeTruthy();
+    expect(host.querySelector("#rev-retype")).toBeNull();
+    expect(host.querySelector('[data-slot="accordion"]')).toBeTruthy();
+    expect(host.querySelector('.rev-rate [data-slot="kbd"]')).toBeNull();
+    expect(host.querySelector(".rev-ratings")?.textContent).not.toContain("Enter");
+  });
+
+  it("both phrase buttons and the word heading pronounce the whole phrase", async () => {
+    const spy = vi.spyOn(store, "sayFrench").mockImplementation(() => {});
+    await mount(card({ target: "tout de suite" }));
+    await enterInput(await typeInput("#rev-input", "suite"));
+    spy.mockClear();
+    const phraseButtons = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).filter((b) => b.textContent === "tout de suite");
+    expect(phraseButtons).toHaveLength(2);
+    for (const phrase of phraseButtons) await act(async () => phrase.click());
+    await act(async () => button("Word/phrase").click());
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Pronounce tout de suite"]')!.click());
+    expect(spy.mock.calls).toEqual(Array.from({ length: 4 }, () => ["tout de suite"]));
+  });
+
+  it("grading before any repetitions and the Enter suggestion still work", async () => {
+    await mount(card({ id: fake.srs.cards[0].id }));
+    await enterInput(await typeInput("#rev-input", "avon"));
+    await act(async () => {
+      (document.activeElement as HTMLElement)?.blur();
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    await wait(200);
+    const calls = fake.calls.filter((c) => /\/review$/.test(c.path));
+    expect(calls).toHaveLength(1);
+    expect(calls[0].body).toMatchObject({ rating: 1 });
+  });
+
+  it.each(["listen", "speak"] as const)("%s reveal keeps the sentence without a fabricated answer", async (mode) => {
+    await mount(card({ mode, kind: mode === "listen" ? "Listen" : "Speak" }), { revealed: true });
+    expect(host.textContent).toContain(FR);
+    expect(host.textContent).not.toContain("Your answer");
+    expect(host.querySelector("#rev-retype")).toBeNull();
   });
 });
 
