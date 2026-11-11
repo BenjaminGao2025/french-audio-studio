@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bookmark, BookmarkCheck, Eye, Play, Search, Archive, RotateCcw, Volume2, ChevronLeft, ChevronRight, Loader2, ChevronDown } from "lucide-react";
+import { Bookmark, BookmarkCheck, Play, Search, Archive, RotateCcw, Volume2, ChevronLeft, ChevronRight, Loader2, ChevronDown, MoreHorizontal } from "lucide-react";
 import {
   DEFAULT_SESSION_SIZE,
   planSession,
@@ -34,6 +34,10 @@ import { Input } from "../components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "../components/ui/collapsible";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { Card, CardAction, CardContent, CardFooter, CardHeader } from "../components/ui/card";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../components/ui/dropdown-menu";
+import { Separator } from "../components/ui/separator";
+import { Kbd } from "../components/ui/kbd";
 import { cn } from "cn";
 
 /** Design reference states set this so Due today shows their sample queue instead of loading the learner's. */
@@ -167,7 +171,7 @@ export function ReviewScreen({ sub }: { sub: string }) {
   const tab = sub === "session" ? "due" : sub === "library" ? "saved" : sub;
   if (sub === "session") {
     return (
-      <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 review-focus">
+      <div className="review-focus flex w-full flex-1 flex-col py-4 md:py-8">
         <h1 className="sr-only" tabIndex={-1} data-page-title>Review</h1>
         <ReviewSession />
       </div>
@@ -370,6 +374,14 @@ function DueToday() {
 
 /* ---------------- SCR-REV-02 ---------------- */
 
+function PlayButton({ onClick }: { onClick: () => void }) {
+  return (
+    <Button type="button" variant="outline" size="icon" aria-label="Play" className="shrink-0" onClick={onClick}>
+      <Play aria-hidden />
+    </Button>
+  );
+}
+
 function ReviewSession() {
   const review = useApp((s) => s.review);
   const ui = useApp((s) => s.reviewUi);
@@ -424,7 +436,7 @@ function ReviewSession() {
   const isWordCard = mode === "cloze" || mode === "recognize" || mode === "grammar";
   const markTarget = isWordCard ? card?.target ?? "" : "";
   const suggested: number | undefined = u.suggested ?? (u.result ? (u.result.correct ? (u.hinted || u.hint ? 2 : 3) : 1) : undefined);
-  const groupLabel = card?.group === "new" ? "New card" : card?.group === "due" ? "Due review" : "Learning";
+  const groupLabel = card?.group === "new" ? "New" : card?.group === "due" ? "Due" : "Learning";
 
   const reveal = (extra: Partial<ReviewUI> = {}) => {
     if (!card || revealed) return;
@@ -491,6 +503,13 @@ function ReviewSession() {
     else if (mode === "recognize") sayFrench(card.target);
   };
 
+  const slow = () => {
+    if (!card) return;
+    if (revealed) return sayFrench(cardSpeech(card), 0.75);
+    if (mode === "listen") sayFrench(sentenceFr, 0.75);
+    else if (mode === "recognize") sayFrench(card.target, 0.75);
+  };
+
   // Keyboard shortcuts. A single listener reads a ref so the latest handlers are always used.
   const keys = useRef<{
     reveal: () => void; check: () => void; rate: (r: number) => void; replay: () => void;
@@ -504,7 +523,7 @@ function ReviewSession() {
     const onKey = (e: KeyboardEvent) => {
       if (e.isComposing || !keys.current.active) return;
       const t = e.target as HTMLElement | null;
-      if (t?.closest?.("[role=dialog]")) return;
+      if (t?.closest?.("[role=dialog], [role=menu]")) return;
       if (e.key === "Enter" && t?.id === "rev-input") { e.preventDefault(); keys.current.check(); return; }
       const tag = t?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
@@ -537,7 +556,7 @@ function ReviewSession() {
 
   if (review.phase === "complete" || forced === "complete" || !card) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="mx-auto flex w-full max-w-xl flex-col gap-4">
         <Alert variant="default" role="status"><AlertTitle>Review complete</AlertTitle><AlertDescription>{review.completed} of {cards.length} cards in this session completed. Each review updated that card’s schedule.</AlertDescription></Alert>
         {review.removedNew > 0 && <p className="text-sm text-muted-foreground">{plural(review.removedNew, "new card")} removed because you lowered today’s limit.</p>}
         <div className="flex flex-wrap items-center gap-2">
@@ -577,49 +596,52 @@ function ReviewSession() {
     const secs = provided == null ? (blank ? FALLBACK_INTERVALS[value] : undefined) : provided;
     return secs == null ? "" : formatInterval(secs);
   };
+  const suggestedGrade = (suggested ?? 3) as 1 | 2 | 3 | 4;
+  const canPlay = revealed || mode === "listen" || mode === "recognize";
+  const hasBack = Boolean(translationZh || translationEn || u.result || isWordCard || dictLine || (hereLine && hereLine !== dictLine) || meta.hook || grammar.length);
 
   return (
-    <div className={cx("grid items-start gap-6", pick && !narrow && "lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]")}>
-      <div className="flex flex-col gap-6" data-mode={mode} data-card-id={card.id}>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p id="rev-q" tabIndex={-1} className="text-xs leading-4 text-muted-foreground tabular-nums">Card {review.index + 1} of {cards.length}</p>
-          <span className="text-sm text-muted-foreground tabular-nums">{review.completed} completed</span>
-        </div>
+    <div className={cx("mx-auto grid w-full items-start gap-6", pick && !narrow ? "max-w-5xl md:px-6 lg:grid-cols-[minmax(0,36rem)_minmax(280px,360px)]" : "max-w-xl")}>
+      <div className="flex w-full max-w-xl flex-col gap-4 justify-self-center" data-mode={mode} data-card-id={card.id}>
         {review.removedNew > 0 && <p className="text-sm text-muted-foreground" role="status">{plural(review.removedNew, "new card")} removed because you lowered today’s limit.</p>}
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={card.group === "new" ? "secondary" : "outline"}>{groupLabel}</Badge>
-          <Badge variant="outline">{MODE_LABEL[mode]}</Badge>
-        </div>
-        <hr className="border-t" />
-
+        <Card id="rev-q" tabIndex={-1} className="w-full scroll-mt-20">
+          <CardHeader className="items-center">
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <Badge variant={card.group === "new" ? "secondary" : "outline"}>{groupLabel}</Badge>
+              <Badge variant="outline">{MODE_LABEL[mode]}</Badge>
+            </div>
+            <CardAction>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="ghost" size="icon" aria-label="Card actions"><MoreHorizontal aria-hidden /></Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <DropdownMenuItem onSelect={() => { masterCard(card.id); next(); }}><Archive aria-hidden />Mark mastered</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={slow}><Volume2 aria-hidden />Slow 0.75×</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => go("review")}>Pause and return to Due today</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </CardAction>
+          </CardHeader>
+          <CardContent>
         {!revealed ? (
           <div className="flex flex-col gap-4">
-            {/* ---------------- FRONT, per mode ---------------- */}
             {mode === "listen" && (
-              <div className="rev-listen flex flex-col gap-3">
-                <p className="rev-lead">Listen, then say what it means.</p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button type="button" variant="outline" size="icon" aria-label="Play the sentence" className="" onClick={() => sayFrench(sentenceFr)}>{<Play aria-hidden />}</Button>
-                  <Button type="button" variant="outline" onClick={() => sayFrench(sentenceFr, 0.75)}>{<Volume2 aria-hidden />}Slow 0.75&nbsp;×</Button>
-                </div>
+              <div className="flex justify-center py-6">
+                <PlayButton onClick={replay} />
               </div>
             )}
             {mode === "speak" && (
               <div className="flex flex-col gap-3">
-                <p className="rev-lead">Say this in French out loud.</p>
-                <p className="rev-prompt-zh" lang={translationZh ? "zh" : undefined}>{translationZh || translationEn || "No translation yet."}</p>
+                <p className="text-xl font-medium leading-snug" lang={translationZh ? "zh" : undefined}>{translationZh || translationEn || "No translation yet."}</p>
                 {showEnglish && <Collapsible className="border-t"><CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between gap-2 py-2 text-left text-sm font-medium"><span>Show English</span><ChevronDown className="size-4 shrink-0" aria-hidden /></CollapsibleTrigger><CollapsibleContent className="pb-3 text-sm"><p className="text-sm text-muted-foreground">{translationEn}</p></CollapsibleContent></Collapsible>}
                 <Collapsible className="border-t"><CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between gap-2 py-2 text-left text-sm font-medium"><span>Show initials</span><ChevronDown className="size-4 shrink-0" aria-hidden /></CollapsibleTrigger><CollapsibleContent className="pb-3 text-sm"><p className="rev-initials" lang="fr">{initialsHint(sentenceFr)}</p></CollapsibleContent></Collapsible>
               </div>
             )}
             {mode === "recognize" && (
-              <div className="flex flex-col gap-3">
-                <FrText segments={tokenizeFrench(card.target)} className="font-serif text-2xl leading-snug wrap-break-word" onPick={onWordPick} />
-                <p className="rev-lead">What does it mean?</p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button type="button" variant="outline" size="icon" aria-label="Play the word" className="" onClick={() => sayFrench(card.target)}>{<Play aria-hidden />}</Button>
-                  <Button type="button" variant="outline" onClick={() => sayFrench(card.target, 0.75)}>{<Volume2 aria-hidden />}Slow 0.75&nbsp;×</Button>
-                </div>
+              <div className="flex items-start gap-3">
+                <FrText segments={tokenizeFrench(card.target)} className="min-w-0 flex-1 font-serif text-2xl leading-snug wrap-break-word" onPick={onWordPick} />
+                <PlayButton onClick={replay} />
               </div>
             )}
             {typed && (
@@ -665,27 +687,16 @@ function ReviewSession() {
                 </div>
               </div>
             )}
-            <div className="sticky bottom-0 z-10 bg-background py-3">
-              <div className="flex flex-wrap items-center gap-2">
-                {typed && <Button type="button" variant="default" onClick={check}>Check</Button>}
-                <Button type="button" variant={typed ? "outline" : "default"} onClick={() => reveal()}>{<Eye aria-hidden />}Show answer</Button>
-              </div>
-            </div>
-            <p className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground"><span><kbd>Space</kbd> shows the answer</span><span><kbd>R</kbd> replays</span></p>
           </div>
         ) : (
-          <>
-            {/* ---------------- BACK, after Show answer or Check ---------------- */}
             <div id="rev-result" tabIndex={-1} className="flex flex-col gap-4">
-              <div className="rev-answer-row" data-sentence={sentenceFr}>
-                <FrText segments={backSegments} className={isWordCard ? "t-fr-lg" : "sentence-fr"} onPick={onWordPick} />
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button type="button" variant="outline" onClick={() => sayFrench(cardSpeech(card))}>{<Play aria-hidden />}Play</Button>
-                  <Button type="button" variant="outline" onClick={() => sayFrench(cardSpeech(card), 0.75)}>{<Volume2 aria-hidden />}Slow 0.75&nbsp;×</Button>
-                </div>
+              <div className="flex items-start gap-3" data-sentence={sentenceFr}>
+                <FrText segments={backSegments} className="sentence-fr min-w-0 flex-1 font-serif text-2xl leading-snug wrap-break-word" onPick={onWordPick} />
+                {canPlay && <PlayButton onClick={replay} />}
               </div>
+              {hasBack && <Separator />}
               {(translationZh || translationEn) && (
-                <div className="rev-translations">
+                <div className="flex flex-col gap-1">
                   {translationZh && <p className="text-sm text-muted-foreground" lang="zh">{translationZh}</p>}
                   {translationEn && <p className="text-sm text-muted-foreground">{translationEn}</p>}
                 </div>
@@ -697,19 +708,19 @@ function ReviewSession() {
                 </div>
               )}
               {isWordCard && (
-                <div className="rev-meta">
-                  <p className="font-medium" lang="fr">{card.target}</p>
+                <div className="flex flex-col gap-1">
+                  <p className="text-sm font-medium" lang="fr">{card.target}</p>
                   {metaBits.length > 0 && (
-                    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                      {metaBits.map((bit) => <span className="inline-flex items-baseline gap-1.5 text-sm" key={bit}>{bit}</span>)}
+                    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+                      {metaBits.map((bit) => <span key={bit}>{bit}</span>)}
                     </p>
                   )}
                 </div>
               )}
               {(dictLine || (hereLine && hereLine !== dictLine) || meta.hook) && (
-                <div className="rev-snapshot flex flex-col gap-1">
-                  {dictLine && <p className="text-base"><span className="text-sm font-medium text-muted-foreground">Saved meaning: </span>{dictLine}</p>}
-                  {hereLine && hereLine !== dictLine && <p className="text-sm text-muted-foreground"><span className="text-sm font-medium text-muted-foreground">In this sentence: </span>{hereLine}</p>}
+                <div className="flex flex-col gap-1">
+                  {dictLine && <p className="text-sm text-muted-foreground"><span className="font-medium">Saved meaning: </span>{dictLine}</p>}
+                  {hereLine && hereLine !== dictLine && <p className="text-sm text-muted-foreground"><span className="font-medium">In this sentence: </span>{hereLine}</p>}
                   {meta.hook && <p className="text-sm text-muted-foreground">Memory hook: {meta.hook}</p>}
                 </div>
               )}
@@ -727,33 +738,50 @@ function ReviewSession() {
                 </CollapsibleContent></Collapsible>
               )}
             </div>
-
-            {u.techfail && (
-              <Alert variant="destructive" role="alert"><AlertTitle>Saving your rating failed</AlertTitle><AlertDescription>This is not a wrong answer. Your answer is kept and nothing was recorded.<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={() => rate((suggested ?? 3) as 1 | 2 | 3 | 4)}>Retry</Button></div></AlertDescription></Alert>
-            )}
-            <div className="rev-actionbar">
-            <div className="rev-ratings" role="group" aria-label="How well did you remember?">
-              {RATINGS.map((r) => {
-                const text = intervalText(r.value);
-                return (
-                  <Button type="button" variant="outline" aria-disabled={(!!(u.rateBusy || u.rated)) || undefined} key={r.value} data-rating={r.value} className={cn((!!(u.rateBusy || u.rated)) ? "opacity-50" : "", cx("rev-rate h-auto flex-col gap-0 px-3 py-2", suggested === r.value && "rev-rate--suggested"))} onClick={(event) => { if (!!(u.rateBusy || u.rated)) { event.preventDefault(); return; } (() => rate(r.value))(); }}><span className="rev-rate-name">{r.label}</span>
-                    <span className="rev-rate-interval tabular-nums">{text}</span>
-                    <kbd className="text-xs text-muted-foreground">{r.value}</kbd></Button>
-                );
-              })}
-            </div>
-            {u.rateBusy && <Spinner label="Saving your rating…" />}
-            <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" variant="outline" onClick={() => { masterCard(card.id); next(); }}>{<Archive aria-hidden />}Mark mastered</Button>
-            </div>
-            <p className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground"><span><kbd>1</kbd>–<kbd>4</kbd> rates</span><span><kbd>Enter</kbd> takes the suggestion</span>{u.nextDue ? <span>Next review {dueIn(u.nextDue)}</span> : null}</p>
-            </div>
-          </>
         )}
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" variant="ghost" className="h-8 px-2 text-sm" onClick={() => go("review")}>Pause and return to Due today</Button>
-        </div>
+        {revealed && u.techfail && (
+          <Alert variant="destructive" role="alert"><AlertTitle>Saving your rating failed</AlertTitle><AlertDescription>This is not a wrong answer. Your answer is kept and nothing was recorded.<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={() => rate((suggested ?? 3) as 1 | 2 | 3 | 4)}>Retry</Button></div></AlertDescription></Alert>
+        )}
+          </CardContent>
+          <CardFooter className="flex-col items-stretch gap-3 border-t">
+            {!revealed ? (
+              <>
+                {typed && <Button type="button" className="w-full" onClick={check}>Check</Button>}
+                <Button type="button" variant={typed ? "outline" : "default"} className="w-full" onClick={() => reveal()}>Show answer</Button>
+              </>
+            ) : (
+              <>
+                {u.rateBusy && <Spinner label="Saving your rating…" />}
+                <div className="rev-ratings grid w-full grid-cols-4 gap-2" role="group" aria-label="How well did you remember?">
+                  {RATINGS.map((r) => {
+                    const text = intervalText(r.value);
+                    const suggestedThis = r.value === suggestedGrade;
+                    const busy = Boolean(u.rateBusy || u.rated);
+                    return (
+                      <Button
+                        type="button"
+                        variant={suggestedThis ? "default" : "outline"}
+                        aria-disabled={busy || undefined}
+                        key={r.value}
+                        data-rating={r.value}
+                        aria-keyshortcuts={suggestedThis ? `${r.value} Enter` : String(r.value)}
+                        className={cn("rev-rate h-full min-h-14 w-full min-w-0 shrink flex-col gap-0.5 whitespace-normal px-1 py-2 text-center", busy && "opacity-50")}
+                        onClick={(event) => { if (busy) { event.preventDefault(); return; } rate(r.value); }}
+                      >
+                        <span className="rev-rate-name text-sm leading-none">{r.label}</span>
+                        <span className={cn("rev-rate-interval text-xs leading-none tabular-nums", suggestedThis ? "text-primary-foreground/75" : "text-muted-foreground")}>{text || "\u00a0"}</span>
+                        <span className="mt-0.5 hidden items-center justify-center gap-1 md:flex">
+                          <Kbd className={suggestedThis ? "bg-primary-foreground/15 text-primary-foreground" : undefined}>{r.value}</Kbd>
+                          {suggestedThis ? <Kbd className="bg-primary-foreground/15 text-primary-foreground">Enter</Kbd> : null}
+                        </span>
+                      </Button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </CardFooter>
+        </Card>
       </div>
 
       {pick && !narrow && (

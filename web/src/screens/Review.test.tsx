@@ -199,7 +199,8 @@ describe("Task C — Anki-style review card", () => {
     const spy = vi.spyOn(store, "sayFrench").mockImplementation(() => {});
     await mount(card({ id: "rec-1", mode: "recognize", kind: "Fill-in", target: "soleil", prompt: "" }));
     expect(spy).toHaveBeenCalledWith("soleil");
-    expect(host.textContent).toContain("What does it mean?");
+    expect(host.querySelector("[aria-label='Play']")).toBeTruthy();
+    expect(host.textContent).not.toContain("What does it mean?");
     expect(host.querySelector('.fr-word[data-word="soleil"]')).toBeTruthy();
     expect(host.querySelector("#rev-input")).toBeNull();
   });
@@ -222,6 +223,27 @@ describe("Task C — Anki-style review card", () => {
     expect(host.textContent).not.toContain("I go to the cafe.");
     await act(async () => button("Show answer").click());
     expect(host.textContent).toContain("Je vais au café.");
+  });
+
+  it("the session is one card: Show answer in the footer, grades in an even row, actions in the menu", async () => {
+    vi.spyOn(store, "sayFrench").mockImplementation(() => {});
+    await mount(card({ mode: "listen", kind: "Listen", prompt: "", id: "c-card" }));
+    expect(host.querySelector("[data-slot=card]")).toBeTruthy();
+    expect(host.querySelector("[aria-label='Card actions']")).toBeTruthy();
+    expect(host.querySelector("[aria-label='Play']")).toBeTruthy();
+    expect(host.textContent).not.toContain("Listen, then say what it means");
+    expect(host.textContent).not.toContain("takes the suggestion");
+    expect(host.textContent).not.toContain("Card 1 of");
+    const show = button("Show answer");
+    expect(show.className).toContain("w-full");
+    expect(show.closest("[data-slot=card-footer]")).toBeTruthy();
+    await act(async () => show.click());
+    const rates = Array.from(host.querySelectorAll<HTMLButtonElement>(".rev-rate"));
+    expect(rates).toHaveLength(4);
+    expect(host.querySelector("[data-slot=card-footer] .rev-ratings")).toBeTruthy();
+    expect(rates[2].getAttribute("data-variant")).toBe("default");
+    expect(rates.filter((b) => b.getAttribute("data-variant") === "outline")).toHaveLength(3);
+    expect(host.querySelector("[data-slot=separator]")).toBeTruthy();
   });
 });
 

@@ -155,11 +155,17 @@ function FocusBar() {
   const path = pathOf(route);
   if (path === "review/session") {
     const total = review.sessionCards?.length ?? 0;
+    const n = total > 0 ? Math.min(total, review.index + 1) : 0;
     return (
-      <div className="flex min-w-0 flex-1 items-center gap-3">
+      <div className="flex min-w-0 flex-1 items-center gap-2">
         <Button type="button" variant="ghost" onClick={() => go("review")}>Exit</Button>
-        <span className="font-medium">Review</span>
-        {total > 0 && <span className="ml-auto text-sm tabular-nums text-muted-foreground">{review.index + 1} of {total}</span>}
+        <span className="shrink-0 font-medium">Review</span>
+        {total > 0 && (
+          <div className="ml-auto flex min-w-0 items-center gap-2">
+            <Progress value={(n / total) * 100} aria-label="Session progress" className="h-1.5 w-20 sm:w-48" />
+            <span className="shrink-0 text-sm tabular-nums text-muted-foreground">{n} / {total}</span>
+          </div>
+        )}
       </div>
     );
   }
@@ -205,7 +211,7 @@ export function Shell({ children }: { children: ReactNode }) {
               </>
             )}
             <div className="ml-auto flex items-center gap-2">
-              {focused && <VersionInfo />}
+              {focused && path !== "review/session" && <VersionInfo />}
               <AccountSlot />
             </div>
           </header>
