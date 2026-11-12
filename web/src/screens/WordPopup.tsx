@@ -114,9 +114,11 @@ export function WordPanel({
   );
   const storedMeaning = usableMeaning(w?.meaning, text, sentence.en ?? "");
 
-  const [stack, setStack] = useState<string[]>([]);
+  const [stack, setStack] = useState<{ word: string; surface: string; occurrence: number }[]>([]);
   const nested = stack.length > 0;
-  const shown = stack.at(-1) ?? text;
+  const shown = stack.at(-1)?.word ?? text;
+  const contextWord = stack.at(-1)?.surface ?? text;
+  const contextOccurrence = stack.at(-1)?.occurrence ?? occurrence;
   const tooLong = w === undefined && (shown.length > WORD_MAX_CHARS || (shown.split(" ").length - 1) >= MAX_CHUNK_SPACES);
   const headword = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -129,7 +131,15 @@ export function WordPanel({
   const liveCount = useLookupCount(shown);
   const storedCount = useApp(s => s.lookups[lookupKey(shown)]?.count ?? 0);
   const count = liveCount ?? storedCount;
-  const drill = (word: string) => { if (lookupKey(word) !== lookupKey(shown)) { sayFrench(word); setStack(prev => [...prev, word]); recordLookup(word).catch(() => undefined); } };
+  const drill = (word: string) => {
+    if (lookupKey(word) === lookupKey(shown)) return;
+    sayFrench(word);
+    // Dictionary lemmas retain the clicked inflection and occurrence for sentence context.
+    // The headword, dictionary lookup and deck star still belong to the drilled word.
+    const isLemma = dict?.entries?.some(entry => lookupKey(entry.lemma) === lookupKey(word));
+    setStack(prev => [...prev, { word, surface: isLemma ? contextWord : word, occurrence: isLemma ? contextOccurrence : 0 }]);
+    recordLookup(word).catch(() => undefined);
+  };
   const french = (value: string, className = "text-sm") => <FrText text={value} className={className} onPick={p => drill(p.text)} />;
   const [dict, setDict] = useState<DictionaryEntry | null>(null);
   const dictPhonetic = dict?.dictionary_source === "wiktionnaire" ? dict.phonetic.trim() : "";
@@ -160,6 +170,7 @@ export function WordPanel({
   const loadDict = useCallback(() => {
     const request = ++dictRequest.current;
     if (tooLong) return;
+    setDict(null);
     setDictSt("loading");
     lookupWord(shown)
       .then((d) => {
@@ -180,7 +191,7 @@ export function WordPanel({
     if (tooLong || (!nested && storedMeaning)) return;
     setCtx(null);
     setCtxSt("loading");
-    wordContext({ sentence: sentence.fr, word: shown, occurrence: nested ? 0 : occurrence, translation_zh, hints: nested ? EMPTY_HINTS : hints }, abort.current.signal)
+    wordContext({ sentence: sentence.fr, word: contextWord, occurrence: contextOccurrence, translation_zh, hints: nested ? EMPTY_HINTS : hints }, abort.current.signal)
       .then((r) => {
         if (!alive() || request !== ctxRequest.current) return;
         setCtx(r.context);
@@ -189,7 +200,7 @@ export function WordPanel({
       .catch(() => {
         if (alive() && request === ctxRequest.current) setCtxSt("error");
       });
-  }, [tooLong, storedMeaning, sentence.fr, shown, nested, occurrence, translation_zh, hints]);
+  }, [tooLong, storedMeaning, sentence.fr, shown, contextWord, contextOccurrence, nested, translation_zh, hints]);
 
   useEffect(() => {
     loadDict();
@@ -219,6 +230,7 @@ export function WordPanel({
   const englishOnly = (value?: string) => value && !/\p{Script=Han}/u.test(value) ? value : "";
   const why = englishOnly(w?.why);
   const meaning = (!nested && storedMeaning) || usableMeaning(ctx?.meaning_en, shown, sentence.en ?? "");
+  const dictionaryMeaning = dictSt === "ready" ? (dict?.entries ?? []).filter(e => e.language === "en").flatMap(e => e.senses).map(s => usableMeaning(s, shown, sentence.en ?? "")).find(Boolean) : "";
   const phraseMeaning = overlapping ? usableMeaning(overlapping.meaning_en, text, sentence.en ?? "") : "";
 
   return (
@@ -236,7 +248,7 @@ export function WordPanel({
               <French value={baseForm} onWord={drill} />
             </p>
           )}
-          {nested && <><p className="text-xs text-muted-foreground">{[text, ...stack].join(" › ")}</p><Button type="button" variant="ghost" className="h-8 justify-start px-0" onClick={() => setStack(prev => prev.slice(0, -1))}><ArrowLeft aria-hidden />Back to {stack.length > 1 ? stack[stack.length - 2] : text}</Button></>}
+          {nested && <><p className="text-xs text-muted-foreground">{[text, ...stack.map(item => item.word)].join(" › ")}</p><Button type="button" variant="ghost" className="h-8 justify-start px-0" onClick={() => setStack(prev => prev.slice(0, -1))}><ArrowLeft aria-hidden />Back to {stack.length > 1 ? stack[stack.length - 2].word : text}</Button></>}
           {wordChars(shown).length > 1 && <div className="flex flex-wrap gap-1" aria-label="Component words">{wordChars(shown).map((part, i) => <Button key={i} variant="ghost" size="sm" onClick={() => drill(part)}>{part}</Button>)}</div>}
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -245,7 +257,7 @@ export function WordPanel({
         </div>
       </header>
 
-      <div className="divide-y rounded-lg border">
+      <div className="divide-y border-y">
         <Module key={`context-${sentence.id}-${shown}`} title="In this sentence" defaultOpen>
             {tooLong ? (
               <p className="text-sm text-muted-foreground">Select a word or a short phrase</p>
@@ -253,6 +265,8 @@ export function WordPanel({
               <p className="wp-definition text-sm font-normal text-foreground" lang="en">{meaning}</p>
             ) : ctxSt === "loading" ? (
               <><Spinner label="Finding the meaning…" /><Skeleton lines={1} /></>
+            ) : dictionaryMeaning ? (
+              <div className="flex flex-col gap-2"><p className="wp-definition text-sm">{dictionaryMeaning}</p><p className="text-xs text-muted-foreground">Dictionary meaning</p>{ctxSt === "error" && <Button type="button" variant="outline" onClick={loadCtx}>Retry</Button>}</div>
             ) : ctxSt === "error" ? (
               <div className="flex flex-col gap-2"><p className="text-sm text-muted-foreground">Couldn’t load the meaning in this sentence.</p><Button type="button" variant="outline" onClick={loadCtx}>Retry</Button></div>
             ) : (
@@ -341,7 +355,7 @@ function French({ value, onWord, language = "fr" }: { value: string; onWord: (wo
 }
 
 function Module({ title, defaultOpen = false, inner = false, children }: { title: string; defaultOpen?: boolean; inner?: boolean; children: ReactNode }) {
-  return <section aria-label={title} className={inner ? "rounded-md bg-muted/50 px-3" : "px-3"}>
+  return <section aria-label={title} className={inner ? "rounded-md bg-muted/50 px-3" : ""}>
     <Collapsible defaultOpen={defaultOpen}>
       <h3><CollapsibleTrigger className="flex min-h-10 w-full items-center justify-between gap-2 text-xs font-medium tracking-wide text-muted-foreground">
         {title}<ChevronDown className="size-4" aria-hidden />

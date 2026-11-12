@@ -89,3 +89,35 @@ After deploying the candidate over HTTPS, open `/app/study` in Safari.
 - Mac Safari (macOS Sonoma or later): File → Add to Dock, or Share → Add to Dock → Add. Launch from the Dock. [Apple Mac guide](https://support.apple.com/en-ca/104996).
 
 Check sign-in, Study navigation, word drawer, player, and notch/home-indicator clearance in the installed app. Installation/device checks were not performed against production during this run.
+
+
+## TASK A — Case-insensitive review character diff (follow-up)
+
+- Tool: Codex CLI. Model: gpt-6.1-sol. Version remains 1.3.2; existing PWA commits are preserved.
+- Character alignment and equality normalize NFC and then fold French letter case, matching the existing grading rule. Accents remain strict. Original typed and expected case remains visible.
+- Case-only differences render both lines green without error marks, placeholders, strike-through or expected-character highlighting. Identical answers retain the compact green check. The shared TypeAnswerDiff covers Review Result and Type it again.
+- Tests cover Adossé/adossé, ADOSSÉ/adossé, missing accents, NFC equivalence and a mixed case/accent phrase. The Review frontend test checks Correct plus both display lines, and practice highlighting only the accent mismatch.
+- Verification: cd web && npm test — 409/409 tests, 18/18 files. Final targeted rerun — 55/55 tests. npm run build passes (existing bundle-size / non-module PWA script warnings only).
+
+Screenshots (fixture preview on 127.0.0.1:8030):
+- /home/mgacai/pwa-1.3.2-out/screenshots/pwa-after-review-case-1280.png
+- /home/mgacai/pwa-1.3.2-out/screenshots/pwa-after-review-case-390.png
+
+## TASK B — Nested word-card star, sentence meaning and alignment (follow-up)
+
+- Tool: Codex CLI. Model: gpt-6.1-sol.
+- B1: Verified the existing single WordDeckStar uses the drilled headword, keyed by shown word, and cloze membership through lookupKey. No separate parent star was added. The new nuisibles → nuisible frontend regression saves the parent, drills into its dictionary lemma, verifies the child's empty star, saves/removes the child using the current sentence, and confirms the parent remains saved after Back.
+- B2 root cause: WordPanel previously sent the displayed lemma with occurrence 0 on every nested drill. The backend requires a whole-word surface match and rejects nuisible in “Ces insectes sont nuisibles.” with word_not_in_sentence (422); nuisibles has the valid span (18, 27). Reproduced offline with word_context.word_spans and covered by a backend regression, without production requests or live data.
+- Fix: Nested dictionary lemmas retain their source inflection and selected occurrence for sentence context, while display, lookup and deck actions target the child lemma. Other drilled words keep their own context target. Dictionary state is cleared when another lookup begins.
+- Fallback: If context fails or returns no usable English meaning, an available English dictionary gloss appears under “In this sentence”, explicitly labelled “Dictionary meaning”. Retry remains available for failed context. The frontend test forces failure, checks the harmful gloss instead of the hard error, retries successfully and checks the source-form payload. Existing meaning validation rejects errors; error strings are never used as definitions or saved metadata.
+- B3: Removed the Review Word/phrase button's default horizontal padding and the word modules' extra horizontal inset. Modules retain horizontal dividers. Browser measurement at 390 px confirms label, headword, In this sentence heading and gloss all start at x=40. Breadcrumb shares the headword container's edge.
+- Verification: 409/409 frontend tests; final targeted 55/55; PYTHONPATH=".:tests" python3 -m unittest tests.test_word_context — 25/25 tests, isolated temporary databases. Build passes. bash /home/mgacai/pwa-1.3.2-out/audit.sh — raw button/select/input/textarea/details/summary counts all 0.
+- Browser checks passed using the local fake backend and deliberately unavailable context fixture. Screenshot shows the child's empty star and dictionary fallback. No production services or prohibited ports were used. Preview 8030 was confirmed free before launch and stopped afterward; temporary harness files were removed.
+- /workspace does not exist on this host and its parent / is not writable as mgacai, so the extra screenshot copy there was unavailable.
+
+Screenshots:
+- /home/mgacai/pwa-1.3.2-out/screenshots/pwa-after-drill-star-390.png
+- /home/mgacai/pwa-1.3.2-out/screenshots/pwa-after-drill-insentence-390.png
+- /home/mgacai/pwa-1.3.2-out/screenshots/pwa-after-drill-align-390.png
+
+Verification logs are in /home/mgacai/pwa-1.3.2-out/: npm-test-followup.log, targeted-followup.log, python-test-followup.log, build-followup.log, audit-followup.log and followup-browser.log.

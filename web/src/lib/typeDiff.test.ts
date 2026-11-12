@@ -13,7 +13,16 @@ describe("typeDiff", () => {
     expect(diff.map(c => c.correct).join("")).toBe("tout de suite");
   });
   it("normalizes NFC", () => expect(typeDiff("e\u0301", "é")).toEqual([{ typed: "é", correct: "é", match: true }]));
-  it("case differences count", () => expect(typeDiff("Oui", "oui")[0].match).toBe(false));
+  it.each(["Adossé", "ADOSSÉ"])("ignores case in %s while preserving display", typed => {
+    const diff = typeDiff(typed, "adossé");
+    expect(diff.every(c => c.match)).toBe(true);
+    expect(diff.map(c => c.typed).join("")).toBe(typed);
+    expect(diff.map(c => c.correct).join("")).toBe("adossé");
+  });
+  it("keeps only the real accent mismatch in mixed case phrases", () => {
+    expect(typeDiff("ADOSSÉ Ici", "adosse ici").filter(c => !c.match)).toEqual([{ typed: "É", correct: "e", match: false }]);
+    expect(typeDiff("adossé", "adosse").filter(c => !c.match)).toHaveLength(1);
+  });
   it("handles empty strings and non-BMP characters", () => {
     expect(typeDiff("", "à")).toEqual([{ typed: "", correct: "à", match: false }]);
     expect(typeDiff("😀", "")).toEqual([{ typed: "😀", correct: "", match: false }]);

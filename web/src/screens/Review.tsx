@@ -764,7 +764,7 @@ function ReviewSession() {
               {isWordCard && (
                 <>
                   <section aria-label="Word/phrase" className="flex flex-col gap-2">
-                    <h2 className="text-sm font-medium"><Button variant="ghost" size="sm" onClick={() => sayFrench(card.target)}>Word/phrase</Button></h2>
+                    <h2 className="text-sm font-medium"><Button variant="ghost" size="sm" className="px-0" onClick={() => sayFrench(card.target)}>Word/phrase</Button></h2>
                     <WordPanel key={card.id} compact sentence={{ ...wpSentence, raw: { ...wpSentence.raw!, words: [{ fr: card.target, ipa: meta.ipa || "", type: meta.pos || "", lemma: meta.lemma || card.target, meaning: meta.ctx_en || meta.meaning_en || meta.dict_en || "", meaning_zh: "", why: "", english_link: "", false_friend: false }] } }} text={card.target} wordIndex={0} onClose={() => {}} />
                   </section>
                   <Separator />

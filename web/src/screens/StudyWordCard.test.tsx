@@ -191,6 +191,45 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(host.querySelector(".wp-headword")?.textContent).toBe("machine à laver");
   });
 
+  it("drills nuisibles → nuisible with its own deck star, source occurrence, dictionary fallback and retry", async () => {
+    const sentence: StudySentence = { ...SENTENCE, fr: "Ces insectes sont nuisibles.", en: "These insects are harmful." };
+    const lookup = vi.spyOn(lookupApi, "lookupWord").mockImplementation(async token => ({
+      token, lemma: "nuisible", pos: "adj", phonetic: "", explanation_cn: "", explanation_en: "",
+      entries: [{ lemma: "nuisible", pos: "adj", phonetic: "", language: "en", senses: ["harmful"], source_url: "https://en.wiktionary.org/wiki/nuisible#French", history_url: "" }],
+    }));
+    const context = vi.spyOn(lookupApi, "wordContext").mockRejectedValue(new Error("offline"));
+    await act(async () => root.render(<WordPanel sentence={sentence} text="nuisibles" occurrence={0} onClose={() => {}} />));
+    await wait(100);
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Save word"]')!.click());
+    await wait(150);
+    expect(host.querySelector('[aria-label="Saved"]')).toBeTruthy();
+    await act(async () => findButton("nuisible").click());
+    await wait(100);
+    expect(host.querySelector(".wp-headword")?.textContent).toBe("nuisible");
+    expect(lookup).toHaveBeenLastCalledWith("nuisible");
+    expect(host.querySelector('[aria-label="Save word"]')?.getAttribute("aria-pressed")).toBe("false");
+    const section = host.querySelector('[aria-label="In this sentence"]')!;
+    expect(section.textContent).toContain("harmful");
+    expect(section.textContent).toContain("Dictionary meaning");
+    expect(section.textContent).not.toContain("Couldn’t load");
+    expect(context.mock.calls.at(-1)?.[0]).toMatchObject({ word: "nuisibles", occurrence: 0, sentence: sentence.fr });
+    context.mockResolvedValue({ context: { meaning_en: "harmful to people", meaning_zh: "", why_zh: "" }, state: "ready" } as Awaited<ReturnType<typeof lookupApi.wordContext>>);
+    await act(async () => findButton("Retry").click());
+    await wait(100);
+    expect(section.textContent).toContain("harmful to people");
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Save word"]')!.click());
+    await wait(150);
+    expect(host.querySelector('[aria-label="Saved"]')).toBeTruthy();
+    const saves = fake.calls.filter(c => c.path === "/api/srs/notes" && c.method === "POST");
+    expect(saves.at(-1)?.body).toMatchObject({ sentence: sentence.fr, targets: [{ text: "nuisible" }] });
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Saved"]')!.click());
+    await wait(150);
+    expect(get().cards.some(c => c.word === "nuisible")).toBe(false);
+    expect(get().cards.some(c => c.word === "nuisibles")).toBe(true);
+    await act(async () => findButton("Back to nuisibles").click());
+    expect(host.querySelector('[aria-label="Saved"]')).toBeTruthy();
+  });
+
   it("fills the deck star when saved and keeps importance distinct", async () => {
     await act(async () => root.render(<WordPanel sentence={SENTENCE} text="madame" onClose={() => {}} />));
     await wait(100);
