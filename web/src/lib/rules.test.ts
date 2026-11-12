@@ -17,6 +17,27 @@ describe("grading", () => {
     expect(grade("Ça va.", "ca va").issues[0].kind).toBe("accent");
     expect(grade(T, "jai oublié mon rendez-vous").issues[0].kind).toBe("different");
   });
+  it("scores the aligned reference with half credit for accents", () => {
+    const r = grade("Ma machine à laver fuit.", "Ma machine a lav fui");
+    expect(r.accuracy).toBe(50);
+    expect(r.counts).toEqual({ ok: 2, accent: 1, different: 2, missing: 0, extra: 0 });
+    expect(r.alignment).toEqual([
+      { mark: "ok", given: "Ma", expected: "Ma" },
+      { mark: "ok", given: "machine", expected: "machine" },
+      { mark: "accent", given: "a", expected: "à" },
+      { mark: "different", given: "lav", expected: "laver" },
+      { mark: "different", given: "fui", expected: "fuit" },
+    ]);
+  });
+  it("includes extras in the score denominator and keeps missing words in alignment order", () => {
+    const r = grade("Ma machine à laver fuit.", "Oh Ma machine à laver fuit vraiment");
+    expect(r.accuracy).toBe(71);
+    expect(r.counts.extra).toBe(2);
+    const missing = grade("Ma machine à laver fuit.", "Ma machine fuit");
+    expect(missing.alignment.map(w => w.mark)).toEqual(["ok", "ok", "missing", "missing", "ok"]);
+    expect(missing.accuracy).toBe(60);
+    expect(grade("Rendez-vous ici !", "RENDEZ vous ici").accuracy).toBe(100);
+  });
   it("labels the prompt examples", () => {
     const accent = grade(T, "J’ai oublie mon rendez-vous.");
     expect(accent.issues).toEqual([{ kind: "accent", expected: "oublié", given: "oublie" }]);

@@ -230,6 +230,20 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(host.querySelector('[aria-label="Saved"]')).toBeTruthy();
   });
 
+  it("shows importance dots and lookup count beside an unsaved deck star", async () => {
+    await act(async () => root.render(<WordPanel sentence={SENTENCE} text="machine" onClose={() => {}} />));
+    await wait(100);
+    const star = host.querySelector('[aria-label="Save word"]')!;
+    expect(star.getAttribute("aria-pressed")).toBe("false");
+    expect(star.querySelector("svg.fill-current")).toBeNull();
+    const importance = host.querySelector(".wp-importance")!;
+    expect(importance.querySelectorAll("[data-filled]")).toHaveLength(5);
+    expect(importance.querySelectorAll('[data-filled="true"]')).toHaveLength(3);
+    expect(importance.querySelector("svg")).toBeNull();
+    expect(importance.textContent).toContain("1 lookup");
+    expect(importance.textContent).toContain("Importance, 3 out of 5, based on 1 lookup.");
+  });
+
   it("fills the deck star when saved and keeps importance distinct", async () => {
     await act(async () => root.render(<WordPanel sentence={SENTENCE} text="madame" onClose={() => {}} />));
     await wait(100);

@@ -1,5 +1,6 @@
 import json
 import pathlib
+import shutil
 import struct
 import subprocess
 from unittest.mock import patch
@@ -164,11 +165,19 @@ for (const path of ['/api/study', '/tts', '/files/a.mp3', '/auth/login',
     }
 }
 """.replace("SOURCE", json.dumps(src), 1)
-        subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True)
+        # The production Python image has no Node; source assertions below always run.
+        node = shutil.which("node")
+        if node is not None:
+            subprocess.run([node, "-e", script], check=True, capture_output=True, text=True)
         self.assertIn("await caches.delete(key)", src)
         registration = (STATIC / "pwa-register.js").read_text()
         self.assertIn("location.protocol !== 'https:'", registration)
         self.assertIn("register('/sw.js', { scope: '/' })", registration)
+
+    def test_service_worker_source_checks_still_run_without_node(self):
+        with patch("shutil.which", return_value=None), patch("subprocess.run") as run:
+            self.test_service_worker_leaves_sensitive_routes_and_spa_on_network()
+            run.assert_not_called()
 
     def test_standalone_session_cookie_is_same_origin_and_secure(self):
         request = Request({"type": "http", "scheme": "http", "path": "/app/study",

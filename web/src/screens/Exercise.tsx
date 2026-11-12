@@ -1,13 +1,12 @@
-import { useLayoutEffect, useRef, useState } from "react";
-import { Lightbulb, Eye, Play, Turtle, RotateCcw, History as HistoryIcon, Loader2 } from "lucide-react";
+import { Fragment, useLayoutEffect, useRef, useState } from "react";
+import { Lightbulb, Eye, Play, Turtle, RotateCcw, Loader2 } from "lucide-react";
 import type { PracticeItem, StudySentence } from "../data/fixtures";
-import { grade, type DisplayWord } from "../lib/grading";
+import { grade } from "../lib/grading";
 import { gradeFeedback } from "../lib/feedback";
 import { plural } from "../lib/format";
 import {
   announce,
   get,
-  go,
   retryPlayback,
   set,
   startPlayback,
@@ -17,7 +16,7 @@ import {
   type QuestionUI,
 } from "../state/store";
 import { gradeAttempt } from "../api/dictation";
-import { FrText, type FrPick, type FrSegment } from "../components/FrText";
+import { FrText, type FrPick } from "../components/FrText";
 import { Spinner, Textarea, useNarrow } from "../components/ui";
 import { WordOverlay, WordPanel } from "./WordPopup";
 import { Button } from "../components/ui/button";
@@ -196,74 +195,6 @@ export function submitAnswer(key: string) {
       patchUI(key, qk, { phase: "techfail" });
       announce("Checking didn’t finish. This is not a wrong answer. Your answer is kept.", true);
     });
-}
-
-/* ---------------- shared feedback pieces ---------------- */
-
-function cleanCounterpart(w?: string) {
-  return (w ?? "").replace(/^[^\p{L}\p{N}]+|[.,;:!?…»«"]+$/gu, "");
-}
-
-function inlineTagFor(w: DisplayWord, side: "answer" | "target"): string | null {
-  if (w.mark === "ok") return null;
-  if (side === "answer") {
-    return w.mark === "extra" ? "Extra word" : null;
-  }
-  if (w.mark === "missing") return "Missing word";
-  const given = cleanCounterpart(w.counterpart);
-  if (w.mark === "different") return given ? `Different word: you wrote ${given}` : "Different word";
-  if (w.mark === "accent") return given ? `Accent: you wrote ${given}` : "Accent";
-  return null;
-}
-
-function targetSegments(words: DisplayWord[]): FrSegment[] {
-  const out: FrSegment[] = [];
-  words.forEach((w, i) => {
-    const word = /[\p{L}\p{N}]/u.test(w.text);
-    out.push({ t: w.text, w: word, tone: w.mark !== "ok" ? w.mark : undefined });
-    if (i < words.length - 1) out.push({ t: " " });
-  });
-  return out;
-}
-
-export function MarkedLine({
-  words,
-  label,
-  side = label === "Your answer" ? "answer" : "target",
-  onPick,
-  onPlay,
-}: {
-  words: DisplayWord[];
-  label: string;
-  onPlay?: () => void;
-  side?: "answer" | "target";
-  /** Correct-answer French uses the same tappable text as the study sentence. */
-  onPick?: (p: FrPick) => void;
-}) {
-  const notes = [...new Set(words.map((w) => inlineTagFor(w, side)).filter((tag): tag is string => Boolean(tag)))];
-  const tappable = side === "target" && onPick;
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="text-sm font-medium text-muted-foreground">{label}</span>
-      {onPlay ? (
-        <Button type="button" variant="link" onClick={onPlay} className="h-auto justify-start self-start whitespace-normal p-0 text-left font-serif text-xl leading-9" lang="fr">
-          <span>{words.map((w, i) => <span key={i}>{i > 0 ? " " : ""}{w.mark === "ok" ? w.text : <span className={`rounded px-0.5 tok--${w.mark}`}>{w.text}</span>}</span>)}</span>
-        </Button>
-      ) : tappable ? (
-        <FrText segments={targetSegments(words)} className="font-serif text-xl leading-9" onPick={onPick} />
-      ) : (
-        <p className="font-serif text-xl leading-9" lang="fr">
-          {words.map((w, i) => (
-            <span key={i}>
-              {w.mark === "ok" ? w.text : <span className={`rounded px-0.5 tok--${w.mark}`}>{w.text}</span>}
-              {i < words.length - 1 ? " " : ""}
-            </span>
-          ))}
-        </p>
-      )}
-      {notes.length > 0 && <p className="compare-note text-xs leading-4 text-muted-foreground">{notes.join(" · ")}</p>}
-    </div>
-  );
 }
 
 /* ---------------- Exercise ---------------- */
@@ -489,7 +420,6 @@ export function Exercise({
             doneLabel={doneLabel}
             sessionAttempts={sessionAttempts}
             itemsCount={sess.items.length}
-            route={route}
           />
         )
       )}
@@ -520,7 +450,6 @@ function Result({
   doneLabel,
   sessionAttempts,
   itemsCount,
-  route,
 }: {
   sessionKey: string;
   attempt: Attempt;
@@ -533,48 +462,50 @@ function Result({
   doneLabel: string;
   sessionAttempts: Attempt[];
   itemsCount: number;
-  route: string;
 }) {
   const r = attempt.result!;
   const correct = attempt.outcome === "correct";
   return (
     <div className="flex flex-col gap-4">
       <div id={`ex-result-${sessionKey}`} tabIndex={-1} className="flex flex-col gap-3">
-        {attempt.answerKnown ? (
-          <Alert variant="default"><AlertTitle>Answer known</AlertTitle></Alert>
-        ) : correct ? (
-          <Alert variant="default"><AlertTitle>{attempt.hinted ? "Correct · hint used" : "Correct"}</AlertTitle></Alert>
-        ) : (
-          <Alert variant="destructive"><AlertTitle>{`Not quite · ${plural(r.issues.length, "difference")}`}</AlertTitle></Alert>
-        )}
-        {correct ? (
-          <div className="flex flex-col gap-3 py-2">
-            <span className="text-sm font-medium text-muted-foreground">Answer</span>
-            <FrText text={target} className="font-serif text-2xl leading-snug wrap-break-word" onPick={onPick} />
-            <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" variant="ghost" className="md:-ml-3" onClick={() => startPlayback({ kind: "exercise", label: "Practice audio", route }, Math.max(1, target.length / 13), { texts: [target] })}>{<Play aria-hidden />}Play answer</Button>
-            </div>
+        <div className="flex flex-wrap items-center gap-4">
+          <p className="text-4xl font-semibold tabular-nums" aria-label={`Score: ${r.accuracy}%`}>{r.accuracy}%</p>
+          <div>
+            <p className="font-medium">{attempt.answerKnown ? "Answer known" : correct ? attempt.hinted ? "Correct · hint used" : "Correct" : "Not quite"}</p>
+            <p className="text-sm text-muted-foreground">{r.counts.ok} right · {r.counts.different + r.counts.missing + r.counts.extra} wrong{r.counts.accent > 0 && ` · ${plural(r.counts.accent, "accent")}`}</p>
           </div>
-        ) : (
-          <div className="flex flex-col gap-4">
-            <MarkedLine label="Your answer" words={r.answer} side="answer" />
-            <MarkedLine label="Correct answer" words={r.target} side="target" onPick={onPick} />
-          </div>
-        )}
+        </div>
+        <p aria-label="Inline corrections" className="font-serif text-2xl leading-relaxed wrap-break-word" lang="fr">
+          {r.alignment.map((word, i) => (
+            <Fragment key={i}>
+              {i > 0 && " "}
+              <span data-mark={word.mark} className={word.mark === "different" || word.mark === "accent" ? "inline-block max-w-full" : undefined}>
+                {word.mark === "ok" ? word.given : word.mark === "missing" ? (
+                  <span className="text-muted-foreground" aria-label={`Missing word: ${word.expected}`}>{word.expected}</span>
+                ) : (
+                  <>
+                    <del className={word.mark === "accent" ? "text-muted-foreground decoration-dotted" : "text-muted-foreground"}>{word.given}</del>
+                    {word.expected && <> <span className={word.mark === "accent" ? "underline decoration-dotted underline-offset-4" : "text-destructive font-medium"} aria-label={word.mark === "accent" ? `Accent correction: ${word.expected}` : undefined}>{word.expected}</span></>}
+                  </>
+                )}
+              </span>
+            </Fragment>
+          ))}
+        </p>
+        <div className="rounded-md bg-muted p-4" aria-label="Correct answer">
+          <FrText text={target} className="font-serif text-xl leading-relaxed wrap-break-word" onPick={onPick} />
+        </div>
         <HistoryStatus attempt={attempt} />
       </div>
 
       {isLast && <SessionSummary attempts={sessionAttempts} items={itemsCount} />}
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2" aria-label="Result actions">
+        <Button type="button" variant="outline" onClick={onTryAgain}>{<RotateCcw aria-hidden />}Try again</Button>
         {isLast ? (
           <Button type="button" variant="default" onClick={onDone}>{doneLabel}</Button>
         ) : (
           <Button type="button" variant="default" onClick={onNext}>Next</Button>
-        )}
-        <Button type="button" variant="outline" onClick={onTryAgain}>{<RotateCcw aria-hidden />}Try again</Button>
-        {isLast && (
-          <Button type="button" variant="ghost" onClick={() => go("progress/history?tab=attempts")}>{<HistoryIcon aria-hidden />}See attempts in History</Button>
         )}
       </div>
     </div>

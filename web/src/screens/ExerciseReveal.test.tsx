@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { gradeAttempt } from "../api/dictation";
 import type { PracticeItem } from "../data/fixtures";
 import { get, resetDemo, set } from "../state/store";
-import { ensureSession, Exercise } from "./Exercise";
+import { ensureSession, Exercise, submitAnswer } from "./Exercise";
 
 vi.mock("../api/dictation", () => ({
   gradeAttempt: vi.fn(async () => ({ correct: true, saved: true })),
@@ -133,5 +133,42 @@ describe.each(["Recall", "Dictation"] as const)("%s answer keyboard", (kind) => 
     expect(input.getAttribute("aria-describedby")).toBe("ex-err-empty-test");
     expect(host.querySelector("#ex-err-empty-test")?.textContent).toContain("Type an answer before checking.");
     expect(gradeAttempt).not.toHaveBeenCalled();
+  });
+});
+
+
+describe.each(["Recall", "Dictation"] as const)("%s result", kind => {
+  describe.each(["whole", "step"] as const)("%s scope", mode => {
+    it.each([false, true])("renders inline feedback and two last-item actions (correct=%s)", async correct => {
+      const target = "Ma machine à laver fuit.";
+      const fixture: PracticeItem[] = [{ id: "machine", fr: target, en: "My washing machine leaks.", label: "Sentence", steps: [{ fr: target, en: "My washing machine leaks." }] }];
+      const key = mode === "whole" ? "0:whole:w" : "0:step:0";
+      const sessionKey = "result-test";
+      vi.mocked(gradeAttempt).mockResolvedValueOnce({ correct, saved: true } as Awaited<ReturnType<typeof gradeAttempt>>);
+      ensureSession(sessionKey, kind, "Fixture", fixture);
+      await act(async () => {
+        set(s => ({ exercises: { ...s.exercises, [sessionKey]: { ...s.exercises[sessionKey], mode, drafts: { [key]: correct ? "MA machine à laver fuit!" : "Ma machine a lav fui" } } } }));
+        root.render(<Exercise sessionKey={sessionKey} kind={kind} source="Fixture" items={fixture} onDone={() => {}} />);
+      });
+      await act(async () => { submitAnswer(sessionKey); });
+      expect(host.querySelector('[aria-label="Score: ' + (correct ? 100 : 50) + '%"]')?.className).toContain("text-4xl");
+      expect(host.textContent).toContain(correct ? "5 right · 0 wrong" : "2 right · 2 wrong · 1 accent");
+      const inline = host.querySelector('[aria-label="Inline corrections"]')!;
+      if (correct) {
+        expect(inline.querySelector("del")).toBeNull();
+        expect(inline.querySelector('[data-mark]:not([data-mark="ok"])')).toBeNull();
+      } else {
+        expect([...inline.querySelectorAll("del")].map(el => el.textContent)).toEqual(["a", "lav", "fui"]);
+        expect(inline.querySelector('[data-mark="accent"]')?.textContent?.trim()).toBe("a à");
+        expect(inline.querySelector('[data-mark="accent"] .decoration-dotted')).toBeTruthy();
+        expect([...inline.querySelectorAll(".text-destructive")].map(el => el.textContent)).toEqual(["laver", "fuit"]);
+      }
+      expect(host.querySelector('[aria-label="Correct answer"]')?.textContent).toBe(target);
+      expect(host.textContent).not.toMatch(/Accent: you wrote|Different word:|Your answer/);
+      expect(host.querySelector(".compare-note")).toBeNull();
+      const actions = host.querySelector('[aria-label="Result actions"]')!;
+      expect([...actions.querySelectorAll("button")].map(el => el.textContent)).toEqual(["Try again", "Done — return to Study"]);
+      expect(host.textContent).not.toContain("See attempts in History");
+    });
   });
 });
