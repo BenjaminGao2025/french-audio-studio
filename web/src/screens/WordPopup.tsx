@@ -1,3 +1,4 @@
+import { QuestionMic } from "../components/QuestionMic";
 import { MarkedExplanation } from "../components/MarkedExplanation";
 import { useExplanationLanguage } from "../lib/explanationLanguage";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -368,11 +369,11 @@ function Origin({ word, lemma, onWord }: { word: string; lemma: string; onWord: 
     {value.memory_zh && <div className="grid gap-1"><dt className="text-xs font-medium tracking-wide text-muted-foreground">记忆提示</dt><dd>{value.memory_zh}</dd></div>}
   </dl> : <p className="whitespace-pre-line text-sm" lang="zh">{value.text}</p>;
 }
-function Ask({ sentence, word }: { sentence: StudySentence; word: string }) {
+export function Ask({ sentence, word }: { sentence: StudySentence; word: string }) {
   const [language] = useExplanationLanguage();
   const [question, setQuestion] = useState(""); const [answer, setAnswer] = useState(""); const [busy, setBusy] = useState(false); const [error, setError] = useState(false);
   const send = async () => { setBusy(true); setError(false); try { setAnswer((await askQuestion(sentence, question, [], undefined, { word, language })).answer); } catch { setError(true); } finally { setBusy(false); } };
-  return <><form className="flex gap-2" onSubmit={e => { e.preventDefault(); void send(); }}><Input aria-label="Ask about this word" value={question} onChange={e => setQuestion(e.target.value)} /><Button disabled={busy || !question.trim()} type="submit">Send</Button></form>{busy && <Spinner label="Asking…" />}{error && <Button variant="outline" onClick={() => void send()}>Retry</Button>}{answer && <p className="whitespace-pre-wrap text-sm">{answer}</p>}</>;
+  return <><form className="flex flex-wrap gap-2" onSubmit={e => { e.preventDefault(); void send(); }}><Input className="min-w-0 flex-1" aria-label="Ask about this word" value={question} onChange={e => setQuestion(e.target.value)} /><QuestionMic sentence={sentence.fr} disabled={busy} onText={text => setQuestion(prev => [prev.trimEnd(), text].filter(Boolean).join(" "))} /><Button disabled={busy || !question.trim()} type="submit">Send</Button></form>{busy && <Spinner label="Asking…" />}{error && <Button variant="outline" onClick={() => void send()}>Retry</Button>}{answer && <p className="whitespace-pre-wrap text-sm">{answer}</p>}</>;
 }
 
 /** Desktop floats at the original selection; Radix handles collision, Escape and outside dismissal. */
