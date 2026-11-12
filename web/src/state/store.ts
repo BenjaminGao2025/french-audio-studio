@@ -129,8 +129,6 @@ export interface ReviewUI {
   draft: string;
   phase: "answering" | "submitting" | "techfail" | "graded";
   hint: boolean;
-  /** Sticky scoring flag, independent of panel visibility. */
-  hinted?: boolean;
   revealed: boolean;
   recorded?: boolean;
   selfCheck?: boolean;
