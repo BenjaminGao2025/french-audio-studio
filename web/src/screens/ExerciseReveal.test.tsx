@@ -382,6 +382,34 @@ describe("normalization and visible grading marks", () => {
   });
 });
 
+describe("glued comma result display (Bug F)", () => {
+  it("keeps ont/en correct and strikes a wrong word with its correct form", async () => {
+    const target = "Les représentants constitués en Assemblée nationale, ont résolu d'exposer les droits.";
+    const answer = "Les représentants constitués en Assemblee nationale,ont fini d'exposer les droits";
+    vi.mocked(gradeAttempt).mockResolvedValueOnce({ correct: false, saved: true } as Awaited<ReturnType<typeof gradeAttempt>>);
+    const fixture = [{ ...items[0], fr: target }];
+    ensureSession("comma-f", "Recall", "Fixture", fixture);
+    await act(async () => {
+      set(s => ({ exercises: { ...s.exercises, "comma-f": { ...s.exercises["comma-f"], mode: "whole", drafts: { "0:whole:w": answer } } } }));
+      root.render(<Exercise sessionKey="comma-f" kind="Recall" source="Fixture" items={fixture} onDone={() => {}} />);
+      submitAnswer("comma-f");
+    });
+    const result = get().attempts.at(-1)!.result!;
+    const line = host.querySelector('[aria-label="Inline corrections"]')!;
+    const marks = [...line.querySelectorAll('[data-mark]:not([data-mark="ok"])')];
+    // "N right / M wrong" and the visible marks both come from the same alignment.
+    expect(marks.length).toBe(result.counts.different + result.counts.missing + result.counts.extra + result.counts.accent);
+    expect(host.textContent).toContain(
+      `${result.counts.ok} right · ${result.counts.different + result.counts.missing + result.counts.extra} wrong`,
+    );
+    const wrong = marks.find(m => m.getAttribute("data-mark") === "different")!;
+    expect(wrong.querySelector("del")?.classList.contains("line-through")).toBe(true);
+    expect(wrong.querySelector("del")?.textContent).toBe("fini");
+    expect(wrong.textContent).toContain("résolu");
+    expect(result.alignment.filter(w => w.expected === "ont" || w.expected === "en").every(w => w.mark === "ok")).toBe(true);
+  });
+});
+
 
 describe.each(["Recall", "Dictation"] as const)("%s panel toggles", kind => {
   it.each(["whole", "step"] as const)("keeps scoring flags when toolbar or close controls hide %s panels", async mode => {

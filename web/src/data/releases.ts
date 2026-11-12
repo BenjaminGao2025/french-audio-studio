@@ -7,7 +7,7 @@ export const RELEASES = [
   {
     version: APP_VERSION,
     date: "2026-11-12",
-    changes: ["Steps and Step by step open first. Save individual steps for review.", "Compact word-by-word layout, phrase-specific context, and single audio playback."],
+    changes: ["Steps and Step by step open first. Save individual steps for review.", "Compact word-by-word layout, phrase-specific context, and single audio playback.", "Answer checking splits words at punctuation, so a missing space cannot shift later words."],
   },
   {
     version: "1.3.5",

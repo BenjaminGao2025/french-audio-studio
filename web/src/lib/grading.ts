@@ -1,8 +1,10 @@
 /**
  * Dictation / Recall grading (prototype rules).
  * - NFC, case, repeated spaces and curly/straight apostrophes are normalized.
- * - Ordinary punctuation is ignored; hyphen and space are equivalent (rendez-vous = rendez vous).
- * - Word-internal apostrophes are kept (j’ai = j'ai, but jai is a different word).
+ * - Punctuation (, . ; : ! ? … « » quotes, and hyphen) splits words wherever it appears,
+ *   regardless of spacing: "nationale,ont", "nationale, ont" and "nationale , ont" are the same
+ *   two words. Punctuation itself is never a token, so it cannot be right or wrong.
+ * - Elisions are one token (j’ai = j'ai, l'homme stays l'homme); jai is a different word.
  * - Accents are strict (été ≠ ete), except œ/oe which is tolerated for grading only.
  * These equivalences are never used for dictionary lookup keys (see lookup.ts).
  */
@@ -27,6 +29,10 @@ export interface GradeResult {
 }
 
 const APOS = /[\u2019\u2018\u02BC\u0060\u00B4\u2032]/g;
+// A run of anything that is not a letter, digit or apostrophe separates two words. Apostrophes
+// stay inside an elision (l'homme); every punctuation mark and whitespace is a boundary no matter
+// how many spaces surround it, so a missing space after a comma cannot glue two words together.
+const SEPARATOR = /[^\p{L}\p{N}']+/u;
 
 interface KeyToken {
   text: string;
@@ -44,17 +50,19 @@ function stripAccents(s: string): string {
 }
 
 export function tokenize(sentence: string): { words: string[]; keys: KeyToken[] } {
-  const words = sentence.normalize("NFC").trim().split(/\s+/).filter(Boolean);
+  // Normalize before splitting: NFC composes decomposed accents (résolu in NFD becomes one \p{L}),
+  // and typographic apostrophes become ASCII so l’homme stays one token rather than l + homme.
+  const normalized = sentence.normalize("NFC").replace(APOS, "'");
+  const words = normalized.trim().split(/\s+/).filter(Boolean);
   const keys: KeyToken[] = [];
   words.forEach((w, wi) => {
-    const parts = baseNormalize(w)
-      .replace(/œ/g, "oe")
-      .replace(/æ/g, "ae")
-      .split("-");
-    for (const [partIndex, p] of parts.entries()) {
-      // Drop punctuation, then trim apostrophes that are not word-internal.
-      const cleaned = p.replace(/[^\p{L}\p{N}']/gu, "").replace(/^'+|'+$/g, "");
-      if (cleaned) keys.push({ text: stripPunct(w.split("-")[partIndex] ?? w), key: cleaned, bare: stripAccents(cleaned), word: wi });
+    // Split off punctuation inside the whitespace chunk too. A glued comma, a trailing period or
+    // a hyphen each yield separate grading tokens; punctuation-only pieces yield none.
+    for (const p of w.split(SEPARATOR)) {
+      const cleaned = p.replace(/^'+|'+$/g, ""); // quote apostrophes at a word's edges are punctuation
+      if (!cleaned) continue;
+      const key = baseNormalize(cleaned).replace(/œ/g, "oe").replace(/æ/g, "ae");
+      keys.push({ text: cleaned, key, bare: stripAccents(key), word: wi });
     }
   });
   return { words, keys };

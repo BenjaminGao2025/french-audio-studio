@@ -1,9 +1,11 @@
 """Dictation practice in Study: Recall (write from the English prompt) and Dictation (write what you hear).
 
 Grading is local and word-level: case, sentence punctuation (quotes and guillemets too) and spacing are
-ignored, typographic apostrophes count as plain ones, French elision (l', j', qu', ...) splits into its own
-word, and a word that only misses an accent or an apostrophe is marked apart from a wrong word and earns
-partial credit. tests/fixtures/dictation_cases.json pins ``tokenize`` / ``grade``.
+ignored, typographic apostrophes count as plain ones, and a word that only misses an accent or an
+apostrophe is marked apart from a wrong word and earns partial credit. Punctuation splits words wherever
+it appears (nationale,ont = nationale + ont), and an elision (l'homme, j'ai, d'exposer, aujourd'hui)
+stays ONE token, matching the frontend grading.ts. tests/fixtures/dictation_cases.json pins
+``tokenize`` / ``grade``.
 
 The server never takes the expected answer from an attempt. A learner registers an exercise item once (the
 sentence and build-up steps of their own analysis); each attempt names the item and a step, and the target is
@@ -35,8 +37,6 @@ HISTORY_LIMIT = 50
 
 # Typographic apostrophes and look-alikes typed on phones: all mean the plain one
 _APOSTROPHES = {"’", "‘", "ʼ", "`", "´", "′", "'"}
-# Words that elide before a vowel: l'homme -> l' + homme. Anything else (aujourd'hui, quelqu'un) stays one word.
-ELISION_PREFIXES = {"l", "d", "j", "m", "t", "s", "n", "c", "ç", "qu", "jusqu", "lorsqu", "puisqu", "quoiqu"}
 
 
 # ---------------------------------------------------------------------------
@@ -61,33 +61,15 @@ def _is_word_char(ch: str) -> bool:
     return ch in _APOSTROPHES or unicodedata.category(ch)[0] in "LMN"
 
 
-def _split_elision(surface: str) -> list[str]:
-    parts: list[str] = []
-    # A quote mark typed as an apostrophe before a word ('J'ai faim') is punctuation, never part of the word
-    rest = surface.lstrip("".join(_APOSTROPHES))
-    while True:
-        cut = next((i for i, ch in enumerate(rest) if ch in _APOSTROPHES), -1)
-        if cut <= 0:
-            break
-        prefix, tail = rest[:cut], rest[cut + 1 :].lstrip("".join(_APOSTROPHES))
-        if _norm(prefix) not in ELISION_PREFIXES:
-            break
-        parts.append(rest[: cut + 1])
-        rest = tail
-        if not rest:
-            return parts
-    # "l'" typed before a space is a whole elided word; other leading/trailing quotes are punctuation
-    if len(rest) > 1 and rest[-1] in _APOSTROPHES and _norm(rest[:-1]) in ELISION_PREFIXES:
-        parts.append(rest)
-        return parts
-    rest = rest.strip("".join(_APOSTROPHES))
-    if rest:
-        parts.append(rest)
-    return parts
-
-
 def tokenize(text: str) -> list[dict[str, str]]:
-    """Words of `text` as {"text": surface as typed, "norm": comparison form}."""
+    """Words of `text` as {"text": surface as typed, "norm": comparison form}.
+
+    Any non-word character (whitespace, comma, period, semicolon, colon, ! ? … quotes and guillemets,
+    hyphen) splits words, so a glued "nationale,ont" yields the same tokens as "nationale, ont".
+    An elision such as l'homme, j'ai or aujourd'hui is ONE token: apostrophes are word characters and
+    only apostrophes at a word's edges (quotation marks) are stripped. NFC composes decomposed accents
+    before splitting, so NFD é never becomes a token boundary.
+    """
     tokens: list[dict[str, str]] = []
     word: list[str] = []
     for ch in unicodedata.normalize("NFC", str(text or "")) + " ":
@@ -95,8 +77,9 @@ def tokenize(text: str) -> list[dict[str, str]]:
             word.append(ch)
             continue
         if word:
-            for part in _split_elision("".join(word)):
-                tokens.append({"text": part, "norm": _norm(part)})
+            surface = "".join(word).strip("".join(_APOSTROPHES))
+            if surface:
+                tokens.append({"text": surface, "norm": _norm(surface)})
             word = []
     return tokens
 
@@ -114,27 +97,6 @@ def compare_words(actual: str, expected: str) -> str:
     if _fold(_strip_apostrophes(actual)) == _fold(_strip_apostrophes(expected)):
         return "accent"
     return "wrong"
-
-
-def _split_merged(actual: list[dict[str, str]], expected: list[dict[str, str]]) -> list[dict[str, str]]:
-    """'jai' typed for "j'ai": split it at the elision, so it reads as a missing apostrophe, not a wrong word."""
-    merged: dict[str, int] = {}
-    for first, second in zip(expected, expected[1:]):
-        if first["norm"].endswith("'"):
-            head = _fold(_strip_apostrophes(first["norm"]))
-            merged.setdefault(head + _fold(_strip_apostrophes(second["norm"])), len(head))
-    known = {t["norm"] for t in expected}
-    out: list[dict[str, str]] = []
-    for token in actual:
-        norm = token["norm"]
-        cut = merged.get(_fold(norm)) if "'" not in norm and norm not in known else None
-        if cut:
-            surface = token["text"] if len(token["text"]) == len(norm) else norm
-            out.append({"text": surface[:cut], "norm": norm[:cut]})
-            out.append({"text": surface[cut:], "norm": norm[cut:]})
-        else:
-            out.append(token)
-    return out
 
 
 _COST = {"ok": 0.0, "accent": ACCENT_CREDIT, "wrong": 1.0}
@@ -176,7 +138,7 @@ def _align(expected: list[dict[str, str]], actual: list[dict[str, str]]) -> list
 def grade(expected: str, answer: str) -> dict[str, Any]:
     """Word-level diff of `answer` against `expected`, with counts and a 0-100 accuracy."""
     want = tokenize(expected)
-    got = _split_merged(tokenize(answer), want)
+    got = tokenize(answer)
     ops = _align(want, got)
     counts = {kind: 0 for kind in ("ok", "accent", "wrong", "missing", "extra")}
     for op in ops:

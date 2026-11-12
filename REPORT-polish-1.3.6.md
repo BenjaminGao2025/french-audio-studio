@@ -108,3 +108,31 @@ Four 390px light-mode screenshots captured and visually inspected under `/home/m
 - `polish-1.3.6-check-grade-mark-light-390.png`
 
 The hint screenshot was recaptured after inspection to show the panel and close control fully. The mic is visible beside Ask AI's input; Answer has an outline Try again and close control. Preview used the same fixture entry and fake backend, only on 127.0.0.1:8030, confirmed free before launch. Preview stopped and 8030 confirmed free afterward. Temporary preview source/config removed from the checkout; screenshots remain outside Git. /workspace does not exist, so the optional mirror was unavailable. No main push, force push, PR, deploy, Docker operation or production change.
+
+## Follow-up: Bug F — comma tokenization
+
+Tool: **CodeBuddy Code, model `HY4 (hy4std)`**, user `mgacai`, host `7840`. Codex was out of quota. Continued from `bcc012b` on `design/polish-1.3.6`; all A–E implementation, docs, avoir and ruff commits remain intact. No main merge/push, PR, force-push, deploy, Docker, migration or production change.
+
+### F — a comma with no following space glued two words and drifted the alignment
+
+**Root cause (confirmed):** `web/src/lib/grading.ts` `tokenize()` split the sentence on whitespace only, then stripped punctuation from each whitespace chunk with `.replace(/[^\p{L}\p{N}']/gu, "")`. `"nationale,ont"` therefore collapsed into ONE key `nationaleont`; the existing Levenshtein/DP `align()` then shifted the surrounding tokens, so both `ont` and `en` were marked wrong. The Python `dictation.py` `tokenize()` already split on every non-word character, so it never had the comma bug, but it deliberately split elisions (`l'` + `homme`) via `_split_elision`, diverging from the frontend one-unit rule.
+
+**Fix:**
+- `grading.ts` now NFC-normalizes and folds typographic apostrophes to ASCII, then splits each word on a `SEPARATOR` run of anything that is not a letter, digit or apostrophe. `"nationale,ont"`, `"nationale, ont"` and `"nationale , ont"` all yield the same two keys `nationale`, `ont`; punctuation produces no token at all, so it can never be right or wrong. Apostrophes stay inside an elision (`l'homme`, `j'ai`, `d'exposer`, `aujourd'hui` = one token). The existing DP alignment is unchanged: once tokens split correctly, one glued or accented token no longer shifts its neighbours. NFC, accent-strictness, prime/curly-apostrophe folding and the trailing-period behaviour from Bug C are intact.
+- `dictation.py` now keeps elisions as ONE token too (removed `_split_elision`, `_split_merged`, `ELISION_PREFIXES`; `grade()` aligns `tokenize(answer)` directly). `tests/fixtures/dictation_cases.json` was regenerated from the new tokenizer and checked by hand. Consequence, now consistent on both graders: writing an elision as two words (`"l homme"`, `"qu' il"`) is a word-level error, while a merged elision with a dropped apostrophe (`"lhomme"`, `"jai"`) remains an accent-level slip. Accent-strictness and the Bug C NFD / curly-apostrophe / trailing-period cases are unchanged.
+
+**Tests:**
+- Frontend `rules.test.ts` (+5): glued-comma tokenization and spacing equivalence, punctuation never a token, Ben's exact regression (`ont`/`en` ok, only the `Assemblée` accent marked, counts not drifted), the NFD / trailing-period / curly / elision cases fully correct, and elisions as single tokens. `ExerciseReveal.test.tsx` (+1 render): a genuinely wrong word still shows a line-through strike plus its correct form, `N right · M wrong` matches the alignment marks, and `ont`/`en` stay ok.
+- Python `test_dictation.py` (+5 `BugFCommaTokenizationTests`): glued comma, punctuation never a word, Ben's regression, resolu NFD + trailing period, and one-token elisions with curly apostrophes. Elision-related assertions and `dictation_cases.json` were updated carefully; `test_ben_normalization_regressions` (Bug C) is unchanged and still passes.
+
+### Final verification for F
+
+- `cd web && npm test`: **540 passed** (previous 534), 24 test files.
+- `cd web && npm run build`: passed; existing classic PWA script / chunk-size warnings only.
+- `PYTHONPATH=".:tests" python3 -m unittest discover -s tests`: **673 passed** (previous 668), fixture/temp DBs only.
+- Raw-element audit: **button=0, select=0, input=0, textarea=0, details=0, summary=0**; 40 app TSX files, 37 importing UI components, 1337 className uses, CSS 232 lines.
+- `git diff --check`: clean.
+- `uvx ruff==0.17.4 check tests/test_elision_keys.py`: all checks passed (also clean on `dictation.py` and `test_dictation.py`).
+- Avoir nested-lemma tests (Python `test_word_context` 31, frontend `StudyWordCard` 40) and Bug C regressions pass unchanged.
+
+Commit: `fix: split punctuation in grading tokens so commas do not glue words (1.3.6)`. A brief 1.3.6 release-note bullet was added to `web/src/data/releases.ts`. No screenshot was captured (optional); preview port 8030 was not started, and `preview-main.tsx` / `vite.audit.config.ts` were not added to the checkout. /workspace is absent, so the optional mirror was unavailable.
