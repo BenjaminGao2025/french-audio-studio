@@ -3,8 +3,8 @@ import pathlib
 import shutil
 import struct
 import subprocess
-from unittest.mock import patch
 import unittest
+from unittest.mock import patch
 from urllib.parse import urlsplit
 
 import testenv  # noqa: F401  (must run before the app is imported)
@@ -12,8 +12,8 @@ from fastapi.testclient import TestClient
 from starlette.requests import Request
 from starlette.responses import Response
 
-import routers.pages
 import routers.app_shell
+import routers.pages
 import tts_service
 import web_common
 
