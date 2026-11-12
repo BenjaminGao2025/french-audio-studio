@@ -232,16 +232,35 @@ LOOKUP_DEBOUNCE_SECONDS = 5
 IMPORTANCE_FROM_LOOKUPS = ((5, 5), (3, 4))
 
 
-def normalize_lookup_word(word: str) -> str:
-    """Canonical lemma identity: NFC, apostrophes, whitespace, case and a single elision prefix."""
+def _normalize_word_surface(word: str) -> str:
+    """Normalize spelling without conflating elision prefixes or their remainders."""
     text = unicodedata.normalize("NFC", str(word or ""))
     text = text.replace("’", "'").replace("‘", "'").replace("ʼ", "'")
     text = text.replace(" ", " ").replace(" ", " ")
-    return strip_elided_prefix(re.sub(r"\s+", " ", text).strip().lower())
+    return re.sub(r"\s+", " ", text).strip().lower()
+
+
+def normalize_lookup_word(word: str) -> str:
+    """Canonical lemma identity: NFC, apostrophes, whitespace, case and a single elision prefix."""
+    return strip_elided_prefix(_normalize_word_surface(word))
+
+
+# Historical counts lack sentence context: do not infer that these remainders
+# represent the same word as an elided expression (including conjugated verbs).
+ELISION_MIGRATION_SKIP_REMAINDERS = frozenset("""
+    à y il ils elle elles on en un une le la les lui leur leurs eux
+    je tu nous vous ce ceci cela ça se soi me te ne que qui quoi où dont
+    ai as a avons avez ont est es suis sommes êtes sont était étais étaient
+    être avoir avais avait avaient arrive arrives arrivent
+    et ou au aux de du des dans par pour sur sous avec sans si mais donc
+""".split())
 
 
 def _merge_elided_keys(conn: sqlite3.Connection) -> None:
-    """Merge legacy aliases transactionally; retain original rows/schedules/metadata for recovery."""
+    """Remap only unambiguous word data, backing up every replaced row.
+
+    Sentence cards and review assignments must never be merged or rewritten.
+    """
     conn.execute("CREATE TABLE IF NOT EXISTS srs_elision_merge_backup "
                  "(source_table TEXT NOT NULL, source_key TEXT NOT NULL, row_json TEXT NOT NULL, "
                  "PRIMARY KEY (source_table, source_key))")
@@ -250,10 +269,28 @@ def _merge_elided_keys(conn: sqlite3.Connection) -> None:
         conn.execute("INSERT OR IGNORE INTO srs_elision_merge_backup VALUES (?, ?, ?)",
                      (table, str(key), json.dumps(dict(row), ensure_ascii=False)))
 
-    for table in ("word_lookup_counts", "word_favorites"):
+    tables = ("word_lookup_counts", "word_favorites")
+    originals = {table: conn.execute(f"SELECT * FROM {table}").fetchall() for table in tables}
+    prefixes = {}
+    # Inspect both tables before writing, so a star and a count cannot resolve
+    # competing prefixes differently. When in doubt, retain the whole surface.
+    for rows in originals.values():
+        for row in rows:
+            surface = _normalize_word_surface(row["word"])
+            remainder = strip_elided_prefix(surface)
+            if remainder != surface:
+                prefixes.setdefault((row["user_id"], remainder), set()).add(surface.split("'", 1)[0])
+
+    for table, originals_rows in originals.items():
         groups = {}
-        for row in conn.execute(f"SELECT * FROM {table}").fetchall():
-            groups.setdefault((row["user_id"], normalize_lookup_word(row["word"])), []).append(row)
+        for row in originals_rows:
+            surface = _normalize_word_surface(row["word"])
+            remainder = strip_elided_prefix(surface)
+            key = surface
+            if (remainder not in ELISION_MIGRATION_SKIP_REMAINDERS
+                    and len(prefixes.get((row["user_id"], remainder), ())) <= 1):
+                key = remainder
+            groups.setdefault((row["user_id"], key), []).append(row)
         for (user_id, key), rows in groups.items():
             if all(r["word"] == key for r in rows):
                 continue
@@ -267,26 +304,6 @@ def _merge_elided_keys(conn: sqlite3.Connection) -> None:
             else:
                 conn.execute("INSERT INTO word_favorites VALUES (?, ?, ?)",
                              (user_id, key, min(r["created_at"] for r in rows)))
-
-    groups = {}
-    for row in conn.execute("SELECT * FROM srs_cards WHERE mode IN ('cloze', 'recognize') ORDER BY is_new, created_at, id").fetchall():
-        groups.setdefault((row["user_id"], normalize_lookup_word(row["target"])), []).append(row)
-    for rows in groups.values():
-        # Preserve ordinary cards in different sentence contexts. Only legacy elision aliases merge.
-        surfaces = {sentence_key(r["target"]) for r in rows}
-        if len(surfaces) < 2 or not any(strip_elided_prefix(t) != t for t in surfaces):
-            continue
-        survivor = rows[0]  # Keep a practiced schedule in preference to an unreviewed duplicate.
-        for r in rows:
-            backup("srs_cards", r, r["id"])
-            for review in conn.execute("SELECT * FROM srs_reviews WHERE card_id = ?", (r["id"],)).fetchall():
-                backup("srs_reviews", review, review["id"])
-        if any(r["archived_at"] is None for r in rows):
-            conn.execute("UPDATE srs_cards SET archived_at = NULL WHERE id = ?", (survivor["id"],))
-        for r in rows[1:]:
-            # Notes, translations and all reviews remain; original card payloads are in the backup table.
-            conn.execute("UPDATE srs_reviews SET card_id = ? WHERE card_id = ?", (survivor["id"], r["id"]))
-            conn.execute("DELETE FROM srs_cards WHERE id = ?", (r["id"],))
 
 
 def importance_for_lookups(count: int) -> int:
