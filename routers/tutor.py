@@ -364,10 +364,10 @@ async def ask_to_card(request: AskCardRequest, authorization: str | None = Heade
 LOOKUP_MAX_CHARS = 200
 
 
-async def request_word_lookup(word: str, api_key: str = "", model: str = ai.DEFAULT_MODEL) -> dict:
+async def request_word_lookup(word: str, api_key: str = "", model: str = ai.DEFAULT_MODEL, pos: str = "") -> dict:
     """Read genuine source definitions. Kept callable by the snapshot backfill script; no AI calls."""
     try:
-        result = await run_in_threadpool(offline_dictionary.lookup, word)
+        result = await run_in_threadpool(offline_dictionary.lookup, word, pos)
     except offline_dictionary.DictionaryUnavailable as exc:
         raise HTTPException(status_code=503, detail={"code": "dictionary_unavailable", "message": "The dictionary is temporarily unavailable. Please try again."}) from exc
     if result is not None:
@@ -383,6 +383,7 @@ async def request_word_lookup(word: str, api_key: str = "", model: str = ai.DEFA
 @router.get("/api/lookup")
 async def lookup_word(
     word: str = Query(min_length=1, max_length=LOOKUP_MAX_CHARS),
+    pos: str = Query(default="", max_length=80),
     model: str = ai.DEFAULT_MODEL,
     authorization: str | None = Header(default=None),
 ):
@@ -391,7 +392,7 @@ async def lookup_word(
     if not clean or any(ord(c) < 32 for c in word):
         raise HTTPException(status_code=400, detail={"message": "Enter a word to look up."})
     rate_limit(user_id, "dictionary")
-    return await request_word_lookup(clean)
+    return await request_word_lookup(word.strip(), pos=pos)
 
 
 class EtymologyRequest(BaseModel):

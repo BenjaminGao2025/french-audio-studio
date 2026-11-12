@@ -41,6 +41,23 @@ class SrsStoreTests(unittest.TestCase):
     def setUp(self):
         self.user_id, _ = _new_user()
 
+    def test_short_or_mostly_blanked_sentence_saves_as_recognize(self):
+        for sentence, target in (("Nous partons.", "partons"), ("Nous allons à la gare.", "allons à la gare")):
+            note = srs.add_note(self.user_id, sentence, translation_en="We leave.",
+                                targets=[{"text": target, "exact_target": True}], auto_listen=True)
+            self.assertEqual(note["cards"][0]["mode"], "recognize")
+            self.assertEqual(note["cards"][0]["target"], target)
+
+    def test_lookup_autosave_keeps_both_sentence_translations(self):
+        for count in range(3):
+            srs.record_word_lookup(self.user_id, "carte", debounce_seconds=0,
+                                   sentence="J’ai laissé ma carte.", translation_en="I left my card.",
+                                   translation_zh="我落下了我的卡。")
+        card = srs.list_cards(self.user_id)[0]
+        self.assertEqual(card["note"]["translation_en"], "I left my card.")
+        self.assertEqual(card["note"]["translation_zh"], "我落下了我的卡。")
+        self.assertEqual(card["mode"], "cloze")
+
     def test_add_note_is_idempotent_and_dedupes_sentences(self):
         first = srs.add_note(self.user_id, "Les cours commencent lundi.", "课程周一开始。", modes=["listen", "speak"])
         again = srs.add_note(
@@ -119,7 +136,7 @@ class SrsStoreTests(unittest.TestCase):
         client = TestClient(tts_service.app)
         payload = {"sentence": "Je vais en France.", "modes": ["listen", "speak"], "targets": [{"text": "en", "exact_target": True}, {"text": "France", "exact_target": True}, {"text": "aller", "exact_target": True}]}
         note = client.post("/api/srs/notes", headers=headers, json=payload).json()
-        self.assertEqual(sorted((c["mode"], c["target"]) for c in note["cards"]), [("cloze", "France"), ("cloze", "aller"), ("cloze", "en"), ("listen", ""), ("speak", "")])
+        self.assertEqual(sorted((c["mode"], c["target"]) for c in note["cards"]), [("cloze", "France"), ("cloze", "en"), ("listen", ""), ("recognize", "aller"), ("speak", "")])
         star = next(c for c in note["cards"] if c["target"] == "en")
         self.assertEqual(client.delete("/api/srs/cards/" + star["id"], headers=headers).status_code, 200)
         remaining = client.get("/api/srs/cards", headers=headers).json()["cards"]
@@ -237,16 +254,19 @@ class ImportanceAndWordsTests(unittest.TestCase):
         mid = srs.add_note(self.user_id, "Phrase normale.", modes=["listen"])
         self.assertEqual(mid["cards"][0]["importance"], 3)
 
+        start = datetime.datetime(2026, 11, 1, tzinfo=UTC)
+        for i in range(5):
+            srs.record_word_lookup(self.user_id, "très", now=start + datetime.timedelta(seconds=6*i))
         queue = srs.build_queue(self.user_id)
-        self.assertEqual([c["importance"] for c in queue["cards"]], [5, 3, 1])  # important first
+        self.assertEqual([c["importance"] for c in queue["cards"]], [5, 3, 3])  # important first
         only_top = srs.build_queue(self.user_id, min_importance=4)
         self.assertEqual([c["target"] for c in only_top["cards"]], ["très"])
 
         other_id, _ = _new_user()
         self.assertEqual(srs.set_importance(other_id, [low["cards"][0]["id"]], 5), 0)
-        self.assertEqual(srs.set_importance(self.user_id, [low["cards"][0]["id"]], 9), 1)  # clamped to 5
-        self.assertEqual(srs.build_queue(self.user_id, min_importance=5)["counts"]["total"], 2)
-        self.assertEqual(high["cards"][0]["importance"], 5)
+        self.assertEqual(srs.set_importance(self.user_id, [low["cards"][0]["id"]], 9), 1)  # derived word priority remains 3
+        self.assertEqual(srs.build_queue(self.user_id, min_importance=5)["counts"]["total"], 1)
+        self.assertEqual(high["cards"][0]["importance"], 3)
 
     def test_saved_words_span_all_sentences(self):
         srs.add_note(self.user_id, "Voici l'examen.", targets=[{"text": "Voici"}])
@@ -262,16 +282,16 @@ class ImportanceAndWordsTests(unittest.TestCase):
     def test_api_importance_and_words(self):
         note = self.client_post({"sentence": "Voici le test.", "targets": [{"text": "Voici", "importance": 4}]})
         card_id = note["cards"][0]["id"]
-        self.assertEqual(note["cards"][0]["importance"], 4)
+        self.assertEqual(note["cards"][0]["importance"], 3)
         from fastapi.testclient import TestClient
 
         client = TestClient(tts_service.app)
         res = client.post("/api/srs/importance", headers=self.headers, json={"card_ids": [card_id], "importance": 2})
         self.assertEqual(res.json(), {"updated": 1})
         words = client.get("/api/srs/words", headers=self.headers).json()["words"]
-        self.assertEqual([(w["text"], w["importance"]) for w in words], [("Voici", 2)])
+        self.assertEqual([(w["text"], w["importance"]) for w in words], [("Voici", 3)])
         self.assertEqual(
-            client.get("/api/srs/queue?min_importance=3", headers=self.headers).json()["counts"]["total"], 0
+            client.get("/api/srs/queue?min_importance=4", headers=self.headers).json()["counts"]["total"], 0
         )
 
     def client_post(self, body):
@@ -544,9 +564,7 @@ class CardBalanceTests(unittest.TestCase):
             targets=[{"text": "à"}],
             auto_listen=True,
         )
-        cloze_card = next(c for c in note["cards"] if c["mode"] == "cloze")
-        self.assertEqual(cloze_card["target"], "à la gare")
-        self.assertTrue(any(c["mode"] == "listen" for c in note["cards"]))
+        self.assertEqual([(c["mode"], c["target"]) for c in note["cards"]], [("recognize", "à la gare")])
 
     def test_api_notes_auto_listen_and_chunk(self):
         res = self.client.post(
@@ -681,7 +699,7 @@ class SessionSizeAndFavoriteTests(unittest.TestCase):
         self.assertEqual(srs.favorite_words(self.user_id), [])
         self.assertEqual(self.client.get("/api/srs/favorites").status_code, 401)
 
-    def test_lookups_raise_the_word_cards_importance_but_never_lower_it(self):
+    def test_word_importance_ignores_manual_values_and_follows_lookups(self):
         note = srs.add_note(self.user_id, "J’ai oublié mon billet.", targets=[{"text": "oublié", "mode": "cloze"}])
         other = srs.add_note(self.user_id, "Le billet est cher.", targets=[{"text": "billet", "mode": "cloze", "importance": 5}])
         start = datetime.datetime(2026, 11, 1, tzinfo=UTC)
@@ -689,6 +707,6 @@ class SessionSizeAndFavoriteTests(unittest.TestCase):
             srs.record_word_lookup(self.user_id, "Oublié", now=start + datetime.timedelta(minutes=i))
         srs.record_word_lookup(self.user_id, "billet", now=start)
         cards = {c["target"]: c for c in srs.list_cards(self.user_id)}
-        self.assertEqual(cards["oublié"]["importance"], 4)
-        self.assertEqual(cards["billet"]["importance"], 5)
+        self.assertEqual(cards["oublié"]["importance"], 5)
+        self.assertEqual(cards["billet"]["importance"], 3)
         self.assertTrue(note["id"] and other["id"])

@@ -120,6 +120,9 @@ class SrsImportanceRequest(BaseModel):
 
 
 class WordLookupRequest(BaseModel):
+    sentence: str = ""
+    translation_zh: str = ""
+    translation_en: str = ""
     word: str = Field(min_length=1, max_length=200)
 
 
@@ -137,7 +140,7 @@ def srs_saved_words(authorization: str | None = Header(default=None)):
 def srs_record_lookup(req: WordLookupRequest, authorization: str | None = Header(default=None)):
     """One card open of a word: increments its per-user lookup count (5s debounced)."""
     try:
-        return srs.record_word_lookup(_require_user_id(authorization), req.word)
+        return srs.record_word_lookup(_require_user_id(authorization), req.word, sentence=req.sentence, translation_en=req.translation_en, translation_zh=req.translation_zh)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail={"message": str(exc)})
 

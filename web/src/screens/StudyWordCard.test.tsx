@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StudySentence } from "../data/fixtures";
 import { StudyLearn } from "../screens/StudyLearn";
+import { WordsPanel } from "./StudyTools";
 import { WordPanel } from "./WordPopup";
 import { fake, installFakeBackend } from "../test/fakeBackend";
 import { resetLookupCaches, type DictionaryEntry } from "../api/lookup";
@@ -100,7 +101,7 @@ afterEach(async () => {
 });
 
 describe("Task B — Study word card, selection and steps", () => {
-  it("shows the English meaning and the dictionary, with collapsed French definitions", async () => {
+  it("loads Chinese context despite a stored English gloss, with collapsed French definitions", async () => {
     const sentence: StudySentence = {
       ...SENTENCE,
       raw: { ...SENTENCE.raw!, words: [{ fr: "madame", ipa: "madam", lemma: "madame", type: "noun", meaning: "madam; a polite address", meaning_zh: "女士", why: "A polite way to address a woman.", english_link: "madam", false_friend: false }] },
@@ -108,16 +109,68 @@ describe("Task B — Study word card, selection and steps", () => {
     await act(async () => root.render(<WordPanel sentence={sentence} text="madame" wordIndex={0} onClose={() => {}} />));
     await wait(150);
     const panel = host.querySelector(".word-card")!;
-    expect(panel.querySelector(".wp-definition")?.textContent).toBe("madam; a polite address");
+    expect(panel.querySelector(".wp-definition")?.textContent).toContain("它在这句话里的用法说明。");
+    expect(fake.calls.some(c => c.path === "/api/word-context")).toBe(true);
     expect(panel.textContent).toContain("[madam]");
     expect(panel.textContent).not.toContain("Example sentence");
-    expect(panel.textContent).not.toMatch(/\p{Script=Han}/u);
+    expect(panel.querySelector('[aria-label="In this sentence"]')?.textContent).toMatch(/\p{Script=Han}/u);
     expect(panel.textContent).not.toContain("Définition de madame.");
     await act(async () => findButton("French definitions").click());
     expect(panel.textContent).toContain("Définition de madame.");
 
-    expect(panel.textContent).toContain("A polite way to address a woman.");
-    expect(panel.textContent).not.toMatch(/\p{Script=Han}/u);
+    expect(panel.textContent).toContain("the meaning here");
+    expect(panel.querySelector('[aria-label="In this sentence"]')?.textContent).toMatch(/\p{Script=Han}/u);
+  });
+
+  it("keeps L’oubli as headword and renders elision plus Chinese meaning and role", async () => {
+    vi.spyOn(lookupApi, "lookupWord").mockResolvedValue({
+      token: "L’oubli", lemma: "oubli", pos: "noun", phonetic: "", explanation_cn: "", explanation_en: "",
+      elision: { prefix: "L’", expansion: "le", note: "masculine definite article, elided before a vowel", remainder: "oubli" },
+      entries: [{ lemma: "oubli", pos: "noun", phonetic: "", language: "en", senses: ["forgetting"], source_url: "", history_url: "" }],
+    });
+    vi.spyOn(lookupApi, "wordContext").mockResolvedValue({ context: {
+      meaning_zh: "遗忘", meaning_en: "forgetting", why_zh: "这里指遗忘；le mépris 和 l’oubli 由 ou 连接，共同作主语。",
+    }, state: "ready" });
+    await act(async () => root.render(<WordPanel sentence={SENTENCE} text="L’oubli" onClose={() => {}} />));
+    expect(host.querySelector(".wp-headword")?.textContent).toBe("L’oubli");
+    expect(host.querySelector('[aria-label="Elision breakdown"]')?.textContent).toContain("L’ = le");
+    expect(host.querySelector('[aria-label="Dictionary"]')?.textContent).not.toContain("not in the dictionary");
+    const context = host.querySelector('[aria-label="In this sentence"]')!;
+    expect(context.querySelector('[lang="zh"]')?.textContent).toContain("共同作主语");
+    expect(context.textContent).toContain("遗忘");
+    expect(context.querySelector('[lang="en"]')?.textContent).toBe("forgetting");
+  });
+
+  it("uses the aligned surface in analysis word chips and split component alignment", async () => {
+    const word = {fr:"homme",meaning:"human being",meaning_zh:"人",lemma:"homme",type:"noun",ipa:"",why:"",english_link:"",false_friend:false};
+    const sentence = {...SENTENCE,fr:"Voici l'homme.",segments:[{t:"Voici l'"},{t:"homme",w:true,wi:0},{t:"."}],raw:{...SENTENCE.raw!,words:[word],alignment:[{fr:"l'",en:"the"},{fr:"homme",en:"man"}]}};
+    const picked = vi.fn();
+    await act(async () => root.render(<WordsPanel sentence={sentence} onPick={picked} />));
+    const tokens = Array.from(host.querySelectorAll<HTMLElement>(".fr-word"));
+    expect(tokens.map(t => t.textContent)).toEqual(["l'homme", "l'homme"]);
+    await act(async () => tokens[1].click());
+    expect(picked.mock.calls[0][0].text).toBe("l'homme");
+  });
+
+  it("shows the full selected elision and a Chinese fixed expression only when present", async () => {
+    const fr = "Il défend les droits de l'homme.";
+    vi.spyOn(lookupApi, "phraseContext").mockResolvedValue({phrases: [{text:"droits de l’homme", phrase:"droits de l’homme", meaning_zh:"人权", meaning_en:"human rights", literal_zh:""}]});
+    vi.spyOn(lookupApi, "lookupWord").mockResolvedValue({token:"l'homme", lemma:"homme",pos:"noun",phonetic:"",explanation_cn:"",explanation_en:"",elision:{prefix:"l'",expansion:"le",note:"definite article",remainder:"homme"},entries:[{lemma:"homme",pos:"noun",phonetic:"",language:"en",senses:["man"],source_url:"",history_url:""}]});
+    vi.spyOn(lookupApi, "wordContext").mockResolvedValue({context:{meaning_zh:"人",meaning_en:"man",why_zh:"这里泛指人。"},state:"ready"});
+    const sentence = {...SENTENCE, fr, segments:[{t:"Il défend les droits de l'"},{t:"homme",w:true,wi:0},{t:"."}]};
+    const picked = vi.fn();
+    const { FrText } = await import("../components/FrText");
+    await act(async () => root.render(<FrText segments={sentence.segments} onPick={picked} />));
+    const token = Array.from(host.querySelectorAll<HTMLElement>(".fr-word")).find(s => s.textContent === "l'homme")!;
+    expect(token).toBeTruthy();
+    await act(async () => token.click());
+    expect(picked.mock.calls[0][0].text).toBe("l'homme");
+    await act(async () => root.render(<WordPanel sentence={sentence} text={picked.mock.calls[0][0].text} wordIndex={0} onClose={() => {}} />));
+    expect(host.querySelector(".wp-headword")?.textContent).toBe("l'homme");
+    expect(host.querySelector('[aria-label="Elision breakdown"]')?.textContent).toContain("l' = le");
+    expect(host.querySelector('[aria-label="In this sentence"] [lang="zh"]')?.textContent).toContain("droits de l’homme：人权");
+    await act(async () => root.render(<WordPanel sentence={{...sentence,fr:"Il voit l'homme."}} text="l'homme" onClose={() => {}} />));
+    expect(host.querySelector('[aria-label="In this sentence"]')?.textContent).not.toContain("人权");
   });
 
   it("renders English before French with a related label and short source attribution", async () => {
@@ -206,7 +259,7 @@ describe("Task B — Study word card, selection and steps", () => {
     await act(async () => findButton("nuisible").click());
     await wait(100);
     expect(host.querySelector(".wp-headword")?.textContent).toBe("nuisible");
-    expect(lookup).toHaveBeenLastCalledWith("nuisible");
+    expect(lookup).toHaveBeenLastCalledWith("nuisible", "");
     expect(host.querySelector('[aria-label="Save word"]')?.getAttribute("aria-pressed")).toBe("false");
     const section = host.querySelector('[aria-label="In this sentence"]')!;
     expect(section.textContent).toContain("harmful");
@@ -238,13 +291,13 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(star.querySelector("svg.fill-current")).toBeNull();
     const importance = host.querySelector(".wp-importance")!;
     expect(importance.querySelectorAll("[data-filled]")).toHaveLength(5);
-    expect(importance.querySelectorAll('[data-filled="true"]')).toHaveLength(3);
+    expect(importance.querySelectorAll('[data-filled="true"]')).toHaveLength(0);
     expect(importance.querySelector("svg")).toBeNull();
     expect(importance.textContent).toContain("1 lookup");
-    expect(importance.textContent).toContain("Importance, 3 out of 5, based on 1 lookup.");
+    expect(importance.textContent).toContain("Importance, 0 out of 5, based on 1 lookup.");
   });
 
-  it("fills the deck star when saved and keeps importance distinct", async () => {
+  it("fills the deck star and three dots when saved", async () => {
     await act(async () => root.render(<WordPanel sentence={SENTENCE} text="madame" onClose={() => {}} />));
     await wait(100);
     await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Save word"]')!.click());
@@ -252,7 +305,31 @@ describe("Task B — Study word card, selection and steps", () => {
     const saved = host.querySelector('[aria-label="Saved"]');
     expect(saved?.getAttribute("aria-pressed")).toBe("true");
     expect(saved?.querySelector("svg.fill-current")).toBeTruthy();
-    expect(host.querySelector(".wp-importance")?.textContent).toContain("Importance");
+    expect(host.querySelectorAll('.wp-importance [data-filled="true"]')).toHaveLength(3);
+    await act(async () => (saved as HTMLButtonElement).click());
+    await wait(100);
+    expect(host.querySelector('[aria-label="Save word"]')).toBeTruthy();
+    expect(host.querySelectorAll('.wp-importance [data-filled="true"]')).toHaveLength(0);
+    expect(host.querySelector(".wp-importance")?.textContent).toContain("1 lookup");
+  });
+
+  it.each([[2, 4], [4, 5]])("auto-saves on the next lookup after %i and shows %i dots", async (previous, dots) => {
+    fake.lookups.madame = previous;
+    await act(async () => root.render(<WordPanel sentence={SENTENCE} text="madame" onClose={() => {}} />));
+    await wait(150);
+    expect(host.querySelector('[aria-label="Saved"]')).toBeTruthy();
+    expect(host.querySelectorAll('.wp-importance [data-filled="true"]')).toHaveLength(dots);
+    expect(host.querySelector(".wp-importance")?.textContent).toContain(`${previous + 1} lookups`);
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Saved"]')!.click());
+    await wait(150);
+    expect(host.querySelector('[aria-label="Save word"]')).toBeTruthy();
+    await act(async () => { await lookupApi.recordLookup("madame", SENTENCE); });
+    expect(host.querySelectorAll('.wp-importance [data-filled="true"]')).toHaveLength(0);
+    expect(host.querySelector(".wp-importance")?.textContent).toContain(`${previous + 1} lookups`);
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Save word"]')!.click());
+    await wait(150);
+    expect(host.querySelector('[aria-label="Saved"]')).toBeTruthy();
+    expect(host.querySelectorAll('.wp-importance [data-filled="true"]')).toHaveLength(dots);
   });
 
   it("plays headword and dictionary phonetics without drilling or counting another lookup", async () => {
@@ -289,6 +366,7 @@ describe("Task B — Study word card, selection and steps", () => {
     await render("madame");
     checkOpen();
     for (const name of ["Word origin", "Ask AI", "Notes"]) expect(host.querySelector(`[aria-label="${name}"] button`)?.getAttribute("aria-expanded")).toBe("false");
+    await wait(150);
   });
 
   it("saves exact cloze metadata and unsaves only this word across sentences", async () => {
@@ -303,23 +381,23 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(request?.body).toMatchObject({ sentence: SENTENCE.fr, modes: [], targets: [{ text: "madame", mode: "cloze", exact_target: true, meta: { snap: "1" } }] });
     expect(host.querySelector('[data-saved]')?.getAttribute("data-saved")).toBe("true");
     const own = get().cards.find(c => c.word === "madame")!;
-    await act(async () => set(s => ({ cards: [...s.cards, { ...own, id: "other-context", sentenceId: "other-note" }, { ...own, id: "not-cloze", mode: "recognize" }] })));
-    const remaining = get().cards.filter(c => c.word !== "madame" || c.mode !== "cloze").map(c => c.id);
+    await act(async () => set(s => ({ cards: [...s.cards, { ...own, id: "other-context", sentenceId: "other-note" }, { ...own, id: "recall-fallback", mode: "recognize" }] })));
+    const remaining = get().cards.filter(c => c.word !== "madame" || !["cloze", "recognize"].includes(c.mode ?? "")).map(c => c.id);
     await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Saved"]')!.click());
     await wait(150);
     expect(get().cards.map(c => c.id)).toEqual(remaining);
-    expect(fake.calls.filter(c => c.method === "DELETE").map(c => c.path)).toEqual([`/api/srs/cards/${own.id}`, "/api/srs/cards/other-context"]);
+    expect(fake.calls.filter(c => c.method === "DELETE").map(c => c.path)).toEqual([`/api/srs/cards/${own.id}`, "/api/srs/cards/other-context", "/api/srs/cards/recall-fallback"]);
     expect(host.querySelector('[data-saved]')?.getAttribute("data-saved")).toBe("false");
     expect(host.querySelector('[aria-label="Save word"]')).toBeTruthy();
     expect(fake.calls.some(c => c.path === "/api/srs/favorites" && c.method === "PUT")).toBe(false);
   });
 
-  it("rolls the optimistic star back on save and delete failure", async () => {
+  it("keeps star and importance together on save and delete failure", async () => {
     await act(async () => root.render(<WordPanel sentence={SENTENCE} text="madame" onClose={() => {}} />));
     await wait(100);
     fake.failNext.add("/api/srs/notes");
     await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Save word"]')!.click());
-    expect(host.querySelector('[aria-label="Saved"]')).toBeTruthy();
+    expect(host.querySelector('[aria-label="Save word"]')).toBeTruthy();
     await wait(150);
     expect(host.querySelector('[aria-label="Save word"]')).toBeTruthy();
     expect(get().announce.msg).toContain("Couldn’t update");
@@ -327,7 +405,7 @@ describe("Task B — Study word card, selection and steps", () => {
     await wait(150);
     fake.failNext.add("/api/srs/cards/");
     await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Saved"]')!.click());
-    expect(host.querySelector('[aria-label="Save word"]')).toBeTruthy();
+    expect(host.querySelector('[aria-label="Saved"]')).toBeTruthy();
     await wait(150);
     expect(host.querySelector('[aria-label="Saved"]')).toBeTruthy();
   });
@@ -338,7 +416,7 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(fake.calls.filter(c => c.path === "/api/srs/lookups" && c.method === "POST")).toHaveLength(1);
     await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Component words"] button')!.click());
     await wait(100);
-    expect(fake.calls.filter(c => c.path === "/api/srs/lookups" && c.method === "POST").map(c => c.body)).toEqual([{ word: "machine à laver" }, { word: "machine" }]);
+    expect(fake.calls.filter(c => c.path === "/api/srs/lookups" && c.method === "POST").map(c => ({ word: (c.body as { word: string }).word }))).toEqual([{ word: "machine à laver" }, { word: "machine" }]);
   });
 
   it("adds, edits and deletes multiple notes, and asks AI with sentence context", async () => {
@@ -463,7 +541,7 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(panel.textContent).toContain("Définition de madame.");
     expect(panel.querySelector('a[href="https://fr.wiktionary.org/wiki/madame#fr"]')).toBeTruthy();
     expect(panel.textContent).toContain("Source: Wiktionary (CC BY-SA)");
-    expect(panel.textContent).not.toMatch(/\p{Script=Han}/u);
+    expect(panel.querySelector('[aria-label="In this sentence"]')?.textContent).toMatch(/\p{Script=Han}/u);
     expect(fake.calls.filter((call) => call.path === "/api/etymology")).toHaveLength(0);
     fake.etymologyFails = 1;
     await act(async () => findButton("Word origin").click());

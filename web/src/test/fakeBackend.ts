@@ -161,6 +161,7 @@ interface Item {
 export const fake = {
   /** Server-side lookup counts by lookupKey. */
   lookups: {} as Record<string, number>,
+  lookupLast: {} as Record<string, number>,
   /** Path prefixes whose next request fails with a 503. */
   failNext: new Set<string>(),
   /** The next N graded attempts report saved: false (history write failed). */
@@ -198,6 +199,7 @@ export const fake = {
     this.episodes = demoEpisodes();
     this.heartbeats = {};
     this.lookups = {};
+    this.lookupLast = {};
     this.notes = [];
     this.nextNote = 1;
     this.etymologyFails = 0;
@@ -240,9 +242,17 @@ function route(method: string, url: URL, body: Record<string, unknown>): Respons
   }
   if (p === "/api/srs/lookups" && method === "POST") {
     const k = lookupKey(String(body.word));
-    const count = (fake.lookups[k] ?? 0) + 1;
+    const incremented = fake.lookupLast[k] === undefined || Date.now() - fake.lookupLast[k] >= 5000;
+    const count = (fake.lookups[k] ?? 0) + (incremented ? 1 : 0);
+    if (incremented) fake.lookupLast[k] = Date.now();
     fake.lookups[k] = count;
-    return json(200, { count, importance: importanceFor(count), incremented: true });
+    let saved = fake.srs.cards.some(c => c.mode === "cloze" && lookupKey(c.target) === k);
+    if (incremented && count >= 3 && !saved) {
+      const id = `auto-${++seq}`;
+      fake.srs.cards.push({ id, note_id: id, mode: "cloze", target: String(body.word), target_meta: {}, archived: false, importance: importanceFor(count, true), state: "new", due: new Date().toISOString(), created_at: new Date().toISOString(), note: { id, sentence: String(body.sentence || body.word), translation_en: String(body.translation_en || ""), translation_zh: "" } });
+      saved = true;
+    }
+    return json(200, { count, importance: importanceFor(count, saved), incremented });
   }
   if (p === "/api/srs/notes/lookup") return json(200, { notes: [] });
   if (p === "/api/srs/notes") {

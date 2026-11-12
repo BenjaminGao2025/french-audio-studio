@@ -1,6 +1,6 @@
-import { Bookmark, BookmarkCheck, Loader2, AlertCircle } from "lucide-react";
+import { Bookmark, BookmarkCheck, Loader2, AlertCircle, Star } from "lucide-react";
 import { grade } from "../lib/grading";
-import { countLookup, importanceFor, lookupKey, type LookupCounter } from "../lib/lookup";
+import { countLookup, lookupKey, type LookupCounter } from "../lib/lookup";
 import { Importance, PageHead, pageFrame } from "../components/ui";
 import { REGISTRY } from "./registry";
 import { Button } from "../components/ui/button";
@@ -169,13 +169,12 @@ export function DesignReference() {
             </div>
           </div>
           <div className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-2">
-            <p className="font-medium">Favorite vs importance — two separate controls</p>
+            <p className="font-medium">Word deck and Importance</p>
             <div className="flex flex-wrap items-center gap-2 gap-4">
               <Button type="button" variant="ghost" aria-pressed={false}>{<Bookmark aria-hidden />}Favorite</Button>
               <Button type="button" variant="ghost" aria-pressed>{<BookmarkCheck aria-hidden />}Favorited</Button>
             </div>
-            {[0, 4, 5, 6, 9, 10].map((n) => <Importance key={n} count={n} />)}
-            <p className="text-sm text-muted-foreground">Importance is read-only: 0–4 lookups → {importanceFor(4)}/5, 5–9 → {importanceFor(5)}/5, 10+ → {importanceFor(10)}/5. Favorite never changes it.</p>
+            {[0, 1, 3, 5].map((n) => <div key={n} className="flex items-center gap-2"><Button variant="ghost" size="icon" aria-label={n > 0 ? "Saved" : "Save word"} aria-pressed={n > 0}><Star aria-hidden className={n > 0 ? "fill-current" : undefined} /></Button><Importance count={n} saved={n > 0} /></div>)}
           </div>
         </section>
 
@@ -190,7 +189,7 @@ export function DesignReference() {
             <li>Enter follows focus and state and never triggers two actions; Shift+Enter adds a line in answers.</li>
             <li>Sticky submit areas stay above the mobile keyboard; player, bottom navigation and sheets respect safe areas.</li>
             <li>Layouts use container queries, so the 320/390/768/desktop widths, the Mac window and 200% zoom all reflow without horizontal page scrolling.</li>
-            <li>Targets are at least 44 × 44 px. Importance reads “Importance, 4 out of 5, based on 5 lookups.”</li>
+            <li>Targets are at least 44 × 44 px. Importance reads “Importance, 5 out of 5, based on 5 lookups.”</li>
             <li>Exercise targets are never rendered — in text, accessible names, titles, URLs or notifications — before Check or Show answer.</li>
           </ul>
         </section>

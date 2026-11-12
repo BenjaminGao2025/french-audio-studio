@@ -3,7 +3,6 @@ import { Play, Search, Archive, RotateCcw, Volume2, ChevronLeft, ChevronRight, L
 import {
   DEFAULT_SESSION_SIZE,
   planSession,
-  wordCardImportance,
   type LibCard,
   type LibSentence,
   type ReviewCard,
@@ -15,7 +14,7 @@ import { ApiError } from "../api/client";
 import { libraryReady, loadLibrary, loadQueue, masterCard, setCardArchived, rateCard, restoreMastered, toReviewCard as serverToReviewCard } from "../api/review";
 import { grade } from "../lib/grading";
 import { gradeFeedback, practiceFeedback } from "../lib/feedback";
-import { importanceFor } from "../lib/lookup";
+import { importanceFor, wordIsSaved } from "../lib/lookup";
 import { nf, plural } from "../lib/format";
 import { announce, get, getCardLookups, go, introduceNewCard, sayFrench, set, useApp, type ReviewUI } from "../state/store";
 import { Checkbox, DisabledReason, EntryCard, Importance, PageHead, Progress, Skeleton, Spinner, Stat, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, pageFrame, useNarrow } from "../components/ui";
@@ -143,7 +142,7 @@ const MODE_LABEL: Record<ReviewMode, string> = { listen: "Listen", speak: "Speak
 const LEARN_AHEAD_MS = 20 * 60 * 1000;
 
 /** The full sentence as FrText segments, with the target word(s) highlighted using --mark-bg. */
-function markedSegments(full: string, target: string): FrSegment[] {
+export function markedSegments(full: string, target: string): FrSegment[] {
   const segs = tokenizeFrench(full);
   const t = (target || "").trim();
   if (!t) return segs;
@@ -708,12 +707,9 @@ function ReviewSession() {
                 ) : (
                   <FrText segments={tokenizeFrench(mode === "grammar" ? (meta.prompt_fr || card.prompt) : card.prompt)} className="font-serif text-2xl leading-snug wrap-break-word" onPick={onWordPick} />
                 )}
-                {(mode === "grammar" ? meta.full_en : (translationZh || translationEn)) && (
-                  <p className="text-sm text-muted-foreground" lang={translationZh && mode !== "grammar" ? "zh" : undefined}>
-                    {mode === "grammar" ? meta.full_en : (translationZh || translationEn)}
-                  </p>
-                )}
-                {card.kind === "Fill-in" && (meta.meaning_zh || meta.meaning_en) && <p className="text-sm text-muted-foreground">Blank means: {meta.meaning_zh || meta.meaning_en}</p>}
+                {translationZh && <p className="text-sm text-muted-foreground" lang="zh">{translationZh}</p>}
+                {(translationEn || (mode === "grammar" && meta.full_en)) && <p className="text-sm text-muted-foreground">{translationEn || meta.full_en}</p>}
+                {card.kind === "Fill-in" && (meta.meaning_zh || meta.meaning_en || meta.pos) && <p className="text-sm text-muted-foreground">Blank means: {[meta.meaning_zh, meta.meaning_en, meta.pos].filter(Boolean).join(" · ")}</p>}
                 {mode === "grammar" && meta.hint && <p className="text-sm text-muted-foreground">Hint: {meta.hint}</p>}
                 <Collapsible className="border-t"><CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between gap-2 py-2 text-left text-sm font-medium"><span>Show initials</span><ChevronDown className="size-4 shrink-0" aria-hidden /></CollapsibleTrigger><CollapsibleContent className="pb-3 text-sm"><p className="rev-initials" lang="fr">{initialsHint(card.target)}</p></CollapsibleContent></Collapsible>
               </div>
@@ -893,7 +889,7 @@ function SavedCards() {
     const wordLookups = getCardLookups({ lookups }, c);
     return (
       (f.mastered === "hide" ? !c.mastered : f.mastered === "only" ? c.mastered : true) &&
-      (!f.minImportance || (wordLookups !== null && importanceFor(wordLookups) >= f.minImportance)) &&
+      (!f.minImportance || (wordLookups !== null && importanceFor(wordLookups, wordIsSaved(cards, c.word ?? "")) >= f.minImportance)) &&
       true
     );
   };
@@ -903,7 +899,7 @@ function SavedCards() {
     const value = (c: LibCard) => {
       if (savedSort.key === "saved") return c.savedAt;
       if (savedSort.key === "due") return Date.parse(c.due ?? "") || 0;
-      return wordCardImportance(c, lookups);
+      return importanceFor(getCardLookups({ lookups }, c) ?? 0, wordIsSaved(cards, c.word ?? ""));
     };
     return cards
       .filter(matchCard)
@@ -982,7 +978,7 @@ function SavedCards() {
       header: () => sortButton("importance", "Importance"),
       cell: ({ row }) => {
         const wordLookups = getCardLookups({ lookups }, row.original.c);
-        return wordLookups !== null ? <Importance count={wordLookups} lookups="muted" /> : "—";
+        return wordLookups !== null ? <Importance saved={wordIsSaved(cards, row.original.c.word ?? "")} count={wordLookups} lookups="muted" /> : "—";
       },
     },
     { id: "saved", header: () => sortButton("saved", "Saved"), cell: ({ row }) => <span className="tabular-nums">{shortSavedDate(row.original.c.savedAt)}</span> },

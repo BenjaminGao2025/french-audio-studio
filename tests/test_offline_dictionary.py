@@ -87,6 +87,90 @@ class OfflineDictionaryTests(unittest.TestCase):
         self.add_entry(self.english, "différents", ["masculine plural of différent"], refs=["différent"], pos="adj")
         self.add_entry(self.path, "correction", ["Action de corriger."])
 
+    def ma_indexes(self):
+        self.enable_english()
+        for path, senses in ((self.path, ["Déterminant possessif."]),
+                             (self.english, ["feminine singular of mon (my)"])):
+            with sqlite3.connect(path) as conn:
+                for lemma, pos, gloss, refs in (("MA", "prep", ["abbreviation of meilleur avant: BB"], []),
+                                                ("Ma", "name", ["A name"], []),
+                                                ("ma", "det", senses, ["mon"])):
+                    conn.execute("INSERT INTO entries VALUES(NULL,?,?,?,?,?,?,?,?)",
+                                 ("ma", lemma, pos, pos, "", "", json.dumps(gloss), json.dumps(refs)))
+        dictionary._lookup.cache_clear()
+
+    def test_elisions_both_apostrophes_both_indexes_and_api(self):
+        self.enable_english()
+        for path in (self.path, self.english):
+            self.add_entry(path, "oubli", ["forgetting"])
+            self.add_entry(path, "homme", ["man"])
+            self.add_entry(path, "avoir", ["have"], pos="verb")
+            self.add_entry(path, "ai", ["first-person singular of avoir"], refs=["avoir"], pos="verb")
+            with sqlite3.connect(path) as conn:
+                conn.execute("UPDATE entries SET gender='m' WHERE word IN ('oubli','homme')")
+        client = TestClient(tts_service.app)
+        headers = testenv.session_headers()
+        for apostrophe in ("'", "’"):
+            for prefix, rest, lemma in (("l", "oubli", "oubli"), ("l", "homme", "homme"),
+                                        ("j", "ai", "avoir"), ("n", "ai", "avoir")):
+                with self.subTest(prefix=prefix, rest=rest, apostrophe=apostrophe):
+                    query = prefix + apostrophe + rest
+                    result = client.get("/api/lookup", params={"word": query}, headers=headers).json()
+                    self.assertEqual(result["dictionary_state"], "found")
+                    self.assertEqual(result["lemma"], lemma)
+                    self.assertEqual(result["elision"]["remainder"], rest)
+                    for lang in ("en", "fr"):
+                        self.assertEqual(result["entries_" + lang][0]["lemma"], lemma)
+            for disabled in ("ENGLISH_DICTIONARY_PATH", "FRENCH_DICTIONARY_PATH"):
+                with patch.dict(os.environ, {disabled: ""}):
+                    self.assertEqual(dictionary.lookup("l" + apostrophe + "oubli")["lemma"], "oubli")
+        result = dictionary.lookup("L'oubli")
+        self.assertEqual(result["token"], "L'oubli")
+        self.assertEqual(result["elision"]["prefix"], "L'")
+        self.assertEqual(result["elision"]["expansion"], "le")
+        self.assertIn("masculine definite article", result["elision"]["note"])
+
+    def test_all_elision_prefixes_components_related_and_unknown(self):
+        self.add_entry(self.path, "correction", ["correction"])
+        for prefix in dictionary.ELISIONS:
+            for apostrophe in ("'", "’"):
+                result = dictionary.lookup(prefix + apostrophe + "correction")
+                self.assertEqual(result["lemma"], "correction")
+                self.assertIn("elision", result)
+        self.assertEqual(dictionary.lookup("d'recorrection")["match_type"], "related")
+        self.assertEqual(dictionary.lookup("l'correction inconnu")["components"][0]["lemma"], "correction")
+        self.assertIsNone(dictionary.lookup("l'unknownzzz"))
+        self.assertIsNone(dictionary.lookup("xyz'correction"))
+        self.assertNotIn("elision", dictionary.lookup("d’accord"))
+
+    def test_ma_exact_case_in_both_indexes_and_uppercase_fallback(self):
+        self.ma_indexes()
+        for query, expected in (("ma", "ma"), ("MA", "MA"), ("Ma", "Ma")):
+            result = dictionary.lookup(query)
+            self.assertEqual(result["lemma"], expected)
+            for lang in ("en", "fr"):
+                self.assertEqual(result["entries_" + lang][0]["lemma"], expected)
+            if query == "ma":
+                self.assertTrue(all(e["pos"] == "det" for e in result["entries"]))
+                self.assertNotIn("meilleur avant", str(result["entries"]))
+
+    def test_ma_sentence_pos_api_and_single_corpus(self):
+        self.ma_indexes()
+        client = TestClient(tts_service.app)
+        for pos in ("det", "determiner", "ADJ:pos"):
+            result = client.get("/api/lookup", params={"word": "ma", "pos": pos},
+                                headers=testenv.session_headers()).json()
+            self.assertEqual((result["lemma"], result["pos"]), ("ma", "det"))
+        for env in ("ENGLISH_DICTIONARY_PATH", "FRENCH_DICTIONARY_PATH"):
+            with patch.dict(os.environ, {env: ""}):
+                self.assertEqual(dictionary.lookup("ma", "ADJ:pos")["pos"], "det")
+
+    def test_sentence_pos_precedes_corpus_and_frequency_with_same_case(self):
+        self.enable_english()
+        self.add_entry(self.english, "test", ["a noun"], pos="noun")
+        self.add_entry(self.path, "test", ["a determiner"], pos="det")
+        self.assertEqual(dictionary.lookup("test", "determiner")["pos"], "det")
+
     def test_english_first_with_french_senses_and_correct_source(self):
         self.enable_english()
         result = dictionary.lookup("correction")
@@ -207,6 +291,10 @@ class OfflineDictionaryTests(unittest.TestCase):
         self.assertIn("creativecommons.org", result["license_url"])
         result["entries"][0]["senses"].clear()
         self.assertTrue(dictionary.lookup("réservé")["entries"][0]["senses"])
+
+    def test_sentence_pos_selects_inflected_verb_before_same_case_adjective(self):
+        self.assertEqual(dictionary.lookup("réservé", "verb")["lemma"], "réserver")
+        self.assertEqual(dictionary.lookup("réservé", "adjective")["lemma"], "réservé")
 
     def test_contraction_expression_and_inflection(self):
         self.assertEqual(dictionary.lookup("au")["entries"][0]["senses"], ["Contraction de à et le."])

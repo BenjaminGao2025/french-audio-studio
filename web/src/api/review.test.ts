@@ -33,7 +33,19 @@ describe("toReviewCard", () => {
       toReviewCard(card({ id: "g", mode: "grammar", target: "passé composé", target_meta: { prompt_fr: "Hier, il ____ parti.", answer: "est" } })),
     ).toMatchObject({ kind: "Fill-in", prompt: "Hier, il ____ parti.", target: "est", sentenceFr: "Hier, il est parti." });
     // A nested word keeps its target even when the sentence cannot supply a blank.
-    expect(toReviewCard(card({ id: "x", mode: "cloze", target: "chat" }))).toMatchObject({ kind: "Recall", prompt: "I forgot my appointment.", target: "chat" });
+    expect(toReviewCard(card({ id: "x", mode: "cloze", target: "chat" }))).toMatchObject({ kind: "Recall", mode: "recognize", prompt: "", target: "chat" });
+  });
+
+  it("presents short, mostly blanked, or untranslated legacy clozes as Recall", () => {
+    for (const [sentence, target, en] of [["Nous partons.", "partons", "We leave."], ["Nous allons à la gare.", "allons à la gare", "We go to the station."], ["Nous avons pris le bus.", "avons", ""]]) {
+      expect(toReviewCard(card({ id: "cue-test", mode: "cloze", target, note: { id: "n", sentence, translation_en: en, translation_zh: "" } }))).toMatchObject({ mode: "recognize", kind: "Recall", target });
+    }
+  });
+
+  it("keeps either or both sentence cues on a usable Fill-in", () => {
+    for (const [en, zh] of [["We took the bus.", "我们坐了公交车。"], ["We took the bus.", ""], ["", "我们坐了公交车。"]]) {
+      expect(toReviewCard(card({ id: "cue-test", mode: "cloze", target: "avons", note: { id: "n", sentence: "Nous avons pris le bus.", translation_en: en, translation_zh: zh } }))).toMatchObject({ kind: "Fill-in", translationEn: en, translationZh: zh });
+    }
   });
 
   it("keeps a recognize target even when its lemma is absent from the sentence", () => {

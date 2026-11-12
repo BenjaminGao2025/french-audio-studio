@@ -7,7 +7,7 @@ import { cardKey, useSavedCards } from "../api/srs";
 import { askQuestion, checkExplanation, saveAnswer, saveGrammar, transcribeExplanation, transcribeTake, type ExplanationFeedback, type TutorTurn } from "../api/learning";
 import { evaluateShadowing } from "../lib/shadowing";
 import { gradeFeedback } from "../lib/feedback";
-import { FrText, type FrPick } from "../components/FrText";
+import { build, FrText, type FrPick } from "../components/FrText";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger, Textarea } from "../components/ui";
 import { Toggle } from "../components/ui/toggle";
 import { ToggleGroup, ToggleGroupItem } from "../components/ui/toggle-group";
@@ -62,12 +62,21 @@ export function StudyCheckTabs({ value, onChange }: { value: Tab; onChange: (tab
 
 export function WordsPanel({ sentence, onPick }: { sentence: StudySentence; onPick: (p: FrPick) => void }) {
   const raw = sentence.raw;
-  const words = raw?.words ?? [];
-  const content = words.map((w, i) => ({ ...w, index: i })).filter((w) => !/^(article|pronoun|preposition|conjunction|determiner|pronom|préposition|déterminant)\b/i.test(w.type));
-  const functionWords = words.map((w, i) => ({ ...w, index: i })).filter((w) => !content.some((c) => c.index === w.index));
+  const aligned = build(sentence.segments).segs;
+  const words = (raw?.words ?? []).map((w, index) => ({ ...w, index, fr: aligned.find(s => s.wi === index)?.t ?? w.fr }))
+    .filter(w => !/^(?:l|d|j|n|m|t|s|c|qu|jusqu|lorsqu|puisqu)['’]$/i.test(w.fr));
+  const content = words.filter((w) => !/^(article|pronoun|preposition|conjunction|determiner|pronom|préposition|déterminant)\b/i.test(w.type));
+  const functionWords = words.filter((w) => !content.some((c) => c.index === w.index));
+  const alignment = (raw?.alignment ?? []).reduce<{fr: string; en: string}[]>((items, item) => {
+    const previous = items.at(-1);
+    if (previous && /^(?:l|d|j|n|m|t|s|c|qu|jusqu|lorsqu|puisqu)['’]$/i.test(previous.fr.trim())) {
+      items[items.length - 1] = { fr: previous.fr.trim() + item.fr, en: `${previous.en} ${item.en}`.trim() };
+    } else items.push(item);
+    return items;
+  }, []);
   const list = (items: typeof content) => <div className="grid gap-3 sm:grid-cols-2">{items.map((w) => <article key={w.index} className="flex flex-col gap-3 rounded-lg border bg-card p-4"><div className="flex flex-wrap items-center justify-between gap-2"><FrText segments={[{ t: w.fr, w: true, wi: w.index }]} className="font-medium" onPick={onPick} /><span className="text-xs leading-4 text-muted-foreground">{w.type}</span></div><p>{w.meaning}</p>{formatFriendlyPhonetic(w.ipa) && <Phonetic word={w.fr} ipa={w.ipa} />}<Collapsible><CollapsibleTrigger className="flex min-h-11 items-center text-sm font-medium">Usage & memory</CollapsibleTrigger><CollapsibleContent><div className="flex flex-col gap-2">{w.lemma && w.lemma !== w.fr && <p className="text-xs leading-4 text-muted-foreground">Base form: {w.lemma}</p>}{w.why && <p>{w.why}</p>}{w.english_link && <p>{w.english_link}</p>}{w.false_friend && <p className="text-xs leading-4 text-muted-foreground">False friend: check the meaning carefully.</p>}</div></CollapsibleContent></Collapsible><Button type="button" variant="ghost" onClick={(e) => onPick({ text: w.fr, wordIndex: w.index, occurrence: 0, anchor: e.currentTarget })}>Meaning & save card</Button></article>)}</div>;
   return <section className="flex flex-col gap-4"><div><h3 className="text-lg font-semibold text-balance">Words in this sentence</h3></div>
-    {!!raw?.alignment?.length && <div className="grid gap-3 rounded-lg border p-4 sm:grid-cols-2" aria-label="Word by word">{raw.alignment.map((a, i) => <div key={i}><FrText text={a.fr} onPick={onPick} /><span className="text-sm text-muted-foreground">{a.en}</span></div>)}</div>}
+    {!!alignment.length && <div className="grid gap-3 rounded-lg border p-4 sm:grid-cols-2" aria-label="Word by word">{alignment.map((a, i) => <div key={i}><FrText text={a.fr} onPick={onPick} /><span className="text-sm text-muted-foreground">{a.en}</span></div>)}</div>}
     {raw?.order_note && <p className="rounded-md border-l-2 border-primary bg-muted px-3 py-2">{raw.order_note}</p>}
     {words.length ? <>{list(content.length ? content : functionWords)}{!!content.length && !!functionWords.length && <Collapsible className="rounded-lg border bg-card p-4 text-card-foreground"><CollapsibleTrigger className="flex min-h-11 w-full items-center text-sm font-medium">Function words ({functionWords.length})</CollapsibleTrigger><CollapsibleContent>{list(functionWords)}</CollapsibleContent></Collapsible>}</> : <Alert variant="default"><AlertTitle>No saved word breakdown</AlertTitle></Alert>}
   </section>;

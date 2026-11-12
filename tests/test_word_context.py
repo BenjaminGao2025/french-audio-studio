@@ -166,6 +166,26 @@ class EndpointTests(unittest.TestCase):
             headers=self.headers if headers is None else headers,
         )
 
+    def test_thin_cached_gloss_is_upgraded_on_lookup(self):
+        sentence = "Le mépris ou l'oubli est nuisible."
+        word = "l'oubli"
+        key = word_context.cache_key(sentence, word, 0)
+        upgraded = {"meaning_zh": "遗忘", "meaning_en": "forgetting",
+                    "why_zh": "这里指遗忘；le mépris 和 l’oubli 由 ou 连接，共同作主语。"}
+        for thin in ({"meaning_zh": "遗忘", "meaning_en": "forgetting", "why_zh": ""},
+                     {"meaning_zh": "遗忘", "meaning_en": "forgetting", "why_zh": "遗忘"}):
+            word_context.save_cached(self.user_id, key, sentence, word, 0, thin)
+            self.assertIsNone(word_context.get_cached(self.user_id, key))
+            with mock.patch("services.ai.post_chat", new=mock.AsyncMock(return_value=(None, json.dumps(upgraded)))) as chat:
+                response = self._post(sentence, word)
+                self.assertEqual(response.status_code, 200)
+                self.assertFalse(response.json()["cached"])
+                self.assertEqual(response.json()["context"], upgraded)
+                self.assertEqual(self._post(sentence, word).json()["cached"], True)
+                self.assertEqual(chat.await_count, 1)
+        self.assertIn("explain the meaning HERE plus what job", word_context.SYSTEM_PROMPT)
+        self.assertIn("1–2 short Chinese sentences", word_context.SYSTEM_PROMPT)
+
     def test_requires_login_and_spends_nothing(self):
         with mock.patch("services.ai.post_chat") as post_chat:
             self.assertEqual(self._post(headers={}).status_code, 401)

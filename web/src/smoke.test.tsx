@@ -268,7 +268,7 @@ describe("3. lookup importance comes from the server count", () => {
 
     expect(fake.lookups[lookupKey("failli")]).toBe(5);
     expect(fake.calls.filter((c) => c.path === "/api/srs/lookups" && c.method === "POST")).toHaveLength(1);
-    expect(document.body.textContent).toContain("Importance, 4 out of 5, based on 5 lookups.");
+    expect(document.body.textContent).toContain("Importance, 5 out of 5, based on 5 lookups.");
     expect(document.body.textContent).not.toContain("Définition de ");
     const french = Array.from(document.querySelectorAll<HTMLButtonElement>(".word-card button")).find(b => b.textContent === "French definitions")!;
     await act(async () => french.click());

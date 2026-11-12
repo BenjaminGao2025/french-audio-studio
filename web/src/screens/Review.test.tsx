@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReviewCard } from "../data/fixtures";
-import { ReviewScreen } from "../screens/Review";
+import { markedSegments, ReviewScreen } from "../screens/Review";
 import { loadLibrary, resetReviewCache, toReviewCard } from "../api/review";
 import { resetLookupCaches } from "../api/lookup";
 import { fake, installFakeBackend } from "../test/fakeBackend";
@@ -103,6 +103,22 @@ const button = (text: string): HTMLButtonElement => {
 };
 
 describe("Task C — Anki-style review card", () => {
+  it("shows both Fill-in sentence cues and the blank meaning and POS before reveal", async () => {
+    await mount(card());
+    expect(host.textContent).toContain("我们坐了公交车。");
+    expect(host.textContent).toContain("We took the bus.");
+    expect(host.textContent).toContain("Blank means: 有（助动词） · have (auxiliary) · verb");
+  });
+
+  it("shows an untranslated old short cloze as Recall without a blank", async () => {
+    const old = { ...fake.srs.cards[0], mode: "cloze" as const, target: "partons", note: { id: "n-short", sentence: "Nous partons.", translation_en: "", translation_zh: "" } };
+    await mount(toReviewCard(old));
+    expect(host.textContent).toContain("Recall");
+    expect(host.textContent).toContain("partons");
+    expect(host.textContent).not.toContain("_____");
+    expect(host.querySelector("#rev-input")).toBeNull();
+  });
+
   it("the four rating buttons show the server's interval previews", async () => {
     await mount(card(), { revealed: true });
     const rates = Array.from(host.querySelectorAll<HTMLButtonElement>(".rev-rate"));
@@ -393,6 +409,27 @@ describe("Task C — Saved as a table", () => {
     expect(store.get().cards.map(c => c.id)).toEqual(["keep-listen", "keep-speak", "keep-other-word"]);
     expect(host.querySelector('[data-card-id="star-word"]')).toBeNull();
   });
+  it("uses deck membership and the 3/5 lookup thresholds for dots and filters", async () => {
+    fake.delay = 0;
+    const template = fake.srs.cards[0];
+    fake.srs.cards = [
+      ...["chat", "chien", "oiseau"].map((target, i) => ({ ...template, id: `tier-${i}`, mode: "cloze" as const, target, archived: false })),
+      { ...template, id: "recall-fallback", mode: "recognize", target: "ancien", archived: false },
+    ];
+    fake.lookups = { chat: 1, chien: 3, oiseau: 5, ancien: 10 };
+    await act(async () => { store.resetDemo(); await loadLibrary(true); root.render(<ReviewScreen sub="saved" />); });
+    await wait(50);
+    for (const [id, dots] of [["tier-0", 3], ["tier-1", 4], ["tier-2", 5], ["recall-fallback", 5]] as const) {
+      expect(host.querySelectorAll(`[data-card-id="${id}"] [data-filled="true"]`)).toHaveLength(dots);
+    }
+    await act(async () => store.set(s => ({ libFilters: { ...s.libFilters, minImportance: 4 } })));
+    expect(host.querySelectorAll('tbody [data-card-id]')).toHaveLength(3);
+    expect(host.querySelector('[data-card-id="recall-fallback"]')).toBeTruthy();
+    await act(async () => store.set(s => ({ libFilters: { ...s.libFilters, minImportance: 5 } })));
+    expect(host.querySelectorAll('tbody [data-card-id]')).toHaveLength(2);
+    expect(host.querySelector('[data-card-id="tier-2"]')).toBeTruthy();
+  });
+
   it("shows at most 50 tbody rows plus a pager, and a sentence card's Importance cell is —", async () => {
     await act(async () => {
       store.resetDemo();
@@ -479,3 +516,11 @@ describe("Review focus and mastered shortcut", () => {
     expect(host.textContent).toContain("Review complete");
   });
 });
+
+for (const apostrophe of ["'", "’"]) for (const form of ["l'homme", "l'oubli", "j'ai", "n'ai", "qu'il"]) {
+  const surface = form.replace("'", apostrophe);
+  it(`review marks the full ${surface} when the saved target is its remainder`, () => {
+    const marked = markedSegments(`Voici ${surface}.`, surface.split(apostrophe)[1]).filter(s => s.mark);
+    expect(marked).toEqual([{t:surface,w:true,mark:true}]);
+  });
+}
