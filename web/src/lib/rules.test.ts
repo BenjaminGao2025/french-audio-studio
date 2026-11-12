@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { planSession, type ReviewCard } from "../data/fixtures";
 import { grade } from "./grading";
-import { countLookup, importanceFor, lookupKey, type LookupCounter } from "./lookup";
+import { countLookup, importanceFor, lookupKey, wordIsSaved, type LookupCounter } from "./lookup";
 import { countedMinutesFor, mergeIntervals, pace, splitAtMidnight } from "./progress";
 
 const T = "J’ai oublié mon rendez-vous.";
@@ -55,6 +55,14 @@ describe("lookup", () => {
     expect(lookupKey("failli")).not.toBe(lookupKey("faillir"));
     expect(lookupKey("sœur")).not.toBe(lookupKey("soeur"));
     expect(lookupKey("Rendez-vous")).toBe("rendez-vous");
+  });
+  it("shares elision keys and saved membership without changing phrases", () => {
+    for (const prefix of ["l", "d", "j", "n", "m", "t", "s", "c", "qu", "jusqu", "lorsqu", "puisqu"]) {
+      for (const apostrophe of ["'", "’"]) expect(lookupKey(`${prefix}${apostrophe}homme`)).toBe("homme");
+    }
+    expect(lookupKey(" L’HOMME ")).toBe(lookupKey("homme"));
+    expect(lookupKey("droits de l'homme")).toBe("droits de l'homme");
+    expect(wordIsSaved([{saved:true, mode:"cloze", kind:"Fill-in", word:"l'homme"}], "homme")).toBe(true);
   });
   it("throttles from the last counted event", () => {
     let c: LookupCounter = { count: 0, lastCounted: null };

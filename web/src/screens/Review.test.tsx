@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReviewCard } from "../data/fixtures";
-import { ReviewScreen } from "../screens/Review";
+import { markedSegments, ReviewScreen } from "../screens/Review";
 import { loadLibrary, resetReviewCache, toReviewCard } from "../api/review";
 import { resetLookupCaches } from "../api/lookup";
 import { fake, installFakeBackend } from "../test/fakeBackend";
@@ -516,3 +516,11 @@ describe("Review focus and mastered shortcut", () => {
     expect(host.textContent).toContain("Review complete");
   });
 });
+
+for (const apostrophe of ["'", "’"]) for (const form of ["l'homme", "l'oubli", "j'ai", "n'ai", "qu'il"]) {
+  const surface = form.replace("'", apostrophe);
+  it(`review marks the full ${surface} when the saved target is its remainder`, () => {
+    const marked = markedSegments(`Voici ${surface}.`, surface.split(apostrophe)[1]).filter(s => s.mark);
+    expect(marked).toEqual([{t:surface,w:true,mark:true}]);
+  });
+}

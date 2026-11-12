@@ -19,6 +19,23 @@ const ANALYSIS_SEGMENTS: FrSegment[] = [
   { t: " vous avez réservé une table pour ce soir ?" },
 ];
 
+describe("elided sentence units", () => {
+  for (const apostrophe of ["'", "’"]) for (const form of ["l'homme", "l'oubli", "j'ai", "n'ai", "qu'il"]) {
+    const surface = form.replace("'", apostrophe);
+    it(`keeps ${surface} whole across raw, analysis and flagged prefix boundaries`, () => {
+      expect(tokenizeFrench(surface)).toEqual([{ t: surface, w: true }]);
+      const [prefix, rest] = surface.split(apostrophe);
+      for (const flagged of [true, false]) {
+        const { segs, full, posOf } = build([{ t: "Voici " }, { t: prefix + apostrophe, w: flagged, wi: flagged ? 0 : undefined }, { t: rest, w: true, wi: 1, mark: true }, { t: "." }]);
+        const token = segs.find(s => s.wi === 1)!;
+        expect(token).toMatchObject({ t: surface, w: true, mark: true });
+        expect(segs.filter(s => s.w).map(s => s.t)).toEqual(["Voici", surface]);
+        expect(selectionText(full, {pos: posOf[segs.indexOf(token)], text: token.t}, {pos: posOf[segs.indexOf(token)], text: token.t})).toBe(surface);
+      }
+    });
+  }
+});
+
 describe("build() — every word of the sentence stays tappable", () => {
   it("splits gaps the analysis did not list into words", () => {
     const { segs, full, posOf } = build(ANALYSIS_SEGMENTS);
@@ -112,6 +129,24 @@ describe("FrText — keyboard access and native selection", () => {
   const render = async (props: { segments?: FrSegment[]; text?: string }) => {
     await act(async () => root.render(<FrText {...props} onPick={() => {}} />));
   };
+
+  it("snaps a native selection of only homme to the full analysis-split l’homme", async () => {
+    const picked = vi.fn();
+    vi.spyOn(store, "sayFrench").mockImplementation(() => {});
+    await act(async () => root.render(<FrText segments={[{t:"Voici l’"},{t:"homme",w:true,wi:0}]} onPick={picked} />));
+    const token = host.querySelector<HTMLElement>('[data-wi="0"]')!;
+    expect(token.textContent).toBe("l’homme");
+    await act(async () => {
+      token.dispatchEvent(new MouseEvent("pointerdown", {bubbles:true,clientX:0}));
+      const range = document.createRange();
+      range.setStart(token.firstChild!, 2);
+      range.setEnd(token.firstChild!, 7);
+      window.getSelection()!.addRange(range);
+      token.dispatchEvent(new MouseEvent("pointerup", {bubbles:true,clientX:40}));
+    });
+    expect(picked.mock.calls[0][0].text).toBe("l’homme");
+    expect(window.getSelection()?.toString()).toBe("l’homme");
+  });
 
   it("word spans are not focusable buttons and the root is the single tab stop", async () => {
     await render({ segments: ANALYSIS_SEGMENTS });

@@ -1,4 +1,5 @@
 /* Saving study sentences as review cards (routers/srs.py) and what is already saved, per sentence. */
+import { lookupKey } from "../lib/lookup";
 import { useSyncExternalStore } from "react";
 import { lookupWord } from "./lookup";
 import type { ApiWord } from "./study";
@@ -39,7 +40,7 @@ export function sentenceKey(s: string): string {
 /** Saved cards of one sentence: "listen", "speak", and "cloze:<word>", and "grammar:<title>" (targets lower-cased). */
 export type SavedSet = ReadonlySet<string>;
 
-export const cardKey = (mode: string, target = "") => (["cloze", "recognize", "grammar"].includes(mode) ? `${mode === "recognize" ? "cloze" : mode}:${sentenceKey(target)}` : mode);
+export const cardKey = (mode: string, target = "") => (["cloze", "recognize", "grammar"].includes(mode) ? `${mode === "recognize" ? "cloze" : mode}:${mode === "grammar" ? sentenceKey(target) : lookupKey(target)}` : mode);
 
 let saved: Record<string, SavedSet> = {};
 const listeners = new Set<() => void>();

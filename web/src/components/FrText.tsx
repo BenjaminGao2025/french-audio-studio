@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { stripElidedPrefix } from "../lib/lookup";
 import type { StepPart } from "../data/fixtures";
 import { sayFrench } from "../state/store";
 
@@ -52,6 +53,38 @@ export function tokenizeFrench(text: string): FrSegment[] {
 export function stepSegments(parts: StepPart[]): FrSegment[] {
   const out: FrSegment[] = [];
   for (const p of parts) for (const seg of tokenizeFrench(p.t)) out.push({ ...seg, added: p.added });
+  return alignElidedSegments(out);
+}
+
+/** Repair analysis/build-up boundaries inside an elided token, preserving the remainder's index. */
+export function alignElidedSegments(input: FrSegment[]): FrSegment[] {
+  let out = input.slice();
+  const full = input.map(s => s.t).join("");
+  let offset = 0;
+  for (const token of tokenizeFrench(full)) {
+    const start = offset;
+    const end = offset += token.t.length;
+    if (!token.w || stripElidedPrefix(token.t) === token.t) continue;
+    let pos = 0;
+    const before: FrSegment[] = [], inside: FrSegment[] = [], after: FrSegment[] = [];
+    for (const s of out) {
+      const a = pos, b = pos += s.t.length;
+      if (b <= start) before.push(s);
+      else if (a >= end) after.push(s);
+      else {
+        if (a < start) before.push({ ...s, t: s.t.slice(0, start - a) });
+        inside.push({ ...s, t: s.t.slice(Math.max(0, start - a), end - a) });
+        if (b > end) after.push({ ...s, t: s.t.slice(end - a) });
+      }
+    }
+    if (inside.length < 2) continue;
+    const owner = [...inside].reverse().find(s => s.wi !== undefined);
+    out = [...before, {
+      ...owner, t: token.t, w: true,
+      added: inside.some(s => s.added), mark: inside.some(s => s.mark),
+      tone: inside.find(s => s.tone)?.tone,
+    }, ...after];
+  }
   return out;
 }
 
@@ -64,11 +97,12 @@ interface Built {
 /**
  * Split every segment the analysis did NOT flag as a word into individual words, so even words the
  * analysis left out stay tappable. Analysis chunks ("est-ce que") are kept whole; only they carry wi.
+ * Elided tokens are aligned first, even across analysis boundaries.
  * The added/mark flags are carried onto every piece derived from a flagged segment, and posOf is
  * recomputed from the resulting pieces so word positions stay exact.
  */
 export function build(segments?: FrSegment[], text?: string): Built {
-  const base = segments ?? tokenizeFrench(text ?? "");
+  const base = alignElidedSegments(segments ?? tokenizeFrench(text ?? ""));
   const segs: FrSegment[] = [];
   for (const s of base) {
     if (s.w) {
@@ -166,6 +200,14 @@ export function FrText({
       const last = lastSelection.current;
       if (last && last.start === p.startPos && last.end === p.endPos) return;
       lastSelection.current = { start: p.startPos, end: p.endPos };
+      // Native selection can start after the apostrophe. Snap its visible range as well as the pick.
+      if (stripElidedPrefix(p.text) !== p.text && p.anchor.textContent === p.text) {
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(p.anchor);
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+      }
       emit(p);
     },
     [emit],

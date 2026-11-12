@@ -127,3 +127,33 @@ Screenshots, all visually inspected, with browser assertions for elision breakdo
 Screenshots use the actual offline_dictionary implementation against `/home/mgacai/polish-1.2-out/dict-build/english-french-v1.sqlite`, opened read-only/immutable. No configured French index was available for screenshots; both languages are covered by fixture tests. The context response is a fixture containing why_zh, rendered by the real UI; no live paid AI was called. Reused `/tmp/pwa-1.3.2-tools/node_modules/playwright` and `/home/mgacai/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`.
 
 Confirmed 8030 free before starting; preview bound only to 127.0.0.1:8030, stopped afterward and port verified free. Temporary preview source/config were removed from the checkout. No screenshots, node_modules, database copies or preview files are committed. No production files, containers, credentials, deployment, main branch, merge or PR operations were used. Push target is only `origin design/polish-1.3.4`.
+
+
+## TASK 6 — Whole elided tokens and shared lemma identity
+
+Tool: Codex CLI. Model: gpt-6.1-sol. Branch: `design/polish-1.3.4`; version stays 1.3.4. Tasks 1–5 remain committed and preserved.
+
+Root cause: `tokenizeFrench` already recognized internal apostrophes, but `FrText.build` retained analysis word boundaries. An analysis that flagged only `homme` left `l'` outside its tappable span. `alignElidedSegments` now aligns boundaries against the complete sentence and merges an immediately adjacent recognized prefix and remainder, preserving the remainder's analysis index and combined mark/added flags. Straight/curly apostrophes work identically. Build-up steps, analysis word chips and split word-by-word components use the same full surface. Review marks cover the complete token. Native selection starting inside the remainder visibly snaps to the full elided token. Card titles retain `l'homme`; Task 5's `l' = le + homme` breakdown remains visible, including nested dictionary rendering.
+
+Frontend `stripElidedPrefix` and backend `strip_elided_prefix` strip one prefix from the same Task 5 set (l, d, j, n, m, t, s, c, qu, jusqu, lorsqu, puisqu), for single-word identity. NFC, whitespace normalization, case folding and apostrophe equivalence remain intact; whole phrases, accents and distinct inflections remain distinct. Backend dictionary elision resolution reuses its helper while preserving Task 5 exact-expression handling. Counts, debounce, deck star, Importance and saved-card keys share the remainder key, so `l'homme` and `homme` share `homme`. SRS retains the surface target for sentence blanks while preventing a second alias card.
+
+The recorded `elision-keys-1.3.4` migration merges count aliases by summing counts, retaining earliest first/latest last lookup timestamps, and preserving favorite membership. Legacy deck aliases merge across word-card modes; a practiced schedule takes precedence, and any active saved alias keeps the survivor active. Notes/translations remain, review records follow the survivor, and original count/favorite/card/review rows (including schedules and metadata) are retained in the additive `srs_elision_merge_backup` recovery table. Importance is recalculated after merging. Migration testing used SQLite backup of a temporary fixture source into a temporary users-backup.db, verified the source stayed unchanged, and verified a second migration run is idempotent. No live users.db was read or changed.
+
+The phrase overlap path normalizes apostrophes and verifies that the expression occurs in the actual sentence. “In this sentence” adds a short Chinese fixed-expression note, e.g. `固定表达 droits de l’homme：人权。` from fixture phrase context. Absent expressions are not shown.
+
+Verification:
+
+- `cd web && npm test`: **477 passed**, 20 files. Includes both apostrophes for l'homme, l'oubli, j'ai, n'ai, qu'il; split analysis regression; native selection; analysis/component chips; review marks; shared keys/star; surface headword and present/absent fixed-expression context. Task 5 elision tests remain passing.
+- `PYTHONPATH=".:tests" python3 -m unittest discover -s tests`: **650 passed**. Includes all prefixes, shared counts/save/Importance, and reversible/idempotent migration on a fixture backup.
+- `cd web && npm run build`: passed (existing bundle-size and static-script advisories).
+- `bash /home/mgacai/polish-1.3.4-out/audit.sh`: raw button/select/input/textarea/details/summary counts all **0**.
+- `git diff --check`: passed.
+
+New screenshots only, all visually inspected; fixture-only preview used actual taps on analysis-split sentence tokens. Browser assertions verify the full selected unit, surface headword, elision breakdown, fixed-expression Chinese note and no horizontal overflow:
+
+- `/home/mgacai/polish-1.3.4-out/screenshots/polish-1.3.4-word-lhomme-light-1280.png`
+- `/home/mgacai/polish-1.3.4-out/screenshots/polish-1.3.4-word-lhomme-dark-1280.png`
+- `/home/mgacai/polish-1.3.4-out/screenshots/polish-1.3.4-word-lhomme-light-390.png`
+- `/home/mgacai/polish-1.3.4-out/screenshots/polish-1.3.4-word-lhomme-dark-390.png`
+
+Dictionary and sentence/phrase context are explicit screenshot fixtures; no live AI or database was used. Reused `/tmp/pwa-1.3.2-tools/node_modules/playwright` and `/home/mgacai/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`. Confirmed 8030 free before preview, bound only to 127.0.0.1:8030, stopped afterward and verified free. Temporary preview source/config removed. No screenshot PNGs, node_modules, database copies or preview files are committed. No production, Docker, environment, models, credentials, deployment, main branch, PR or merge changes. Push target: only `origin design/polish-1.3.4`.

@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StudySentence } from "../data/fixtures";
 import { StudyLearn } from "../screens/StudyLearn";
+import { WordsPanel } from "./StudyTools";
 import { WordPanel } from "./WordPopup";
 import { fake, installFakeBackend } from "../test/fakeBackend";
 import { resetLookupCaches, type DictionaryEntry } from "../api/lookup";
@@ -138,6 +139,38 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(context.querySelector('[lang="zh"]')?.textContent).toContain("共同作主语");
     expect(context.textContent).toContain("遗忘");
     expect(context.querySelector('[lang="en"]')?.textContent).toBe("forgetting");
+  });
+
+  it("uses the aligned surface in analysis word chips and split component alignment", async () => {
+    const word = {fr:"homme",meaning:"human being",meaning_zh:"人",lemma:"homme",type:"noun",ipa:"",why:"",english_link:"",false_friend:false};
+    const sentence = {...SENTENCE,fr:"Voici l'homme.",segments:[{t:"Voici l'"},{t:"homme",w:true,wi:0},{t:"."}],raw:{...SENTENCE.raw!,words:[word],alignment:[{fr:"l'",en:"the"},{fr:"homme",en:"man"}]}};
+    const picked = vi.fn();
+    await act(async () => root.render(<WordsPanel sentence={sentence} onPick={picked} />));
+    const tokens = Array.from(host.querySelectorAll<HTMLElement>(".fr-word"));
+    expect(tokens.map(t => t.textContent)).toEqual(["l'homme", "l'homme"]);
+    await act(async () => tokens[1].click());
+    expect(picked.mock.calls[0][0].text).toBe("l'homme");
+  });
+
+  it("shows the full selected elision and a Chinese fixed expression only when present", async () => {
+    const fr = "Il défend les droits de l'homme.";
+    vi.spyOn(lookupApi, "phraseContext").mockResolvedValue({phrases: [{text:"droits de l’homme", phrase:"droits de l’homme", meaning_zh:"人权", meaning_en:"human rights", literal_zh:""}]});
+    vi.spyOn(lookupApi, "lookupWord").mockResolvedValue({token:"l'homme", lemma:"homme",pos:"noun",phonetic:"",explanation_cn:"",explanation_en:"",elision:{prefix:"l'",expansion:"le",note:"definite article",remainder:"homme"},entries:[{lemma:"homme",pos:"noun",phonetic:"",language:"en",senses:["man"],source_url:"",history_url:""}]});
+    vi.spyOn(lookupApi, "wordContext").mockResolvedValue({context:{meaning_zh:"人",meaning_en:"man",why_zh:"这里泛指人。"},state:"ready"});
+    const sentence = {...SENTENCE, fr, segments:[{t:"Il défend les droits de l'"},{t:"homme",w:true,wi:0},{t:"."}]};
+    const picked = vi.fn();
+    const { FrText } = await import("../components/FrText");
+    await act(async () => root.render(<FrText segments={sentence.segments} onPick={picked} />));
+    const token = Array.from(host.querySelectorAll<HTMLElement>(".fr-word")).find(s => s.textContent === "l'homme")!;
+    expect(token).toBeTruthy();
+    await act(async () => token.click());
+    expect(picked.mock.calls[0][0].text).toBe("l'homme");
+    await act(async () => root.render(<WordPanel sentence={sentence} text={picked.mock.calls[0][0].text} wordIndex={0} onClose={() => {}} />));
+    expect(host.querySelector(".wp-headword")?.textContent).toBe("l'homme");
+    expect(host.querySelector('[aria-label="Elision breakdown"]')?.textContent).toContain("l' = le");
+    expect(host.querySelector('[aria-label="In this sentence"] [lang="zh"]')?.textContent).toContain("droits de l’homme：人权");
+    await act(async () => root.render(<WordPanel sentence={{...sentence,fr:"Il voit l'homme."}} text="l'homme" onClose={() => {}} />));
+    expect(host.querySelector('[aria-label="In this sentence"]')?.textContent).not.toContain("人权");
   });
 
   it("renders English before French with a related label and short source attribution", async () => {

@@ -27,8 +27,8 @@ def _new_user() -> tuple[int, dict]:
 
 class NormalizeTests(unittest.TestCase):
     def test_curly_apostrophe_nbsp_case_and_spaces(self):
-        self.assertEqual(srs.normalize_lookup_word("  D’ACCORD "), "d'accord")
-        self.assertEqual(srs.normalize_lookup_word("d'accord"), "d'accord")
+        self.assertEqual(srs.normalize_lookup_word("  D’ACCORD "), "accord")
+        self.assertEqual(srs.normalize_lookup_word("accord"), "accord")
         self.assertEqual(srs.normalize_lookup_word("il y a"), "il y a")
         self.assertEqual(srs.normalize_lookup_word("Bonjour"), "bonjour")
 
@@ -47,11 +47,11 @@ class RecordLookupTests(unittest.TestCase):
 
     def test_same_word_counts_once_across_spellings_and_sentences(self):
         first = srs.record_word_lookup(self.user_id, "D’accord", now=self.now)
-        self.assertEqual((first["word"], first["count"], first["incremented"]), ("d'accord", 1, True))
+        self.assertEqual((first["word"], first["count"], first["incremented"]), ("accord", 1, True))
         # A different sentence, a curly apostrophe and NBSP still land on the same row.
         later = self.now + datetime.timedelta(seconds=6)
         second = srs.record_word_lookup(self.user_id, "d'accord ", now=later)
-        self.assertEqual((second["word"], second["count"]), ("d'accord", 2))
+        self.assertEqual((second["word"], second["count"]), ("accord", 2))
 
     def test_repeated_opens_within_five_seconds_are_debounced(self):
         srs.record_word_lookup(self.user_id, "bonjour", now=self.now)

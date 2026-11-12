@@ -23,6 +23,7 @@ from typing import Any, Iterable
 from fsrs import Card, Rating, Scheduler, State
 
 import auth_db
+from offline_dictionary import strip_elided_prefix
 
 MODES = ("listen", "cloze", "grammar", "speak", "recognize")
 MODE_ORDER = {mode: index for index, mode in enumerate(MODES)}
@@ -125,6 +126,10 @@ def init_db() -> None:
         if not conn.execute("SELECT 1 FROM srs_migrations WHERE name = 'importance-1.3.4'").fetchone():
             _sync_word_importance(conn)
             conn.execute("INSERT INTO srs_migrations VALUES ('importance-1.3.4')")
+        if not conn.execute("SELECT 1 FROM srs_migrations WHERE name = 'elision-keys-1.3.4'").fetchone():
+            _merge_elided_keys(conn)
+            _sync_word_importance(conn)
+            conn.execute("INSERT INTO srs_migrations VALUES ('elision-keys-1.3.4')")
         conn.commit()
     _initialized_db_paths.add(db_path)
 
@@ -228,11 +233,60 @@ IMPORTANCE_FROM_LOOKUPS = ((5, 5), (3, 4))
 
 
 def normalize_lookup_word(word: str) -> str:
-    """Lower-case, normalise apostrophes and treat non-breaking spaces as spaces, so one word counts once."""
+    """Canonical lemma identity: NFC, apostrophes, whitespace, case and a single elision prefix."""
     text = unicodedata.normalize("NFC", str(word or ""))
     text = text.replace("’", "'").replace("‘", "'").replace("ʼ", "'")
     text = text.replace(" ", " ").replace(" ", " ")
-    return re.sub(r"\s+", " ", text).strip().lower()
+    return strip_elided_prefix(re.sub(r"\s+", " ", text).strip().lower())
+
+
+def _merge_elided_keys(conn: sqlite3.Connection) -> None:
+    """Merge legacy aliases transactionally; retain original rows/schedules/metadata for recovery."""
+    conn.execute("CREATE TABLE IF NOT EXISTS srs_elision_merge_backup "
+                 "(source_table TEXT NOT NULL, source_key TEXT NOT NULL, row_json TEXT NOT NULL, "
+                 "PRIMARY KEY (source_table, source_key))")
+
+    def backup(table, row, key):
+        conn.execute("INSERT OR IGNORE INTO srs_elision_merge_backup VALUES (?, ?, ?)",
+                     (table, str(key), json.dumps(dict(row), ensure_ascii=False)))
+
+    for table in ("word_lookup_counts", "word_favorites"):
+        groups = {}
+        for row in conn.execute(f"SELECT * FROM {table}").fetchall():
+            groups.setdefault((row["user_id"], normalize_lookup_word(row["word"])), []).append(row)
+        for (user_id, key), rows in groups.items():
+            if all(r["word"] == key for r in rows):
+                continue
+            for r in rows:
+                backup(table, r, f"{user_id}:{r['word']}")
+                conn.execute(f"DELETE FROM {table} WHERE user_id = ? AND word = ?", (user_id, r["word"]))
+            if table == "word_lookup_counts":
+                conn.execute("INSERT INTO word_lookup_counts VALUES (?, ?, ?, ?, ?)",
+                             (user_id, key, sum(r["count"] for r in rows),
+                              min(r["first_looked_at"] for r in rows), max(r["last_looked_at"] for r in rows)))
+            else:
+                conn.execute("INSERT INTO word_favorites VALUES (?, ?, ?)",
+                             (user_id, key, min(r["created_at"] for r in rows)))
+
+    groups = {}
+    for row in conn.execute("SELECT * FROM srs_cards WHERE mode IN ('cloze', 'recognize') ORDER BY is_new, created_at, id").fetchall():
+        groups.setdefault((row["user_id"], normalize_lookup_word(row["target"])), []).append(row)
+    for rows in groups.values():
+        # Preserve ordinary cards in different sentence contexts. Only legacy elision aliases merge.
+        surfaces = {sentence_key(r["target"]) for r in rows}
+        if len(surfaces) < 2 or not any(strip_elided_prefix(t) != t for t in surfaces):
+            continue
+        survivor = rows[0]  # Keep a practiced schedule in preference to an unreviewed duplicate.
+        for r in rows:
+            backup("srs_cards", r, r["id"])
+            for review in conn.execute("SELECT * FROM srs_reviews WHERE card_id = ?", (r["id"],)).fetchall():
+                backup("srs_reviews", review, review["id"])
+        if any(r["archived_at"] is None for r in rows):
+            conn.execute("UPDATE srs_cards SET archived_at = NULL WHERE id = ?", (survivor["id"],))
+        for r in rows[1:]:
+            # Notes, translations and all reviews remain; original card payloads are in the backup table.
+            conn.execute("UPDATE srs_reviews SET card_id = ? WHERE card_id = ?", (survivor["id"], r["id"]))
+            conn.execute("DELETE FROM srs_cards WHERE id = ?", (r["id"],))
 
 
 def importance_for_lookups(count: int) -> int:
@@ -767,6 +821,11 @@ def add_note(
                 wanted.append(("listen", "", {}, DEFAULT_IMPORTANCE))
 
         for mode, text, meta, importance in wanted:
+            if mode in ("cloze", "recognize"):
+                existing = conn.execute("SELECT target FROM srs_cards WHERE user_id = ? AND mode IN ('cloze', 'recognize')", (user_id,)).fetchall()
+                if any(normalize_lookup_word(r["target"]) == normalize_lookup_word(text)
+                       and (sentence_key(r["target"]) != sentence_key(text)) for r in existing):
+                    continue  # Surface and base lemma share one saved identity.
             fsrs_card = Card(due=now)
             conn.execute(
                 """

@@ -1,15 +1,21 @@
 /**
  * Dictionary lookup keys and lookup counting (prototype rules).
  * Keys: NFC, trimmed/collapsed whitespace, case folding, curly/straight apostrophe equivalence.
+ * A single word’s recognized elision prefix is stripped for shared lemma identity.
  * Accents, hyphens, œ, whole phrases and distinct word forms are kept: failli ≠ faillir, sœur ≠ soeur.
  */
+/** Strip a single Task 5 elision from a word; keep whole phrases intact. */
+export function stripElidedPrefix(s: string): string {
+  return s.replace(/^(?:l|d|j|n|m|t|s|c|qu|jusqu|lorsqu|puisqu)['’‘ʼ](?=[\p{L}\p{N}])([^\s]+)$/iu, "$1");
+}
+
 export function lookupKey(s: string): string {
-  return s
+  return stripElidedPrefix(s
     .normalize("NFC")
     .replace(/[\u2019\u2018\u02BC]/g, "'")
     .trim()
     .replace(/\s+/g, " ")
-    .toLocaleLowerCase("fr");
+    .toLocaleLowerCase("fr"));
 }
 
 export const LOOKUP_WINDOW_SECONDS = 5;

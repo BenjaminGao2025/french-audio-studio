@@ -21,7 +21,7 @@ import { Phonetic } from "../components/Phonetic";
 import type { StudySentence } from "../data/fixtures";
 import { askQuestion } from "../api/learning";
 import { WordNotes } from "./WordNotes";
-import { FrText } from "../components/FrText";
+import { findWordSpans, FrText } from "../components/FrText";
 import { Input } from "../components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent } from "../components/ui/popover";
 import { lookupKey, wordIsSaved } from "../lib/lookup";
@@ -47,6 +47,7 @@ function pick(sentenceId: string, wordIndex: number) {
 const wordChars = (s: string) =>
   s
     .toLocaleLowerCase("fr")
+    .replace(/[’‘ʼ]/g, "'")
     .replace(/[^\p{L}\p{N}'’-]+/gu, " ")
     .split(/\s+/)
     .filter(Boolean);
@@ -224,10 +225,12 @@ export function WordPanel({
 
   useEffect(() => { loadCtx(); }, [loadCtx]);
 
-  const overlapping = phrases.find((p) => phraseOverlaps(text, p.text));
+  const overlapping = phrases.find((p) => findWordSpans(sentence.fr, p.text).length > 0 && phraseOverlaps(contextWord, p.text));
   // English glosses remain secondary to the Chinese sentence explanation.
   const englishOnly = (value?: string) => value && !/\p{Script=Han}/u.test(value) ? value : "";
-  const contextNote = ctx?.why_zh?.trim() || "";
+  const expressionNote = overlapping?.meaning_zh && plain(overlapping.text) !== plain(contextWord)
+    ? `固定表达 ${overlapping.text}：${overlapping.meaning_zh}。` : "";
+  const contextNote = [ctx?.why_zh?.trim(), expressionNote].filter(Boolean).join(" ");
   const chineseMeaning = ctx?.meaning_zh?.trim() || "";
   const meaning = usableMeaning(ctx?.meaning_en, shown, sentence.en ?? "") || (!nested ? storedMeaning : "");
   const dictionaryMeaning = dictSt === "ready" ? (dict?.entries ?? []).filter(e => e.language === "en").flatMap(e => e.senses).map(s => usableMeaning(s, shown, sentence.en ?? "")).find(Boolean) : "";

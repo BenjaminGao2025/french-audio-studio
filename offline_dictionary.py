@@ -103,6 +103,14 @@ ELISIONS = {
 }
 
 
+_ELIDED_WORD = re.compile(r"^(?:" + "|".join(ELISIONS) + r")[’‘ʼ'](?=[^\W_])([^\s]+)$", re.IGNORECASE)
+
+
+def strip_elided_prefix(word: str) -> str:
+    """Strip one Task 5 prefix for lemma identity, leaving whole phrases unchanged."""
+    return _ELIDED_WORD.sub(r"\1", word)
+
+
 STOPWORDS = set("le la les un une des de du à au aux et ou en pour par sur ce ces se ne pas l d".split())
 
 
@@ -169,6 +177,7 @@ def lookup(word: str, pos: str = ""):
             return result
         prefix, apostrophe, remainder = token.partition("'")
         if apostrophe and prefix in ELISIONS and remainder and " " not in remainder:
+            remainder = strip_elided_prefix(token)
             result = exact(remainder)
             if not result:
                 for candidate in related_candidates(remainder):

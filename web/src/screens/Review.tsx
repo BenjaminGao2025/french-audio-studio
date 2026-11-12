@@ -142,7 +142,7 @@ const MODE_LABEL: Record<ReviewMode, string> = { listen: "Listen", speak: "Speak
 const LEARN_AHEAD_MS = 20 * 60 * 1000;
 
 /** The full sentence as FrText segments, with the target word(s) highlighted using --mark-bg. */
-function markedSegments(full: string, target: string): FrSegment[] {
+export function markedSegments(full: string, target: string): FrSegment[] {
   const segs = tokenizeFrench(full);
   const t = (target || "").trim();
   if (!t) return segs;
