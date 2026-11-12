@@ -15,7 +15,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 SCHEMA_VERSION = 1
-SELECTION_VERSION = 5
+SELECTION_VERSION = 6
 
 
 class DictionaryUnavailable(Exception):
@@ -86,6 +86,23 @@ def related_candidates(word):
     return list(dict.fromkeys(candidates))
 
 
+# Grammatical expansions only; lexical definitions still come from the existing indexes.
+ELISIONS = {
+    "l": ("le / la", "definite article or object pronoun, elided before a vowel or silent h"),
+    "d": ("de", "preposition, elided before a vowel or silent h"),
+    "j": ("je", "subject pronoun, elided before a vowel or silent h"),
+    "n": ("ne", "negation particle, elided before a vowel or silent h"),
+    "m": ("me", "object/reflexive pronoun, elided before a vowel or silent h"),
+    "t": ("te", "object/reflexive pronoun, elided before a vowel or silent h"),
+    "s": ("se", "reflexive pronoun, elided before a vowel or silent h"),
+    "c": ("ce", "demonstrative pronoun, elided before a vowel"),
+    "qu": ("que", "conjunction or relative/interrogative pronoun, elided before a vowel"),
+    "jusqu": ("jusque", "preposition, elided before a vowel"),
+    "lorsqu": ("lorsque", "conjunction, elided before a vowel"),
+    "puisqu": ("puisque", "conjunction, elided before a vowel"),
+}
+
+
 STOPWORDS = set("le la les un une des de du à au aux et ou en pour par sur ce ces se ne pas l d".split())
 
 
@@ -150,6 +167,27 @@ def lookup(word: str, pos: str = ""):
         result = exact(token)
         if result:
             return result
+        prefix, apostrophe, remainder = token.partition("'")
+        if apostrophe and prefix in ELISIONS and remainder and " " not in remainder:
+            result = exact(remainder)
+            if not result:
+                for candidate in related_candidates(remainder):
+                    result = exact(candidate)
+                    if result:
+                        result.update(match_type="related", related=result["lemma"], phonetic="")
+                        break
+            if result:
+                expansion, note = ELISIONS[prefix]
+                # With a noun, the index supplies the gender of the definite article.
+                if prefix == "l" and result["pos"] == "noun":
+                    gender = result.get("gender", "")
+                    if gender in ("m", "masculine", "f", "feminine"):
+                        masculine = gender in ("m", "masculine")
+                        expansion = "le" if masculine else "la"
+                        note = ("masculine" if masculine else "feminine") + " definite article, elided before a vowel or silent h"
+                result.update(token=token, elision=dict(prefix=token[:len(prefix) + 1],
+                              expansion=expansion, note=note, remainder=remainder))
+                return result
         for candidate in related_candidates(token):
             result = exact(candidate)
             if result:
@@ -159,6 +197,9 @@ def lookup(word: str, pos: str = ""):
 
     result = resolve(word)
     if result or " " not in word:
+        if result and result.get("elision"):
+            result["token"] = surface
+            result["elision"]["prefix"] = surface[:len(result["elision"]["prefix"])]
         return result
     parts = []
     for token in dict.fromkeys(re.findall(r"[^\W_]+(?:['-][^\W_]+)*", word, re.UNICODE)[:32]):

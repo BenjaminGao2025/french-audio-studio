@@ -100,7 +100,7 @@ afterEach(async () => {
 });
 
 describe("Task B — Study word card, selection and steps", () => {
-  it("shows the English meaning and the dictionary, with collapsed French definitions", async () => {
+  it("loads Chinese context despite a stored English gloss, with collapsed French definitions", async () => {
     const sentence: StudySentence = {
       ...SENTENCE,
       raw: { ...SENTENCE.raw!, words: [{ fr: "madame", ipa: "madam", lemma: "madame", type: "noun", meaning: "madam; a polite address", meaning_zh: "女士", why: "A polite way to address a woman.", english_link: "madam", false_friend: false }] },
@@ -108,16 +108,36 @@ describe("Task B — Study word card, selection and steps", () => {
     await act(async () => root.render(<WordPanel sentence={sentence} text="madame" wordIndex={0} onClose={() => {}} />));
     await wait(150);
     const panel = host.querySelector(".word-card")!;
-    expect(panel.querySelector(".wp-definition")?.textContent).toBe("madam; a polite address");
+    expect(panel.querySelector(".wp-definition")?.textContent).toContain("它在这句话里的用法说明。");
+    expect(fake.calls.some(c => c.path === "/api/word-context")).toBe(true);
     expect(panel.textContent).toContain("[madam]");
     expect(panel.textContent).not.toContain("Example sentence");
-    expect(panel.textContent).not.toMatch(/\p{Script=Han}/u);
+    expect(panel.querySelector('[aria-label="In this sentence"]')?.textContent).toMatch(/\p{Script=Han}/u);
     expect(panel.textContent).not.toContain("Définition de madame.");
     await act(async () => findButton("French definitions").click());
     expect(panel.textContent).toContain("Définition de madame.");
 
-    expect(panel.textContent).toContain("A polite way to address a woman.");
-    expect(panel.textContent).not.toMatch(/\p{Script=Han}/u);
+    expect(panel.textContent).toContain("the meaning here");
+    expect(panel.querySelector('[aria-label="In this sentence"]')?.textContent).toMatch(/\p{Script=Han}/u);
+  });
+
+  it("keeps L’oubli as headword and renders elision plus Chinese meaning and role", async () => {
+    vi.spyOn(lookupApi, "lookupWord").mockResolvedValue({
+      token: "L’oubli", lemma: "oubli", pos: "noun", phonetic: "", explanation_cn: "", explanation_en: "",
+      elision: { prefix: "L’", expansion: "le", note: "masculine definite article, elided before a vowel", remainder: "oubli" },
+      entries: [{ lemma: "oubli", pos: "noun", phonetic: "", language: "en", senses: ["forgetting"], source_url: "", history_url: "" }],
+    });
+    vi.spyOn(lookupApi, "wordContext").mockResolvedValue({ context: {
+      meaning_zh: "遗忘", meaning_en: "forgetting", why_zh: "这里指遗忘；le mépris 和 l’oubli 由 ou 连接，共同作主语。",
+    }, state: "ready" });
+    await act(async () => root.render(<WordPanel sentence={SENTENCE} text="L’oubli" onClose={() => {}} />));
+    expect(host.querySelector(".wp-headword")?.textContent).toBe("L’oubli");
+    expect(host.querySelector('[aria-label="Elision breakdown"]')?.textContent).toContain("L’ = le");
+    expect(host.querySelector('[aria-label="Dictionary"]')?.textContent).not.toContain("not in the dictionary");
+    const context = host.querySelector('[aria-label="In this sentence"]')!;
+    expect(context.querySelector('[lang="zh"]')?.textContent).toContain("共同作主语");
+    expect(context.textContent).toContain("遗忘");
+    expect(context.querySelector('[lang="en"]')?.textContent).toBe("forgetting");
   });
 
   it("renders English before French with a related label and short source attribution", async () => {
@@ -488,7 +508,7 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(panel.textContent).toContain("Définition de madame.");
     expect(panel.querySelector('a[href="https://fr.wiktionary.org/wiki/madame#fr"]')).toBeTruthy();
     expect(panel.textContent).toContain("Source: Wiktionary (CC BY-SA)");
-    expect(panel.textContent).not.toMatch(/\p{Script=Han}/u);
+    expect(panel.querySelector('[aria-label="In this sentence"]')?.textContent).toMatch(/\p{Script=Han}/u);
     expect(fake.calls.filter((call) => call.path === "/api/etymology")).toHaveLength(0);
     fake.etymologyFails = 1;
     await act(async () => findButton("Word origin").click());

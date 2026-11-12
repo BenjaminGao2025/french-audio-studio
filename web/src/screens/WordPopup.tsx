@@ -149,7 +149,7 @@ export function WordPanel({
   const [dictErr, setDictErr] = useState("");
 
   const [ctx, setCtx] = useState<WordContextResult | null>(null);
-  const [ctxSt, setCtxSt] = useState<LoadState>(tooLong || storedMeaning ? "idle" : "loading");
+  const [ctxSt, setCtxSt] = useState<LoadState>(tooLong ? "idle" : "loading");
 
   const [phrases, setPhrases] = useState<Phrase[]>([]);
 
@@ -187,7 +187,7 @@ export function WordPanel({
 
   const loadCtx = useCallback(() => {
     const request = ++ctxRequest.current;
-    if (tooLong || (!nested && storedMeaning)) return;
+    if (tooLong) return;
     setCtx(null);
     setCtxSt("loading");
     wordContext({ sentence: sentence.fr, word: contextWord, occurrence: contextOccurrence, translation_zh, hints: nested ? EMPTY_HINTS : hints }, abort.current.signal)
@@ -199,7 +199,7 @@ export function WordPanel({
       .catch(() => {
         if (alive() && request === ctxRequest.current) setCtxSt("error");
       });
-  }, [tooLong, storedMeaning, sentence.fr, shown, contextWord, contextOccurrence, nested, translation_zh, hints]);
+  }, [tooLong, sentence.fr, shown, contextWord, contextOccurrence, nested, translation_zh, hints]);
 
   useEffect(() => {
     loadDict();
@@ -225,10 +225,11 @@ export function WordPanel({
   useEffect(() => { loadCtx(); }, [loadCtx]);
 
   const overlapping = phrases.find((p) => phraseOverlaps(text, p.text));
-  // Legacy analyses can contain Chinese notes; only English explanations belong in this card.
+  // English glosses remain secondary to the Chinese sentence explanation.
   const englishOnly = (value?: string) => value && !/\p{Script=Han}/u.test(value) ? value : "";
-  const why = englishOnly(w?.why);
-  const meaning = (!nested && storedMeaning) || usableMeaning(ctx?.meaning_en, shown, sentence.en ?? "");
+  const contextNote = ctx?.why_zh?.trim() || "";
+  const chineseMeaning = ctx?.meaning_zh?.trim() || "";
+  const meaning = usableMeaning(ctx?.meaning_en, shown, sentence.en ?? "") || (!nested ? storedMeaning : "");
   const dictionaryMeaning = dictSt === "ready" ? (dict?.entries ?? []).filter(e => e.language === "en").flatMap(e => e.senses).map(s => usableMeaning(s, shown, sentence.en ?? "")).find(Boolean) : "";
   const phraseMeaning = overlapping ? usableMeaning(overlapping.meaning_en, text, sentence.en ?? "") : "";
 
@@ -260,12 +261,15 @@ export function WordPanel({
         <Module key={`context-${sentence.id}-${shown}`} title="In this sentence" defaultOpen>
             {tooLong ? (
               <p className="text-sm text-muted-foreground">Select a word or a short phrase</p>
-            ) : meaning ? (
-              <p className="wp-definition text-sm font-normal text-foreground" lang="en">{meaning}</p>
+            ) : contextNote || chineseMeaning ? (
+              <>
+                <p className="wp-definition text-sm font-normal text-foreground" lang="zh">{[chineseMeaning, contextNote].filter(Boolean).join("。 ").replace(/。。/g, "。")}</p>
+                {meaning && <p className="text-sm text-muted-foreground" lang="en">{meaning}</p>}
+              </>
             ) : ctxSt === "loading" ? (
               <><Spinner label="Finding the meaning…" /><Skeleton lines={1} /></>
-            ) : dictionaryMeaning ? (
-              <div className="flex flex-col gap-2"><p className="wp-definition text-sm">{dictionaryMeaning}</p><p className="text-xs text-muted-foreground">Dictionary meaning</p>{ctxSt === "error" && <Button type="button" variant="outline" onClick={loadCtx}>Retry</Button>}</div>
+            ) : meaning || dictionaryMeaning ? (
+              <div className="flex flex-col gap-2"><p className="wp-definition text-sm">{meaning || dictionaryMeaning}</p><p className="text-xs text-muted-foreground">{meaning ? "Sentence explanation unavailable" : "Dictionary meaning"}</p>{ctxSt === "error" && <Button type="button" variant="outline" onClick={loadCtx}>Retry</Button>}</div>
             ) : ctxSt === "error" ? (
               <div className="flex flex-col gap-2"><p className="text-sm text-muted-foreground">Couldn’t load the meaning in this sentence.</p><Button type="button" variant="outline" onClick={loadCtx}>Retry</Button></div>
             ) : (
@@ -278,7 +282,6 @@ export function WordPanel({
                 {phraseMeaning}
               </p>
             )}
-            {!nested && why && <p className="text-sm text-muted-foreground"><French value={why} onWord={drill} language="en" /></p>}
         </Module>
 
         <Module key={`dictionary-${sentence.id}-${shown}`} title="Dictionary" defaultOpen>
@@ -316,6 +319,7 @@ function DictionaryResult({ result, onWord }: { result: DictionaryEntry; onWord:
   if (!entries.length) return <p className="text-sm text-muted-foreground">“{result.token}” is not in the dictionary.</p>;
   const primaryFrench = entries[0].language !== "en" && entries.some(e => e.language === "en");
   return <>
+    {result.elision && <p className="text-sm" aria-label="Elision breakdown"><span lang="fr">{result.elision.prefix} = {result.elision.expansion}</span> ({result.elision.note}) + <French value={result.elision.remainder} onWord={onWord} /></p>}
     {result.match_type === "related" && <p className="text-sm text-muted-foreground">Related: <French value={result.related || ""} onWord={onWord} /></p>}
     {primaryFrench && <DictEntry entry={entries[0]} onWord={onWord} />}
     {entries.filter(e => e.language === "en").map((entry, index) => <DictEntry key={index} entry={entry} onWord={onWord} />)}
@@ -336,7 +340,7 @@ function DictEntry({ entry, onWord }: { entry: NonNullable<DictionaryEntry["entr
     <div className="wp-source-entry flex flex-col gap-1">
       <p className="text-sm">
         <French value={entry.lemma} onWord={onWord} />
-        <span className="text-muted-foreground"> {entry.pos} </span><Phonetic word={entry.lemma} ipa={entryIpa} />
+        <span className="text-muted-foreground"> {(entry.gender === "m" || entry.gender === "masculine") ? "masculine " : (entry.gender === "f" || entry.gender === "feminine") ? "feminine " : ""}{entry.pos} </span><Phonetic word={entry.lemma} ipa={entryIpa} />
       </p>
       <ol className="wp-senses list-decimal space-y-1 pl-5 text-sm" lang={entry.language ?? "fr"}>
         {shown.map((sense, i) => <li key={i}>{entry.language === "en" ? sense : <French value={sense} onWord={onWord} />}</li>)}

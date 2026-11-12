@@ -16,6 +16,7 @@ export interface DictionaryEntry {
   dictionary_state?: "found" | "not_found";
   match_type?: "exact" | "related" | "components";
   related?: string;
+  elision?: { prefix: string; expansion: string; note: string; remainder: string };
   components?: DictionaryEntry[];
   entries_en?: NonNullable<DictionaryEntry["entries"]>;
   entries_fr?: NonNullable<DictionaryEntry["entries"]>;
@@ -23,6 +24,7 @@ export interface DictionaryEntry {
     language?: "en" | "fr";
     lemma: string;
     pos: string;
+    gender?: string;
     phonetic: string;
     senses: string[];
     source_url: string;

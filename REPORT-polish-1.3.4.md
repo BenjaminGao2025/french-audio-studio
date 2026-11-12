@@ -97,3 +97,33 @@ Follow-up verification:
 - Logs: `followup-npm-verified.log`, `followup-python-final.log`, `followup-build-final.log`, `followup-audit.log`, `followup-screenshots.log` under `/home/mgacai/polish-1.3.4-out/`.
 
 Reused the fixture preview pattern, specified Playwright installation and Chromium binary. Captured 12 new screenshots, without recapturing tasks 1–2. Optional `/workspace/polish-1.3.4/screenshots/` copy was unavailable/unwritable. Confirmed 127.0.0.1:8030 free before starting; bound only there, stopped our preview, and verified the port free by binding afterward. Temporary preview source/config were removed from the checkout; reusable copies remain in the output directory. No screenshot PNGs, databases, node_modules or preview files are committed. No production files, containers, credentials, deployment, main branch, merge or PR operations were used. Only `origin design/polish-1.3.4` is the push target.
+
+
+## TASK 5 — Elision lookup and Chinese sentence context
+
+Tool: Codex CLI. Model: gpt-6.1-sol. Follow-up on `design/polish-1.3.4`; version remains 1.3.4 and tasks 1–4 are preserved.
+
+The existing offline_dictionary lookup now resolves l’, d’, j’, n’, m’, t’, s’, c’, qu’, jusqu’, lorsqu’, and puisqu’ (straight and curly apostrophes) through the remainder, using the same French/English indexes, ranking, inflection handling, related-word fallback and phrase components. Exact expressions such as d’accord remain intact. Selection version is 6. The word card keeps the clicked headword and displays an elision breakdown; noun gender from the index identifies le/la when available, and dictionary entry headings show masculine/feminine noun labels. No dictionary database was modified.
+
+The card now requests word_context even when the analysis already supplies an English gloss, renders meaning_zh plus why_zh as its main sentence explanation, and keeps English as a secondary line. The prompt asks why_zh for the meaning here and grammatical role in 1–2 conservative short Chinese sentences. Existing field limits remain unchanged. word_context.VERSION is 4, invalidating older cache keys; current-version nonempty bare-gloss rows without a usable Chinese note also regenerate on lookup. Empty negative-cache entries remain cached. A failed context request retains a clearly labelled fallback and Retry.
+
+Regression coverage includes l’oubli, l’homme, j’ai and n’ai with both apostrophes, both indexes and isolated single-index lookup, all requested prefixes, API found state, related/components fallback, exact expressions, clicked headword, Chinese role display despite a stored English gloss, prompt requirements, and mocked cache regeneration followed by cache reuse. Unit tests use temporary databases/fixtures and mocked AI only.
+
+Verification:
+
+- `cd web && npm test`: **453 passed**, 20 files.
+- `PYTHONPATH=".:tests" python3 -m unittest discover -s tests`: **647 passed**.
+- `cd web && npm run build`: passed (existing bundle-size advisory only).
+- `bash /home/mgacai/polish-1.3.4-out/audit.sh`: raw button/select/input/textarea/details/summary counts all **0**.
+- `git diff --check`: passed.
+
+Screenshots, all visually inspected, with browser assertions for elision breakdown, Chinese meaning/subject role, absence of a dictionary miss, and no horizontal overflow:
+
+- `/home/mgacai/polish-1.3.4-out/screenshots/polish-1.3.4-word-oubli-light-1280.png`
+- `/home/mgacai/polish-1.3.4-out/screenshots/polish-1.3.4-word-oubli-dark-1280.png`
+- `/home/mgacai/polish-1.3.4-out/screenshots/polish-1.3.4-word-oubli-light-390.png`
+- `/home/mgacai/polish-1.3.4-out/screenshots/polish-1.3.4-word-oubli-dark-390.png`
+
+Screenshots use the actual offline_dictionary implementation against `/home/mgacai/polish-1.2-out/dict-build/english-french-v1.sqlite`, opened read-only/immutable. No configured French index was available for screenshots; both languages are covered by fixture tests. The context response is a fixture containing why_zh, rendered by the real UI; no live paid AI was called. Reused `/tmp/pwa-1.3.2-tools/node_modules/playwright` and `/home/mgacai/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`.
+
+Confirmed 8030 free before starting; preview bound only to 127.0.0.1:8030, stopped afterward and port verified free. Temporary preview source/config were removed from the checkout. No screenshots, node_modules, database copies or preview files are committed. No production files, containers, credentials, deployment, main branch, merge or PR operations were used. Push target is only `origin design/polish-1.3.4`.
