@@ -1,3 +1,4 @@
+import { useExplanationLanguage } from "../lib/explanationLanguage";
 import { Phonetic } from "../components/Phonetic";
 import { useEffect, useRef, useState } from "react";
 import { Check, Volume2, Map as MapIcon, Plus, Loader2 } from "lucide-react";
@@ -129,6 +130,7 @@ export function StructurePanel({ sentence }: { sentence: StudySentence }) {
 interface ExplainState { explanation: string; variation: string; question: string; feedback?: ExplanationFeedback; history: TutorTurn[]; saved: number[] }
 const explanations = new Map<string, ExplainState>();
 export function ExplainPanel({ sentence }: { sentence: StudySentence }) {
+  const [language] = useExplanationLanguage();
   const [state, setState] = useState<ExplainState>(() => explanations.get(sentence.id) ?? { explanation: "", variation: "", question: "", history: [], saved: [] });
   const [busy, setBusy] = useState(""), [error, setError] = useState("");
   const ctl = useRef<AbortController | null>(null);
@@ -145,7 +147,7 @@ export function ExplainPanel({ sentence }: { sentence: StudySentence }) {
   });
   const ask = () => request("ask", async (signal) => {
     const question = state.question.trim();
-    const { answer } = await askQuestion(sentence, question, state.history, signal);
+    const { answer } = await askQuestion(sentence, question, state.history, signal, { language });
     if (!signal.aborted) update({ history: [...state.history, { role: "learner", content: question }, { role: "tutor", content: answer }], question: "" });
   });
   const spoken = (field: "explanation" | "question") => async (blob: Blob, signal: AbortSignal) => {

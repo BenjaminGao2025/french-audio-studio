@@ -391,8 +391,9 @@ function Origin({ word, lemma, onWord }: { word: string; lemma: string; onWord: 
   </dl> : <p className="whitespace-pre-line text-sm" lang="zh">{value.text}</p>;
 }
 function Ask({ sentence, word }: { sentence: StudySentence; word: string }) {
+  const [language] = useExplanationLanguage();
   const [question, setQuestion] = useState(""); const [answer, setAnswer] = useState(""); const [busy, setBusy] = useState(false); const [error, setError] = useState(false);
-  const send = async () => { setBusy(true); setError(false); try { setAnswer((await askQuestion(sentence, `About “${word}”: ${question}`, [])).answer); } catch { setError(true); } finally { setBusy(false); } };
+  const send = async () => { setBusy(true); setError(false); try { setAnswer((await askQuestion(sentence, question, [], undefined, { word, language })).answer); } catch { setError(true); } finally { setBusy(false); } };
   return <><form className="flex gap-2" onSubmit={e => { e.preventDefault(); void send(); }}><Input aria-label="Ask about this word" value={question} onChange={e => setQuestion(e.target.value)} /><Button disabled={busy || !question.trim()} type="submit">Send</Button></form>{busy && <Spinner label="Asking…" />}{error && <Button variant="outline" onClick={() => void send()}>Retry</Button>}{answer && <p className="whitespace-pre-wrap text-sm">{answer}</p>}</>;
 }
 

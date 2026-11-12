@@ -41,3 +41,29 @@ The fixture sentence is “Les représentants ont résolu le problème.” Engli
 Preview bound only to 127.0.0.1:8030 after confirming it was free. The preview was stopped and 8030 confirmed free afterward. Temporary preview-main.tsx and vite.audit.config.ts were copied to the output folder for reproducibility and removed from the checkout. No screenshots or preview sources/config are committed.
 
 Push target: git push -u origin design/polish-1.3.5 only; no main push, merge, PR, force-push or deployment.
+
+
+## TASK 4 — Ask AI answers the learner's actual question first
+
+Tool: Codex CLI. Exact model id: gpt-6.1-sol.
+
+Root cause: WordPopup prefixed the raw question with About “word”, making the open French word the assumed topic. The server required sentence-first French grounding, omitted the English translation and open-word context, and unconditionally appended English-only style instructions.
+
+Changes: WordPopup now sends the raw question with structured word, translation_en and language context through the existing /api/ask endpoint. Sentence-level Ask sends the translation and Explanation language without requiring a word. AskRequest accepts these optional fields (language defaults to en for older clients). The system prompt supplies the translation and open word as context and requires answering the actual question first, including defining English translation phrases before any helpful French connection. Clear Chinese/English questions determine the response language; mixed or ambiguous questions use the en/zh setting. English answers use short, plain B1 English; Chinese answers use Chinese. Follow-up continuity, example limits, the 90-word cap, plain text, history mapping and truncation remain intact. Tasks 1–3 and version 1.3.5 are preserved.
+
+Verification:
+- cd web && npm test: 494 passed across 22 files.
+- cd web && npm run build: passed; existing classic PWA script and chunk-size warnings only.
+- PYTHONPATH=".:tests" python3 -m unittest discover -s tests: 665 passed, including all 12 Ask prompt tests; fixtures/temp databases only.
+- Original 1.3.4 audit ran; because its path is fixed to the old worktree, also ran a copy targeting this 1.3.5 checkout. Current-worktree raw button/select/input/textarea/details/summary: 0 / 0 / 0 / 0 / 0 / 0.
+- git diff --check: passed.
+- Frontend tests cover the unchanged madame question, the exact mixed-language set-forth question with both settings, and sentence Ask translation/language/history without a word.
+- Prompt tests cover direct English-gloss answers, raw user messages, structured context, language precedence/fallback, conditional style, backward compatibility and invalid-language validation.
+
+Screenshot: /home/mgacai/polish-1.3.5-out/screenshots/polish-1.3.5-ask-set-forth-light-390.png
+Light mode, 390px wide, d'exposer card open with Ask AI expanded and the exact question “啥意思？ to set forth 呢？”. The visibly labeled fixture answer defines “to set forth” first as formally state or present, then connects it to d'exposer. No live model call was made; this verifies the preview UI and fixture response, while automated tests verify the request and prompt. The screenshot was visually reviewed. /workspace was not writable for the optional copy.
+
+Preview bound only to 127.0.0.1:8030 after confirming it was free. Stopped the task-owned preview process, confirmed no listener and a successful reusable bind on 8030, and removed temporary preview-main.tsx / vite.audit.config.ts from the checkout. Preview sources are retained only in the output directory. No screenshots, preview files, databases or node_modules are committed.
+
+Task 4 logs: task4-npm-test.log, task4-build.log, task4-python-test.log, task4-python-targeted.log, task4-audit.log, task4-original-audit.log, task4-screenshot.log in /home/mgacai/polish-1.3.5-out/.
+Push target: origin design/polish-1.3.5 only. No main push, merge, PR, force-push, deployment, Docker or production changes.

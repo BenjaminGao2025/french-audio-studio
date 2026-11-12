@@ -6,6 +6,7 @@ import { loadSavedCards } from "./srs";
 export const sentenceContext = (s: StudySentence) => ({
   sentence: s.fr,
   translation_zh: s.raw?.translation_zh ?? "",
+  translation_en: s.en ?? s.raw?.translation_en ?? "",
   grammar_points: (s.raw?.grammar_points ?? []).slice(0, 5).map(({ title, explanation }) => ({ title, explanation })),
 });
 export interface ExplanationFeedback {
@@ -18,8 +19,8 @@ export interface ExplanationFeedback {
 export interface TutorTurn { role: "learner" | "tutor"; content: string }
 export const checkExplanation = (s: StudySentence, explanation: string, variation: string, signal?: AbortSignal) =>
   apiFetch<ExplanationFeedback>("/api/feynman", { body: { ...sentenceContext(s), explanation, variation }, signal });
-export const askQuestion = (s: StudySentence, question: string, history: TutorTurn[], signal?: AbortSignal) =>
-  apiFetch<{ answer: string }>("/api/ask", { body: { ...sentenceContext(s), question, history: history.slice(-12) }, signal });
+export const askQuestion = (s: StudySentence, question: string, history: TutorTurn[], signal?: AbortSignal, context: { word?: string; language?: "en" | "zh" } = {}) =>
+  apiFetch<{ answer: string }>("/api/ask", { body: { ...sentenceContext(s), ...context, question, history: history.slice(-12) }, signal });
 export async function saveGrammar(s: StudySentence, grammar: { title: string; explanation: string; hook: string }) {
   await apiFetch("/api/srs/grammar", { body: { sentence: s.fr, translation_en: s.en, translation_zh: s.raw?.translation_zh ?? "", grammar } });
   await loadSavedCards([s.fr]).catch(() => undefined);

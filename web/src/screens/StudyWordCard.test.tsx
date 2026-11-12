@@ -508,8 +508,27 @@ describe("Task B — Study word card, selection and steps", () => {
     await input('[aria-label="Ask about this word"]', "What does it mean?");
     await act(async () => findButton("Send").click());
     await wait(100);
-    expect(fake.calls.find(c => c.path === "/api/ask")?.body).toMatchObject({ sentence: FR, question: "About “madame”: What does it mean?" });
+    expect(fake.calls.find(c => c.path === "/api/ask")?.body).toMatchObject({ sentence: FR, question: "What does it mean?", word: "madame", translation_en: SENTENCE.en, language: "en" });
     expect(host.textContent).toContain("The surrounding words give the context.");
+  });
+
+  it.each(["en", "zh"] as const)("sends the raw mixed-language gloss question with %s context", async language => {
+    localStorage.setItem("explanationLanguage", language);
+    const sentence = { ...SENTENCE, fr: "Les représentants ont décidé d'exposer le plan.", en: "The representatives decided to set forth the plan." };
+    await act(async () => root.render(<WordPanel sentence={sentence} text="d'exposer" onClose={() => {}} />));
+    await wait(100);
+    await act(async () => findButton("Ask AI").click());
+    const el = host.querySelector<HTMLInputElement>('[aria-label="Ask about this word"]')!;
+    const question = "啥意思？ to set forth 呢？";
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(el, question);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => findButton("Send").click());
+    await wait(100);
+    expect(fake.calls.find(c => c.path === "/api/ask")?.body).toMatchObject({
+      sentence: sentence.fr, translation_en: sentence.en, word: "d'exposer", language, question, history: [],
+    });
   });
 
   it("keeps grammar available at sentence level without a word-card entry point", async () => {
