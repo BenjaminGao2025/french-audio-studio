@@ -26,7 +26,7 @@ export interface GradeResult {
   issues: { kind: Exclude<MarkKind, "ok">; expected?: string; given?: string }[];
 }
 
-const APOS = /[\u2019\u2018\u02BC\u0060\u00B4]/g;
+const APOS = /[\u2019\u2018\u02BC\u0060\u00B4\u2032]/g;
 
 interface KeyToken {
   text: string;

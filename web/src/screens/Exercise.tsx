@@ -503,10 +503,10 @@ function Result({
               {i > 0 && " "}
               <span data-mark={word.mark} className={word.mark === "different" || word.mark === "accent" ? "inline-block max-w-full" : undefined}>
                 {word.mark === "ok" ? word.given : word.mark === "missing" ? (
-                  <span className="text-muted-foreground" aria-label={`Missing word: ${word.expected}`}>{word.expected}</span>
+                  <span className="text-destructive font-medium underline underline-offset-4" aria-label={`Missing word: ${word.expected}`}>{word.expected}</span>
                 ) : (
                   <>
-                    <del className={word.mark === "accent" ? "text-muted-foreground decoration-dotted" : "text-muted-foreground"}>{word.given}</del>
+                    <del className={word.mark === "accent" ? "text-foreground line-through decoration-2 decoration-dotted" : "text-foreground line-through decoration-2"}>{word.given}</del>
                     {word.expected && <> <span className={word.mark === "accent" ? "underline decoration-dotted underline-offset-4" : "text-destructive font-medium"} aria-label={word.mark === "accent" ? `Accent correction: ${word.expected}` : undefined}>{word.expected}</span></>}
                   </>
                 )}

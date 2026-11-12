@@ -7,6 +7,20 @@ import { countedMinutesFor, mergeIntervals, pace, splitAtMidnight } from "./prog
 const T = "J’ai oublié mon rendez-vous.";
 
 describe("grading", () => {
+  it.each([
+    ["NFD answer", "Les représentants ont résolu d'exposer les droits.", "Les représentants ont résolu d'exposer les droits".normalize("NFD")],
+    ["NFD target", "Les représentants ont résolu d'exposer les droits.".normalize("NFD"), "Les représentants ont résolu d'exposer les droits"],
+    ["curly answer", "d'exposer", "d’exposer"],
+    ["curly target", "d’exposer", "d'exposer"],
+    ["Ben's exact pair", "Les représentants ont résolu d'exposer les droits.", "Les représentants ont résolu d'exposer les droits"],
+    ["prime apostrophe", "d'exposer", "d′exposer"],
+  ])("fully accepts %s", (_, target, answer) => {
+    const r = grade(target, answer);
+    expect(r.correct).toBe(true);
+    expect(r.accuracy).toBe(100);
+    expect(r.alignment.every(w => w.mark === "ok")).toBe(true);
+    expect(r.counts.accent + r.counts.different + r.counts.missing + r.counts.extra).toBe(0);
+  });
   it("accepts equivalent forms", () => {
     expect(grade(T, "j'ai oublié mon rendez vous").correct).toBe(true);
     expect(grade(T, "  J’ai   OUBLIÉ mon rendez-vous ").correct).toBe(true);

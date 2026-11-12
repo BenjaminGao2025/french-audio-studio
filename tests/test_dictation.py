@@ -63,6 +63,24 @@ class TokenizeTests(unittest.TestCase):
 
 
 class GradeTests(unittest.TestCase):
+    def test_ben_normalization_regressions(self):
+        target = "Les représentants ont résolu d'exposer les droits."
+        import unicodedata
+
+        for expected, answer in [
+            (target, unicodedata.normalize("NFD", target[:-1])),
+            (unicodedata.normalize("NFD", target), target[:-1]),
+            (target, target[:-1]),
+            ("d'exposer", "d’exposer"),
+            ("d’exposer", "d'exposer"),
+            ("d'exposer", "d′exposer"),
+        ]:
+            with self.subTest(expected=expected, answer=answer):
+                result = dictation.grade(expected, answer)
+                self.assertTrue(result["correct"])
+                self.assertEqual(result["accuracy"], 100)
+                self.assertTrue(all(op["kind"] == "ok" for op in result["ops"]))
+
     def test_case_punctuation_and_spacing_ignored(self):
         result = dictation.grade("Bonjour, Marie !", "  bonjour   MARIE ")
         self.assertTrue(result["correct"])

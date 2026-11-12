@@ -329,3 +329,48 @@ it("new sessions default to Step by step first, preserve existing modes, and Rev
   ensureSession("default-review", "Recall", "Fixture", items);
   expect(get().exercises["default-review"].mode).toBe("whole");
 });
+
+
+describe("normalization and visible grading marks", () => {
+  it.each([
+    ["Les représentants ont résolu d'exposer les droits.", "Les représentants ont résolu d'exposer les droits".normalize("NFD"), true],
+    ["Les représentants ont résolu d'exposer les droits.".normalize("NFD"), "Les représentants ont résolu d'exposer les droits", true],
+    ["d'exposer", "d’exposer", true],
+    ["d’exposer", "d'exposer", true],
+    ["Les représentants ont résolu d'exposer les droits.", "Les représentants ont résolu d'exposer les droits", true],
+    ["résolu", "fini", false],
+    ["été", "ete", false],
+    ["été ici", "été", false],
+    ["été", "été ici", false],
+  ])("renders %s / %s from the counted alignment", async (target, answer, correct) => {
+    vi.mocked(gradeAttempt).mockResolvedValueOnce({correct, saved:true} as Awaited<ReturnType<typeof gradeAttempt>>);
+    const fixture = [{...items[0], fr: target}];
+    ensureSession("marks", "Recall", "Fixture", fixture);
+    await act(async () => {
+      set(s => ({exercises:{...s.exercises, marks:{...s.exercises.marks, mode:"whole", drafts:{"0:whole:w":answer}}}}));
+      root.render(<Exercise sessionKey="marks" kind="Recall" source="Fixture" items={fixture} onDone={() => {}} />);
+      submitAnswer("marks");
+    });
+    const result = get().attempts.at(-1)!.result!;
+    const line = host.querySelector('[aria-label="Inline corrections"]')!;
+    const marks = line.querySelectorAll('[data-mark]:not([data-mark="ok"])');
+    expect(marks.length).toBe(result.counts.different + result.counts.missing + result.counts.extra + result.counts.accent);
+    if (correct) {
+      expect(host.textContent).toContain("100%");
+      expect(host.textContent).toContain("0 wrong");
+      expect(host.textContent).not.toContain("Not quite");
+    }
+    for (const mark of marks) {
+      const kind = mark.getAttribute("data-mark");
+      if (kind !== "missing") {
+        expect(mark.querySelector("del")?.classList.contains("line-through")).toBe(true);
+        expect(mark.querySelector("del")?.classList.contains("text-foreground")).toBe(true);
+      }
+      if (kind !== "extra") expect(mark.textContent).toContain(result.alignment.find(w => w.mark === kind)!.expected);
+    }
+    if (target === "été") {
+      expect(result.counts.different).toBe(0);
+      expect(result.counts.accent).toBe(answer === "ete" ? 1 : 0);
+    }
+  });
+});
