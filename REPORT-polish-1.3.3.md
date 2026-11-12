@@ -134,3 +134,21 @@ The optional /workspace copy remains unavailable because /workspace is absent/no
   - Visually reviewed desktop/mobile light/dark captures; browser assertions confirm one action row, no horizontal overflow, inline inset icons, and focused Next. `/workspace` does not exist and its parent is not writable, so the optional copy was unavailable.
 - Evidence: `task8-tests-verified.log`, `task8-build.log`, `task8-audit.log`, and `task8-screenshots.cjs` under `/home/mgacai/polish-1.3.3-out/`. The first full-suite invocation ended without a summary; the completed rerun above passed all 439 tests.
 - Tool: **Codex CLI**. Model: **gpt-6.1-sol**.
+
+
+## TASK 9 — Standalone Recall/Dictation sessions and PWA register version
+
+- Reused the existing Exercise toolbar, single muted question/step/source line, stock shadcn Card, collapsed reveal insets, shared answer actions, and in-card results. RunScreen already mounts Exercise with an sr-only page title and Recall/Dictation > Session breadcrumb; retained that structure and the focused shell Exit control. No duplicate session layout or launcher redesign was needed.
+- Tightened the shared toolbar so justify-between applies only when modeTabs exists; standalone scope controls align compactly at the left. Removed the unused Exercise compact prop and its Check yourself call-site argument. Scoring, history saving, tappable French words, dark theme, and correct-result Next focus with Enter-release protection remain shared.
+- Extended ExerciseReveal coverage through RunScreen for both kinds/scopes: hidden title, breadcrumb, no tabs, toolbar alignment classes, one muted meta line, one Card, Check/Hint/Answer row, collapsed defaults and inline inset icons. Wrong/correct result tests now mount RunScreen; Check-button Enter-release and next-question focus tests also mount RunScreen. Existing Check yourself/modeTabs and keyboard coverage remain.
+- Changed web/index.html pwa-register query to 1.3.3 without changing package.json or routers.pages.ASSET_VERSION. Both Python suites read web/package.json; source and optional built dist/index.html must match. Updated the script allowlist to include the existing theme-boot script.
+- Verification: cd web && npm test — **443 tests passed, 19 files passed**. npm run build passed with existing classic PWA-script/chunk-size warnings; dist/index.html contains pwa-register.js?v=1.3.3. PYTHONPATH=".:tests" python3 -m unittest tests.test_app_shell tests.test_pwa -v — **27 tests passed**, including Node-unavailable skip coverage. Tests use fixtures/temp resources only. audit.sh reports raw button/select/input/textarea/details/summary counts all **0**. git diff --check passed.
+- Captured and visually inspected **20 standalone screenshots** under /home/mgacai/polish-1.3.3-out/screenshots/:
+  - standalone-recall-prompt-{light,dark}-{1280,390}.png
+  - standalone-recall-revealed-{light,dark}-{1280,390}.png
+  - standalone-recall-wrong-{light,dark}-{1280,390}.png
+  - standalone-recall-correct-{light,dark}-{1280,390}.png
+  - standalone-dictation-{light,dark}-{1280,390}.png
+- Browser assertions verify /app/study/run, focused Exit header, no tabs or visible main-column headings, a compact left-aligned scope toolbar, one Card, same-row answer actions, inline inset icons, correct-result Next focus, and no horizontal overflow. Optional /workspace/polish-1.3.3/screenshots copy was unavailable (not writable).
+- Evidence: task9-tests.log, task9-build.log, task9-python.log, task9-audit.log, task9-screenshots.log, task9-screenshots.cjs, and standalone-contact-{390,1280}.jpg in /home/mgacai/polish-1.3.3-out/. Preview used only 127.0.0.1:8030 after a free-port check, then stopped; port confirmed free. Temporary preview source/config removed. No screenshot PNGs or node_modules are committed; protected production resources and other processes were untouched.
+- Tool: **Codex CLI**. Model: **gpt-6.1-sol**.

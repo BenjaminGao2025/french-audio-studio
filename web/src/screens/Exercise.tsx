@@ -217,7 +217,6 @@ export function Exercise({
   onDone: () => void;
   /** Opens the study word card. When omitted, this exercise opens the same card itself. */
   onPick?: (p: FrPick) => void;
-  compact?: boolean;
   modeTabs?: ReactNode;
   doneLabel?: string;
 }) {
@@ -297,7 +296,7 @@ export function Exercise({
 
   return (
     <section className="exercise flex flex-col gap-6" aria-label={`${kind} exercise`}>
-      <div className="flex items-center justify-between gap-2" aria-label="Exercise toolbar">
+      <div className={cn("flex items-center gap-2", modeTabs && "justify-between")} aria-label="Exercise toolbar">
         {modeTabs}
         <ToggleGroup type="single" variant="outline" size="sm" spacing={0} value={sess.mode} onValueChange={(next) => { if (next === "step" || next === "whole") {
             if (busy) return;

@@ -6,6 +6,7 @@ import { gradeAttempt } from "../api/dictation";
 import type { PracticeItem } from "../data/fixtures";
 import { get, resetDemo, set } from "../state/store";
 import { ensureSession, Exercise, submitAnswer } from "./Exercise";
+import { RunScreen } from "./Launcher";
 import { StudyCheckTabs, StudyNavigation } from "./StudyTools";
 
 vi.mock("../api/dictation", () => ({
@@ -39,46 +40,62 @@ afterEach(async () => {
 });
 
 describe.each(["Recall", "Dictation"] as const)("%s exercise layout", kind => {
-  it.each(["whole", "step"] as const)("coordinates toolbar, meta and card in %s scope", async mode => {
-    const sessionKey = "layout-test";
-    const tab = kind === "Recall" ? "recall" : "dictation";
-    ensureSession(sessionKey, kind, "Current sentence", items);
-    await act(async () => {
-      set(s => ({ exercises: { ...s.exercises, [sessionKey]: { ...s.exercises[sessionKey], mode } } }));
-      root.render(<>
-        <StudyNavigation value={tab} onChange={() => {}} />
-        <Exercise sessionKey={sessionKey} kind={kind} source="Current sentence" items={items} onDone={() => {}}
-          modeTabs={<StudyCheckTabs value={tab} onChange={() => {}} />} />
-      </>);
+  describe.each([false, true])("standalone=%s", standalone => {
+    it.each(["whole", "step"] as const)("coordinates toolbar, meta and card in %s scope", async mode => {
+      const sessionKey = "layout-test";
+      const tab = kind === "Recall" ? "recall" : "dictation";
+      ensureSession(sessionKey, kind, "Current sentence", items);
+      await act(async () => {
+        set(s => ({ exercises: { ...s.exercises, [sessionKey]: { ...s.exercises[sessionKey], mode } } }));
+        set(() => ({ activeRun: sessionKey, route: "study/run" }));
+        root.render(standalone ? <RunScreen /> : <>
+          <StudyNavigation value={tab} onChange={() => {}} />
+          <Exercise sessionKey={sessionKey} kind={kind} source="Current sentence" items={items} onDone={() => {}}
+            modeTabs={<StudyCheckTabs value={tab} onChange={() => {}} />} />
+        </>);
+      });
+      const toolbar = host.querySelector('[aria-label="Exercise toolbar"]')!;
+      expect(host.querySelectorAll('[role="tablist"]')).toHaveLength(standalone ? 0 : 1);
+      expect(Boolean(toolbar.querySelector('[role="tablist"]'))).toBe(!standalone);
+      expect(toolbar.className.includes("justify-between")).toBe(!standalone);
+      if (standalone) {
+        expect(host.querySelector("h1")?.className).toBe("sr-only");
+        expect(host.querySelector("h1")?.textContent).toBe(kind);
+        expect(host.querySelector("nav")?.textContent).toContain(kind);
+        expect(host.querySelector("nav")?.textContent).toContain("Session");
+        expect(host.textContent).not.toContain("Check yourself");
+      }
+      const meta = host.querySelector('[id="ex-q-layout-test"]')!;
+      expect(meta.className).toContain("text-muted-foreground");
+      expect(meta.parentElement?.querySelectorAll(":scope > p")).toHaveLength(1);
+      expect(meta.textContent).not.toMatch(/Source:|sentences/);
+      expect(host.querySelectorAll('[data-slot="card"]')).toHaveLength(1);
+      expect(toolbar.querySelector('[aria-label="Practice scope"]')).toBeTruthy();
+      expect(host.querySelector("h2")).toBeNull();
+      expect(host.querySelector('[id="ex-q-layout-test"]')?.textContent).toContain(
+        mode === "whole" ? "Question 1 of 1 · Current sentence" : "Question 1 of 1 · Step 1 of 1 · Current sentence",
+      );
+      const card = host.querySelector('[data-slot="card"]')!;
+      expect(card.querySelector("textarea")).toBeTruthy();
+      if (kind === "Recall") expect(card.textContent).toContain(mode === "whole" ? items[0].en : items[0].steps[0].en);
+      else expect(card.querySelector('[aria-label="Play practice audio"]')).toBeTruthy();
+      const actions = card.querySelector('[aria-label="Answer actions"]')!;
+      expect([...actions.children].map(el => el.textContent)).toEqual(["Check", "Hint", "Answer"]);
+      expect(actions.children[1].getAttribute("data-variant")).toBe("ghost");
+      expect(actions.children[2].getAttribute("data-variant")).toBe("ghost");
+      expect(card.querySelector('[aria-label="Hint"]')).toBeNull();
+      expect(card.querySelector('[aria-label="Answer"]')).toBeNull();
+      await act(async () => (actions.children[1] as HTMLButtonElement).click());
+      await act(async () => (actions.children[2] as HTMLButtonElement).click());
+      for (const label of ["Hint", "Answer"]) {
+        const inset = card.querySelector(`[aria-label="${label}"]`)!;
+        expect(inset.className).toContain("bg-muted");
+        const iconLabel = inset.querySelector("svg")!.parentElement!;
+        expect(iconLabel.textContent).toBe(label);
+        expect(iconLabel.className).toContain("flex");
+      }
+      expect(card.querySelector('[aria-label="Answer"]')?.textContent).toContain("Try it now");
     });
-    const toolbar = host.querySelector('[aria-label="Exercise toolbar"]')!;
-    expect(host.querySelectorAll('[role="tablist"]')).toHaveLength(1);
-    expect(toolbar.querySelector('[role="tablist"]')).toBeTruthy();
-    expect(toolbar.querySelector('[aria-label="Practice scope"]')).toBeTruthy();
-    expect(host.querySelector("h2")).toBeNull();
-    expect(host.querySelector('[id="ex-q-layout-test"]')?.textContent).toContain(
-      mode === "whole" ? "Question 1 of 1 · Current sentence" : "Question 1 of 1 · Step 1 of 1 · Current sentence",
-    );
-    const card = host.querySelector('[data-slot="card"]')!;
-    expect(card.querySelector("textarea")).toBeTruthy();
-    if (kind === "Recall") expect(card.textContent).toContain(mode === "whole" ? items[0].en : items[0].steps[0].en);
-    else expect(card.querySelector('[aria-label="Play practice audio"]')).toBeTruthy();
-    const actions = card.querySelector('[aria-label="Answer actions"]')!;
-    expect([...actions.children].map(el => el.textContent)).toEqual(["Check", "Hint", "Answer"]);
-    expect(actions.children[1].getAttribute("data-variant")).toBe("ghost");
-    expect(actions.children[2].getAttribute("data-variant")).toBe("ghost");
-    expect(card.querySelector('[aria-label="Hint"]')).toBeNull();
-    expect(card.querySelector('[aria-label="Answer"]')).toBeNull();
-    await act(async () => (actions.children[1] as HTMLButtonElement).click());
-    await act(async () => (actions.children[2] as HTMLButtonElement).click());
-    for (const label of ["Hint", "Answer"]) {
-      const inset = card.querySelector(`[aria-label="${label}"]`)!;
-      expect(inset.className).toContain("bg-muted");
-      const iconLabel = inset.querySelector("svg")!.parentElement!;
-      expect(iconLabel.textContent).toBe(label);
-      expect(iconLabel.className).toContain("flex");
-    }
-    expect(card.querySelector('[aria-label="Answer"]')?.textContent).toContain("Try it now");
   });
 });
 
@@ -193,7 +210,8 @@ describe.each(["Recall", "Dictation"] as const)("%s result", kind => {
       ensureSession(sessionKey, kind, "Fixture", fixture);
       await act(async () => {
         set(s => ({ exercises: { ...s.exercises, [sessionKey]: { ...s.exercises[sessionKey], mode, drafts: { [key]: correct ? "MA machine à laver fuit!" : "Ma machine a lav fui" } } } }));
-        root.render(<Exercise sessionKey={sessionKey} kind={kind} source="Fixture" items={fixture} onDone={() => {}} />);
+        set(() => ({ activeRun: sessionKey, route: "study/run" }));
+        root.render(<RunScreen />);
       });
       await act(async () => { submitAnswer(sessionKey); });
       expect(host.querySelector('[aria-label="Score: ' + (correct ? 100 : 50) + '%"]')?.className).toContain("text-4xl");
@@ -256,7 +274,8 @@ describe.each(["Recall", "Dictation"] as const)("%s Next focus", kind => {
     ensureSession("check-focus", kind, "Fixture", fixture);
     await act(async () => {
       set(s => ({ exercises: { ...s.exercises, "check-focus": { ...s.exercises["check-focus"], drafts: { "0:whole:w": "answer" } } } }));
-      root.render(<Exercise sessionKey="check-focus" kind={kind} source="Fixture" items={fixture} onDone={() => {}} />);
+      set(() => ({ activeRun: "check-focus", route: "study/run" }));
+      root.render(<RunScreen />);
     });
     const check = [...host.querySelectorAll("button")].find(b => b.textContent === "Check")!;
     await act(async () => { check.focus(); check.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); check.click(); });

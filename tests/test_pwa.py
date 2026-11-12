@@ -119,6 +119,7 @@ class PwaTests(unittest.TestCase):
 
     def test_spa_source_and_built_shell_have_ios_tags(self):
         web = pathlib.Path(__file__).resolve().parents[1] / "web"
+        version = json.loads((web / "package.json").read_text())["version"]
         indexes = [web / "index.html"]
         if (web / "dist" / "index.html").is_file():
             indexes.append(web / "dist" / "index.html")
@@ -133,7 +134,7 @@ class PwaTests(unittest.TestCase):
                 'name="theme-color" content="#141a23" media="(prefers-color-scheme: dark)"',
                 '<script src="/static/theme-boot.js"></script>',
                 'rel="apple-touch-icon"', 'viewport-fit=cover',
-                '/static/pwa-register.js?v=1.3.2',
+                f'/static/pwa-register.js?v={version}',
             ):
                 self.assertIn(tag, html, (index, tag))
             self.assertEqual(html.count('rel="manifest"'), 1)

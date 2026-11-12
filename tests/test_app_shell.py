@@ -3,6 +3,7 @@
 The build is not in git, so these tests serve a small fake build from a temporary APP_DIR.
 """
 
+import json
 import re
 import tempfile
 import unittest
@@ -169,13 +170,27 @@ class WebSourceTests(unittest.TestCase):
         parser = _Tags()
         parser.feed(html)
         scripts = [attrs for tag, attrs in parser.tags if tag == "script"]
-        self.assertEqual([a.get("src") for a in scripts], ["/static/pwa-register.js?v=1.3.2", "/src/main.tsx"])
+        version = json.loads((WEB / "package.json").read_text())["version"]
+        self.assertEqual([a.get("src") for a in scripts], ["/static/theme-boot.js", f"/static/pwa-register.js?v={version}", "/src/main.tsx"])
         for tag, attrs in parser.tags:
             for name in attrs:
                 self.assertFalse(name.startswith("on"), f"inline handler {name} on <{tag}>")
             for name in ("src", "href"):
                 self.assertFalse(re.match(r"(?i)(https?:)?//", attrs.get(name) or ""), f"external {name}")
         self.assertIsNone(re.search(r"<script(?![^>]*\bsrc=)[^>]*>", html))
+
+    def test_pwa_register_matches_app_version_in_source_and_build(self):
+        version = json.loads((WEB / "package.json").read_text())["version"]
+        indexes = [WEB / "index.html"]
+        if (WEB / "dist" / "index.html").is_file():
+            indexes.append(WEB / "dist" / "index.html")
+        for index in indexes:
+            with self.subTest(index=index):
+                parser = _Tags()
+                parser.feed(index.read_text(encoding="utf-8"))
+                registers = [attrs.get("src") for tag, attrs in parser.tags
+                             if tag == "script" and "pwa-register.js" in attrs.get("src", "")]
+                self.assertEqual(registers, [f"/static/pwa-register.js?v={version}"])
 
     def test_vite_builds_under_app(self):
         config = (WEB / "vite.config.ts").read_text(encoding="utf-8")

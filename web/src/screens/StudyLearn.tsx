@@ -191,7 +191,6 @@ export function StudyLearn() {
                 ]}
                 onDone={() => patchStudy({ tab: "steps" })}
                 onPick={onPick}
-                compact
                 modeTabs={<StudyCheckTabs value={study.tab} onChange={changeTab} />}
               />
             )}
