@@ -1,7 +1,8 @@
 /* 1000H French service worker (served at /sw.js, scope /).
    Caches only versioned static files (/static/...?v=<version>) so pages open fast.
    Never touches /api, /tts, /files, /episodes or auth: those always go to the network.
-   HTML is network-first (the cached copy is only an offline fallback), so a deploy is
+   SPA HTML (/app, /app/* including index.html) and /app/assets/* stay network-only.
+   Public landing HTML is network-first (the cached copy is only an offline fallback), so a deploy is
    picked up on the next load and a page never runs old JS against a new server.
    The version below changes on every deploy, which makes the browser install a new worker. */
 'use strict';

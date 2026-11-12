@@ -457,7 +457,7 @@ export function Exercise({
             <Alert variant="destructive" role="alert"><AlertTitle>Checking didn’t finish</AlertTitle><AlertDescription>This is a technical problem, not a wrong answer. Your answer is kept and Retry checks the same attempt.</AlertDescription></Alert>
           )}
           {busy && <Spinner label="Checking your answer…" />}
-          <div className="sticky bottom-0 z-10 bg-background py-3">
+          <div className="sticky bottom-0 z-10 bg-background py-3 pb-[calc(0.75rem+var(--safe-bottom))]">
             <div className="flex flex-wrap items-center gap-2">
               <Button type="button" variant="default" aria-disabled={(!!(busy)) || undefined} aria-busy={busy || undefined} className={cn((!!(busy)) ? "opacity-50" : "")} onClick={(event) => { if (!!(busy)) { event.preventDefault(); return; } (() => submitAnswer(sessionKey))(); }}>{busy ? <Loader2 className="animate-spin" aria-hidden /> : null}{ui.phase === "techfail" ? "Retry check" : busy ? "Checking…" : "Check"}</Button>
               <Button type="button" variant="ghost" aria-pressed={ui.hint || undefined} onClick={() => {

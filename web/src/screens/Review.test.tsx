@@ -305,6 +305,24 @@ describe("Task C — revealed result and optional repetitions", () => {
     expect(fake.calls.filter((c) => /\/review$/.test(c.path))).toHaveLength(1);
   });
 
+  it("case-only answers are Correct and retain both green lines; practice flags only accents", async () => {
+    await mount(card({ target: "adossé" }));
+    await enterInput(await typeInput("#rev-input", "Adossé"));
+    expect(host.querySelector('[aria-label="Correct"]')).toBeTruthy();
+    const diff = host.querySelector('[aria-label="Answer comparison"]')!;
+    expect(diff.querySelector('[aria-label="Your answer"]')?.textContent).toBe("Adossé");
+    expect(diff.querySelector('[aria-label="Correct answer"]')?.textContent).toBe("adossé");
+    expect(diff.querySelector(".text-destructive, .bg-muted, .line-through, .text-muted-foreground span")).toBeNull();
+    await mount(card({ target: "adossé" }));
+    await enterInput(await typeInput("#rev-input", "adosse"));
+    await enterInput(await typeInput("#rev-retype", "ADOSSE"));
+    const comparisons = host.querySelectorAll('[aria-label="Answer comparison"]');
+    const practice = comparisons[comparisons.length - 1];
+    expect(practice.querySelector('[aria-label="Your answer"]')?.textContent).toBe("ADOSSE");
+    expect(Array.from(practice.querySelectorAll(".text-destructive")).map(e => e.textContent)).toEqual(["E"]);
+    expect(Array.from(practice.querySelectorAll(".bg-muted")).map(e => e.textContent)).toEqual(["é"]);
+  });
+
   it("a correct Check has a check mark and no repetition input", async () => {
     const pronunciation = vi.spyOn(store, "sayFrench").mockImplementation(() => {});
     await mount(card());

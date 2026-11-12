@@ -34,13 +34,12 @@ ASSET_VERSION = _asset_version()
 # Installable app (iPhone "Add to Home Screen"): manifest, icons, safe areas, service worker
 PWA_HEAD = (
     '<link rel="manifest" href="/manifest.webmanifest">\n'
-    '<meta name="theme-color" content="#f5f7fb" media="(prefers-color-scheme: light)">\n'
-    '<meta name="theme-color" content="#141a23" media="(prefers-color-scheme: dark)">\n'
+    '<meta name="theme-color" content="#f7f4ee">\n'
     '<meta name="apple-mobile-web-app-capable" content="yes">\n'
     '<meta name="mobile-web-app-capable" content="yes">\n'
     '<meta name="apple-mobile-web-app-title" content="1000H French">\n'
     '<meta name="apple-mobile-web-app-status-bar-style" content="default">\n'
-    '<link rel="apple-touch-icon" sizes="180x180" href="/static/pwa/apple-touch-icon.png?v=brand-1">\n'
+    '<link rel="apple-touch-icon" sizes="180x180" href="/static/pwa/apple-touch-icon.png?v=brand-2">\n'
     '<link rel="stylesheet" href="/static/pwa.css?v=__ASSET_VERSION__">\n'
     '<script src="/static/pwa-register.js?v=__ASSET_VERSION__" defer></script>\n'
 )

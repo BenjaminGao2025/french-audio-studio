@@ -48,6 +48,13 @@ def _user_message(post_chat) -> str:
 
 
 class OccurrenceTests(unittest.TestCase):
+    def test_drilled_lemma_needs_the_original_inflected_surface(self):
+        sentence = "Ces insectes sont nuisibles."
+        self.assertEqual(word_context.word_spans("nuisible", sentence), [])
+        spans = word_context.word_spans("nuisibles", sentence)
+        self.assertEqual(spans, [(18, 27)])
+        self.assertEqual(word_context.marked_sentence(sentence, spans[0]), "Ces insectes sont ⟦nuisibles⟧.")
+
     def test_shared_fixture(self):
         for case in FIXTURES["spans"]:
             with self.subTest(word=case["word"], sentence=case["sentence"]):
