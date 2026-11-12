@@ -78,6 +78,7 @@ beforeAll(() => {
 });
 
 beforeEach(async () => {
+  localStorage.removeItem("explanationLanguage");
   fake.reset();
   resetReviewCache();
   resetSavedCards();
@@ -101,7 +102,63 @@ afterEach(async () => {
 });
 
 describe("Task B — Study word card, selection and steps", () => {
+  it("shows Simple English by default in Settings and persists the Chinese selection", async () => {
+    const { SettingsScreen } = await import("./Settings");
+    await act(async () => root.render(<SettingsScreen />));
+    const control = host.querySelector<HTMLButtonElement>('[aria-label="Explanation language"]')!;
+    expect(control.textContent).toContain("Simple English");
+    await act(async () => control.click());
+    const option = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]')).find(el => el.textContent === "中文")!;
+    await act(async () => option.click());
+    expect(localStorage.getItem("explanationLanguage")).toBe("zh");
+    await act(async () => root.render(<div />));
+    await act(async () => root.render(<SettingsScreen />));
+    expect(host.querySelector('[aria-label="Explanation language"]')?.textContent).toContain("中文");
+  });
+
+  it("reloads an open word card when the explanation language changes", async () => {
+    const { chooseExplanationLanguage } = await import("../lib/explanationLanguage");
+    await act(async () => root.render(<WordPanel sentence={SENTENCE} text="madame" onClose={() => {}} />));
+    await wait(100);
+    const context = () => host.querySelector('[aria-label="In this sentence"]')!;
+    expect(context().textContent).toContain("This word describes its role");
+    expect(context().textContent).not.toMatch(/\p{Script=Han}/u);
+    await act(async () => chooseExplanationLanguage("zh"));
+    await wait(100);
+    expect(context().textContent).toContain("它在这句话里的用法说明。");
+    expect(fake.calls.filter(c => c.path === "/api/word-context").map(c => (c.body as { language: string }).language)).toEqual(["en", "zh"]);
+  });
+
+  it.each(["en", "zh"] as const)("links only marked French surfaces in %s and drills elisions as one unit", async language => {
+    localStorage.setItem("explanationLanguage", language);
+    const dictionary = vi.spyOn(lookupApi, "lookupWord");
+    vi.spyOn(lookupApi, "wordContext").mockResolvedValue({ context: {
+      meaning_en: "have", meaning_zh: "已经", why_en: "With ⟦avoir⟧ and ⟦résolu⟧, ⟦Les représentants⟧ see ⟦l'homme⟧.",
+      why_zh: "这里 ⟦avoir⟧ 和 ⟦résolu⟧ 配合，⟦Les représentants⟧ 看见 ⟦l'homme⟧。",
+    }, state: "ready" });
+    await act(async () => root.render(<WordPanel sentence={SENTENCE} text="ont" onClose={() => {}} />));
+    const context = host.querySelector('[aria-label="In this sentence"]')!;
+    const buttons = Array.from(context.querySelectorAll<HTMLButtonElement>('button[lang="fr"]'));
+    expect(buttons.map(b => b.textContent)).toEqual(["avoir", "résolu", "Les représentants", "l'homme"]);
+    expect(context.querySelectorAll("button")).toHaveLength(5); // section toggle plus four marked spans
+    expect(context.textContent).not.toMatch(/[⟦⟧]/);
+    expect(context.textContent).toContain(language === "en" ? "With" : "这里");
+    await act(async () => buttons[3].click());
+    expect(host.querySelector(".wp-headword")?.textContent).toBe("l'homme");
+    expect(findButton("Back to ont")).toBeTruthy();
+    expect(dictionary).toHaveBeenCalledWith("l'homme", "");
+    await act(async () => findButton("Back to ont").click());
+    expect(host.querySelector(".wp-headword")?.textContent).toBe("ont");
+  });
+
+  it("keeps unmarked French and English words plain in the explanation", async () => {
+    vi.spyOn(lookupApi, "wordContext").mockResolvedValue({ context: { meaning_en: "have", meaning_zh: "", why_zh: "", why_en: "avoir is used here with résolu." }, state: "ready" });
+    await act(async () => root.render(<WordPanel sentence={SENTENCE} text="ont" onClose={() => {}} />));
+    expect(host.querySelectorAll('[aria-label="In this sentence"] button[lang="fr"]')).toHaveLength(0);
+  });
+
   it("loads Chinese context despite a stored English gloss, with collapsed French definitions", async () => {
+    localStorage.setItem("explanationLanguage", "zh");
     const sentence: StudySentence = {
       ...SENTENCE,
       raw: { ...SENTENCE.raw!, words: [{ fr: "madame", ipa: "madam", lemma: "madame", type: "noun", meaning: "madam; a polite address", meaning_zh: "女士", why: "A polite way to address a woman.", english_link: "madam", false_friend: false }] },
@@ -123,6 +180,7 @@ describe("Task B — Study word card, selection and steps", () => {
   });
 
   it("keeps L’oubli as headword and renders elision plus Chinese meaning and role", async () => {
+    localStorage.setItem("explanationLanguage", "zh");
     vi.spyOn(lookupApi, "lookupWord").mockResolvedValue({
       token: "L’oubli", lemma: "oubli", pos: "noun", phonetic: "", explanation_cn: "", explanation_en: "",
       elision: { prefix: "L’", expansion: "le", note: "masculine definite article, elided before a vowel", remainder: "oubli" },
@@ -153,6 +211,7 @@ describe("Task B — Study word card, selection and steps", () => {
   });
 
   it("shows the full selected elision and a Chinese fixed expression only when present", async () => {
+    localStorage.setItem("explanationLanguage", "zh");
     const fr = "Il défend les droits de l'homme.";
     vi.spyOn(lookupApi, "phraseContext").mockResolvedValue({phrases: [{text:"droits de l’homme", phrase:"droits de l’homme", meaning_zh:"人权", meaning_en:"human rights", literal_zh:""}]});
     vi.spyOn(lookupApi, "lookupWord").mockResolvedValue({token:"l'homme", lemma:"homme",pos:"noun",phonetic:"",explanation_cn:"",explanation_en:"",elision:{prefix:"l'",expansion:"le",note:"definite article",remainder:"homme"},entries:[{lemma:"homme",pos:"noun",phonetic:"",language:"en",senses:["man"],source_url:"",history_url:""}]});
@@ -283,7 +342,7 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(host.querySelector('[aria-label="Saved"]')).toBeTruthy();
   });
 
-  it("shows importance dots and lookup count beside an unsaved deck star", async () => {
+  it("shows importance stars and lookup count beside an unsaved deck star", async () => {
     await act(async () => root.render(<WordPanel sentence={SENTENCE} text="machine" onClose={() => {}} />));
     await wait(100);
     const star = host.querySelector('[aria-label="Save word"]')!;
@@ -292,12 +351,12 @@ describe("Task B — Study word card, selection and steps", () => {
     const importance = host.querySelector(".wp-importance")!;
     expect(importance.querySelectorAll("[data-filled]")).toHaveLength(5);
     expect(importance.querySelectorAll('[data-filled="true"]')).toHaveLength(0);
-    expect(importance.querySelector("svg")).toBeNull();
+    expect(importance.querySelectorAll("svg.lucide-star")).toHaveLength(5);
     expect(importance.textContent).toContain("1 lookup");
     expect(importance.textContent).toContain("Importance, 0 out of 5, based on 1 lookup.");
   });
 
-  it("fills the deck star and three dots when saved", async () => {
+  it("fills the deck star and three stars when saved", async () => {
     await act(async () => root.render(<WordPanel sentence={SENTENCE} text="madame" onClose={() => {}} />));
     await wait(100);
     await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Save word"]')!.click());
@@ -313,12 +372,12 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(host.querySelector(".wp-importance")?.textContent).toContain("1 lookup");
   });
 
-  it.each([[2, 4], [4, 5]])("auto-saves on the next lookup after %i and shows %i dots", async (previous, dots) => {
+  it.each([[2, 4], [4, 5]])("auto-saves on the next lookup after %i and shows %i stars", async (previous, stars) => {
     fake.lookups.madame = previous;
     await act(async () => root.render(<WordPanel sentence={SENTENCE} text="madame" onClose={() => {}} />));
     await wait(150);
     expect(host.querySelector('[aria-label="Saved"]')).toBeTruthy();
-    expect(host.querySelectorAll('.wp-importance [data-filled="true"]')).toHaveLength(dots);
+    expect(host.querySelectorAll('.wp-importance [data-filled="true"]')).toHaveLength(stars);
     expect(host.querySelector(".wp-importance")?.textContent).toContain(`${previous + 1} lookups`);
     await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Saved"]')!.click());
     await wait(150);
@@ -329,7 +388,7 @@ describe("Task B — Study word card, selection and steps", () => {
     await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Save word"]')!.click());
     await wait(150);
     expect(host.querySelector('[aria-label="Saved"]')).toBeTruthy();
-    expect(host.querySelectorAll('.wp-importance [data-filled="true"]')).toHaveLength(dots);
+    expect(host.querySelectorAll('.wp-importance [data-filled="true"]')).toHaveLength(stars);
   });
 
   it("plays headword and dictionary phonetics without drilling or counting another lookup", async () => {
@@ -449,8 +508,27 @@ describe("Task B — Study word card, selection and steps", () => {
     await input('[aria-label="Ask about this word"]', "What does it mean?");
     await act(async () => findButton("Send").click());
     await wait(100);
-    expect(fake.calls.find(c => c.path === "/api/ask")?.body).toMatchObject({ sentence: FR, question: "About “madame”: What does it mean?" });
+    expect(fake.calls.find(c => c.path === "/api/ask")?.body).toMatchObject({ sentence: FR, question: "What does it mean?", word: "madame", translation_en: SENTENCE.en, language: "en" });
     expect(host.textContent).toContain("The surrounding words give the context.");
+  });
+
+  it.each(["en", "zh"] as const)("sends the raw mixed-language gloss question with %s context", async language => {
+    localStorage.setItem("explanationLanguage", language);
+    const sentence = { ...SENTENCE, fr: "Les représentants ont décidé d'exposer le plan.", en: "The representatives decided to set forth the plan." };
+    await act(async () => root.render(<WordPanel sentence={sentence} text="d'exposer" onClose={() => {}} />));
+    await wait(100);
+    await act(async () => findButton("Ask AI").click());
+    const el = host.querySelector<HTMLInputElement>('[aria-label="Ask about this word"]')!;
+    const question = "啥意思？ to set forth 呢？";
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(el, question);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => findButton("Send").click());
+    await wait(100);
+    expect(fake.calls.find(c => c.path === "/api/ask")?.body).toMatchObject({
+      sentence: sentence.fr, translation_en: sentence.en, word: "d'exposer", language, question, history: [],
+    });
   });
 
   it("keeps grammar available at sentence level without a word-card entry point", async () => {
@@ -541,7 +619,7 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(panel.textContent).toContain("Définition de madame.");
     expect(panel.querySelector('a[href="https://fr.wiktionary.org/wiki/madame#fr"]')).toBeTruthy();
     expect(panel.textContent).toContain("Source: Wiktionary (CC BY-SA)");
-    expect(panel.querySelector('[aria-label="In this sentence"]')?.textContent).toMatch(/\p{Script=Han}/u);
+    expect(panel.querySelector('[aria-label="In this sentence"]')?.textContent).not.toMatch(/\p{Script=Han}/u);
     expect(fake.calls.filter((call) => call.path === "/api/etymology")).toHaveLength(0);
     fake.etymologyFails = 1;
     await act(async () => findButton("Word origin").click());

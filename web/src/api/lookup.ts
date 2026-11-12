@@ -92,6 +92,7 @@ export interface WordContextBody {
   sentence: string;
   word: string;
   occurrence: number;
+  language?: "en" | "zh";
   translation_zh: string;
   hints: WordContextHints;
 }
@@ -99,6 +100,7 @@ export interface WordContextResult {
   meaning_zh: string;
   meaning_en: string;
   why_zh: string;
+  why_en?: string;
 }
 export interface WordContextResponse {
   context: WordContextResult;
@@ -142,7 +144,7 @@ const phraseCtxCache = new Map<string, Promise<PhraseContextResponse>>();
 const etyCache = new Map<string, Promise<EtymologyResponse>>();
 
 export function wordContext(body: WordContextBody, signal?: AbortSignal): Promise<WordContextResponse> {
-  const key = JSON.stringify([body.sentence, body.word, body.occurrence]);
+  const key = JSON.stringify([body.sentence, body.word, body.occurrence, body.language ?? "en"]);
   return cached(wordCtxCache, key, () => apiFetch<WordContextResponse>("/api/word-context", { body, signal }));
 }
 

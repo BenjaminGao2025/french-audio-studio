@@ -2,6 +2,7 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { chooseExplanationLanguage } from "../lib/explanationLanguage";
 import { StudyInput, StudyPhoto, selectStudyPhoto } from "./StudyInput";
 import * as studyApi from "../api/study";
 import { StudyPersonal } from "./StudyPersonal";
@@ -49,7 +50,7 @@ beforeEach(() => {
   URL.createObjectURL = vi.fn(() => "blob:test"); URL.revokeObjectURL = vi.fn();
   vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
 });
-afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+afterEach(async () => { await act(async () => root.unmount()); localStorage.removeItem("explanationLanguage"); host.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("restored study flows", () => {
   it("accepts 15,000 text characters and redirects old personal/grammar routes", () => {
@@ -138,6 +139,7 @@ describe("restored study flows", () => {
     expect(button("Make a practice card").getAttribute("aria-disabled")).not.toBe("true");
   });
   it("corrects explanations, continues a tutor conversation and saves an answer as a card", async () => {
+    chooseExplanationLanguage("zh");
     respond = (path) => path === "/api/feynman" ? { verdict: "partial", got_right: ["The meaning is correct."], gaps: ["au joins à and le."], variation: null, follow_up: "Why au?" } : path === "/api/ask" ? { answer: "Au joins à and le." } : { notes: [] };
     await act(async () => root.render(<ExplainPanel sentence={sentence} />));
     await input("explain-draft", "It means I go to the market."); await click("Check my understanding");
@@ -145,7 +147,10 @@ describe("restored study flows", () => {
     await input("tutor-question", "Why au?"); await click("Ask tutor");
     await input("tutor-question", "Does it work with la?"); await click("Ask tutor");
     const ask = calls.filter((c) => c.path === "/api/ask");
-    expect(JSON.parse(ask[1].init!.body as string).history).toHaveLength(2);
+    const body = JSON.parse(ask[1].init!.body as string);
+    expect(body.history).toHaveLength(2);
+    expect(body).toMatchObject({ question: "Does it work with la?", translation_en: sentence.en, language: "zh" });
+    expect(body.word).toBeUndefined();
     await click("Turn this answer"); expect(calls.some((c) => c.path === "/api/ask/card")).toBe(true);
     expect(host.textContent).toContain("Practice card saved");
   });

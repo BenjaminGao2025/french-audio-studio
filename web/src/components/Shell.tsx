@@ -1,3 +1,4 @@
+import { useExplanationLanguage } from "../lib/explanationLanguage";
 import { useTheme } from "../lib/theme";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { BarChart3, BookOpen, CloudOff, Dumbbell, Layers, LogOut, Pause, Play, RefreshCw, RotateCcw, Settings as SettingsIcon, Square, CheckCircle2, AlertCircle, Clock, User, Loader2 } from "lucide-react";
@@ -237,6 +238,7 @@ export function Shell({ children }: { children: ReactNode }) {
 
 function AccountSlot() {
   const [theme, chooseTheme] = useTheme();
+  const [language, chooseLanguage] = useExplanationLanguage();
   const auth = useApp((s) => s.auth);
   const offline = useApp((s) => s.offline);
   const sync = useApp((s) => s.sync);
@@ -262,6 +264,12 @@ function AccountSlot() {
               <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
               <DropdownMenuRadioItem value="system">System</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Explanation language</DropdownMenuLabel>
+            <DropdownMenuRadioGroup value={language} onValueChange={chooseLanguage} aria-label="Explanation language">
+              <DropdownMenuRadioItem value="en">Simple English</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="zh">中文</DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={() => go("settings/account")}>

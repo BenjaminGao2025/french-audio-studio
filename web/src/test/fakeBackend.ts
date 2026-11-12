@@ -303,7 +303,9 @@ function route(method: string, url: URL, body: Record<string, unknown>): Respons
   /* ---------- word card context (routers/tutor.py) ---------- */
   if (p === "/api/word-context" && method === "POST") {
     return json(200, {
-      context: { meaning_zh: "这里的意思", meaning_en: "the meaning here", why_zh: "它在这句话里的用法说明。" },
+      context: body.language === "zh"
+        ? { meaning_zh: "这里的意思", meaning_en: "the meaning here", why_zh: "它在这句话里的用法说明。", why_en: "" }
+        : { meaning_en: "the meaning here", why_en: "This word describes its role in this sentence.", meaning_zh: "", why_zh: "" },
       state: "ready",
     });
   }

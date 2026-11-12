@@ -25,12 +25,12 @@ FIXTURES = json.loads((ROOT / "tests" / "fixtures" / "word_context_cases.json").
 TON_SAC = {
     "meaning_zh": "你的",
     "meaning_en": "your",
-    "why_zh": "ton 是主有限定词“你的”，和后面的名词 sac 配合：sac 是阳性单数，所以用 ton，不用 ta 或 tes。",
+    "why_en": "", "why_zh": "ton 是主有限定词“你的”，和后面的名词 sac 配合：sac 是阳性单数，所以用 ton，不用 ta 或 tes。",
 }
 TON_AMIE = {
     "meaning_zh": "你的",
     "meaning_en": "your",
-    "why_zh": "amie 是阴性单数，本该用 ta，但 amie 以元音开头，为了好读改用 ton。",
+    "why_en": "", "why_zh": "amie 是阴性单数，本该用 ta，但 amie 以元音开头，为了好读改用 ton。",
 }
 
 
@@ -80,11 +80,11 @@ class CleanTests(unittest.TestCase):
         raw = {
             "meaning_zh": "<b>你的</b>\n",
             "meaning_en": "your" * 50,
-            "why_zh": "<img src=x onerror=alert(1)>因为 sac 是阳性。" + "很长" * 200,
+            "why_en": "", "why_zh": "<img src=x onerror=alert(1)>因为 sac 是阳性。" + "很长" * 200,
             "extra": "ignored",
         }
         got = word_context.clean_result(raw)
-        self.assertEqual(set(got), {"meaning_zh", "meaning_en", "why_zh"})
+        self.assertEqual(set(got), {"meaning_zh", "meaning_en", "why_zh", "why_en"})
         for key, limit in word_context.FIELD_LIMITS.items():
             self.assertLessEqual(len(got[key]), limit)
             self.assertNotIn("<", got[key])
@@ -96,7 +96,7 @@ class CleanTests(unittest.TestCase):
         self.assertEqual(word_context.parse_ai_context(json.dumps(TON_SAC, ensure_ascii=False)), TON_SAC)
         fenced = "<think>hmm</think>```json\n" + json.dumps(TON_SAC, ensure_ascii=False) + "\n```"
         self.assertEqual(word_context.parse_ai_context(fenced), TON_SAC)
-        empty = {"meaning_zh": "", "meaning_en": "", "why_zh": ""}
+        empty = {"meaning_zh": "", "meaning_en": "", "why_en": "", "why_zh": ""}
         self.assertEqual(word_context.parse_ai_context(json.dumps(empty)), empty)
         self.assertTrue(word_context.is_empty(word_context.parse_ai_context(json.dumps(empty))))
         # Not an answer at all: None (an error, never cached as "nothing to say")
@@ -106,11 +106,25 @@ class CleanTests(unittest.TestCase):
         self.assertIsNone(word_context.parse_ai_context("{" + " " * word_context.RAW_REPLY_MAX_CHARS + "}"))
 
     def test_error_text_is_not_a_definition(self):
-        bad = {"meaning_zh": "", "meaning_en": "Error: try again", "why_zh": ""}
+        bad = {"meaning_zh": "", "meaning_en": "Error: try again", "why_en": "", "why_zh": ""}
         self.assertIsNone(word_context.reject_error_text(bad))
-        self.assertEqual(word_context.reject_error_text({"meaning_zh": "你的", "meaning_en": "your", "why_zh": ""}), {"meaning_zh": "你的", "meaning_en": "your", "why_zh": ""})
+        self.assertEqual(word_context.reject_error_text({"meaning_zh": "你的", "meaning_en": "your", "why_en": "", "why_zh": ""}), {"meaning_zh": "你的", "meaning_en": "your", "why_en": "", "why_zh": ""})
         self.assertIsNone(word_context.reject_error_text(None))
         self.assertIsNone(word_context.parse_ai_context(None))
+
+    def test_marks_and_english_note_are_preserved_and_clipped_atomically(self):
+        note = "⟦ont⟧ comes from ⟦avoir⟧. With ⟦résolu⟧ it forms the passé composé. ⟦Les représentants⟧ see ⟦l'homme⟧."
+        got = word_context.parse_ai_context(json.dumps({"why_en": note, "why_zh": "⟦avoir⟧ 是原形。"}))
+        self.assertEqual(got["why_en"], note)
+        self.assertEqual(got["why_zh"], "⟦avoir⟧ 是原形。")
+        self.assertTrue(word_context.has_context_note(got))
+        clipped = word_context.clean_result({"why_en": "a" * 238 + "⟦avoir⟧"})["why_en"]
+        self.assertEqual(clipped, "a" * 238)
+        self.assertLessEqual(len(word_context.clean_result({"why_en": "a" * 400})["why_en"]), 240)
+        for malformed in ("⟦avoir", "⟦⟦avoir⟧⟧", "avoir⟧"):
+            clean = word_context.clean_result({"why_en": malformed})["why_en"]
+            self.assertNotRegex(clean, "[⟦⟧]")
+        self.assertIsNone(word_context.reject_error_text({"why_en": "Error: try again"}))
 
     def test_hints_are_bounded(self):
         got = word_context.clean_hints({"meaning_zh": "中" * 500, "note_en": "<script>x</script>note", "bogus": 1})
@@ -120,12 +134,12 @@ class CleanTests(unittest.TestCase):
         self.assertEqual(word_context.clean_hints("not a dict")["lemma"], "")
 
     def test_cache_key(self):
-        key = word_context.cache_key("Prends ton sac.", "ton", 0)
-        self.assertEqual(key, word_context.cache_key("  prends   TON sac. ", "Ton", 0))
-        self.assertNotEqual(key, word_context.cache_key("Prends ton sac.", "ton", 1))
-        self.assertNotEqual(key, word_context.cache_key("C'est ton amie.", "ton", 0))
+        key = word_context.cache_key("Prends ton sac.", "ton", 0, "zh")
+        self.assertEqual(key, word_context.cache_key("  prends   TON sac. ", "Ton", 0, "zh"))
+        self.assertNotEqual(key, word_context.cache_key("Prends ton sac.", "ton", 1, "zh"))
+        self.assertNotEqual(key, word_context.cache_key("C'est ton amie.", "ton", 0, "zh"))
         with mock.patch.object(word_context, "VERSION", word_context.VERSION + 1):
-            self.assertNotEqual(key, word_context.cache_key("Prends ton sac.", "ton", 0))
+            self.assertNotEqual(key, word_context.cache_key("Prends ton sac.", "ton", 0, "zh"))
 
 
 class PromptTests(unittest.TestCase):
@@ -140,6 +154,16 @@ class PromptTests(unittest.TestCase):
         self.assertIn("Do not repeat the French word", prompt)
         self.assertIn("Do not translate the whole sentence", prompt)
         self.assertIn("issues being discussed", prompt)
+
+    def test_language_prompts_and_explicit_french_marks(self):
+        for language, field, tone in (("en", "why_en", "simple English"), ("zh", "why_zh", "Chinese")):
+            prompt = word_context.ai_payload("m", "Prends ton sac.", (7, 10), language=language)["messages"][0]["content"]
+            self.assertIn(field, prompt)
+            self.assertIn(tone, prompt)
+            self.assertIn("mark every French word or phrase", prompt)
+            self.assertIn("Never mark English or Chinese", prompt)
+            self.assertIn("⟦l'homme⟧", prompt)
+        self.assertNotEqual(word_context.cache_key("Prends ton sac.", "ton", 0, "en"), word_context.cache_key("Prends ton sac.", "ton", 0, "zh"))
 
     def test_payload_marks_the_word_and_passes_notes_as_data(self):
         sentence = "Le chat voit le chien."
@@ -162,18 +186,18 @@ class EndpointTests(unittest.TestCase):
     def _post(self, sentence="Prends ton sac.", word="ton", headers=None, **extra):
         return self.client.post(
             "/api/word-context",
-            json={"sentence": sentence, "word": word, **extra},
+            json={"sentence": sentence, "word": word, "language": "zh", **extra},
             headers=self.headers if headers is None else headers,
         )
 
     def test_thin_cached_gloss_is_upgraded_on_lookup(self):
         sentence = "Le mépris ou l'oubli est nuisible."
         word = "l'oubli"
-        key = word_context.cache_key(sentence, word, 0)
+        key = word_context.cache_key(sentence, word, 0, "zh")
         upgraded = {"meaning_zh": "遗忘", "meaning_en": "forgetting",
-                    "why_zh": "这里指遗忘；le mépris 和 l’oubli 由 ou 连接，共同作主语。"}
-        for thin in ({"meaning_zh": "遗忘", "meaning_en": "forgetting", "why_zh": ""},
-                     {"meaning_zh": "遗忘", "meaning_en": "forgetting", "why_zh": "遗忘"}):
+                    "why_en": "", "why_zh": "这里指遗忘；le mépris 和 l’oubli 由 ou 连接，共同作主语。"}
+        for thin in ({"meaning_zh": "遗忘", "meaning_en": "forgetting", "why_en": "", "why_zh": ""},
+                     {"meaning_zh": "遗忘", "meaning_en": "forgetting", "why_en": "", "why_zh": "遗忘"}):
             word_context.save_cached(self.user_id, key, sentence, word, 0, thin)
             self.assertIsNone(word_context.get_cached(self.user_id, key))
             with mock.patch("services.ai.post_chat", new=mock.AsyncMock(return_value=(None, json.dumps(upgraded)))) as chat:
@@ -185,6 +209,22 @@ class EndpointTests(unittest.TestCase):
                 self.assertEqual(chat.await_count, 1)
         self.assertIn("explain the meaning HERE plus what job", word_context.SYSTEM_PROMPT)
         self.assertIn("1–2 short Chinese sentences", word_context.SYSTEM_PROMPT)
+
+    def test_languages_are_isolated_and_default_is_english(self):
+        sentence = "Prends ton sac."
+        key = word_context.cache_key(sentence, "ton", 0, "zh")
+        word_context.save_cached(self.user_id, key, sentence, "ton", 0, TON_SAC)
+        answer = {"meaning_en": "your", "why_en": "⟦ton⟧ agrees with the masculine noun ⟦sac⟧."}
+        with mock.patch("services.ai.post_chat", return_value=_reply(answer)) as chat:
+            for extra in ({}, {"language": "en"}):
+                response = self.client.post("/api/word-context", json={"sentence": sentence, "word": "ton", **extra}, headers=self.headers)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json()["context"]["why_en"], answer["why_en"])
+                self.assertEqual(response.json()["context"]["why_zh"], "")
+            self.assertEqual(chat.call_count, 1)
+            self.assertIn("simple English", chat.call_args.args[1]["messages"][0]["content"])
+        self.assertTrue(self._post().json()["cached"])
+        self.assertEqual(self._post(language="fr").status_code, 422)
 
     def test_requires_login_and_spends_nothing(self):
         with mock.patch("services.ai.post_chat") as post_chat:
@@ -211,7 +251,7 @@ class EndpointTests(unittest.TestCase):
 
     def test_hyphenated_and_multi_token_chunks_get_a_context(self):
         sentence = "Pendant la nuit avez-vous entendu quelque chose ?"
-        reply = {"meaning_zh": "你们……吗", "meaning_en": "do you", "why_zh": "avez-vous 是 vous avez 的倒装疑问。"}
+        reply = {"meaning_zh": "你们……吗", "meaning_en": "do you", "why_en": "", "why_zh": "avez-vous 是 vous avez 的倒装疑问。"}
         for word in ("avez-vous", "la nuit"):
             with self.subTest(word=word), mock.patch("services.ai.post_chat", return_value=_reply(reply)) as post_chat:
                 got = self._post(sentence, word=word)
@@ -246,7 +286,7 @@ class EndpointTests(unittest.TestCase):
         with mock.patch("services.ai.post_chat", return_value=_reply(TON_AMIE)) as post_chat:
             self.assertEqual(self._post(headers=other).json()["cached"], False)
         self.assertEqual(post_chat.call_count, 1)
-        key = word_context.cache_key("Prends ton sac.", "ton", 0)
+        key = word_context.cache_key("Prends ton sac.", "ton", 0, "zh")
         self.assertEqual(word_context.get_cached(self.user_id, key), TON_SAC)
         self.assertEqual(word_context.get_cached(other_id, key), TON_AMIE)
 
@@ -263,7 +303,7 @@ class EndpointTests(unittest.TestCase):
 
     def test_empty_answer_is_cached_too(self):
         sentence = "Il pleut beaucoup."
-        empty = {"meaning_zh": "", "meaning_en": "", "why_zh": ""}
+        empty = {"meaning_zh": "", "meaning_en": "", "why_en": "", "why_zh": ""}
         with mock.patch("services.ai.post_chat", return_value=_reply(empty)) as post_chat:
             self.assertEqual(self._post(sentence, "beaucoup").json()["state"], "empty")
             self.assertEqual(
@@ -277,7 +317,7 @@ class EndpointTests(unittest.TestCase):
             bad = self._post(sentence, "partir")
         self.assertEqual(bad.status_code, 502)
         self.assertEqual(bad.json()["detail"]["code"], "word_context_bad_output")
-        self.assertIsNone(word_context.get_cached(self.user_id, word_context.cache_key(sentence, "partir", 0)))
+        self.assertIsNone(word_context.get_cached(self.user_id, word_context.cache_key(sentence, "partir", 0, "zh")))
         with mock.patch("services.ai.post_chat", return_value=_reply(TON_SAC)) as post_chat:
             self.assertEqual(self._post(sentence, "partir").json()["state"], "ready")
         self.assertEqual(post_chat.call_count, 1)
@@ -287,13 +327,13 @@ class EndpointTests(unittest.TestCase):
         evil = {
             "meaning_zh": "<script>x</script>吃",
             "meaning_en": "eats",
-            "why_zh": "<img src=x onerror=alert(1)>动词",
+            "why_en": "", "why_zh": "<img src=x onerror=alert(1)>动词",
         }
         with mock.patch("services.ai.post_chat", return_value=_reply(evil)):
             got = self._post(sentence, "mange").json()["context"]
         for value in got.values():
             self.assertNotIn("<", value)
-        cached = word_context.get_cached(self.user_id, word_context.cache_key(sentence, "mange", 0))
+        cached = word_context.get_cached(self.user_id, word_context.cache_key(sentence, "mange", 0, "zh"))
         self.assertEqual(cached, got)
 
     def test_rate_limit_and_entitlement_before_any_call(self):
@@ -325,7 +365,7 @@ class EndpointTests(unittest.TestCase):
         token = self.headers["Authorization"]
 
         async def run():
-            request = tutor.WordContextRequest(sentence="Range ton sac ici.", word="ton")
+            request = tutor.WordContextRequest(sentence="Range ton sac ici.", word="ton", language="zh")
             return await asyncio.gather(*[tutor.word_context_for(request, token) for _ in range(3)])
 
         with mock.patch("services.ai.post_chat", side_effect=slow_post):

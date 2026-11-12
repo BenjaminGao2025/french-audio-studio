@@ -75,8 +75,19 @@ jobs:
 
       - name: Run unit tests in the candidate image (throwaway container)
         run: |
-          # The exact dependencies about to ship, against the new code (tests are not baked into the image)
-          if ! docker run --rm -v "$REPO_DIR":/src -w /src --user "$(stat -c %u:%g "$REPO_DIR")" \
+          # The exact dependencies about to ship, against the new code (tests are not baked into the image).
+          # Some tests inspect web/dist when that gitignored folder exists. The shared checkout can
+          # retain a stale dist from a previous release, so overlay the SPA baked into the candidate
+          # (/app/static/app) instead of trusting the host leftover.
+          DIST="$RUNNER_TEMP/candidate-web-dist"
+          rm -rf "$DIST"
+          mkdir -p "$DIST"
+          if ! docker run --rm --entrypoint tar "$CANDIDATE" -C /app/static/app -cf - . | tar -C "$DIST" -xf -; then
+            echo "::error::Could not read the candidate SPA; restoring code to $PREV (live container untouched)"
+            "$RUNNER_TEMP/g" reset --hard "$PREV"
+            exit 1
+          fi
+          if ! docker run --rm -v "$REPO_DIR":/src -v "$DIST":/src/web/dist:ro -w /src --user "$(stat -c %u:%g "$REPO_DIR")" \
                -e PYTHONDONTWRITEBYTECODE=1 --entrypoint python "$CANDIDATE" -m unittest discover -s tests; then
             echo "::error::Tests failed; restoring code to $PREV (live container untouched)"
             "$RUNNER_TEMP/g" reset --hard "$PREV"

@@ -238,6 +238,9 @@ class AskTurn(BaseModel):
 class AskRequest(BaseModel):
     sentence: str = Field(min_length=1, max_length=1000)
     translation_zh: str = Field(default="", max_length=1000)
+    translation_en: str = Field(default="", max_length=1000)
+    word: str = Field(default="", max_length=1000)
+    language: Literal["en", "zh"] = "en"
     grammar_points: list[FeynmanGrammarPoint] = Field(default_factory=list, max_length=5)
     history: list[AskTurn] = Field(default_factory=list, max_length=20)
     question: str = Field(min_length=1, max_length=1000)
@@ -252,10 +255,23 @@ def _ask_payload(request: AskRequest) -> dict:
         "You are a patient French tutor. The learner is A1–A2 in French, native language Chinese.\n"
         f"They are studying this sentence: {request.sentence}\n"
         f"Chinese translation: {request.translation_zh or '(none)'}\n"
+        f"English translation: {request.translation_en or '(none)'}\n"
+        f"The word card is open on: {request.word or '(none)'} (context only, not the assumed subject).\n"
         f"Notes they have seen:\n{reference or '(none)'}\n\n"
-        "Answer their question about French. They may ask in Chinese or English.\n"
-        "- Ground your answer in their sentence first: point to the actual clue in that sentence, "
-        "not a generic rule.\n"
+        "Answer the user's actual question first and directly. The open French word is context, "
+        "not necessarily what they are asking about.\n"
+        "- If they ask about an English word or phrase in the translation, define that English first. "
+        "For example, 'to set forth' means to formally state or present. "
+        "Only then link it to the French word or sentence if it helps.\n"
+        "- Ground your answer in their French sentence only if it helps answer their actual question: "
+        "point to the actual clue in that sentence, not a generic rule. Grounding is secondary.\n"
+        "- Follow the language of the question: clearly Chinese questions get Chinese answers; "
+        "clearly English questions get English answers.\n"
+        f"- For mixed or ambiguous question language, use {'Chinese (zh)' if request.language == 'zh' else 'English (en)'}, "
+        "the learner's Explanation language setting.\n"
+        "- Only for English answers: use simple English, roughly B1, with short, plain sentences "
+        "and everyday words. Explain any needed grammar terms simply. Quote French words exactly.\n"
+        "- For Chinese answers, write in Chinese; quote English or French terms when needed.\n"
         "- For a follow-up question, continue from your previous answer: refer back briefly, "
         "e.g. 'As above, ...', and connect to earlier turns. "
         "Never repeat an example already given in the conversation.\n"
@@ -264,7 +280,7 @@ def _ask_payload(request: AskRequest) -> dict:
         "- If their message answers a question you asked earlier, say clearly if it is right, "
         "and fix it if not.\n"
         "- At most 90 words. Plain text only: no markdown, no headings, no tables. "
-        "You may use short lines like 'de + la = de la'.\n" + TUTOR_ENGLISH_STYLE
+        "You may use short lines like 'de + la = de la'.\n"
     )
     messages = [{"role": "system", "content": system}]
     for turn in request.history[-12:]:
@@ -565,6 +581,7 @@ class WordContextHints(BaseModel):
 
 
 class WordContextRequest(BaseModel):
+    language: Literal["en", "zh"] = "en"
     sentence: str = Field(min_length=1, max_length=word_context.SENTENCE_MAX_CHARS)
     word: str = Field(min_length=1, max_length=word_context.WORD_MAX_CHARS)
     occurrence: int = Field(default=0, ge=0, le=word_context.MAX_OCCURRENCE)
@@ -590,7 +607,7 @@ async def _compute_word_context(
     request: WordContextRequest,
     api_key: str,
 ) -> dict:
-    payload = word_context.ai_payload(ai.AGY_MODEL, sentence, span, request.translation_zh, request.hints.model_dump())
+    payload = word_context.ai_payload(ai.AGY_MODEL, sentence, span, request.translation_zh, request.hints.model_dump(), language=request.language)
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     async with httpx.AsyncClient(timeout=30.0) as client:
         _, raw_text = await ai.post_chat(client, payload, headers)
@@ -623,7 +640,7 @@ async def word_context_for(
     if request.occurrence >= len(spans):
         # Not a word of this sentence: there is nothing to explain, and no model call is spent on it
         raise HTTPException(status_code=422, detail={"code": "word_not_in_sentence", "message": "这个词不在这句话里。"})
-    key = word_context.cache_key(sentence, word, request.occurrence)
+    key = word_context.cache_key(sentence, word, request.occurrence, request.language)
     cached = await run_in_threadpool(word_context.get_cached, user_id, key)
     if cached is not None:
         return _word_context_response(cached, cached=True)
