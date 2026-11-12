@@ -30,9 +30,10 @@ MEDIA_TYPES = {
 @router.api_route("/app", methods=["GET", "HEAD"], include_in_schema=False)
 @router.api_route("/app/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
 async def app_shell(path: str = ""):
+    # index.html shares the no-store shell policy below.
     # A last segment with a dot (or anything under assets/) is a file: serve it or 404, never
     # the shell, so a missing chunk is a real 404 instead of HTML served as JavaScript.
-    if path.startswith("assets/") or "." in PurePosixPath(path).name:
+    if path != "index.html" and (path.startswith("assets/") or "." in PurePosixPath(path).name):
         try:
             target = (APP_DIR / path).resolve()
             found = target.is_relative_to(APP_DIR) and target.is_file()

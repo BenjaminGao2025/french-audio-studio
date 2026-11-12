@@ -8,6 +8,13 @@ export const RELEASES = [
     version: APP_VERSION,
     date: "2026-11-11",
     changes: [
+      "Install on iPhone Home Screen or in the Mac Dock. App bars and word cards respect safe areas.",
+    ],
+  },
+  {
+    version: "1.3.1",
+    date: "2026-11-11",
+    changes: [
       "Removed the French character keyboard and Enter hint from Recall and Dictation.",
     ],
   },

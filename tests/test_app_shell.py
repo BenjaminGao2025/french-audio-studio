@@ -62,7 +62,7 @@ class AppShellTests(unittest.TestCase):
         cls.client = TestClient(tts_service.app)
 
     def test_shell_served_for_app_root_and_deep_links(self):
-        for path in ("/app", "/app/", "/app/study", "/app/review/session", "/app/progress/history?tab=x", "/app/login"):
+        for path in ("/app", "/app/", "/app/index.html", "/app/study", "/app/review/session", "/app/progress/history?tab=x", "/app/login"):
             with self.subTest(path=path):
                 res = self.client.get(path, follow_redirects=False)
                 self.assertEqual(res.status_code, 200)
@@ -169,7 +169,7 @@ class WebSourceTests(unittest.TestCase):
         parser = _Tags()
         parser.feed(html)
         scripts = [attrs for tag, attrs in parser.tags if tag == "script"]
-        self.assertEqual([a.get("src") for a in scripts], ["/src/main.tsx"])
+        self.assertEqual([a.get("src") for a in scripts], ["/static/pwa-register.js?v=1.3.2", "/src/main.tsx"])
         for tag, attrs in parser.tags:
             for name in attrs:
                 self.assertFalse(name.startswith("on"), f"inline handler {name} on <{tag}>")

@@ -1,13 +1,18 @@
 import json
 import pathlib
 import struct
+import subprocess
+from unittest.mock import patch
 import unittest
 from urllib.parse import urlsplit
 
 import testenv  # noqa: F401  (must run before the app is imported)
 from fastapi.testclient import TestClient
+from starlette.requests import Request
+from starlette.responses import Response
 
 import routers.pages
+import routers.app_shell
 import tts_service
 import web_common
 
@@ -29,7 +34,12 @@ class PwaTests(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertIn("application/manifest+json", res.headers["content-type"])
         m = json.loads(res.text)
-        self.assertEqual((m["start_url"], m["scope"], m["display"]), ("/app/study", "/", "standalone"))
+        self.assertEqual((m["start_url"], m["scope"], m["display"]), ("/app/study", "/app/", "standalone"))
+        self.assertEqual(m["id"], "/app/study")
+        self.assertEqual(m["name"], "1000H French")
+        self.assertEqual(m["theme_color"], "#f7f4ee")
+        self.assertEqual(m["background_color"], "#f7f4ee")
+        self.assertEqual(res.headers["cache-control"], "no-cache")
         sizes = {(i["sizes"], i["purpose"]) for i in m["icons"]}
         self.assertIn(("192x192", "any"), sizes)
         self.assertIn(("512x512", "any"), sizes)
@@ -37,7 +47,9 @@ class PwaTests(unittest.TestCase):
         for icon in m["icons"]:
             w, h = _png_size(STATIC / urlsplit(icon["src"]).path.removeprefix("/static/"))
             self.assertEqual(f"{w}x{h}", icon["sizes"])
-            self.assertEqual(self.client.get(icon["src"]).status_code, 200)
+            response = self.client.get(icon["src"])
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.headers["content-type"], "image/png")
         self.assertEqual(_png_size(STATIC / "pwa" / "apple-touch-icon.png"), (180, 180))
 
     def test_every_page_has_ios_app_tags(self):
@@ -45,7 +57,11 @@ class PwaTests(unittest.TestCase):
             html = self.client.get(path).text
             for tag in (
                 'rel="manifest"',
-                "apple-mobile-web-app-capable",
+                'name="apple-mobile-web-app-capable" content="yes"',
+                'name="mobile-web-app-capable" content="yes"',
+                'name="apple-mobile-web-app-status-bar-style" content="default"',
+                'name="apple-mobile-web-app-title" content="1000H French"',
+                'name="theme-color" content="#f7f4ee"',
                 'rel="apple-touch-icon"',
                 "viewport-fit=cover",
                 "/static/pwa-register.js?v=" + routers.pages.ASSET_VERSION,
@@ -99,3 +115,67 @@ class PwaTests(unittest.TestCase):
                 first = routers.pages._asset_version()
                 script.write_text("two", encoding="utf-8")
                 self.assertNotEqual(first, routers.pages._asset_version())
+
+    def test_spa_source_and_built_shell_have_ios_tags(self):
+        web = pathlib.Path(__file__).resolve().parents[1] / "web"
+        indexes = [web / "index.html"]
+        if (web / "dist" / "index.html").is_file():
+            indexes.append(web / "dist" / "index.html")
+        for index in indexes:
+            html = index.read_text()
+            for tag in (
+                'name="apple-mobile-web-app-capable" content="yes"',
+                'name="mobile-web-app-capable" content="yes"',
+                'name="apple-mobile-web-app-status-bar-style" content="default"',
+                'name="apple-mobile-web-app-title" content="1000H French"',
+                'name="theme-color" content="#f7f4ee"',
+                'rel="apple-touch-icon"', 'viewport-fit=cover',
+                '/static/pwa-register.js?v=1.3.2',
+            ):
+                self.assertIn(tag, html, (index, tag))
+            self.assertEqual(html.count('rel="manifest"'), 1)
+            with patch.object(routers.app_shell, "APP_DIR", index.parent):
+                for path in ("/app", "/app/study", "/app/index.html"):
+                    res = self.client.get(path)
+                    self.assertEqual(res.status_code, 200)
+                    self.assertEqual(res.text, html)
+                    self.assertIn("no-store", res.headers["cache-control"])
+
+    def test_service_worker_leaves_sensitive_routes_and_spa_on_network(self):
+        # Execute the actual fetch handler: assertions about comments alone cannot prove safety.
+        src = (STATIC / "sw.js").read_text()
+        script = """
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const handlers = {};
+vm.runInNewContext(SOURCE, {
+    URL, self: {location: {origin: 'https://example.test'},
+        addEventListener: (name, handler) => handlers[name] = handler}
+});
+for (const path of ['/api/study', '/tts', '/files/a.mp3', '/auth/login',
+                    '/users.db', '/episodes', '/app', '/app/study', '/app/index.html',
+                    '/app/assets/index-hash.js', '/static/plain.js',
+                    '/static/versioned.js?v=wrong']) {
+    for (const mode of ['navigate', 'cors']) {
+        let intercepted = false;
+        handlers.fetch({request: {method: 'GET', url: 'https://example.test' + path, mode},
+            respondWith: () => intercepted = true});
+        assert.equal(intercepted, false, path + ' ' + mode);
+    }
+}
+""".replace("SOURCE", json.dumps(src), 1)
+        subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True)
+        self.assertIn("await caches.delete(key)", src)
+        registration = (STATIC / "pwa-register.js").read_text()
+        self.assertIn("location.protocol !== 'https:'", registration)
+        self.assertIn("register('/sw.js', { scope: '/' })", registration)
+
+    def test_standalone_session_cookie_is_same_origin_and_secure(self):
+        request = Request({"type": "http", "scheme": "http", "path": "/app/study",
+                           "headers": [(b"x-forwarded-proto", b"https")],
+                           "client": ("127.0.0.1", 12345), "server": ("localhost", 443)})
+        response = Response()
+        web_common._set_session_cookie(response, "test-token", request)
+        cookie = response.headers["set-cookie"]
+        for value in ("fas_session=", "Path=/", "HttpOnly", "SameSite=lax", "Secure"):
+            self.assertIn(value, cookie)

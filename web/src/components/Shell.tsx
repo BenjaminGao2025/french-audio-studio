@@ -186,7 +186,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const section = NAV.find((n) => n.key === top)?.label ?? "1000H French";
   return (
     <TooltipProvider>
-      <SidebarProvider>
+      <SidebarProvider className="pl-[var(--safe-left)] pr-[var(--safe-right)]">
         {!focused && <AppSidebar />}
         <SidebarInset id="main" tabIndex={-1} className="main flex h-svh min-w-0 flex-col overflow-y-auto bg-background">
           <a
@@ -196,7 +196,7 @@ export function Shell({ children }: { children: ReactNode }) {
           >
             Skip to main content
           </a>
-          <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b bg-background px-3 pt-safe">
+          <header className="sticky top-0 z-20 flex min-h-[calc(3.5rem+var(--safe-top))] shrink-0 items-center gap-2 border-b bg-background px-3 pt-safe">
             {focused ? <FocusBar /> : (
               <>
                 <SidebarTrigger />
@@ -223,7 +223,10 @@ export function Shell({ children }: { children: ReactNode }) {
           <div className="flex min-w-0 flex-1 flex-col px-4 pt-4 md:px-0 md:pt-6">{children}</div>
           <GlobalPlayer />
         </SidebarInset>
-        <Toaster />
+        <Toaster
+          offset={{ top: "calc(2rem + var(--safe-top))", bottom: "calc(2rem + var(--safe-bottom))", left: "calc(2rem + var(--safe-left))", right: "calc(2rem + var(--safe-right))" }}
+          mobileOffset={{ top: "calc(1rem + var(--safe-top))", bottom: "calc(1rem + var(--safe-bottom))", left: "calc(1rem + var(--safe-left))", right: "calc(1rem + var(--safe-right))" }}
+        />
       </SidebarProvider>
     </TooltipProvider>
   );
@@ -304,7 +307,7 @@ function GlobalPlayer() {
   };
   const pct = p.duration ? Math.min(100, (p.position / p.duration) * 100) : 0;
   return (
-    <section className="sticky bottom-0 z-20 flex flex-wrap items-center gap-3 border-t bg-background px-4 py-2 pb-safe" aria-label={`Player: ${p.owner.label}`}>
+    <section className="sticky bottom-0 z-20 flex flex-wrap items-center gap-3 border-t bg-background px-4 py-2 pb-[calc(0.5rem+var(--safe-bottom))]" aria-label={`Player: ${p.owner.label}`}>
       {p.status === "error" ? (
         <Button type="button" variant="outline" size="icon" aria-label={`Retry ${p.owner.label}`} onClick={retryPlayback}>{<RotateCcw aria-hidden />}</Button>
       ) : p.status === "playing" || p.status === "buffering" ? (
@@ -365,7 +368,7 @@ export function MasteryToast() {
   if (!visible.length) return null;
 
   return (
-    <div className="pointer-events-none fixed bottom-4 left-1/2 z-50 flex w-[min(32rem,calc(100%-1.5rem))] -translate-x-1/2 flex-col gap-2">
+    <div className="pointer-events-none fixed bottom-[calc(1rem+var(--safe-bottom))] left-1/2 z-50 flex w-[min(32rem,calc(100%-1.5rem-var(--safe-left)-var(--safe-right)))] -translate-x-1/2 flex-col gap-2">
       {visible.map((m, idx) => {
         const left = Math.max(0, Math.ceil((UNDO_MS - (now - m.at)) / 1000));
         const card = cards.find((c) => c.id === m.cardId);

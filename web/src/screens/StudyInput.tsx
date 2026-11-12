@@ -500,7 +500,7 @@ function OcrResults({ back, photoTitle }: { back: React.ReactNode; photoTitle: s
               }}>Put it back</Button>
           </p>
         )}
-        <div className="sticky bottom-0 z-10 bg-background py-3">
+        <div className="sticky bottom-0 z-10 bg-background py-3 pb-[calc(0.75rem+var(--safe-bottom))]">
           <div className="flex flex-wrap items-center gap-2">
             <Button type="button" variant="default" aria-disabled={(!!(reason)) || undefined} className={cn((!!(reason)) ? "opacity-50" : "")} onClick={(event) => { if (!!(reason)) { event.preventDefault(); return; } (() => {
                 patchStudy({ mode: "text", drafts: { ...get().study.drafts, text: selected.map((l) => l.text.trim()).join("\n") } });

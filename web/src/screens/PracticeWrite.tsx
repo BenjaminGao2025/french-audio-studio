@@ -234,7 +234,7 @@ export function Write() {
             </div>
             {error && <Alert variant="destructive" role="alert"><AlertTitle>Feedback didn’t load</AlertTitle><AlertDescription>{error} Your text is kept.</AlertDescription></Alert>}
             {phase === "wait1" && <Spinner label="Reading your text… this usually takes 10–40 seconds." />}
-            <div className="sticky bottom-0 z-10 bg-background py-3">
+            <div className="sticky bottom-0 z-10 bg-background py-3 pb-[calc(0.75rem+var(--safe-bottom))]">
               <div className="flex flex-wrap items-center gap-2">
                 <Button type="button" variant="default" aria-disabled={(!!(phase === "wait1")) || undefined} aria-busy={phase === "wait1" || undefined} className={cn((!!(phase === "wait1")) ? "opacity-50" : "")} onClick={(event) => { if (!!(phase === "wait1")) { event.preventDefault(); return; } (() => void submit1())(); }}>{phase === "wait1" ? <Loader2 className="animate-spin" aria-hidden /> : null}{error ? "Retry" : "Get feedback"}</Button>
               </div>
