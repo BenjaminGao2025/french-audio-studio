@@ -51,3 +51,60 @@ All nine light-mode shots were opened and visually inspected. Directory: `/home/
 Desktop width is 1280px. Preview used fixture-only fetch on 127.0.0.1:8030; the port was checked free before starting and after stopping our preview process. Preview source/config were copied to the output directory and removed from the checkout. No screenshots or dependencies are committed. `/workspace` is absent, so the optional screenshot mirror was unavailable.
 
 Report copy: `/home/mgacai/polish-1.3.6-out/REPORT.md`.
+
+## Follow-up: Bug C, Task D, Task E
+
+Tool: Codex CLI, model `gpt-6.1-sol`, user `mgacai`, host `mini7840`. Continued from `e7dc4ee` on `design/polish-1.3.6`; all earlier implementation, docs, avoir and ruff commits remain intact.
+
+### C — grading normalization and visible corrections
+
+Reproduced the requested pairs before changing comparison code. At this HEAD, frontend and Python already accept NFC/NFD in both directions for représentants/résolu, straight/curly apostrophes in both directions, and Ben's exact answer without the target's final period. All are correct, 100%, with no wrong or accent marks. The reported original 86% result could not be reproduced from those exact strings; it would be inaccurate to attribute it to an NFC or trailing-period defect in this checkout.
+
+A confirmed comparison hole was frontend omission of U+2032 (prime) from APOS, although the backend already folds it. A new regression failed before the fix and passes after adding the same folding. Existing frontend and backend NFC normalization remain in place; no backend comparison change was necessary. Accent strictness remains intact.
+
+The confirmed presentation problem was reliance on semantic `del` styling with muted foreground. Given forms now explicitly use `line-through decoration-2 text-foreground`; accent-only deletions retain dotted decoration and their correct accented counterpart. Missing words use a contrasting underlined expected form. Different words show the struck given form and contrasting expected form side by side; extras show a struck given form. Counts and marks still derive from the same alignment.
+
+Tests: frontend `rules.test.ts` and Exercise result render cover NFD both ways, curly both ways, Ben's exact pair, prime apostrophe, genuine substitution, accent-only, missing and extra tokens. Render tests compare visible mark counts to alignment counts and assert explicit strike classes and expected forms. Python `test_ben_normalization_regressions` covers all normalized pairs at 100% with only ok operations. The fixture screenshot shows fini struck through next to résolu; Chromium computed `text-decoration-line: line-through` and foreground `rgb(42, 38, 34)`.
+
+Commit: `6a9fd3d`.
+
+### D — toggle panels and Try again
+
+Root cause: open-state early returns made Hint and Answer one-way controls; hint visibility doubled as its scoring flag. The answer's faint ghost action also hid only the answer.
+
+Hint now has an independent sticky hinted scoring flag. Answer retains the existing sticky revealed flag and uses coverAnswer for panel visibility. Toolbar buttons toggle, report accurate boolean aria-pressed states, and each panel has a stock shadcn ghost icon close button (Hide hint / Hide answer). The pre-check Answer action is an outline Try again with RotateCcw: it hides both panels, clears the textarea and focuses it while preserving hint-used and answer-known scoring. Result-view Try again still resets the completed attempt's flags.
+
+Tests: ExerciseReveal covers toolbar toggle and panel close in Recall and Dictation, Whole sentence and Step by step; a later Check retains both scoring flags and renders Answer known. The pre-check Try again regression checks cleared/focused input, hidden panels, and preserved scoring. Completed-result Try again is checked for fresh flags. No Try it now remains in the UI.
+
+Commits: `8c0050d`, `9c60520` (scope the added field to QuestionUI, preserving the existing ReviewUI hinted field).
+
+### E — word-card Ask AI voice input
+
+Root cause: Ask AI had text entry and Send only. Added a compact stock shadcn icon mic next to the input and Send, with Record question / Stop recording labels and a pressed recording state. A busy spinner marks permission/transcription work. Unsupported MediaRecorder/getUserMedia hides the control. Permission, recording and transcription errors are dismissible; the input stays usable. Capture tracks are released when stopped or unmounted, in-flight transcription is aborted on unmount, and recording has the existing three-minute limit.
+
+The compact recorder reuses audio focus, the existing transcribeTake API and a shared StudyRecorder MIME chooser: webm/opus, mp4, webm, ogg. It POSTs to the existing /api/transcribe with language=zh and the current French sentence as context. No new service, vendor, key, backend STT change or fix pass was added. Transcription appends with a separating space using the current input value, preserving edits made while processing. It never auto-sends.
+
+Tests: seven fake-backend AskVoice tests cover supported presence, three unsupported fallbacks, start/stop POST and sentence/language context, mp4 selection/payload, appending a second recording after editing, manual Send only, permission denial/dismissal/retry, transcription failure/retry, and track cleanup on unmount. No live ASR model or production transcription endpoint was called.
+
+Commit: `d134a34`.
+
+Voice limitations: physical iPhone Safari/PWA and physical Mac Chrome microphone capture were not tested. iOS requires a user tap and microphone permission, may select mp4 only, and recording can be interrupted by app/background changes. Mac Chrome also requires microphone permission. Browser support and local STT recognition of mixed Chinese/English/French determine results; reviewed text is editable before sending. Unit tests use an mp4-only fake recorder and fake backend; screenshots use desktop Chromium at a 390px viewport.
+
+### Final verification for C/D/E
+
+- `cd web && npm test`: **534 passed**, 24 test files (previous 508). Existing React act warnings remain non-fatal. The avoir nested-lemma tests remain unchanged and pass in StudyWordCard.
+- `cd web && npm run build`: passed; existing classic PWA script/chunk-size warnings only.
+- `PYTHONPATH=".:tests" python3 -m unittest discover -s tests`: **668 passed** (previous 667), fixture/temp DBs only.
+- Raw-element audit: **button=0, select=0, input=0, textarea=0, details=0, summary=0**; 40 app TSX files, 37 importing UI components, 1337 className uses, CSS remains 232 lines.
+- `git diff --check`: clean.
+- `uvx ruff==0.17.4 check tests/test_elision_keys.py`: all checks passed. The ruff blank line remains unchanged.
+- Logs: `npm-test-cde.log`, `python-test-cde.log`, `build-cde.log`, `audit-cde.log` in the output directory.
+
+Four 390px light-mode screenshots captured and visually inspected under `/home/mgacai/polish-1.3.6-out/screenshots/`:
+
+- `polish-1.3.6-ask-ai-mic-light-390.png`
+- `polish-1.3.6-check-hint-open-light-390.png`
+- `polish-1.3.6-check-answer-try-again-light-390.png`
+- `polish-1.3.6-check-grade-mark-light-390.png`
+
+The hint screenshot was recaptured after inspection to show the panel and close control fully. The mic is visible beside Ask AI's input; Answer has an outline Try again and close control. Preview used the same fixture entry and fake backend, only on 127.0.0.1:8030, confirmed free before launch. Preview stopped and 8030 confirmed free afterward. Temporary preview source/config removed from the checkout; screenshots remain outside Git. /workspace does not exist, so the optional mirror was unavailable. No main push, force push, PR, deploy, Docker operation or production change.
