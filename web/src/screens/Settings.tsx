@@ -279,7 +279,7 @@ function Account({ onSignOut }: { onSignOut: () => void }) {
     <div className="flex flex-col gap-3">
       <ul className="divide-y overflow-hidden rounded-lg border">
         <li className="flex flex-wrap items-center gap-3 px-4 py-3">
-          <span className="brand-mark" style={{ background: "var(--text)", borderRadius: "50%", width: 40, height: 40 }} aria-hidden>{initials(email)}</span>
+          <span className="brand-mark" style={{ background: "var(--primary)", color: "var(--primary-foreground)", borderRadius: "50%", width: 40, height: 40 }} aria-hidden>{initials(email)}</span>
           <span className="min-w-0 flex-1 flex flex-col">
             <span className="font-medium">{email}</span>
             <span className="text-sm text-muted-foreground">Signed in on this device</span>

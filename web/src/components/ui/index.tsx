@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { ChevronRight, Loader2, Star, X } from "lucide-react";
+import { ChevronRight, Loader2, X } from "lucide-react";
 import { cn } from "cn";
 import { importanceFor, importanceLabel } from "../../lib/lookup";
 import { Button } from "./button";
@@ -355,9 +355,9 @@ export function Importance({ count, lookups = "inline" }: { count: number; looku
   const times = `${count} ${count === 1 ? "lookup" : "lookups"}`;
   return (
     <p className="flex flex-nowrap items-center gap-2">
-      <span className="inline-flex text-primary" aria-hidden>
+      <span className="inline-flex items-center gap-1" aria-hidden>
         {[1, 2, 3, 4, 5].map((i) => (
-          <Star key={i} className={cn("size-4", i > n && "text-muted-foreground")} fill={i <= n ? "currentColor" : "none"} />
+          <span key={i} data-filled={i <= n} className={cn("size-1.5 rounded-full", i <= n ? "bg-primary" : "bg-muted-foreground/25")} />
         ))}
       </span>
       <span className="text-sm text-muted-foreground">

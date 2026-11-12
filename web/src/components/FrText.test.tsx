@@ -192,4 +192,19 @@ describe("FrText — keyboard access and native selection", () => {
     expect(spy).toHaveBeenLastCalledWith(words[1].textContent);
     expect(window.getSelection()!.isCollapsed).toBe(true);
   });
+  it("always emits repeated word clicks, including multi-click counts and stale phrase selection", async () => {
+    const picks = vi.fn();
+    await act(async () => root.render(<FrText text="Ma machine à laver fuit." onPick={picks} />));
+    const words = [...host.querySelectorAll<HTMLElement>(".fr-word")];
+    const range = document.createRange();
+    range.setStart(words[0].firstChild!, 0); range.setEnd(words[1].firstChild!, 7);
+    window.getSelection()!.removeAllRanges(); window.getSelection()!.addRange(range);
+    // A programmatic/accessibility click has no pointer sequence. Old selection is irrelevant.
+    for (const [index, detail] of [[3, 1], [3, 2], [3, 3], [1, 1], [2, 1], [4, 1]]) {
+      await act(async () => words[index].dispatchEvent(new MouseEvent("click", { bubbles: true, detail })));
+    }
+    expect(picks.mock.calls.map(([p]) => p.text)).toEqual(["laver", "laver", "laver", "machine", "à", "fuit"]);
+    expect(new Set(picks.mock.calls.map(([p]) => p)).size).toBe(6);
+  });
+
 });

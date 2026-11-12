@@ -1,3 +1,4 @@
+import { useTheme } from "../lib/theme";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { BarChart3, BookOpen, CloudOff, Dumbbell, Layers, LogOut, Pause, Play, RefreshCw, RotateCcw, Settings as SettingsIcon, Square, CheckCircle2, AlertCircle, Clock, User, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -41,6 +42,8 @@ import {
 import { TooltipProvider } from "./ui/tooltip";
 import {
   DropdownMenu,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -233,6 +236,7 @@ export function Shell({ children }: { children: ReactNode }) {
 }
 
 function AccountSlot() {
+  const [theme, chooseTheme] = useTheme();
   const auth = useApp((s) => s.auth);
   const offline = useApp((s) => s.offline);
   const sync = useApp((s) => s.sync);
@@ -253,6 +257,12 @@ function AccountSlot() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel className="font-normal">{email}</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuRadioGroup value={theme} onValueChange={chooseTheme} aria-label="Theme">
+              <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="system">System</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={() => go("settings/account")}>
               <User aria-hidden />

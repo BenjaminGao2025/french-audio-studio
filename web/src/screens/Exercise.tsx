@@ -1,13 +1,12 @@
-import { useLayoutEffect, useRef, useState } from "react";
-import { Lightbulb, Eye, Play, Turtle, RotateCcw, History as HistoryIcon, Loader2 } from "lucide-react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Lightbulb, Eye, Play, Turtle, RotateCcw, Loader2 } from "lucide-react";
 import type { PracticeItem, StudySentence } from "../data/fixtures";
-import { grade, type DisplayWord } from "../lib/grading";
+import { grade } from "../lib/grading";
 import { gradeFeedback } from "../lib/feedback";
 import { plural } from "../lib/format";
 import {
   announce,
   get,
-  go,
   retryPlayback,
   set,
   startPlayback,
@@ -17,9 +16,10 @@ import {
   type QuestionUI,
 } from "../state/store";
 import { gradeAttempt } from "../api/dictation";
-import { FrText, type FrPick, type FrSegment } from "../components/FrText";
+import { FrText, type FrPick } from "../components/FrText";
 import { Spinner, Textarea, useNarrow } from "../components/ui";
 import { WordOverlay, WordPanel } from "./WordPopup";
+import { Card, CardContent } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
 import { ToggleGroup, ToggleGroupItem } from "../components/ui/toggle-group";
@@ -190,80 +190,12 @@ export function submitAnswer(key: string) {
       const a = get().attempts.find((x) => x.id === attemptId)!;
       if (!a.answerKnown) gradeFeedback(r.correct);
       announce(a.answerKnown ? "Checked. Recorded as answer known." : r.correct ? "Correct." : `Not quite. ${plural(res.issues.length, "difference")}.`);
-      requestAnimationFrame(() => document.getElementById(`ex-result-${key}`)?.focus());
+      if (!r.correct) requestAnimationFrame(() => document.getElementById(`ex-result-${key}`)?.focus());
     })
     .catch(() => {
       patchUI(key, qk, { phase: "techfail" });
       announce("Checking didn’t finish. This is not a wrong answer. Your answer is kept.", true);
     });
-}
-
-/* ---------------- shared feedback pieces ---------------- */
-
-function cleanCounterpart(w?: string) {
-  return (w ?? "").replace(/^[^\p{L}\p{N}]+|[.,;:!?…»«"]+$/gu, "");
-}
-
-function inlineTagFor(w: DisplayWord, side: "answer" | "target"): string | null {
-  if (w.mark === "ok") return null;
-  if (side === "answer") {
-    return w.mark === "extra" ? "Extra word" : null;
-  }
-  if (w.mark === "missing") return "Missing word";
-  const given = cleanCounterpart(w.counterpart);
-  if (w.mark === "different") return given ? `Different word: you wrote ${given}` : "Different word";
-  if (w.mark === "accent") return given ? `Accent: you wrote ${given}` : "Accent";
-  return null;
-}
-
-function targetSegments(words: DisplayWord[]): FrSegment[] {
-  const out: FrSegment[] = [];
-  words.forEach((w, i) => {
-    const word = /[\p{L}\p{N}]/u.test(w.text);
-    out.push({ t: w.text, w: word, tone: w.mark !== "ok" ? w.mark : undefined });
-    if (i < words.length - 1) out.push({ t: " " });
-  });
-  return out;
-}
-
-export function MarkedLine({
-  words,
-  label,
-  side = label === "Your answer" ? "answer" : "target",
-  onPick,
-  onPlay,
-}: {
-  words: DisplayWord[];
-  label: string;
-  onPlay?: () => void;
-  side?: "answer" | "target";
-  /** Correct-answer French uses the same tappable text as the study sentence. */
-  onPick?: (p: FrPick) => void;
-}) {
-  const notes = [...new Set(words.map((w) => inlineTagFor(w, side)).filter((tag): tag is string => Boolean(tag)))];
-  const tappable = side === "target" && onPick;
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="text-sm font-medium text-muted-foreground">{label}</span>
-      {onPlay ? (
-        <Button type="button" variant="link" onClick={onPlay} className="h-auto justify-start self-start whitespace-normal p-0 text-left font-serif text-xl leading-9" lang="fr">
-          <span>{words.map((w, i) => <span key={i}>{i > 0 ? " " : ""}{w.mark === "ok" ? w.text : <span className={`rounded px-0.5 tok--${w.mark}`}>{w.text}</span>}</span>)}</span>
-        </Button>
-      ) : tappable ? (
-        <FrText segments={targetSegments(words)} className="font-serif text-xl leading-9" onPick={onPick} />
-      ) : (
-        <p className="font-serif text-xl leading-9" lang="fr">
-          {words.map((w, i) => (
-            <span key={i}>
-              {w.mark === "ok" ? w.text : <span className={`rounded px-0.5 tok--${w.mark}`}>{w.text}</span>}
-              {i < words.length - 1 ? " " : ""}
-            </span>
-          ))}
-        </p>
-      )}
-      {notes.length > 0 && <p className="compare-note text-xs leading-4 text-muted-foreground">{notes.join(" · ")}</p>}
-    </div>
-  );
 }
 
 /* ---------------- Exercise ---------------- */
@@ -275,7 +207,7 @@ export function Exercise({
   items,
   onDone,
   onPick,
-  compact,
+  modeTabs,
   doneLabel = "Done — return to Study",
 }: {
   sessionKey: string;
@@ -285,7 +217,7 @@ export function Exercise({
   onDone: () => void;
   /** Opens the study word card. When omitted, this exercise opens the same card itself. */
   onPick?: (p: FrPick) => void;
-  compact?: boolean;
+  modeTabs?: ReactNode;
   doneLabel?: string;
 }) {
   useLayoutEffect(() => ensureSession(sessionKey, kind, source, items), [sessionKey]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -293,6 +225,16 @@ export function Exercise({
   const attempts = useApp((s) => s.attempts);
   const player = useApp((s) => s.player);
   const route = useApp((s) => s.route);
+  const enterHeld = useRef(false);
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => { if (e.key === "Enter") enterHeld.current = true; };
+    const up = (e: KeyboardEvent) => { if (e.key === "Enter") enterHeld.current = false; };
+    const blur = () => { enterHeld.current = false; };
+    document.addEventListener("keydown", down, true);
+    document.addEventListener("keyup", up, true);
+    window.addEventListener("blur", blur);
+    return () => { document.removeEventListener("keydown", down, true); document.removeEventListener("keyup", up, true); window.removeEventListener("blur", blur); };
+  }, []);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [localPick, setLocalPick] = useState<FrPick | null>(null);
   const narrow = useNarrow();
@@ -352,42 +294,37 @@ export function Exercise({
   const play = (slow: boolean) =>
     startPlayback({ kind: "exercise", label: "Practice audio", route }, Math.max(1, t.fr.length / 13), { speed: slow ? 0.75 : 1, texts: [t.fr] });
 
-  const qLabel = kind;
-
   return (
-    <section className={compact ? "exercise" : "exercise"} aria-labelledby={`ex-q-${sessionKey}`}>
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 id={`ex-q-${sessionKey}`} tabIndex={-1} className={compact ? "t-label" : "t-section"}>{qLabel}</h2>
-          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-sm text-muted-foreground">
-            <span>Question {sess.index + 1} of {sess.items.length}</span>
-            {sess.mode === "step" && <span>Step {step + 1} of {stepCount}</span>}
-            <span>Source: {sess.source}</span>
-            <span>{plural(sess.items.length, "sentence")}</span>
-          </p>
-        </div>
-        <ToggleGroup type="single" variant="outline" value={sess.mode} onValueChange={(next) => { if (next === "step" || next === "whole") {
+    <section className="exercise flex flex-col gap-6" aria-label={`${kind} exercise`}>
+      <div className={cn("flex items-center gap-2", modeTabs && "justify-between")} aria-label="Exercise toolbar">
+        {modeTabs}
+        <ToggleGroup type="single" variant="outline" size="sm" spacing={0} value={sess.mode} onValueChange={(next) => { if (next === "step" || next === "whole") {
             if (busy) return;
             patchSession(sessionKey, { mode: next, modeNotice: "" });
             announce(next === "step" ? "Scope changed to step by step." : "Scope changed to whole sentence.");
           } }} aria-label="Practice scope">{([
             { value: "whole", label: "Whole sentence" },
             { value: "step", label: "Step by step" },
-          ]).map((o) => (<ToggleGroupItem key={o.value} value={o.value}>{o.label}</ToggleGroupItem>))}</ToggleGroup>
+          ]).map((o) => (<ToggleGroupItem key={o.value} value={o.value} className="px-2 text-xs sm:text-sm">{o.label}</ToggleGroupItem>))}</ToggleGroup>
       </div>
+      <p id={`ex-q-${sessionKey}`} tabIndex={-1} className="text-xs text-muted-foreground">
+        Question {sess.index + 1} of {sess.items.length}
+        {sess.mode === "step" && ` · Step ${step + 1} of ${stepCount}`}
+        {` · ${sess.source}`}
+      </p>
 
-      <hr className="border-t" />
-
+      <Card aria-label="Exercise card">
+      <CardContent className="gap-4">
       {/* Prompt — never the French target */}
       <div className="flex flex-col gap-3">
         {kind === "Recall" ? (
           <>
             <p className="text-sm text-muted-foreground">Write this in French.</p>
-            <p className="text-lg font-medium">{t.en}</p>
+            <p className="text-2xl font-medium leading-snug">{t.en}</p>
           </>
         ) : (
           <>
-            <p className="text-sm text-muted-foreground">Listen and type what you hear.</p>
+            <p className="text-2xl font-medium leading-snug">Listen and type what you hear.</p>
             <div className="flex flex-wrap items-center gap-2">
               <Button type="button" variant="outline" aria-disabled={(!!(myAudio?.status === "loading")) || undefined} aria-busy={myAudio?.status === "loading" || undefined} aria-label="Play practice audio" className={cn((!!(myAudio?.status === "loading")) ? "opacity-50" : "")} onClick={(event) => { if (!!(myAudio?.status === "loading")) { event.preventDefault(); return; } (() => play(false))(); }}>{myAudio?.status === "loading" ? <Loader2 className="animate-spin" aria-hidden /> : (<Play aria-hidden />)}Play</Button>
               <Button type="button" variant="outline" aria-label="Play practice audio slowly" onClick={() => play(true)}>{<Turtle aria-hidden />}Slow</Button>
@@ -403,21 +340,16 @@ export function Exercise({
           </>
         )}
         {ui.hint && ui.phase !== "graded" && (
-          <p className="banner banner--info" role="status">
-            <Lightbulb aria-hidden />
-            <span lang={kind === "Recall" ? "fr" : "en"}>{hintFor(kind, t)}</span>
-          </p>
+          <div className="rounded-md bg-muted p-3 text-muted-foreground" role="status" aria-label="Hint">
+            <p className="mb-1 flex items-center gap-2 text-sm font-medium"><Lightbulb className="size-4" aria-hidden />Hint</p>
+            <p lang={kind === "Recall" ? "fr" : "en"}>{hintFor(kind, t)}</p>
+          </div>
         )}
         {ui.revealed && !ui.coverAnswer && ui.phase !== "graded" && (
-          <div className="banner banner--warning" role="status">
-            <Eye aria-hidden />
-            <div className="banner-body">
-              <p className="banner-title">Answer shown</p>
-              <FrText text={t.fr} className="font-serif text-2xl leading-snug wrap-break-word" onPick={handlePick} />
-              <div className="flex flex-wrap items-center gap-2">
-                <Button type="button" variant="outline" onClick={tryFromMemory}>Try it now</Button>
-              </div>
-            </div>
+          <div className="rounded-md bg-muted p-3 text-muted-foreground" role="status" aria-label="Answer">
+            <p className="mb-1 flex items-center gap-2 text-sm font-medium"><Eye className="size-4" aria-hidden />Answer</p>
+            <FrText text={t.fr} className="font-serif text-xl leading-snug wrap-break-word" onPick={handlePick} />
+            <Button type="button" variant="ghost" className="mt-2" onClick={tryFromMemory}>Try it now</Button>
           </div>
         )}
       </div>
@@ -442,7 +374,7 @@ export function Exercise({
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  submitAnswer(sessionKey);
+                  if (!e.repeat) submitAnswer(sessionKey);
                 }
               }}
               spellCheck={false}
@@ -457,27 +389,26 @@ export function Exercise({
             <Alert variant="destructive" role="alert"><AlertTitle>Checking didn’t finish</AlertTitle><AlertDescription>This is a technical problem, not a wrong answer. Your answer is kept and Retry checks the same attempt.</AlertDescription></Alert>
           )}
           {busy && <Spinner label="Checking your answer…" />}
-          <div className="sticky bottom-0 z-10 bg-background py-3 pb-[calc(0.75rem+var(--safe-bottom))]">
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2" aria-label="Answer actions">
               <Button type="button" variant="default" aria-disabled={(!!(busy)) || undefined} aria-busy={busy || undefined} className={cn((!!(busy)) ? "opacity-50" : "")} onClick={(event) => { if (!!(busy)) { event.preventDefault(); return; } (() => submitAnswer(sessionKey))(); }}>{busy ? <Loader2 className="animate-spin" aria-hidden /> : null}{ui.phase === "techfail" ? "Retry check" : busy ? "Checking…" : "Check"}</Button>
               <Button type="button" variant="ghost" aria-pressed={ui.hint || undefined} onClick={() => {
                   if (ui.hint || busy) return;
                   patchUI(sessionKey, qk, { hint: true });
                   if (ui.attemptId) patchAttempt(ui.attemptId, { hinted: true });
                   announce("Hint shown.");
-                }}>{<Lightbulb aria-hidden />}{ui.hint ? "Hint shown" : kind === "Dictation" ? "Show English hint" : "Show hint"}</Button>
+                }}>{<Lightbulb aria-hidden />}Hint</Button>
               <Button type="button" variant="ghost" aria-pressed={ui.revealed || undefined} onClick={() => {
                   if (ui.revealed || busy) return;
                   patchUI(sessionKey, qk, { revealed: true, coverAnswer: false });
                   if (ui.attemptId) patchAttempt(ui.attemptId, { answerKnown: true });
                   announce("Answer shown.");
-                }}>{<Eye aria-hidden />}{ui.revealed ? "Answer shown" : "Show answer"}</Button>
-            </div>
+                }}>{<Eye aria-hidden />}Answer</Button>
           </div>
         </div>
       ) : (
         attempt?.result && (
           <Result
+            enterHeld={enterHeld}
             sessionKey={sessionKey}
             attempt={attempt}
             target={t.fr}
@@ -489,10 +420,11 @@ export function Exercise({
             doneLabel={doneLabel}
             sessionAttempts={sessionAttempts}
             itemsCount={sess.items.length}
-            route={route}
           />
         )
       )}
+      </CardContent>
+      </Card>
       {!onPick && localPick && (
         <ExerciseWord sentence={{ id: item.id, fr: item.fr, en: item.en, segments: [], steps: [], grammar: null, cards: [] }} pick={localPick} narrow={narrow} onClose={() => setLocalPick(null)} />
       )}
@@ -500,15 +432,16 @@ export function Exercise({
   );
 }
 
-function ExerciseWord({ sentence, pick, onClose }: { sentence: StudySentence; pick: FrPick; narrow: boolean; onClose: () => void }) {
+function ExerciseWord({ sentence, pick, onClose, narrow }: { sentence: StudySentence; pick: FrPick; narrow: boolean; onClose: () => void }) {
   return (
-    <WordOverlay label={`Meaning of ${pick.text}`} onClose={onClose}>
-      <WordPanel sentence={sentence} text={pick.text} occurrence={pick.occurrence} onGrammar={onClose} onClose={onClose} inSheet />
+    <WordOverlay anchor={pick.anchor} label={`Meaning of ${pick.text}`} onClose={onClose}>
+      <WordPanel sentence={sentence} text={pick.text} occurrence={pick.occurrence} onClose={onClose} inSheet={narrow} />
     </WordOverlay>
   );
 }
 
 function Result({
+  enterHeld,
   sessionKey,
   attempt,
   target,
@@ -520,8 +453,8 @@ function Result({
   doneLabel,
   sessionAttempts,
   itemsCount,
-  route,
 }: {
+  enterHeld: { current: boolean };
   sessionKey: string;
   attempt: Attempt;
   target: string;
@@ -533,48 +466,66 @@ function Result({
   doneLabel: string;
   sessionAttempts: Attempt[];
   itemsCount: number;
-  route: string;
 }) {
   const r = attempt.result!;
   const correct = attempt.outcome === "correct";
+  const nextRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!correct) return;
+    let frame = 0;
+    let focused = false;
+    const focus = () => { frame = requestAnimationFrame(() => { if (!focused && !enterHeld.current) { nextRef.current?.focus(); focused = true; document.removeEventListener("keyup", release); } }); };
+    const release = (e: KeyboardEvent) => { if (e.key === "Enter") focus(); };
+    if (!enterHeld.current) focus();
+    document.addEventListener("keyup", release);
+    return () => { cancelAnimationFrame(frame); document.removeEventListener("keyup", release); };
+  }, [attempt.id, correct, enterHeld]);
+  const nextKey = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    if (!e.repeat) (isLast ? onDone : onNext)();
+  };
   return (
     <div className="flex flex-col gap-4">
       <div id={`ex-result-${sessionKey}`} tabIndex={-1} className="flex flex-col gap-3">
-        {attempt.answerKnown ? (
-          <Alert variant="default"><AlertTitle>Answer known</AlertTitle></Alert>
-        ) : correct ? (
-          <Alert variant="default"><AlertTitle>{attempt.hinted ? "Correct · hint used" : "Correct"}</AlertTitle></Alert>
-        ) : (
-          <Alert variant="destructive"><AlertTitle>{`Not quite · ${plural(r.issues.length, "difference")}`}</AlertTitle></Alert>
-        )}
-        {correct ? (
-          <div className="flex flex-col gap-3 py-2">
-            <span className="text-sm font-medium text-muted-foreground">Answer</span>
-            <FrText text={target} className="font-serif text-2xl leading-snug wrap-break-word" onPick={onPick} />
-            <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" variant="ghost" className="md:-ml-3" onClick={() => startPlayback({ kind: "exercise", label: "Practice audio", route }, Math.max(1, target.length / 13), { texts: [target] })}>{<Play aria-hidden />}Play answer</Button>
-            </div>
+        <div className="flex flex-wrap items-center gap-4">
+          <p className="text-4xl font-semibold tabular-nums" aria-label={`Score: ${r.accuracy}%`}>{r.accuracy}%</p>
+          <div>
+            <p className="font-medium">{attempt.answerKnown ? "Answer known" : correct ? attempt.hinted ? "Correct · hint used" : "Correct" : "Not quite"}</p>
+            <p className="text-sm text-muted-foreground">{r.counts.ok} right · {r.counts.different + r.counts.missing + r.counts.extra} wrong{r.counts.accent > 0 && ` · ${plural(r.counts.accent, "accent")}`}</p>
           </div>
-        ) : (
-          <div className="flex flex-col gap-4">
-            <MarkedLine label="Your answer" words={r.answer} side="answer" />
-            <MarkedLine label="Correct answer" words={r.target} side="target" onPick={onPick} />
-          </div>
-        )}
+        </div>
+        <p aria-label="Inline corrections" className="font-serif text-2xl leading-relaxed wrap-break-word" lang="fr">
+          {r.alignment.map((word, i) => (
+            <Fragment key={i}>
+              {i > 0 && " "}
+              <span data-mark={word.mark} className={word.mark === "different" || word.mark === "accent" ? "inline-block max-w-full" : undefined}>
+                {word.mark === "ok" ? word.given : word.mark === "missing" ? (
+                  <span className="text-muted-foreground" aria-label={`Missing word: ${word.expected}`}>{word.expected}</span>
+                ) : (
+                  <>
+                    <del className={word.mark === "accent" ? "text-muted-foreground decoration-dotted" : "text-muted-foreground"}>{word.given}</del>
+                    {word.expected && <> <span className={word.mark === "accent" ? "underline decoration-dotted underline-offset-4" : "text-destructive font-medium"} aria-label={word.mark === "accent" ? `Accent correction: ${word.expected}` : undefined}>{word.expected}</span></>}
+                  </>
+                )}
+              </span>
+            </Fragment>
+          ))}
+        </p>
+        <div className="rounded-md bg-muted p-4" aria-label="Correct answer">
+          <FrText text={target} className="font-serif text-xl leading-relaxed wrap-break-word" onPick={onPick} />
+        </div>
         <HistoryStatus attempt={attempt} />
       </div>
 
       {isLast && <SessionSummary attempts={sessionAttempts} items={itemsCount} />}
 
-      <div className="flex flex-wrap items-center gap-2">
-        {isLast ? (
-          <Button type="button" variant="default" onClick={onDone}>{doneLabel}</Button>
-        ) : (
-          <Button type="button" variant="default" onClick={onNext}>Next</Button>
-        )}
+      <div className="flex flex-wrap items-center gap-2" aria-label="Result actions">
         <Button type="button" variant="outline" onClick={onTryAgain}>{<RotateCcw aria-hidden />}Try again</Button>
-        {isLast && (
-          <Button type="button" variant="ghost" onClick={() => go("progress/history?tab=attempts")}>{<HistoryIcon aria-hidden />}See attempts in History</Button>
+        {isLast ? (
+          <Button ref={nextRef} onKeyDown={nextKey} type="button" variant="default" onClick={onDone}>{doneLabel}</Button>
+        ) : (
+          <Button ref={nextRef} onKeyDown={nextKey} type="button" variant="default" onClick={onNext}>Next</Button>
         )}
       </div>
     </div>

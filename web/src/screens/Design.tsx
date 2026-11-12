@@ -35,7 +35,7 @@ const PAIRS: [string, string, string, number][] = [
   ["Control border on surface", "#8A8172", "#FBF8F2", 3],
   ["Focus ring on surface", "#8A5A2B", "#FBF8F2", 3],
   ["Focus ring on canvas", "#8A5A2B", "#F3EFE6", 3],
-  ["Importance stars on surface", "#B45309", "#FBF8F2", 3],
+  ["Importance dots on surface", "#2F4634", "#FBF8F2", 3],
   ["Divider on surface (decorative only)", "#E3DACB", "#FBF8F2", 0],
 ];
 

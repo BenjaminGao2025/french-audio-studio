@@ -183,7 +183,7 @@ describe("1. same-attempt retry must not hide a reveal", () => {
     expect(get().attempts[0].status).toBe("pending");
     expect(get().attempts[0].answerKnown).toBe(false);
 
-    const showAnswer = Array.from(document.querySelectorAll("button")).find((b) => b.textContent === "Show answer")!;
+    const showAnswer = Array.from(document.querySelectorAll("button")).find((b) => b.textContent === "Answer")!;
     await act(async () => showAnswer.click());
     expect(get().attempts[0].answerKnown).toBe(true);
 
@@ -439,23 +439,26 @@ describe("7. Review quota numbers and frozen session cards", () => {
 });
 
 describe("8. feedback and copy cleanups", () => {
-  it("correct result shows the answer once, with no leftover input", async () => {
+  it("correct result shows one correct-answer block and clean inline text, with no leftover input", async () => {
     await act(async () => resetDemo());
     await act(async () => REGISTRY.find((r) => r.id === "SCR-ANS-01")!.states[0].apply());
     await wait(1700);
     const text = document.getElementById("main")!.textContent!;
-    expect(text.split(TARGET).length - 1).toBe(1);
+    expect(document.querySelectorAll('[aria-label="Correct answer"]')).toHaveLength(1);
+    expect(document.querySelector('[aria-label="Inline corrections"] del')).toBeNull();
     expect(document.querySelector("#main textarea")).toBeNull();
     expect(text).not.toContain("Hint and answer flags were recorded when you checked.");
   });
 
-  it("incorrect feedback labels each issue once on Correct answer (and without a third issue list)", async () => {
+  it("incorrect feedback shows inline accent corrections without an issue list", async () => {
     await act(async () => resetDemo());
     await act(async () => REGISTRY.find((r) => r.id === "SCR-ANS-02")!.states.find((s) => s.key === "accent")!.apply());
     await wait(1700);
     const main = document.getElementById("main")!;
     expect(main.querySelector(".tok-tag")).toBeNull();
-    expect(main.textContent).toContain("Accent: you wrote oublie");
+    expect(main.textContent).not.toContain("Accent: you wrote");
+    expect(main.querySelector('[data-mark="accent"] del')?.textContent).toBe("oublie");
+    expect(main.querySelector('[aria-label="Accent correction: oublié"]')?.textContent).toBe("oublié");
     expect(main.querySelector(".issues")).toBeNull();
   });
 

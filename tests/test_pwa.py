@@ -1,5 +1,6 @@
 import json
 import pathlib
+import shutil
 import struct
 import subprocess
 from unittest.mock import patch
@@ -118,6 +119,7 @@ class PwaTests(unittest.TestCase):
 
     def test_spa_source_and_built_shell_have_ios_tags(self):
         web = pathlib.Path(__file__).resolve().parents[1] / "web"
+        version = json.loads((web / "package.json").read_text())["version"]
         indexes = [web / "index.html"]
         if (web / "dist" / "index.html").is_file():
             indexes.append(web / "dist" / "index.html")
@@ -128,9 +130,11 @@ class PwaTests(unittest.TestCase):
                 'name="mobile-web-app-capable" content="yes"',
                 'name="apple-mobile-web-app-status-bar-style" content="default"',
                 'name="apple-mobile-web-app-title" content="1000H French"',
-                'name="theme-color" content="#f7f4ee"',
+                'name="theme-color" content="#f7f4ee" media="(prefers-color-scheme: light)"',
+                'name="theme-color" content="#141a23" media="(prefers-color-scheme: dark)"',
+                '<script src="/static/theme-boot.js"></script>',
                 'rel="apple-touch-icon"', 'viewport-fit=cover',
-                '/static/pwa-register.js?v=1.3.2',
+                f'/static/pwa-register.js?v={version}',
             ):
                 self.assertIn(tag, html, (index, tag))
             self.assertEqual(html.count('rel="manifest"'), 1)
@@ -164,11 +168,19 @@ for (const path of ['/api/study', '/tts', '/files/a.mp3', '/auth/login',
     }
 }
 """.replace("SOURCE", json.dumps(src), 1)
-        subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True)
+        # The production Python image has no Node; source assertions below always run.
+        node = shutil.which("node")
+        if node is not None:
+            subprocess.run([node, "-e", script], check=True, capture_output=True, text=True)
         self.assertIn("await caches.delete(key)", src)
         registration = (STATIC / "pwa-register.js").read_text()
         self.assertIn("location.protocol !== 'https:'", registration)
         self.assertIn("register('/sw.js', { scope: '/' })", registration)
+
+    def test_service_worker_source_checks_still_run_without_node(self):
+        with patch("shutil.which", return_value=None), patch("subprocess.run") as run:
+            self.test_service_worker_leaves_sensitive_routes_and_spa_on_network()
+            run.assert_not_called()
 
     def test_standalone_session_cookie_is_same_origin_and_secure(self):
         request = Request({"type": "http", "scheme": "http", "path": "/app/study",

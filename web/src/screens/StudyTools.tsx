@@ -47,9 +47,17 @@ export function StudyNavigation({ value, onChange }: { value: Tab; onChange: (ta
           </ToggleGroupItem>
         ))}
       </ToggleGroup>
-      <Tabs value={value} onValueChange={(next) => onChange(next as Tab)}><TabsList aria-label={group.title} className="h-auto max-w-full flex-wrap justify-start">{(group.tabs.map((t) => ({ value: t.id, label: t.label }))).map((t) => (<TabsTrigger key={t.value} id={`learn-tab-${t.value}`} value={t.value}>{t.label}</TabsTrigger>))}</TabsList></Tabs>
+      {group.id !== "check" && <Tabs value={value} onValueChange={(next) => onChange(next as Tab)}><TabsList aria-label={group.title} className="h-auto max-w-full flex-wrap justify-start">{(group.tabs.map((t) => ({ value: t.id, label: t.label }))).map((t) => (<TabsTrigger key={t.value} id={`learn-tab-${t.value}`} value={t.value}>{t.label}</TabsTrigger>))}</TabsList></Tabs>}
     </div>
   );
+}
+
+export function StudyCheckTabs({ value, onChange }: { value: Tab; onChange: (tab: Tab) => void }) {
+  return <Tabs value={value} onValueChange={(next) => onChange(next as Tab)}>
+    <TabsList aria-label="Check yourself" className="h-8">
+      {GROUPS[2].tabs.map(t => <TabsTrigger key={t.id} id={`learn-tab-${t.id}`} value={t.id} className="px-2 text-xs sm:text-sm">{t.label}</TabsTrigger>)}
+    </TabsList>
+  </Tabs>;
 }
 
 export function WordsPanel({ sentence, onPick }: { sentence: StudySentence; onPick: (p: FrPick) => void }) {

@@ -471,7 +471,7 @@ function OcrResults({ back, photoTitle }: { back: React.ReactNode; photoTitle: s
                   />
                   {l.accentFrom && <p className="text-sm text-muted-foreground">Accents corrected from: <span lang="fr">{l.accentFrom}</span>. Check the spelling before continuing.</p>}
                   {l.low && (
-                    <p id={`ocr-low-${l.id}`} className="text-sm text-muted-foreground" style={{ color: "var(--warning)" }}>
+                    <p id={`ocr-low-${l.id}`} className="text-sm text-muted-foreground" style={{ color: "var(--primary)" }}>
                       Low confidence: <span className="underline decoration-wavy underline-offset-4" lang="fr">{l.low.join(", ")}</span> — please check {l.low.length > 1 ? "these words" : "this word"}.
                     </p>
                   )}

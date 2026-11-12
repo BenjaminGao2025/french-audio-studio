@@ -365,7 +365,7 @@ function ClearAction({ kind, count, onCleared }: { kind: "analyses" | "attempts"
       {done && count === 0 && (
         <Alert variant="default" role="status"><AlertTitle>Cleared</AlertTitle></Alert>
       )}
-      <Button type="button" variant="ghost" aria-disabled={(!!(count === 0 ? "There’s nothing to clear." : undefined)) || undefined} style={{ color: count ? "var(--error)" : undefined }} className={cn("self-start md:-ml-3", (!!(count === 0 ? "There’s nothing to clear." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(count === 0 ? "There’s nothing to clear." : undefined)) { event.preventDefault(); return; } (() => { setPhase("confirm"); setOpen(true); })(); }}>{<Trash2 aria-hidden />}{label}{(count === 0 ? "There’s nothing to clear." : undefined) ? <span className="sr-only">{count === 0 ? "There’s nothing to clear." : undefined}</span> : null}</Button>
+      <Button type="button" variant="ghost" aria-disabled={(!!(count === 0 ? "There’s nothing to clear." : undefined)) || undefined} style={{ color: count ? "var(--destructive)" : undefined }} className={cn("self-start md:-ml-3", (!!(count === 0 ? "There’s nothing to clear." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(count === 0 ? "There’s nothing to clear." : undefined)) { event.preventDefault(); return; } (() => { setPhase("confirm"); setOpen(true); })(); }}>{<Trash2 aria-hidden />}{label}{(count === 0 ? "There’s nothing to clear." : undefined) ? <span className="sr-only">{count === 0 ? "There’s nothing to clear." : undefined}</span> : null}</Button>
       {count === 0 && <DisabledReason>There’s nothing to clear.</DisabledReason>}
       {open && (
         <Dialog

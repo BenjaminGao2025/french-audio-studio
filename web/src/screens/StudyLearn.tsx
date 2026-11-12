@@ -24,7 +24,7 @@ import { Toggle } from "../components/ui/toggle";
 import { FrText, stepSegments, type FrPick } from "../components/FrText";
 import { WordOverlay, WordPanel } from "./WordPopup";
 import { Exercise } from "./Exercise";
-import { ExplainPanel, GrammarSave, ShadowingPanel, SoundsPanel, StructurePanel, StudyNavigation, WordsPanel } from "./StudyTools";
+import { ExplainPanel, GrammarSave, ShadowingPanel, SoundsPanel, StructurePanel, StudyCheckTabs, StudyNavigation, WordsPanel } from "./StudyTools";
 import { Button } from "../components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
@@ -60,6 +60,12 @@ export function StudyLearn() {
   const [pick, setPick] = useState<Pick | null>(null);
   const [srcOpen, setSrcOpen] = useState(study.sourceOpen);
   const sentRef = useRef<HTMLDivElement>(null);
+  const changeTab = (tab: typeof study.tab) => {
+    setPick(null);
+    const p = get().player;
+    if (p && (p.owner.kind === "exercise" || p.owner.kind === "study")) stopPlayback();
+    patchStudy({ tab });
+  };
 
   // Demo-state forcing: open the card for a word chosen through the Demo states navigator.
   useEffect(() => {
@@ -160,12 +166,7 @@ export function StudyLearn() {
         </Card>}
 
         <div className="flex flex-col gap-4 border-t pt-4">
-          <StudyNavigation value={study.tab} onChange={(tab) => {
-            setPick(null);
-            const p = get().player;
-            if (p && (p.owner.kind === "exercise" || p.owner.kind === "study")) stopPlayback();
-            patchStudy({ tab });
-          }} />
+          <StudyNavigation value={study.tab} onChange={changeTab} />
           <div id="learn-panel" role="tabpanel" aria-labelledby={`learn-tab-${study.tab}`}>
             {study.tab === "steps" && <StepsPanel key={s.id} sentence={s} onPick={onPick} />}
             {study.tab === "grammar" && <div id="sentence-grammar-panel"><GrammarPanel key={s.id} sentence={s} /></div>}
@@ -190,7 +191,7 @@ export function StudyLearn() {
                 ]}
                 onDone={() => patchStudy({ tab: "steps" })}
                 onPick={onPick}
-                compact
+                modeTabs={<StudyCheckTabs value={study.tab} onChange={changeTab} />}
               />
             )}
           </div>
@@ -204,7 +205,6 @@ export function StudyLearn() {
             text={pick.text}
             wordIndex={pick.wordIndex}
             occurrence={pick.occurrence}
-            onGrammar={() => { setPick(null); patchStudy({ tab: "grammar" }); requestAnimationFrame(() => document.getElementById("sentence-grammar-panel")?.scrollIntoView({ behavior: "smooth", block: "start" })); }}
             onClose={() => setPick(null)}
             inSheet
           />

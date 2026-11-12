@@ -18,6 +18,9 @@ export interface DisplayWord {
 
 export interface GradeResult {
   correct: boolean;
+  alignment: { mark: MarkKind; given?: string; expected?: string }[];
+  counts: Record<MarkKind, number>;
+  accuracy: number;
   answer: DisplayWord[];
   target: DisplayWord[];
   issues: { kind: Exclude<MarkKind, "ok">; expected?: string; given?: string }[];
@@ -26,6 +29,7 @@ export interface GradeResult {
 const APOS = /[\u2019\u2018\u02BC\u0060\u00B4]/g;
 
 interface KeyToken {
+  text: string;
   key: string;
   bare: string; // accent-stripped, used only to classify accent-only differences
   word: number; // index of the display word it came from
@@ -47,10 +51,10 @@ export function tokenize(sentence: string): { words: string[]; keys: KeyToken[] 
       .replace(/œ/g, "oe")
       .replace(/æ/g, "ae")
       .split("-");
-    for (const p of parts) {
+    for (const [partIndex, p] of parts.entries()) {
       // Drop punctuation, then trim apostrophes that are not word-internal.
       const cleaned = p.replace(/[^\p{L}\p{N}']/gu, "").replace(/^'+|'+$/g, "");
-      if (cleaned) keys.push({ key: cleaned, bare: stripAccents(cleaned), word: wi });
+      if (cleaned) keys.push({ text: stripPunct(w.split("-")[partIndex] ?? w), key: cleaned, bare: stripAccents(cleaned), word: wi });
     }
   });
   return { words, keys };
@@ -66,7 +70,7 @@ type Op =
 function align(a: KeyToken[], b: KeyToken[]): Op[] {
   const n = a.length;
   const m = b.length;
-  const cost = (i: number, j: number) => (a[i].key === b[j].key ? 0 : a[i].bare === b[j].bare ? 0.4 : 1);
+  const cost = (i: number, j: number) => (a[i].key === b[j].key ? 0 : a[i].bare === b[j].bare ? 0.5 : 1);
   const d: number[][] = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
   for (let i = 0; i <= n; i++) d[i][0] = i;
   for (let j = 0; j <= m; j++) d[0][j] = j;
@@ -116,6 +120,15 @@ export function grade(target: string, answer: string): GradeResult {
       bump(aMarks, A.keys[op.a].word, "extra");
     }
   }
+  // Reuse this alignment for presentation and dictation.py's half-credit score.
+  const counts: GradeResult["counts"] = { ok: 0, accent: 0, different: 0, missing: 0, extra: 0 };
+  const alignment: GradeResult["alignment"] = ops.map(op => {
+    const mark = op.t === "match" ? "ok" : op.t === "sub" ? "different" : op.t === "del" ? "missing" : op.t === "ins" ? "extra" : "accent";
+    counts[mark]++;
+    return { mark, given: "a" in op ? A.keys[op.a].text : undefined, expected: "b" in op ? T.keys[op.b].text : undefined };
+  });
+  const total = T.keys.length + counts.extra;
+  const accuracy = total ? Math.round(100 * (counts.ok + 0.5 * counts.accent) / total) : 100;
   // Learner-facing issues are listed once per display word (a hyphenated word is one word).
   const issues: GradeResult["issues"] = [];
   for (const w of tMarks) {
@@ -124,7 +137,7 @@ export function grade(target: string, answer: string): GradeResult {
       issues.push({ kind: w.mark, expected: stripPunct(w.text), given: stripPunct(w.counterpart ?? "") });
   }
   for (const w of aMarks) if (w.mark === "extra") issues.push({ kind: "extra", given: stripPunct(w.text) });
-  return { correct: issues.length === 0 && A.keys.length > 0, answer: aMarks, target: tMarks, issues };
+  return { correct: issues.length === 0 && A.keys.length > 0, answer: aMarks, target: tMarks, issues, alignment, counts, accuracy };
 }
 
 function stripPunct(w: string) {

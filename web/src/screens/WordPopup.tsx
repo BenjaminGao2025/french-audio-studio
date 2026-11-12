@@ -87,7 +87,6 @@ export function WordPanel({
   text,
   wordIndex,
   occurrence = 0,
-  onGrammar,
   onClose,
   inSheet,
   compact = false,
@@ -99,7 +98,6 @@ export function WordPanel({
   wordIndex?: number;
   /** Index of this text among its occurrences in the sentence (for /api/word-context). */
   occurrence?: number;
-  onGrammar?: () => void;
   onClose: () => void;
   inSheet?: boolean;
   compact?: boolean;
@@ -299,7 +297,6 @@ export function WordPanel({
         <div className="wp-importance flex items-center gap-2 text-muted-foreground"><span className="text-xs">Importance</span>
             <Importance count={count ?? 0} lookups="muted" />
         </div>
-        {!nested && onGrammar && <Button type="button" variant="ghost" className="h-8 px-2 text-sm" onClick={onGrammar}>See grammar in this sentence</Button>}
       </footer>
     </div>
   );
