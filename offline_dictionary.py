@@ -15,7 +15,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 SCHEMA_VERSION = 1
-SELECTION_VERSION = 4
+SELECTION_VERSION = 5
 
 
 class DictionaryUnavailable(Exception):
@@ -65,10 +65,10 @@ def index_path(env="FRENCH_DICTIONARY_PATH"):
     return p
 
 
-def _read(p, word):
+def _read(p, word, surface, pos):
     try:
         st = p.stat()
-        return copy.deepcopy(_lookup(str(p), st.st_ino, st.st_mtime_ns, st.st_size, word))
+        return copy.deepcopy(_lookup(str(p), st.st_ino, st.st_mtime_ns, st.st_size, word, surface, pos))
     except (OSError, sqlite3.Error, ValueError, KeyError, TypeError) as exc:
         raise DictionaryUnavailable("Dictionary index is unavailable") from exc
 
@@ -89,8 +89,23 @@ def related_candidates(word):
 STOPWORDS = set("le la les un une des de du à au aux et ou en pour par sur ce ces se ne pas l d".split())
 
 
-def lookup(word: str):
-    """English first, French second; explicit related and component fallbacks, without AI."""
+def canonical_pos(pos):
+    value = POS.get(pos, pos).strip().lower()
+    return {"determiner": "det", "déterminant": "det", "déterminant possessif": "det",
+            "adjective": "adj", "verb": "verb", "noun": "noun"}.get(value, value)
+
+
+def entry_rank(entry, surface, pos):
+    # Case selection precedes POS; an uppercase abbreviation is a fallback for lowercase input.
+    lemma = unicodedata.normalize("NFC", entry["lemma"]).replace("’", "'")
+    case_matches = (lemma == surface or (lemma.islower() and surface.islower())
+                    or (lemma.isupper() and surface.isupper()) or (lemma.istitle() and surface.istitle()))
+    return (not case_matches, bool(pos) and canonical_pos(entry["pos"]) != canonical_pos(pos))
+
+
+def lookup(word: str, pos: str = ""):
+    """Rank surface case and sentence POS before corpus preference; never select with AI."""
+    surface = " ".join(unicodedata.normalize("NFC", word).replace("’", "'").replace("ʼ", "'").split())
     word = normalize(word)
     if not word or len(word) > 200:
         return None
@@ -100,7 +115,7 @@ def lookup(word: str):
         raise DictionaryUnavailable("Dictionary index is not configured")
 
     def exact(token):
-        results = {lang: _read(path, token) if path else None for lang, path in paths.items()}
+        results = {lang: _read(path, token, surface if token == word else token, pos) if path else None for lang, path in paths.items()}
         if not any(results.values()):
             return None
         # A lemma supplied by either corpus can provide the other corpus's senses.
@@ -108,13 +123,24 @@ def lookup(word: str):
             if result:
                 other = "fr" if lang == "en" else "en"
                 if paths[other] and not results[other]:
-                    results[other] = _read(paths[other], normalize(result["lemma"]))
+                    results[other] = _read(paths[other], normalize(result["lemma"]), surface, pos)
         result = copy.deepcopy(results["en"] or results["fr"])
         result["token"] = token
         for lang in ("en", "fr"):
             result["entries_" + lang] = [dict(e, language=lang) for e in
                                                (results[lang] or {}).get("entries", [])]
-        result["entries"] = result["entries_en"] + result["entries_fr"]
+        result["entries"] = sorted(result["entries_en"] + result["entries_fr"],
+                                   key=lambda e: entry_rank(e, surface if token == word else token, pos))
+        if any(e["lemma"].replace("’", "'") == surface for e in result["entries"]):
+            for lang in ("en", "fr"):
+                result["entries_" + lang] = [e for e in result["entries_" + lang]
+                    if normalize(e["lemma"]) != word or e["lemma"].replace("’", "'") == surface]
+            result["entries"] = [e for e in result["entries"]
+                if normalize(e["lemma"]) != word or e["lemma"].replace("’", "'") == surface]
+        first = result["entries"][0]
+        result["phonetic"] = results[first["language"]]["phonetic"]
+        for field in ("lemma", "pos", "gender"):
+            result[field] = first[field]
         result["attribution"] = " ".join(r["attribution"] for r in results.values() if r)
         result["datasets"] = {lang: r["dataset"] for lang, r in results.items() if r}
         result["match_type"] = "exact"
@@ -152,7 +178,7 @@ def lookup(word: str):
 
 
 @functools.lru_cache(maxsize=2048)
-def _lookup(path, inode, mtime, size, word):
+def _lookup(path, inode, mtime, size, word, surface, pos):
     if not word or len(word) > 200:
         return None
     with closing(sqlite3.connect(Path(path).as_uri() + "?mode=ro&immutable=1", uri=True)) as conn:
@@ -176,7 +202,7 @@ def _lookup(path, inode, mtime, size, word):
         direct = [dict(r) for r in conn.execute("SELECT * FROM entries WHERE word=? LIMIT 24", (word,))]
         # A direct non-inflected entry remains available, even when Lexique does not contain it.
         for entry in direct:
-            if not json.loads(entry["form_of"]) or any(
+            if len({e["lemma"] for e in direct}) > 1 or not json.loads(entry["form_of"]) or any(
                 POS.get(r["pos"], r["pos"]) == entry["pos"] and normalize(r["lemma"]) == word for r in lex
             ):
                 candidates.append((entry, next((r for r in lex if POS.get(r["pos"], r["pos"]) == entry["pos"]), {})))
@@ -191,7 +217,7 @@ def _lookup(path, inode, mtime, size, word):
             if not candidates:
                 candidates = [(e, {}) for e in direct]
         # Lexique frequency ranks POS, never sentence meaning. Preserve multiple plausible entries.
-        candidates.sort(key=lambda x: (-float(x[1].get("frequency", 0)), bool(json.loads(x[0]["form_of"])), x[0]["id"]))
+        candidates.sort(key=lambda x: (*entry_rank(x[0], surface, pos), -float(x[1].get("frequency", 0)), bool(json.loads(x[0]["form_of"])), x[0]["id"]))
         entries = []
         seen = set()
         for entry, form in candidates:

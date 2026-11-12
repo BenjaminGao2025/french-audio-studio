@@ -276,6 +276,7 @@ def record_word_lookup(
     debounce_seconds: int = LOOKUP_DEBOUNCE_SECONDS,
     sentence: str = "",
     translation_en: str = "",
+    translation_zh: str = "",
 ) -> dict[str, Any]:
     """Count one lookup of `word`, at most once per `debounce_seconds` for repeated opens."""
     normalized = normalize_lookup_word(word)
@@ -318,15 +319,15 @@ def record_word_lookup(
     # Only a newly counted lookup can auto-save, never a suppressed reopen after unstar.
     if incremented and count >= min(t for t, _ in IMPORTANCE_FROM_LOOKUPS):
         with _connect() as conn:
-            cards = conn.execute("SELECT id, target FROM srs_cards WHERE user_id = ? AND mode = 'cloze'", (user_id,)).fetchall()
+            cards = conn.execute("SELECT id, target FROM srs_cards WHERE user_id = ? AND mode IN ('cloze', 'recognize')", (user_id,)).fetchall()
         if not any(normalize_lookup_word(c["target"]) == normalized for c in cards):
-            add_note(user_id, sentence.strip() or word, translation_en=translation_en, modes=[],
+            add_note(user_id, sentence.strip() or word, translation_en=translation_en, translation_zh=translation_zh, modes=[],
                      targets=[{"text": word, "mode": "cloze", "exact_target": True}], auto_listen=False)
     with _connect() as conn:
         if incremented:
             _sync_word_importance(conn, user_id, word=normalized)
         saved = any(normalize_lookup_word(r["target"]) == normalized for r in conn.execute(
-            "SELECT target FROM srs_cards WHERE user_id = ? AND mode = 'cloze'", (user_id,)))
+            "SELECT target FROM srs_cards WHERE user_id = ? AND mode IN ('cloze', 'recognize')", (user_id,)))
         conn.commit()
     return {"word": normalized, "count": count,
             "importance": importance_for_lookups(count) if saved else 0,
@@ -381,6 +382,17 @@ def sentence_word_count(sentence: str) -> int:
     cleaned = sentence.replace("'", " ").replace("’", " ")
     tokens = re.findall(r"[a-zA-ZÀ-ÿ0-9]+(?:-[a-zA-ZÀ-ÿ0-9]+)*", cleaned)
     return len(tokens)
+
+
+# Keep in sync with api/review.ts for legacy-card presentation.
+CLOZE_MIN_SENTENCE_WORDS = 3
+CLOZE_MAX_BLANK_FRACTION = 0.5
+
+
+def cloze_has_context(sentence: str, target: str) -> bool:
+    words = sentence_word_count(sentence)
+    return (words >= CLOZE_MIN_SENTENCE_WORDS and target_in_sentence(sentence, target)
+            and sentence_word_count(target) / words <= CLOZE_MAX_BLANK_FRACTION)
 
 
 def is_function_word(token: str) -> bool:
@@ -739,6 +751,8 @@ def add_note(
                     mode = "recognize"  # a blank is impossible if the chunk is not in the sentence
                 elif is_function_word(text):
                     text = expand_function_word(clean_sentence, text, extra)
+            if mode == "cloze" and not cloze_has_context(clean_sentence, text):
+                mode = "recognize"
             if mode == "cloze":
                 has_cloze = True
             if text and mode in ("cloze", "recognize", "grammar"):

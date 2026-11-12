@@ -171,7 +171,7 @@ export function WordPanel({
     if (tooLong) return;
     setDict(null);
     setDictSt("loading");
-    lookupWord(shown)
+    lookupWord(shown, nested ? "" : hints.pos)
       .then((d) => {
         if (!alive() || request !== dictRequest.current) return;
         setDict(d);
@@ -183,7 +183,7 @@ export function WordPanel({
         setDictSt("error");
         announce("Dictionary request failed.", true);
       });
-  }, [shown, tooLong]);
+  }, [shown, tooLong, nested, hints.pos]);
 
   const loadCtx = useCallback(() => {
     const request = ++ctxRequest.current;
@@ -314,10 +314,12 @@ function DictionaryResult({ result, onWord }: { result: DictionaryEntry; onWord:
   }
   const entries = result.entries ?? [];
   if (!entries.length) return <p className="text-sm text-muted-foreground">“{result.token}” is not in the dictionary.</p>;
+  const primaryFrench = entries[0].language !== "en" && entries.some(e => e.language === "en");
   return <>
     {result.match_type === "related" && <p className="text-sm text-muted-foreground">Related: <French value={result.related || ""} onWord={onWord} /></p>}
+    {primaryFrench && <DictEntry entry={entries[0]} onWord={onWord} />}
     {entries.filter(e => e.language === "en").map((entry, index) => <DictEntry key={index} entry={entry} onWord={onWord} />)}
-    {entries.some(e => e.language !== "en") && <Module title="French definitions" inner>{entries.filter(e => e.language !== "en").map((entry, index) => <DictEntry key={index} entry={entry} onWord={onWord} />)}</Module>}
+    {entries.some((e, i) => e.language !== "en" && !(primaryFrench && i === 0)) && <Module title="French definitions" inner>{entries.filter((e, i) => e.language !== "en" && !(primaryFrench && i === 0)).map((entry, index) => <DictEntry key={index} entry={entry} onWord={onWord} />)}</Module>}
     <p className="wp-attribution text-xs text-muted-foreground" title={[result.attribution, result.changes].filter(Boolean).join(" ")}>
       <a href={entries[0].source_url} target="_blank" rel="noopener noreferrer">Source: Wiktionary (CC BY-SA)</a>
     </p>

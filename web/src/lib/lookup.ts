@@ -41,7 +41,7 @@ export function importanceLabel(count: number, saved = false): string {
   return `Importance, ${n} out of 5, based on ${count} ${count === 1 ? "lookup" : "lookups"}.`;
 }
 
-/** The deck star represents Fill-in/cloze membership, never word_favorites. */
+/** The deck star represents saved word membership (Fill-in and Recall), never word_favorites. */
 export function wordIsSaved(cards: readonly { saved: boolean; mode?: string; kind: string; word?: string }[], word: string): boolean {
-  return cards.some(c => c.saved && (c.mode === "cloze" || (!c.mode && c.kind === "Fill-in")) && lookupKey(c.word ?? "") === lookupKey(word));
+  return cards.some(c => c.saved && (c.mode === "cloze" || c.mode === "recognize" || (!c.mode && c.kind === "Fill-in")) && lookupKey(c.word ?? "") === lookupKey(word));
 }

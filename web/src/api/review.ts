@@ -52,6 +52,15 @@ export function blankOut(sentence: string, word: string): string | null {
   return re.test(sentence) ? sentence.replace(re, "_____") : null;
 }
 
+// Keep in sync with srs.py; existing cards retain their stored identity and scheduling.
+export const CLOZE_MIN_SENTENCE_WORDS = 3;
+export const CLOZE_MAX_BLANK_FRACTION = 0.5;
+const wordCount = (s: string) => (s.match(/[a-zA-ZÀ-ÿ0-9]+(?:-[a-zA-ZÀ-ÿ0-9]+)*/g) ?? []).length;
+export function clozeHasContext(sentence: string, target: string): boolean {
+  const count = wordCount(sentence);
+  return count >= CLOZE_MIN_SENTENCE_WORDS && wordCount(target) / count <= CLOZE_MAX_BLANK_FRACTION;
+}
+
 const groupOf = (state: ServerCard["state"]): ReviewCard["group"] => (state === "new" ? "new" : state === "review" ? "due" : "learning");
 
 /** Turns a server card into a review question. Legacy modes fall back to a question the screen knows. */
@@ -84,8 +93,8 @@ export function toReviewCard(c: ServerCard): ReviewCard {
   }
   // Cloze and grammar without its example: blank the word in the sentence.
   const blanked = blankOut(fr, c.target);
-  if (blanked) return { ...shared, kind: "Fill-in", prompt: blanked, target: c.target.trim() };
-  return { ...shared, kind: "Recall", prompt: meta.meaning_en || meaning, target: c.target.trim() };
+  if (blanked && clozeHasContext(fr, c.target) && meaning.trim()) return { ...shared, kind: "Fill-in", prompt: blanked, target: c.target.trim() };
+  return { ...shared, mode: "recognize", kind: "Recall", prompt: "", target: c.target.trim() };
 }
 
 const savedLabel = (iso: string) => {

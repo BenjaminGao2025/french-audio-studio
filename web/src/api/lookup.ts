@@ -36,11 +36,11 @@ export interface DictionaryEntry {
 const entries = new Map<string, Promise<DictionaryEntry>>();
 
 /** One request per word per page load; a failed request is forgotten so Retry asks again. */
-export function lookupWord(word: string): Promise<DictionaryEntry> {
-  const key = lookupKey(word);
+export function lookupWord(word: string, pos = ""): Promise<DictionaryEntry> {
+  const key = JSON.stringify([word.trim().normalize("NFC"), pos]);
   let p = entries.get(key);
   if (!p) {
-    p = apiFetch<DictionaryEntry>(`/api/lookup?word=${encodeURIComponent(word.trim())}`);
+    p = apiFetch<DictionaryEntry>(`/api/lookup?word=${encodeURIComponent(word.trim())}&pos=${encodeURIComponent(pos)}`);
     entries.set(key, p);
     p.catch(() => entries.delete(key));
   }
@@ -68,8 +68,8 @@ export function useLookupCount(word: string): number | undefined {
 }
 
 /** Counts one look-up of a word on the server (it debounces repeats itself). */
-export async function recordLookup(word: string, context?: { fr: string; en: string }): Promise<LookupCount> {
-  const res = await apiFetch<LookupCount>("/api/srs/lookups", { body: { word, ...(context ? { sentence: context.fr, translation_en: context.en } : {}) } });
+export async function recordLookup(word: string, context?: { fr: string; en: string; raw?: { translation_en?: string; translation_zh?: string } }): Promise<LookupCount> {
+  const res = await apiFetch<LookupCount>("/api/srs/lookups", { body: { word, ...(context ? { sentence: context.fr, translation_en: context.raw?.translation_en || context.en, translation_zh: context.raw?.translation_zh ?? "" } : {}) } });
   counts = { ...counts, [lookupKey(word)]: res.count };
   listeners.forEach((l) => l());
   set(s => ({ lookups: { ...s.lookups, [lookupKey(word)]: { count: res.count, lastCounted: null } } }));

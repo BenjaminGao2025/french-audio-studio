@@ -87,6 +87,46 @@ class OfflineDictionaryTests(unittest.TestCase):
         self.add_entry(self.english, "différents", ["masculine plural of différent"], refs=["différent"], pos="adj")
         self.add_entry(self.path, "correction", ["Action de corriger."])
 
+    def ma_indexes(self):
+        self.enable_english()
+        for path, senses in ((self.path, ["Déterminant possessif."]),
+                             (self.english, ["feminine singular of mon (my)"])):
+            with sqlite3.connect(path) as conn:
+                for lemma, pos, gloss, refs in (("MA", "prep", ["abbreviation of meilleur avant: BB"], []),
+                                                ("Ma", "name", ["A name"], []),
+                                                ("ma", "det", senses, ["mon"])):
+                    conn.execute("INSERT INTO entries VALUES(NULL,?,?,?,?,?,?,?,?)",
+                                 ("ma", lemma, pos, pos, "", "", json.dumps(gloss), json.dumps(refs)))
+        dictionary._lookup.cache_clear()
+
+    def test_ma_exact_case_in_both_indexes_and_uppercase_fallback(self):
+        self.ma_indexes()
+        for query, expected in (("ma", "ma"), ("MA", "MA"), ("Ma", "Ma")):
+            result = dictionary.lookup(query)
+            self.assertEqual(result["lemma"], expected)
+            for lang in ("en", "fr"):
+                self.assertEqual(result["entries_" + lang][0]["lemma"], expected)
+            if query == "ma":
+                self.assertTrue(all(e["pos"] == "det" for e in result["entries"]))
+                self.assertNotIn("meilleur avant", str(result["entries"]))
+
+    def test_ma_sentence_pos_api_and_single_corpus(self):
+        self.ma_indexes()
+        client = TestClient(tts_service.app)
+        for pos in ("det", "determiner", "ADJ:pos"):
+            result = client.get("/api/lookup", params={"word": "ma", "pos": pos},
+                                headers=testenv.session_headers()).json()
+            self.assertEqual((result["lemma"], result["pos"]), ("ma", "det"))
+        for env in ("ENGLISH_DICTIONARY_PATH", "FRENCH_DICTIONARY_PATH"):
+            with patch.dict(os.environ, {env: ""}):
+                self.assertEqual(dictionary.lookup("ma", "ADJ:pos")["pos"], "det")
+
+    def test_sentence_pos_precedes_corpus_and_frequency_with_same_case(self):
+        self.enable_english()
+        self.add_entry(self.english, "test", ["a noun"], pos="noun")
+        self.add_entry(self.path, "test", ["a determiner"], pos="det")
+        self.assertEqual(dictionary.lookup("test", "determiner")["pos"], "det")
+
     def test_english_first_with_french_senses_and_correct_source(self):
         self.enable_english()
         result = dictionary.lookup("correction")
@@ -207,6 +247,10 @@ class OfflineDictionaryTests(unittest.TestCase):
         self.assertIn("creativecommons.org", result["license_url"])
         result["entries"][0]["senses"].clear()
         self.assertTrue(dictionary.lookup("réservé")["entries"][0]["senses"])
+
+    def test_sentence_pos_selects_inflected_verb_before_same_case_adjective(self):
+        self.assertEqual(dictionary.lookup("réservé", "verb")["lemma"], "réserver")
+        self.assertEqual(dictionary.lookup("réservé", "adjective")["lemma"], "réservé")
 
     def test_contraction_expression_and_inflection(self):
         self.assertEqual(dictionary.lookup("au")["entries"][0]["senses"], ["Contraction de à et le."])

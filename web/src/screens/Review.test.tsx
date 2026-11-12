@@ -103,6 +103,22 @@ const button = (text: string): HTMLButtonElement => {
 };
 
 describe("Task C — Anki-style review card", () => {
+  it("shows both Fill-in sentence cues and the blank meaning and POS before reveal", async () => {
+    await mount(card());
+    expect(host.textContent).toContain("我们坐了公交车。");
+    expect(host.textContent).toContain("We took the bus.");
+    expect(host.textContent).toContain("Blank means: 有（助动词） · have (auxiliary) · verb");
+  });
+
+  it("shows an untranslated old short cloze as Recall without a blank", async () => {
+    const old = { ...fake.srs.cards[0], mode: "cloze" as const, target: "partons", note: { id: "n-short", sentence: "Nous partons.", translation_en: "", translation_zh: "" } };
+    await mount(toReviewCard(old));
+    expect(host.textContent).toContain("Recall");
+    expect(host.textContent).toContain("partons");
+    expect(host.textContent).not.toContain("_____");
+    expect(host.querySelector("#rev-input")).toBeNull();
+  });
+
   it("the four rating buttons show the server's interval previews", async () => {
     await mount(card(), { revealed: true });
     const rates = Array.from(host.querySelectorAll<HTMLButtonElement>(".rev-rate"));
@@ -398,19 +414,19 @@ describe("Task C — Saved as a table", () => {
     const template = fake.srs.cards[0];
     fake.srs.cards = [
       ...["chat", "chien", "oiseau"].map((target, i) => ({ ...template, id: `tier-${i}`, mode: "cloze" as const, target, archived: false })),
-      { ...template, id: "not-in-word-deck", mode: "recognize", target: "ancien", archived: false },
+      { ...template, id: "recall-fallback", mode: "recognize", target: "ancien", archived: false },
     ];
     fake.lookups = { chat: 1, chien: 3, oiseau: 5, ancien: 10 };
     await act(async () => { store.resetDemo(); await loadLibrary(true); root.render(<ReviewScreen sub="saved" />); });
     await wait(50);
-    for (const [id, dots] of [["tier-0", 3], ["tier-1", 4], ["tier-2", 5], ["not-in-word-deck", 0]] as const) {
+    for (const [id, dots] of [["tier-0", 3], ["tier-1", 4], ["tier-2", 5], ["recall-fallback", 5]] as const) {
       expect(host.querySelectorAll(`[data-card-id="${id}"] [data-filled="true"]`)).toHaveLength(dots);
     }
     await act(async () => store.set(s => ({ libFilters: { ...s.libFilters, minImportance: 4 } })));
-    expect(host.querySelectorAll('tbody [data-card-id]')).toHaveLength(2);
-    expect(host.querySelector('[data-card-id="not-in-word-deck"]')).toBeNull();
+    expect(host.querySelectorAll('tbody [data-card-id]')).toHaveLength(3);
+    expect(host.querySelector('[data-card-id="recall-fallback"]')).toBeTruthy();
     await act(async () => store.set(s => ({ libFilters: { ...s.libFilters, minImportance: 5 } })));
-    expect(host.querySelectorAll('tbody [data-card-id]')).toHaveLength(1);
+    expect(host.querySelectorAll('tbody [data-card-id]')).toHaveLength(2);
     expect(host.querySelector('[data-card-id="tier-2"]')).toBeTruthy();
   });
 

@@ -41,6 +41,23 @@ class SrsStoreTests(unittest.TestCase):
     def setUp(self):
         self.user_id, _ = _new_user()
 
+    def test_short_or_mostly_blanked_sentence_saves_as_recognize(self):
+        for sentence, target in (("Nous partons.", "partons"), ("Nous allons à la gare.", "allons à la gare")):
+            note = srs.add_note(self.user_id, sentence, translation_en="We leave.",
+                                targets=[{"text": target, "exact_target": True}], auto_listen=True)
+            self.assertEqual(note["cards"][0]["mode"], "recognize")
+            self.assertEqual(note["cards"][0]["target"], target)
+
+    def test_lookup_autosave_keeps_both_sentence_translations(self):
+        for count in range(3):
+            srs.record_word_lookup(self.user_id, "carte", debounce_seconds=0,
+                                   sentence="J’ai laissé ma carte.", translation_en="I left my card.",
+                                   translation_zh="我落下了我的卡。")
+        card = srs.list_cards(self.user_id)[0]
+        self.assertEqual(card["note"]["translation_en"], "I left my card.")
+        self.assertEqual(card["note"]["translation_zh"], "我落下了我的卡。")
+        self.assertEqual(card["mode"], "cloze")
+
     def test_add_note_is_idempotent_and_dedupes_sentences(self):
         first = srs.add_note(self.user_id, "Les cours commencent lundi.", "课程周一开始。", modes=["listen", "speak"])
         again = srs.add_note(
@@ -119,7 +136,7 @@ class SrsStoreTests(unittest.TestCase):
         client = TestClient(tts_service.app)
         payload = {"sentence": "Je vais en France.", "modes": ["listen", "speak"], "targets": [{"text": "en", "exact_target": True}, {"text": "France", "exact_target": True}, {"text": "aller", "exact_target": True}]}
         note = client.post("/api/srs/notes", headers=headers, json=payload).json()
-        self.assertEqual(sorted((c["mode"], c["target"]) for c in note["cards"]), [("cloze", "France"), ("cloze", "aller"), ("cloze", "en"), ("listen", ""), ("speak", "")])
+        self.assertEqual(sorted((c["mode"], c["target"]) for c in note["cards"]), [("cloze", "France"), ("cloze", "en"), ("listen", ""), ("recognize", "aller"), ("speak", "")])
         star = next(c for c in note["cards"] if c["target"] == "en")
         self.assertEqual(client.delete("/api/srs/cards/" + star["id"], headers=headers).status_code, 200)
         remaining = client.get("/api/srs/cards", headers=headers).json()["cards"]
@@ -547,9 +564,7 @@ class CardBalanceTests(unittest.TestCase):
             targets=[{"text": "à"}],
             auto_listen=True,
         )
-        cloze_card = next(c for c in note["cards"] if c["mode"] == "cloze")
-        self.assertEqual(cloze_card["target"], "à la gare")
-        self.assertTrue(any(c["mode"] == "listen" for c in note["cards"]))
+        self.assertEqual([(c["mode"], c["target"]) for c in note["cards"]], [("recognize", "à la gare")])
 
     def test_api_notes_auto_listen_and_chunk(self):
         res = self.client.post(

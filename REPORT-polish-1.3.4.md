@@ -50,3 +50,50 @@ Logs are under `/home/mgacai/polish-1.3.4-out/`, including `npm-test-final.log`,
 Reused the existing fixture preview, specified Playwright installation, and Chromium binary. Browser assertions covered no horizontal overflow, empty star ⇔ zero dots, saved tiers 3/4/5, preserved lookup counts after unstar, and no grade-toast or bottom-left praise. The fixture clock advanced between counted lookups to respect suppression. Visually inspected all 20 captures through desktop/mobile contact sheets. Optional copy to `/workspace/polish-1.3.4/screenshots/` was unavailable (permission denied).
 
 Confirmed port 8030 free before starting; preview bound only to 127.0.0.1:8030 and was stopped afterward. Confirmed the port free. Removed temporary preview source/config and database backups. No PNGs or node_modules are committed. No Docker commands, deployment, production configuration changes, main push, merge, or PR.
+
+
+## TASK 3 — Case- and POS-aware dictionary lookup
+
+Tool: Codex CLI. Model: gpt-6.1-sol. Follow-up on `design/polish-1.3.4`; application version stays 1.3.4 and tasks 1–2 remain intact.
+
+Root cause: the API and dictionary lookup lowercased the surface token before selection, the browser cache shared uppercase/lowercase requests, and English-first concatenation could promote `MA prep` over `ma det`. English form-of entries could also be excluded when a competing direct abbreviation was present.
+
+The read-only lookup now retains surface case independently of the normalized index key. Both indexes rank matching lemma case and sentence POS before frequency and corpus preference. Exact surface entries suppress competing other-case variants; an uppercase `MA` query still selects its abbreviation. POS aliases include determiner/det/ADJ:pos. Inflected lowercase verb lemmas remain eligible for sentence-POS ranking. The merged primary lemma/POS/IPA follows the selected corpus, preserving surface-form IPA behavior. The API accepts POS, analysis word cards and saved metadata lookups pass it, and the frontend dictionary cache keys include surface case and POS. The word card respects a French primary entry when it outranks English results. No dictionary SQLite data or grading behavior changed; dictionary selection uses no AI.
+
+Four new Python regression tests cover EN and FR ma/MA/Ma, isolated indexes, API determiner POS, cross-corpus POS priority, and inflected verb/adjective selection. A new frontend test verifies case/POS cache isolation.
+
+Screenshots (all visually inspected, with no horizontal overflow):
+
+- `/home/mgacai/polish-1.3.4-out/screenshots/polish-1.3.4-word-ma-{light,dark}-{1280,390}.png`
+
+These use temporary dictionary fixtures through the actual lookup implementation and show `ma det`, “feminine singular of mon (my)”, in “J’ai laissé ma carte.”; no MA/meilleur avant/BB appears.
+
+## TASK 4 — Fill-in cues and short-cloze fallback
+
+Tool: Codex CLI. Model: gpt-6.1-sol.
+
+Root cause traced through the save and render paths: note translation fields are mapped correctly when present, but lookup-triggered auto-save accepted only English and could persist an empty translation. It dropped available Chinese sentence cues. Explicit word saving used the display English field without consulting the original analysis translation. Review then rendered only Chinese OR English, and retained Fill-in even when translations were absent or a sentence provided virtually no context.
+
+Lookup auto-save now carries and stores both available sentence translations. Lookup and manual word saving prefer the original analysis English translation when available. Review shows both available language cues before answering and includes both target meanings and POS when supplied. Missing translations never leave a legacy cloze as a bare blank: it presents as Recall/recognize with the target visible and self-rated after reveal.
+
+Named constants shared in meaning between Python and TypeScript are `CLOZE_MIN_SENTENCE_WORDS = 3` and `CLOZE_MAX_BLANK_FRACTION = 0.5`. New saves with fewer than three words, a target covering more than half the words, or an absent target become recognize cards. Function-word expansion is checked after expansion. Existing cloze cards receive the same shortness check at presentation, preserving their stored IDs, scheduling and content. Saved-word membership includes recognize fallbacks so the existing star/lookup importance behavior remains consistent. No schema changes or destructive migration were needed.
+
+New tests cover bilingual auto-save preservation, short/mostly-blank generation fallback, either/both language cues in mapping, untranslated legacy fallback, visible bilingual meanings/POS, and rendering short legacy cards as Recall without a blank/input. Existing expectations were updated for POS-aware calls and saved recognize membership.
+
+Screenshots (all visually inspected, with no horizontal overflow):
+
+- `/home/mgacai/polish-1.3.4-out/screenshots/polish-1.3.4-review-fillin-{light,dark}-{1280,390}.png`
+- `/home/mgacai/polish-1.3.4-out/screenshots/polish-1.3.4-review-short-fallback-{light,dark}-{1280,390}.png`
+
+The Fill-in shows both “我落下了我的卡。” and “I left my card.” with meaning/POS. The untranslated two-word “Nous partons.” fixture shows Recall with “partons”, rather than “Nous _____.”.
+
+Follow-up verification:
+
+- `cd web && npm test`: **452 passed**, 20 files (6 new tests).
+- `cd web && npm run build`: passed; existing classic PWA-script/chunk-size warnings only.
+- `PYTHONPATH=".:tests" python3 -m unittest discover -s tests`: **644 passed** (6 new tests), fixtures/temp databases only.
+- `bash /home/mgacai/polish-1.3.4-out/audit.sh`: raw button/select/input/textarea/details/summary all **0**.
+- `git diff --check`: passed.
+- Logs: `followup-npm-verified.log`, `followup-python-final.log`, `followup-build-final.log`, `followup-audit.log`, `followup-screenshots.log` under `/home/mgacai/polish-1.3.4-out/`.
+
+Reused the fixture preview pattern, specified Playwright installation and Chromium binary. Captured 12 new screenshots, without recapturing tasks 1–2. Optional `/workspace/polish-1.3.4/screenshots/` copy was unavailable/unwritable. Confirmed 127.0.0.1:8030 free before starting; bound only there, stopped our preview, and verified the port free by binding afterward. Temporary preview source/config were removed from the checkout; reusable copies remain in the output directory. No screenshot PNGs, databases, node_modules or preview files are committed. No production files, containers, credentials, deployment, main branch, merge or PR operations were used. Only `origin design/polish-1.3.4` is the push target.

@@ -707,12 +707,9 @@ function ReviewSession() {
                 ) : (
                   <FrText segments={tokenizeFrench(mode === "grammar" ? (meta.prompt_fr || card.prompt) : card.prompt)} className="font-serif text-2xl leading-snug wrap-break-word" onPick={onWordPick} />
                 )}
-                {(mode === "grammar" ? meta.full_en : (translationZh || translationEn)) && (
-                  <p className="text-sm text-muted-foreground" lang={translationZh && mode !== "grammar" ? "zh" : undefined}>
-                    {mode === "grammar" ? meta.full_en : (translationZh || translationEn)}
-                  </p>
-                )}
-                {card.kind === "Fill-in" && (meta.meaning_zh || meta.meaning_en) && <p className="text-sm text-muted-foreground">Blank means: {meta.meaning_zh || meta.meaning_en}</p>}
+                {translationZh && <p className="text-sm text-muted-foreground" lang="zh">{translationZh}</p>}
+                {(translationEn || (mode === "grammar" && meta.full_en)) && <p className="text-sm text-muted-foreground">{translationEn || meta.full_en}</p>}
+                {card.kind === "Fill-in" && (meta.meaning_zh || meta.meaning_en || meta.pos) && <p className="text-sm text-muted-foreground">Blank means: {[meta.meaning_zh, meta.meaning_en, meta.pos].filter(Boolean).join(" · ")}</p>}
                 {mode === "grammar" && meta.hint && <p className="text-sm text-muted-foreground">Hint: {meta.hint}</p>}
                 <Collapsible className="border-t"><CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between gap-2 py-2 text-left text-sm font-medium"><span>Show initials</span><ChevronDown className="size-4 shrink-0" aria-hidden /></CollapsibleTrigger><CollapsibleContent className="pb-3 text-sm"><p className="rev-initials" lang="fr">{initialsHint(card.target)}</p></CollapsibleContent></Collapsible>
               </div>

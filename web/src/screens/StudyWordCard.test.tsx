@@ -206,7 +206,7 @@ describe("Task B — Study word card, selection and steps", () => {
     await act(async () => findButton("nuisible").click());
     await wait(100);
     expect(host.querySelector(".wp-headword")?.textContent).toBe("nuisible");
-    expect(lookup).toHaveBeenLastCalledWith("nuisible");
+    expect(lookup).toHaveBeenLastCalledWith("nuisible", "");
     expect(host.querySelector('[aria-label="Save word"]')?.getAttribute("aria-pressed")).toBe("false");
     const section = host.querySelector('[aria-label="In this sentence"]')!;
     expect(section.textContent).toContain("harmful");
@@ -328,12 +328,12 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(request?.body).toMatchObject({ sentence: SENTENCE.fr, modes: [], targets: [{ text: "madame", mode: "cloze", exact_target: true, meta: { snap: "1" } }] });
     expect(host.querySelector('[data-saved]')?.getAttribute("data-saved")).toBe("true");
     const own = get().cards.find(c => c.word === "madame")!;
-    await act(async () => set(s => ({ cards: [...s.cards, { ...own, id: "other-context", sentenceId: "other-note" }, { ...own, id: "not-cloze", mode: "recognize" }] })));
-    const remaining = get().cards.filter(c => c.word !== "madame" || c.mode !== "cloze").map(c => c.id);
+    await act(async () => set(s => ({ cards: [...s.cards, { ...own, id: "other-context", sentenceId: "other-note" }, { ...own, id: "recall-fallback", mode: "recognize" }] })));
+    const remaining = get().cards.filter(c => c.word !== "madame" || !["cloze", "recognize"].includes(c.mode ?? "")).map(c => c.id);
     await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Saved"]')!.click());
     await wait(150);
     expect(get().cards.map(c => c.id)).toEqual(remaining);
-    expect(fake.calls.filter(c => c.method === "DELETE").map(c => c.path)).toEqual([`/api/srs/cards/${own.id}`, "/api/srs/cards/other-context"]);
+    expect(fake.calls.filter(c => c.method === "DELETE").map(c => c.path)).toEqual([`/api/srs/cards/${own.id}`, "/api/srs/cards/other-context", "/api/srs/cards/recall-fallback"]);
     expect(host.querySelector('[data-saved]')?.getAttribute("data-saved")).toBe("false");
     expect(host.querySelector('[aria-label="Save word"]')).toBeTruthy();
     expect(fake.calls.some(c => c.path === "/api/srs/favorites" && c.method === "PUT")).toBe(false);
