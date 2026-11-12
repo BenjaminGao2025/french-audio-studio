@@ -21,3 +21,15 @@ it("passes both original sentence translations to lookup auto-save", async () =>
   await recordLookup("ma", { fr: "J’ai laissé ma carte.", en: "", raw: { translation_en: "I left my card.", translation_zh: "我落下了我的卡。" } });
   expect(JSON.parse(fetch.mock.calls[0][1]?.body as string)).toMatchObject({ translation_en: "I left my card.", translation_zh: "我落下了我的卡。" });
 });
+
+it("separates word context languages and deduplicates each language", async () => {
+  const { wordContext } = await import("./lookup");
+  const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ context: {}, state: "ready" }), { status: 200 }));
+  const body = { sentence: "Ils ont résolu le problème.", word: "ont", occurrence: 0, translation_zh: "", hints: { meaning_zh: "", meaning_en: "", note_en: "", lemma: "", pos: "" } };
+  await wordContext(body);
+  await wordContext({ ...body, language: "en" });
+  await wordContext({ ...body, language: "zh" });
+  await wordContext({ ...body, language: "zh" });
+  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(JSON.parse(fetch.mock.calls[1][1]?.body as string).language).toBe("zh");
+});

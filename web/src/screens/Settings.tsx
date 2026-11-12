@@ -1,3 +1,4 @@
+import { useExplanationLanguage } from "../lib/explanationLanguage";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { LogOut, ArrowRight, Monitor, Loader2, AlertCircle } from "lucide-react";
 import { MAX_SESSION_SIZE, MIN_SESSION_SIZE } from "../data/fixtures";
@@ -151,6 +152,13 @@ export function SessionSizeField() {
   );
 }
 
+function ExplanationLanguage() {
+  const [language, choose] = useExplanationLanguage();
+  return <Card><CardHeader><CardTitle>Explanation language</CardTitle></CardHeader><CardContent>
+    <Select value={language} onValueChange={choose}><SelectTrigger aria-label="Explanation language" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="en">Simple English</SelectItem><SelectItem value="zh">中文</SelectItem></SelectContent></Select>
+  </CardContent></Card>;
+}
+
 export function SettingsScreen({ sub }: { sub?: string }) {
   const route = useApp((s) => s.route);
   const [signOut, setSignOut] = useState(route.includes("signout"));
@@ -170,6 +178,7 @@ export function SettingsScreen({ sub }: { sub?: string }) {
             <SessionSizeField />
           </CardContent>
         </Card>
+        <ExplanationLanguage />
         <Playback />
         <FeedbackSettings />
         <Card ref={accountRef} className="scroll-mt-4" aria-labelledby="acct-h">

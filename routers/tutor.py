@@ -565,6 +565,7 @@ class WordContextHints(BaseModel):
 
 
 class WordContextRequest(BaseModel):
+    language: Literal["en", "zh"] = "en"
     sentence: str = Field(min_length=1, max_length=word_context.SENTENCE_MAX_CHARS)
     word: str = Field(min_length=1, max_length=word_context.WORD_MAX_CHARS)
     occurrence: int = Field(default=0, ge=0, le=word_context.MAX_OCCURRENCE)
@@ -590,7 +591,7 @@ async def _compute_word_context(
     request: WordContextRequest,
     api_key: str,
 ) -> dict:
-    payload = word_context.ai_payload(ai.AGY_MODEL, sentence, span, request.translation_zh, request.hints.model_dump())
+    payload = word_context.ai_payload(ai.AGY_MODEL, sentence, span, request.translation_zh, request.hints.model_dump(), language=request.language)
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     async with httpx.AsyncClient(timeout=30.0) as client:
         _, raw_text = await ai.post_chat(client, payload, headers)
@@ -623,7 +624,7 @@ async def word_context_for(
     if request.occurrence >= len(spans):
         # Not a word of this sentence: there is nothing to explain, and no model call is spent on it
         raise HTTPException(status_code=422, detail={"code": "word_not_in_sentence", "message": "这个词不在这句话里。"})
-    key = word_context.cache_key(sentence, word, request.occurrence)
+    key = word_context.cache_key(sentence, word, request.occurrence, request.language)
     cached = await run_in_threadpool(word_context.get_cached, user_id, key)
     if cached is not None:
         return _word_context_response(cached, cached=True)

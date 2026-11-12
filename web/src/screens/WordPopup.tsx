@@ -1,3 +1,5 @@
+import { MarkedExplanation } from "../components/MarkedExplanation";
+import { useExplanationLanguage } from "../lib/explanationLanguage";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ArrowLeft, ChevronDown, Volume2, X } from "lucide-react";
 import { formatFriendlyPhonetic } from "../lib/phonetic";
@@ -103,6 +105,7 @@ export function WordPanel({
   inSheet?: boolean;
   compact?: boolean;
 }) {
+  const [language] = useExplanationLanguage();
   const w = wordIndex !== undefined ? sentence.raw?.words?.[wordIndex] : undefined;
   // A long free selection is still spoken, but the server rejects it: show a hint instead of asking
   // /api/word-context or the dictionary. Analysis words always keep a lookup.
@@ -191,7 +194,7 @@ export function WordPanel({
     if (tooLong) return;
     setCtx(null);
     setCtxSt("loading");
-    wordContext({ sentence: sentence.fr, word: contextWord, occurrence: contextOccurrence, translation_zh, hints: nested ? EMPTY_HINTS : hints }, abort.current.signal)
+    wordContext({ language, sentence: sentence.fr, word: contextWord, occurrence: contextOccurrence, translation_zh, hints: nested ? EMPTY_HINTS : hints }, abort.current.signal)
       .then((r) => {
         if (!alive() || request !== ctxRequest.current) return;
         setCtx(r.context);
@@ -200,7 +203,7 @@ export function WordPanel({
       .catch(() => {
         if (alive() && request === ctxRequest.current) setCtxSt("error");
       });
-  }, [tooLong, sentence.fr, shown, contextWord, contextOccurrence, nested, translation_zh, hints]);
+  }, [language, tooLong, sentence.fr, shown, contextWord, contextOccurrence, nested, translation_zh, hints]);
 
   useEffect(() => {
     loadDict();
@@ -226,12 +229,13 @@ export function WordPanel({
   useEffect(() => { loadCtx(); }, [loadCtx]);
 
   const overlapping = phrases.find((p) => findWordSpans(sentence.fr, p.text).length > 0 && phraseOverlaps(contextWord, p.text));
-  // English glosses remain secondary to the Chinese sentence explanation.
+  // Context follows the global preference; dictionary entries stay English.
   const englishOnly = (value?: string) => value && !/\p{Script=Han}/u.test(value) ? value : "";
-  const expressionNote = overlapping?.meaning_zh && plain(overlapping.text) !== plain(contextWord)
-    ? `固定表达 ${overlapping.text}：${overlapping.meaning_zh}。` : "";
-  const contextNote = [ctx?.why_zh?.trim(), expressionNote].filter(Boolean).join(" ");
-  const chineseMeaning = ctx?.meaning_zh?.trim() || "";
+  const expressionMeaning = language === "en" ? overlapping?.meaning_en : overlapping?.meaning_zh;
+  const expressionNote = expressionMeaning && overlapping && plain(overlapping.text) !== plain(contextWord)
+    ? (language === "en" ? `Fixed expression ⟦${overlapping.text}⟧: ${expressionMeaning}.` : `固定表达 ⟦${overlapping.text}⟧：${expressionMeaning}。`) : "";
+  const contextNote = [language === "en" ? ctx?.why_en?.trim() : ctx?.why_zh?.trim(), expressionNote].filter(Boolean).join(" ");
+  const chineseMeaning = language === "zh" ? ctx?.meaning_zh?.trim() || "" : "";
   const meaning = usableMeaning(ctx?.meaning_en, shown, sentence.en ?? "") || (!nested ? storedMeaning : "");
   const dictionaryMeaning = dictSt === "ready" ? (dict?.entries ?? []).filter(e => e.language === "en").flatMap(e => e.senses).map(s => usableMeaning(s, shown, sentence.en ?? "")).find(Boolean) : "";
   const phraseMeaning = overlapping ? usableMeaning(overlapping.meaning_en, text, sentence.en ?? "") : "";
@@ -266,8 +270,8 @@ export function WordPanel({
               <p className="text-sm text-muted-foreground">Select a word or a short phrase</p>
             ) : contextNote || chineseMeaning ? (
               <>
-                <p className="wp-definition text-sm font-normal text-foreground" lang="zh">{[chineseMeaning, contextNote].filter(Boolean).join("。 ").replace(/。。/g, "。")}</p>
-                {meaning && <p className="text-sm text-muted-foreground" lang="en">{meaning}</p>}
+                <p className="wp-definition text-sm font-normal text-foreground" lang={language}><MarkedExplanation text={[chineseMeaning, contextNote].filter(Boolean).join(language === "zh" ? "。 " : " ").replace(/。。/g, "。")} onWord={drill} /></p>
+                {meaning && !plain(contextNote.replace(/[⟦⟧]/g, "")).includes(plain(meaning)) && <p className="text-sm text-muted-foreground" lang="en">{meaning}</p>}
               </>
             ) : ctxSt === "loading" ? (
               <><Spinner label="Finding the meaning…" /><Skeleton lines={1} /></>
@@ -280,7 +284,7 @@ export function WordPanel({
             )}
             {!nested && phraseMeaning && plain(overlapping?.text ?? "") !== plain(text) && phraseMeaning !== meaning && (
               <p className="text-sm text-muted-foreground">
-                <French value={overlapping?.phrase || overlapping?.text || ""} onWord={drill} />
+                <MarkedExplanation text={`⟦${overlapping?.phrase || overlapping?.text || ""}⟧`} onWord={drill} />
                 {" "}
                 {phraseMeaning}
               </p>

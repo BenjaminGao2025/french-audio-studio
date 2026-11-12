@@ -6,6 +6,11 @@ export const APP_VERSION = version;
 export const RELEASES = [
   {
     version: APP_VERSION,
+    date: "2026-11-12",
+    changes: ["Importance uses five-point stars.", "Choose Simple English or 中文 for sentence explanations. Tap French words in explanations for nested lookup."],
+  },
+  {
+    version: "1.3.4",
     date: "2026-11-11",
     changes: ["Word-deck stars and Importance now agree. Lookups can automatically save words.", "Removed duplicate answer praise below the page."],
   },
