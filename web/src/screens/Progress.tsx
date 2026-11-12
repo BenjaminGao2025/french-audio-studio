@@ -335,7 +335,7 @@ function LogTime({ g, onChange }: { g: GameState; onChange: (g: GameState) => vo
           <Input maxLength={200} value={note} placeholder="Note" onChange={(e) => setNote(e.target.value)} />
         </label>
       </div>
-      {minutes !== "" && !valid && <p className="text-sm text-muted-foreground" style={{ color: "var(--error)" }}>Enter 1 to 300 minutes.</p>}
+      {minutes !== "" && !valid && <p className="text-sm text-muted-foreground" style={{ color: "var(--destructive)" }}>Enter 1 to 300 minutes.</p>}
       {error && <Alert variant="destructive" role="alert"><AlertTitle>Not logged</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
       <div className="flex flex-wrap items-center gap-2">
         <Button type="button" variant="outline" aria-disabled={(!!(busy) || !!(!valid ? "Enter the minutes first." : undefined)) || undefined} aria-busy={busy || undefined} className={cn((!!(busy) || !!(!valid ? "Enter the minutes first." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(busy) || !!(!valid ? "Enter the minutes first." : undefined)) { event.preventDefault(); return; } (() => {

@@ -105,7 +105,7 @@ describe("Task B — Study word card, selection and steps", () => {
       ...SENTENCE,
       raw: { ...SENTENCE.raw!, words: [{ fr: "madame", ipa: "madam", lemma: "madame", type: "noun", meaning: "madam; a polite address", meaning_zh: "女士", why: "A polite way to address a woman.", english_link: "madam", false_friend: false }] },
     };
-    await act(async () => root.render(<WordPanel sentence={sentence} text="madame" wordIndex={0} onGrammar={() => {}} onClose={() => {}} />));
+    await act(async () => root.render(<WordPanel sentence={sentence} text="madame" wordIndex={0} onClose={() => {}} />));
     await wait(150);
     const panel = host.querySelector(".word-card")!;
     expect(panel.querySelector(".wp-definition")?.textContent).toBe("madam; a polite address");
@@ -129,7 +129,7 @@ describe("Task B — Study word card, selection and steps", () => {
         { lemma: "correction", pos: "noun", phonetic: "", language: "fr", senses: ["Action de corriger."], source_url: "https://fr.wiktionary.org/wiki/correction#fr", history_url: "" },
       ], attribution: "Wiktionnaire contributors; extraction by Kaikki.", changes: "Bounded selected source senses.",
     });
-    await act(async () => root.render(<WordPanel sentence={SENTENCE} text="recorrection" onGrammar={() => {}} onClose={() => {}} />));
+    await act(async () => root.render(<WordPanel sentence={SENTENCE} text="recorrection" onClose={() => {}} />));
     const section = host.querySelector('[aria-label="Dictionary"]')!;
     expect(section.textContent).toContain("Related: correction");
     expect(section.textContent).not.toContain("Action de corriger.");
@@ -156,7 +156,7 @@ describe("Task B — Study word card, selection and steps", () => {
         { ...component("différents", "différent", ["different"]), match_type: "related", related: "différent" },
         component("unknownzzz", "unknownzzz", [])],
     });
-    await act(async () => root.render(<WordPanel sentence={SENTENCE} text="objectifs différents unknownzzz" onGrammar={() => {}} onClose={() => {}} />));
+    await act(async () => root.render(<WordPanel sentence={SENTENCE} text="objectifs différents unknownzzz" onClose={() => {}} />));
     const section = host.querySelector('[aria-label="Dictionary"]')!;
     expect(section.textContent).toContain("objectifs");
     expect(section.textContent).toContain("objective, goal, aim");
@@ -375,15 +375,11 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(host.textContent).toContain("The surrounding words give the context.");
   });
 
-  it("closes the Study card and reveals and scrolls the grammar panel", async () => {
-    const scroll = vi.spyOn(Element.prototype, "scrollIntoView");
+  it("keeps grammar available at sentence level without a word-card entry point", async () => {
     await act(async () => headerWord("madame").click());
-    await act(async () => findButton("See grammar in this sentence").click());
-    await wait(50);
-    expect(document.querySelector(".word-card")).toBeNull();
-    expect(get().study.tab).toBe("grammar");
-    expect(host.querySelector("#sentence-grammar-panel")).toBeTruthy();
-    expect(scroll).toHaveBeenCalled();
+    expect(document.querySelector(".word-card")).toBeTruthy();
+    expect(document.querySelector(".word-card")?.textContent).not.toContain("See grammar");
+    expect(get().study.tab).not.toBe("grammar");
   });
 
   it("renders a muted explicit true miss", async () => {
@@ -391,7 +387,7 @@ describe("Task B — Study word card, selection and steps", () => {
       token: "unknownzzz", lemma: "unknownzzz", pos: "", phonetic: "", explanation_cn: "", explanation_en: "",
       dictionary_state: "not_found", entries: [],
     });
-    await act(async () => root.render(<WordPanel sentence={SENTENCE} text="unknownzzz" onGrammar={() => {}} onClose={() => {}} />));
+    await act(async () => root.render(<WordPanel sentence={SENTENCE} text="unknownzzz" onClose={() => {}} />));
     const section = host.querySelector('[aria-label="Dictionary"]')!;
     expect(section.querySelector("p.text-muted-foreground")?.textContent).toBe("“unknownzzz” is not in the dictionary.");
   });

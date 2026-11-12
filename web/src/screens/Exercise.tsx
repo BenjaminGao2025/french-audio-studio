@@ -1,4 +1,4 @@
-import { Fragment, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Lightbulb, Eye, Play, Turtle, RotateCcw, Loader2 } from "lucide-react";
 import type { PracticeItem, StudySentence } from "../data/fixtures";
 import { grade } from "../lib/grading";
@@ -189,7 +189,7 @@ export function submitAnswer(key: string) {
       const a = get().attempts.find((x) => x.id === attemptId)!;
       if (!a.answerKnown) gradeFeedback(r.correct);
       announce(a.answerKnown ? "Checked. Recorded as answer known." : r.correct ? "Correct." : `Not quite. ${plural(res.issues.length, "difference")}.`);
-      requestAnimationFrame(() => document.getElementById(`ex-result-${key}`)?.focus());
+      if (!r.correct) requestAnimationFrame(() => document.getElementById(`ex-result-${key}`)?.focus());
     })
     .catch(() => {
       patchUI(key, qk, { phase: "techfail" });
@@ -224,6 +224,16 @@ export function Exercise({
   const attempts = useApp((s) => s.attempts);
   const player = useApp((s) => s.player);
   const route = useApp((s) => s.route);
+  const enterHeld = useRef(false);
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => { if (e.key === "Enter") enterHeld.current = true; };
+    const up = (e: KeyboardEvent) => { if (e.key === "Enter") enterHeld.current = false; };
+    const blur = () => { enterHeld.current = false; };
+    document.addEventListener("keydown", down, true);
+    document.addEventListener("keyup", up, true);
+    window.addEventListener("blur", blur);
+    return () => { document.removeEventListener("keydown", down, true); document.removeEventListener("keyup", up, true); window.removeEventListener("blur", blur); };
+  }, []);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [localPick, setLocalPick] = useState<FrPick | null>(null);
   const narrow = useNarrow();
@@ -373,7 +383,7 @@ export function Exercise({
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  submitAnswer(sessionKey);
+                  if (!e.repeat) submitAnswer(sessionKey);
                 }
               }}
               spellCheck={false}
@@ -409,6 +419,7 @@ export function Exercise({
       ) : (
         attempt?.result && (
           <Result
+            enterHeld={enterHeld}
             sessionKey={sessionKey}
             attempt={attempt}
             target={t.fr}
@@ -430,15 +441,16 @@ export function Exercise({
   );
 }
 
-function ExerciseWord({ sentence, pick, onClose }: { sentence: StudySentence; pick: FrPick; narrow: boolean; onClose: () => void }) {
+function ExerciseWord({ sentence, pick, onClose, narrow }: { sentence: StudySentence; pick: FrPick; narrow: boolean; onClose: () => void }) {
   return (
-    <WordOverlay label={`Meaning of ${pick.text}`} onClose={onClose}>
-      <WordPanel sentence={sentence} text={pick.text} occurrence={pick.occurrence} onGrammar={onClose} onClose={onClose} inSheet />
+    <WordOverlay anchor={pick.anchor} label={`Meaning of ${pick.text}`} onClose={onClose}>
+      <WordPanel sentence={sentence} text={pick.text} occurrence={pick.occurrence} onClose={onClose} inSheet={narrow} />
     </WordOverlay>
   );
 }
 
 function Result({
+  enterHeld,
   sessionKey,
   attempt,
   target,
@@ -451,6 +463,7 @@ function Result({
   sessionAttempts,
   itemsCount,
 }: {
+  enterHeld: { current: boolean };
   sessionKey: string;
   attempt: Attempt;
   target: string;
@@ -465,6 +478,22 @@ function Result({
 }) {
   const r = attempt.result!;
   const correct = attempt.outcome === "correct";
+  const nextRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!correct) return;
+    let frame = 0;
+    let focused = false;
+    const focus = () => { frame = requestAnimationFrame(() => { if (!focused && !enterHeld.current) { nextRef.current?.focus(); focused = true; document.removeEventListener("keyup", release); } }); };
+    const release = (e: KeyboardEvent) => { if (e.key === "Enter") focus(); };
+    if (!enterHeld.current) focus();
+    document.addEventListener("keyup", release);
+    return () => { cancelAnimationFrame(frame); document.removeEventListener("keyup", release); };
+  }, [attempt.id, correct, enterHeld]);
+  const nextKey = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    if (!e.repeat) (isLast ? onDone : onNext)();
+  };
   return (
     <div className="flex flex-col gap-4">
       <div id={`ex-result-${sessionKey}`} tabIndex={-1} className="flex flex-col gap-3">
@@ -503,9 +532,9 @@ function Result({
       <div className="flex flex-wrap items-center gap-2" aria-label="Result actions">
         <Button type="button" variant="outline" onClick={onTryAgain}>{<RotateCcw aria-hidden />}Try again</Button>
         {isLast ? (
-          <Button type="button" variant="default" onClick={onDone}>{doneLabel}</Button>
+          <Button ref={nextRef} onKeyDown={nextKey} type="button" variant="default" onClick={onDone}>{doneLabel}</Button>
         ) : (
-          <Button type="button" variant="default" onClick={onNext}>Next</Button>
+          <Button ref={nextRef} onKeyDown={nextKey} type="button" variant="default" onClick={onNext}>Next</Button>
         )}
       </div>
     </div>

@@ -1214,7 +1214,7 @@ function MasteredList() {
                   <Badge variant="secondary">Restored</Badge>
                 ) : st === "error" ? (
                   <>
-                    <span className="text-sm text-muted-foreground" style={{ color: "var(--error)" }}>Restore failed</span>
+                    <span className="text-sm text-muted-foreground" style={{ color: "var(--destructive)" }}>Restore failed</span>
                     <Button type="button" variant="outline" onClick={() => restore(c.id)}>{<RotateCcw aria-hidden />}Retry</Button>
                   </>
                 ) : (

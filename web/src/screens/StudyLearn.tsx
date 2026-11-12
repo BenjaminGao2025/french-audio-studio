@@ -204,7 +204,6 @@ export function StudyLearn() {
             text={pick.text}
             wordIndex={pick.wordIndex}
             occurrence={pick.occurrence}
-            onGrammar={() => { setPick(null); patchStudy({ tab: "grammar" }); requestAnimationFrame(() => document.getElementById("sentence-grammar-panel")?.scrollIntoView({ behavior: "smooth", block: "start" })); }}
             onClose={() => setPick(null)}
             inSheet
           />

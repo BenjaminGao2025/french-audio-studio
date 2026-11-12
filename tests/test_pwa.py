@@ -129,7 +129,9 @@ class PwaTests(unittest.TestCase):
                 'name="mobile-web-app-capable" content="yes"',
                 'name="apple-mobile-web-app-status-bar-style" content="default"',
                 'name="apple-mobile-web-app-title" content="1000H French"',
-                'name="theme-color" content="#f7f4ee"',
+                'name="theme-color" content="#f7f4ee" media="(prefers-color-scheme: light)"',
+                'name="theme-color" content="#141a23" media="(prefers-color-scheme: dark)"',
+                '<script src="/static/theme-boot.js"></script>',
                 'rel="apple-touch-icon"', 'viewport-fit=cover',
                 '/static/pwa-register.js?v=1.3.2',
             ):

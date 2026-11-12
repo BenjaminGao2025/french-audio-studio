@@ -384,7 +384,7 @@ function Player({ e }: { e: ServerEpisode }) {
           <Button variant="outline" asChild><a href={episodeFileUrl(e.id, "mp3")} download><Download aria-hidden /> MP3</a></Button>
           <Button variant="ghost" asChild><a href={episodeFileUrl(e.id, "lrc")} download>Lyrics (LRC)</a></Button>
           <Button variant="ghost" asChild><a href={episodeFileUrl(e.id, "srt")} download>Subtitles (SRT)</a></Button>
-          <Button type="button" variant="ghost" style={{ color: "var(--error)" }} onClick={() => setConfirmDelete(true)}>{<Trash2 aria-hidden />}Delete episode</Button>
+          <Button type="button" variant="ghost" style={{ color: "var(--destructive)" }} onClick={() => setConfirmDelete(true)}>{<Trash2 aria-hidden />}Delete episode</Button>
         </section>
         {confirmDelete && (
           <Dialog

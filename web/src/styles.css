@@ -31,6 +31,7 @@
   --accent: #e5efe6;
   --accent-foreground: #243628;
   --destructive: #8f3b32;
+  --success: #2b7a4b;
   --border: #e3dacb;
   --input: #cfc6b6;
   --ring: #8a5a2b;
@@ -70,6 +71,7 @@
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
+  --color-success: var(--success);
   --color-destructive: var(--destructive);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
@@ -95,32 +97,40 @@
 }
 
 .dark {
-  --background: #1c1916;
-  --foreground: #f7f4ee;
-  --card: #26221e;
-  --card-foreground: #f7f4ee;
-  --popover: #26221e;
-  --popover-foreground: #f7f4ee;
-  --primary: #d5e4d6;
-  --primary-foreground: #1c2820;
-  --secondary: #3a342c;
-  --secondary-foreground: #f7f4ee;
-  --muted: #3a342c;
-  --muted-foreground: #c4b8a8;
-  --accent: #2c3b32;
-  --accent-foreground: #f7f4ee;
-  --destructive: #e7a59d;
-  --border: #ffffff1a;
-  --input: #ffffff26;
-  --ring: #c4a27a;
-  --sidebar: #26221e;
-  --sidebar-foreground: #f7f4ee;
-  --sidebar-primary: #d5e4d6;
-  --sidebar-primary-foreground: #1c2820;
-  --sidebar-accent: #2c3b32;
-  --sidebar-accent-foreground: #f7f4ee;
-  --sidebar-border: #ffffff1a;
-  --sidebar-ring: #c4a27a;
+  color-scheme: dark;
+  --background: #141a23;
+  --foreground: #d5deea;
+  --text: #d5deea;
+  --card: #1b2430;
+  --card-foreground: #d5deea;
+  --popover: #1b2430;
+  --popover-foreground: #d5deea;
+  --primary: #91b5e6;
+  --primary-foreground: #141a23;
+  --secondary: #202b38;
+  --secondary-foreground: #d5deea;
+  --muted: #273444;
+  --muted-foreground: #a5b4c7;
+  --accent: #263744;
+  --accent-foreground: #a3bfd3;
+  --destructive: #eca1a9;
+  --success: #8dcca5;
+  --border: #354357;
+  --input: #697e99;
+  --ring: #91b5e6;
+  --sidebar: #1b2430;
+  --sidebar-foreground: #d5deea;
+  --sidebar-primary: #91b5e6;
+  --sidebar-primary-foreground: #141a23;
+  --sidebar-accent: #263744;
+  --sidebar-accent-foreground: #a3bfd3;
+  --sidebar-border: #354357;
+  --sidebar-ring: #91b5e6;
+  --chart-1: #91b5e6;
+  --chart-2: #a3bfd3;
+  --chart-3: #8dcca5;
+  --chart-4: #eca1a9;
+  --chart-5: #a5b4c7;
 }
 
 @layer base {
