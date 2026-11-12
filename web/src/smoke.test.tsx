@@ -183,7 +183,7 @@ describe("1. same-attempt retry must not hide a reveal", () => {
     expect(get().attempts[0].status).toBe("pending");
     expect(get().attempts[0].answerKnown).toBe(false);
 
-    const showAnswer = Array.from(document.querySelectorAll("button")).find((b) => b.textContent === "Show answer")!;
+    const showAnswer = Array.from(document.querySelectorAll("button")).find((b) => b.textContent === "Answer")!;
     await act(async () => showAnswer.click());
     expect(get().attempts[0].answerKnown).toBe(true);
 

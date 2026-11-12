@@ -117,3 +117,20 @@ All 18 follow-up screenshots are under /home/mgacai/polish-1.3.3-out/screenshots
 - polish-after-theme-menu-dark-1280.png
 
 The optional /workspace copy remains unavailable because /workspace is absent/not writable. Browser script and logs remain in the external output directory. The fixture preview bound only 127.0.0.1:8030 after checking it was free; it is stopped and the port is confirmed free. Temporary preview source/config were removed from the checkout. No screenshot PNGs, node_modules or preview files are committed. No protected production resources or other processes were touched. Delivery is restricted to origin design/polish-1.3.3.
+
+
+## TASK 8 — Uncrowd Study > Check yourself (Recall and Dictation)
+
+- Kept the primary Understand / Listen & speak / Check yourself switch. Moved Recall / Dictation Tabs into the exercise toolbar beside the Whole sentence / Step by step ToggleGroup. The toolbar stays on one row at 390px and 1280px.
+- Removed the redundant Recall / Dictation heading, separate heading/meta row, sentence-count repetition, divider, standalone reveal icons, banner chrome, and sticky action wrapper. Question, optional step, and source now form one muted metadata line.
+- One stock shadcn Card holds the prominent English prompt (or Dictation listening prompt and player), collapsed hint/answer insets, textarea, and one Check / Hint / Answer action row. Hint and Answer use ghost buttons with stable labels and pressed states. Revealed inset labels keep Lightbulb / Eye inline; Try it now belongs inside the Answer inset and retains answer-known scoring.
+- Recall and Dictation share this structure in whole-sentence and step-by-step modes. Results stay inside the same card with the existing large score, counts, inline corrections, correct-answer inset, Try again / Next, and correct-result Next focus with Enter-release protection. Existing word-card behavior and dark theme remain intact; version stays 1.3.3.
+- Verification: `cd web && npm test` — **439 tests passed, 19 files passed**, including 25 ExerciseReveal tests. Added layout/reveal coverage for both modes and scopes, retained inline-mark and keyboard-focus coverage, and updated the exercise smoke selector. Tests use fixtures and the fake backend only. `npm run build` passed (existing bundle-size advisory); `bash /home/mgacai/polish-1.3.3-out/audit.sh` passed with all six raw-control counts **0**; `git diff --check` passed.
+- Screenshots: `/home/mgacai/polish-1.3.3-out/screenshots/`:
+  - `polish-before-check-{recall,dictation}-{1280,390}.png` — committed baseline, captured before redesign; recaptured from unchanged HEAD source after dismissing the fixture word-card overlay.
+  - `polish-after-check-{recall,dictation}-{light,dark}-{1280,390}.png`.
+  - `polish-after-check-recall-result-{light,dark}-{1280,390}.png` — correct step result with Next focused.
+  - Additional `polish-after-check-{recall,dictation}-revealed-{light,dark}-{1280,390}.png` — step-by-step hint/answer insets.
+  - Visually reviewed desktop/mobile light/dark captures; browser assertions confirm one action row, no horizontal overflow, inline inset icons, and focused Next. `/workspace` does not exist and its parent is not writable, so the optional copy was unavailable.
+- Evidence: `task8-tests-verified.log`, `task8-build.log`, `task8-audit.log`, and `task8-screenshots.cjs` under `/home/mgacai/polish-1.3.3-out/`. The first full-suite invocation ended without a summary; the completed rerun above passed all 439 tests.
+- Tool: **Codex CLI**. Model: **gpt-6.1-sol**.

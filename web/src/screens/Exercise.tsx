@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Lightbulb, Eye, Play, Turtle, RotateCcw, Loader2 } from "lucide-react";
 import type { PracticeItem, StudySentence } from "../data/fixtures";
 import { grade } from "../lib/grading";
@@ -19,6 +19,7 @@ import { gradeAttempt } from "../api/dictation";
 import { FrText, type FrPick } from "../components/FrText";
 import { Spinner, Textarea, useNarrow } from "../components/ui";
 import { WordOverlay, WordPanel } from "./WordPopup";
+import { Card, CardContent } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
 import { ToggleGroup, ToggleGroupItem } from "../components/ui/toggle-group";
@@ -206,7 +207,7 @@ export function Exercise({
   items,
   onDone,
   onPick,
-  compact,
+  modeTabs,
   doneLabel = "Done — return to Study",
 }: {
   sessionKey: string;
@@ -217,6 +218,7 @@ export function Exercise({
   /** Opens the study word card. When omitted, this exercise opens the same card itself. */
   onPick?: (p: FrPick) => void;
   compact?: boolean;
+  modeTabs?: ReactNode;
   doneLabel?: string;
 }) {
   useLayoutEffect(() => ensureSession(sessionKey, kind, source, items), [sessionKey]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -293,42 +295,37 @@ export function Exercise({
   const play = (slow: boolean) =>
     startPlayback({ kind: "exercise", label: "Practice audio", route }, Math.max(1, t.fr.length / 13), { speed: slow ? 0.75 : 1, texts: [t.fr] });
 
-  const qLabel = kind;
-
   return (
-    <section className={compact ? "exercise" : "exercise"} aria-labelledby={`ex-q-${sessionKey}`}>
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 id={`ex-q-${sessionKey}`} tabIndex={-1} className={compact ? "t-label" : "t-section"}>{qLabel}</h2>
-          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-sm text-muted-foreground">
-            <span>Question {sess.index + 1} of {sess.items.length}</span>
-            {sess.mode === "step" && <span>Step {step + 1} of {stepCount}</span>}
-            <span>Source: {sess.source}</span>
-            <span>{plural(sess.items.length, "sentence")}</span>
-          </p>
-        </div>
-        <ToggleGroup type="single" variant="outline" value={sess.mode} onValueChange={(next) => { if (next === "step" || next === "whole") {
+    <section className="exercise flex flex-col gap-6" aria-label={`${kind} exercise`}>
+      <div className="flex items-center justify-between gap-2" aria-label="Exercise toolbar">
+        {modeTabs}
+        <ToggleGroup type="single" variant="outline" size="sm" spacing={0} value={sess.mode} onValueChange={(next) => { if (next === "step" || next === "whole") {
             if (busy) return;
             patchSession(sessionKey, { mode: next, modeNotice: "" });
             announce(next === "step" ? "Scope changed to step by step." : "Scope changed to whole sentence.");
           } }} aria-label="Practice scope">{([
             { value: "whole", label: "Whole sentence" },
             { value: "step", label: "Step by step" },
-          ]).map((o) => (<ToggleGroupItem key={o.value} value={o.value}>{o.label}</ToggleGroupItem>))}</ToggleGroup>
+          ]).map((o) => (<ToggleGroupItem key={o.value} value={o.value} className="px-2 text-xs sm:text-sm">{o.label}</ToggleGroupItem>))}</ToggleGroup>
       </div>
+      <p id={`ex-q-${sessionKey}`} tabIndex={-1} className="text-xs text-muted-foreground">
+        Question {sess.index + 1} of {sess.items.length}
+        {sess.mode === "step" && ` · Step ${step + 1} of ${stepCount}`}
+        {` · ${sess.source}`}
+      </p>
 
-      <hr className="border-t" />
-
+      <Card aria-label="Exercise card">
+      <CardContent className="gap-4">
       {/* Prompt — never the French target */}
       <div className="flex flex-col gap-3">
         {kind === "Recall" ? (
           <>
             <p className="text-sm text-muted-foreground">Write this in French.</p>
-            <p className="text-lg font-medium">{t.en}</p>
+            <p className="text-2xl font-medium leading-snug">{t.en}</p>
           </>
         ) : (
           <>
-            <p className="text-sm text-muted-foreground">Listen and type what you hear.</p>
+            <p className="text-2xl font-medium leading-snug">Listen and type what you hear.</p>
             <div className="flex flex-wrap items-center gap-2">
               <Button type="button" variant="outline" aria-disabled={(!!(myAudio?.status === "loading")) || undefined} aria-busy={myAudio?.status === "loading" || undefined} aria-label="Play practice audio" className={cn((!!(myAudio?.status === "loading")) ? "opacity-50" : "")} onClick={(event) => { if (!!(myAudio?.status === "loading")) { event.preventDefault(); return; } (() => play(false))(); }}>{myAudio?.status === "loading" ? <Loader2 className="animate-spin" aria-hidden /> : (<Play aria-hidden />)}Play</Button>
               <Button type="button" variant="outline" aria-label="Play practice audio slowly" onClick={() => play(true)}>{<Turtle aria-hidden />}Slow</Button>
@@ -344,21 +341,16 @@ export function Exercise({
           </>
         )}
         {ui.hint && ui.phase !== "graded" && (
-          <p className="banner banner--info" role="status">
-            <Lightbulb aria-hidden />
-            <span lang={kind === "Recall" ? "fr" : "en"}>{hintFor(kind, t)}</span>
-          </p>
+          <div className="rounded-md bg-muted p-3 text-muted-foreground" role="status" aria-label="Hint">
+            <p className="mb-1 flex items-center gap-2 text-sm font-medium"><Lightbulb className="size-4" aria-hidden />Hint</p>
+            <p lang={kind === "Recall" ? "fr" : "en"}>{hintFor(kind, t)}</p>
+          </div>
         )}
         {ui.revealed && !ui.coverAnswer && ui.phase !== "graded" && (
-          <div className="banner banner--warning" role="status">
-            <Eye aria-hidden />
-            <div className="banner-body">
-              <p className="banner-title">Answer shown</p>
-              <FrText text={t.fr} className="font-serif text-2xl leading-snug wrap-break-word" onPick={handlePick} />
-              <div className="flex flex-wrap items-center gap-2">
-                <Button type="button" variant="outline" onClick={tryFromMemory}>Try it now</Button>
-              </div>
-            </div>
+          <div className="rounded-md bg-muted p-3 text-muted-foreground" role="status" aria-label="Answer">
+            <p className="mb-1 flex items-center gap-2 text-sm font-medium"><Eye className="size-4" aria-hidden />Answer</p>
+            <FrText text={t.fr} className="font-serif text-xl leading-snug wrap-break-word" onPick={handlePick} />
+            <Button type="button" variant="ghost" className="mt-2" onClick={tryFromMemory}>Try it now</Button>
           </div>
         )}
       </div>
@@ -398,22 +390,20 @@ export function Exercise({
             <Alert variant="destructive" role="alert"><AlertTitle>Checking didn’t finish</AlertTitle><AlertDescription>This is a technical problem, not a wrong answer. Your answer is kept and Retry checks the same attempt.</AlertDescription></Alert>
           )}
           {busy && <Spinner label="Checking your answer…" />}
-          <div className="sticky bottom-0 z-10 bg-background py-3 pb-[calc(0.75rem+var(--safe-bottom))]">
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2" aria-label="Answer actions">
               <Button type="button" variant="default" aria-disabled={(!!(busy)) || undefined} aria-busy={busy || undefined} className={cn((!!(busy)) ? "opacity-50" : "")} onClick={(event) => { if (!!(busy)) { event.preventDefault(); return; } (() => submitAnswer(sessionKey))(); }}>{busy ? <Loader2 className="animate-spin" aria-hidden /> : null}{ui.phase === "techfail" ? "Retry check" : busy ? "Checking…" : "Check"}</Button>
               <Button type="button" variant="ghost" aria-pressed={ui.hint || undefined} onClick={() => {
                   if (ui.hint || busy) return;
                   patchUI(sessionKey, qk, { hint: true });
                   if (ui.attemptId) patchAttempt(ui.attemptId, { hinted: true });
                   announce("Hint shown.");
-                }}>{<Lightbulb aria-hidden />}{ui.hint ? "Hint shown" : kind === "Dictation" ? "Show English hint" : "Show hint"}</Button>
+                }}>{<Lightbulb aria-hidden />}Hint</Button>
               <Button type="button" variant="ghost" aria-pressed={ui.revealed || undefined} onClick={() => {
                   if (ui.revealed || busy) return;
                   patchUI(sessionKey, qk, { revealed: true, coverAnswer: false });
                   if (ui.attemptId) patchAttempt(ui.attemptId, { answerKnown: true });
                   announce("Answer shown.");
-                }}>{<Eye aria-hidden />}{ui.revealed ? "Answer shown" : "Show answer"}</Button>
-            </div>
+                }}>{<Eye aria-hidden />}Answer</Button>
           </div>
         </div>
       ) : (
@@ -434,6 +424,8 @@ export function Exercise({
           />
         )
       )}
+      </CardContent>
+      </Card>
       {!onPick && localPick && (
         <ExerciseWord sentence={{ id: item.id, fr: item.fr, en: item.en, segments: [], steps: [], grammar: null, cards: [] }} pick={localPick} narrow={narrow} onClose={() => setLocalPick(null)} />
       )}

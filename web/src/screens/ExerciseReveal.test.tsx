@@ -6,6 +6,7 @@ import { gradeAttempt } from "../api/dictation";
 import type { PracticeItem } from "../data/fixtures";
 import { get, resetDemo, set } from "../state/store";
 import { ensureSession, Exercise, submitAnswer } from "./Exercise";
+import { StudyCheckTabs, StudyNavigation } from "./StudyTools";
 
 vi.mock("../api/dictation", () => ({
   gradeAttempt: vi.fn(async () => ({ correct: true, saved: true })),
@@ -35,6 +36,50 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+});
+
+describe.each(["Recall", "Dictation"] as const)("%s exercise layout", kind => {
+  it.each(["whole", "step"] as const)("coordinates toolbar, meta and card in %s scope", async mode => {
+    const sessionKey = "layout-test";
+    const tab = kind === "Recall" ? "recall" : "dictation";
+    ensureSession(sessionKey, kind, "Current sentence", items);
+    await act(async () => {
+      set(s => ({ exercises: { ...s.exercises, [sessionKey]: { ...s.exercises[sessionKey], mode } } }));
+      root.render(<>
+        <StudyNavigation value={tab} onChange={() => {}} />
+        <Exercise sessionKey={sessionKey} kind={kind} source="Current sentence" items={items} onDone={() => {}}
+          modeTabs={<StudyCheckTabs value={tab} onChange={() => {}} />} />
+      </>);
+    });
+    const toolbar = host.querySelector('[aria-label="Exercise toolbar"]')!;
+    expect(host.querySelectorAll('[role="tablist"]')).toHaveLength(1);
+    expect(toolbar.querySelector('[role="tablist"]')).toBeTruthy();
+    expect(toolbar.querySelector('[aria-label="Practice scope"]')).toBeTruthy();
+    expect(host.querySelector("h2")).toBeNull();
+    expect(host.querySelector('[id="ex-q-layout-test"]')?.textContent).toContain(
+      mode === "whole" ? "Question 1 of 1 · Current sentence" : "Question 1 of 1 · Step 1 of 1 · Current sentence",
+    );
+    const card = host.querySelector('[data-slot="card"]')!;
+    expect(card.querySelector("textarea")).toBeTruthy();
+    if (kind === "Recall") expect(card.textContent).toContain(mode === "whole" ? items[0].en : items[0].steps[0].en);
+    else expect(card.querySelector('[aria-label="Play practice audio"]')).toBeTruthy();
+    const actions = card.querySelector('[aria-label="Answer actions"]')!;
+    expect([...actions.children].map(el => el.textContent)).toEqual(["Check", "Hint", "Answer"]);
+    expect(actions.children[1].getAttribute("data-variant")).toBe("ghost");
+    expect(actions.children[2].getAttribute("data-variant")).toBe("ghost");
+    expect(card.querySelector('[aria-label="Hint"]')).toBeNull();
+    expect(card.querySelector('[aria-label="Answer"]')).toBeNull();
+    await act(async () => (actions.children[1] as HTMLButtonElement).click());
+    await act(async () => (actions.children[2] as HTMLButtonElement).click());
+    for (const label of ["Hint", "Answer"]) {
+      const inset = card.querySelector(`[aria-label="${label}"]`)!;
+      expect(inset.className).toContain("bg-muted");
+      const iconLabel = inset.querySelector("svg")!.parentElement!;
+      expect(iconLabel.textContent).toBe(label);
+      expect(iconLabel.className).toContain("flex");
+    }
+    expect(card.querySelector('[aria-label="Answer"]')?.textContent).toContain("Try it now");
+  });
 });
 
 describe("revealed recall answer", () => {
@@ -68,8 +113,8 @@ describe("revealed recall answer", () => {
     const words = host.querySelectorAll<HTMLElement>(".fr-word");
     expect(words.length).toBeGreaterThan(1);
     expect(host.textContent).not.toContain("If you check now");
-    expect(host.textContent).toContain("Hint shown");
-    expect(host.textContent).toContain("Answer shown");
+    expect(host.querySelector('[aria-label="Hint"]')?.textContent).toContain("First letters:");
+    expect(host.querySelector('[aria-label="Answer actions"] button[aria-pressed="true"]')).toBeTruthy();
     expect(host.querySelector("[aria-pressed='true']")).toBeTruthy();
 
     const failli = [...words].find((el) => el.dataset.word === "failli");
@@ -87,7 +132,7 @@ describe("revealed recall answer", () => {
     expect(document.activeElement).toBe(input);
     expect(get().exercises["recall-test"].ui[key].revealed).toBe(true);
     expect(get().exercises["recall-test"].ui[key].coverAnswer).toBe(true);
-    expect(host.textContent).toContain("Answer shown");
+    expect(host.querySelector('[aria-label="Answer actions"] button[aria-pressed="true"]')).toBeTruthy();
   });
 });
 
@@ -166,7 +211,11 @@ describe.each(["Recall", "Dictation"] as const)("%s result", kind => {
       expect(host.querySelector('[aria-label="Correct answer"]')?.textContent).toBe(target);
       expect(host.textContent).not.toMatch(/Accent: you wrote|Different word:|Your answer/);
       expect(host.querySelector(".compare-note")).toBeNull();
+      const card = host.querySelector('[data-slot="card"]')!;
+      expect(card.contains(inline)).toBe(true);
+      expect(card.querySelector('[aria-label="Correct answer"]')).toBeTruthy();
       const actions = host.querySelector('[aria-label="Result actions"]')!;
+      expect(card.contains(actions)).toBe(true);
       expect([...actions.querySelectorAll("button")].map(el => el.textContent)).toEqual(["Try again", "Done — return to Study"]);
       expect(host.textContent).not.toContain("See attempts in History");
     });
