@@ -7,7 +7,11 @@ export const RELEASES = [
   {
     version: APP_VERSION,
     date: "2026-11-12",
-    changes: ["Importance uses five-point stars.", "Choose Simple English or 中文 for sentence explanations. Tap French words in explanations for nested lookup."],
+    changes: [
+      "Importance uses five-point stars.",
+      "Choose Simple English or 中文 for sentence explanations. Tap French words in explanations for nested lookup.",
+      "Ask AI answers the question first, including English words in the translation.",
+    ],
   },
   {
     version: "1.3.4",
