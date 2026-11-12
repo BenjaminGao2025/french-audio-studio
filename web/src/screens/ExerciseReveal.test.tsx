@@ -109,7 +109,7 @@ describe("revealed recall answer", () => {
         exercises: {
           ...s.exercises,
           "recall-test": {
-            ...s.exercises["recall-test"],
+            ...s.exercises["recall-test"], mode: "whole",
             drafts: { [key]: "bonjour" },
             ui: { [key]: { phase: "answering", hint: true, revealed: true } },
           },
@@ -160,7 +160,7 @@ describe.each(["Recall", "Dictation"] as const)("%s answer keyboard", (kind) => 
     ensureSession(sessionKey, kind, "Current sentence", items);
     await act(async () => {
       set((s) => ({ exercises: { ...s.exercises, [sessionKey]: {
-        ...s.exercises[sessionKey], drafts: { [key]: "Bonjour" },
+        ...s.exercises[sessionKey], mode: "whole", drafts: { [key]: "Bonjour" },
       } } }));
       root.render(<Exercise sessionKey={sessionKey} kind={kind} source="Current sentence" items={items} onDone={() => {}} />);
     });
@@ -275,7 +275,7 @@ describe.each(["Recall", "Dictation"] as const)("%s Next focus", kind => {
     const fixture = [...items, { ...items[0], id: "second" }];
     ensureSession("check-focus", kind, "Fixture", fixture);
     await act(async () => {
-      set(s => ({ exercises: { ...s.exercises, "check-focus": { ...s.exercises["check-focus"], drafts: { "0:whole:w": "answer" } } } }));
+      set(s => ({ exercises: { ...s.exercises, "check-focus": { ...s.exercises["check-focus"], mode: "whole", drafts: { "0:whole:w": "answer" } } } }));
       set(() => ({ activeRun: "check-focus", route: "study/run" }));
       root.render(<RunScreen />);
     });
@@ -293,7 +293,7 @@ describe.each(["Recall", "Dictation"] as const)("%s Next focus", kind => {
     const done = vi.fn();
     ensureSession("wrong-focus", kind, "Fixture", items);
     await act(async () => {
-      set(s => ({ exercises: { ...s.exercises, "wrong-focus": { ...s.exercises["wrong-focus"], drafts: { "0:whole:w": "wrong" } } } }));
+      set(s => ({ exercises: { ...s.exercises, "wrong-focus": { ...s.exercises["wrong-focus"], mode: "whole", drafts: { "0:whole:w": "wrong" } } } }));
       root.render(<Exercise sessionKey="wrong-focus" kind={kind} source="Fixture" items={items} onDone={done} />);
       submitAnswer("wrong-focus");
       await new Promise(r => setTimeout(r, 30));
@@ -303,4 +303,29 @@ describe.each(["Recall", "Dictation"] as const)("%s Next focus", kind => {
     await act(async () => { document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); });
     expect(done).not.toHaveBeenCalled();
   });
+});
+
+it("new sessions default to Step by step first, preserve existing modes, and Review works in question and result", async () => {
+  const { fake, installFakeBackend } = await import("../test/fakeBackend");
+  const { resetSavedCards } = await import("../api/srs");
+  installFakeBackend(); fake.reset(); resetSavedCards();
+  ensureSession("default-review", "Recall", "Fixture", items);
+  expect(get().exercises["default-review"].mode).toBe("step");
+  await act(async () => root.render(<Exercise sessionKey="default-review" kind="Recall" source="Fixture" items={items} onDone={() => {}} />));
+  expect(host.querySelector('[aria-label="Practice scope"] button')?.textContent).toBe("Step by step");
+  const review = () => [...host.querySelectorAll("button")].find(b => /^(Review|In review)$/.test(b.textContent!))!;
+  await act(async () => { review().click(); await new Promise(r => setTimeout(r, 100)); });
+  expect(fake.calls.find(c => c.path === "/api/srs/notes")?.body).toMatchObject({sentence:items[0].steps[0].fr,translation_en:items[0].steps[0].en,modes:["listen"],targets:[]});
+  expect(review().getAttribute("aria-pressed")).toBe("true");
+  await act(async () => {
+    set(s => ({ exercises: { ...s.exercises, "default-review": { ...s.exercises["default-review"], drafts: {"0:step:0":"answer"} } } }));
+    submitAnswer("default-review");
+  });
+  expect(host.querySelector('[aria-label="Result actions"]')).toBeTruthy();
+  await act(async () => { review().click(); await new Promise(r => setTimeout(r, 100)); });
+  expect(review().getAttribute("aria-pressed")).toBe("false");
+  expect(fake.srs.cards.filter(c => c.note?.sentence === items[0].steps[0].fr && c.mode === "listen")).toHaveLength(0);
+  set(s => ({ exercises: { ...s.exercises, "default-review": { ...s.exercises["default-review"], mode:"whole" } } }));
+  ensureSession("default-review", "Recall", "Fixture", items);
+  expect(get().exercises["default-review"].mode).toBe("whole");
 });

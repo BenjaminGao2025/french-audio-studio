@@ -1,3 +1,4 @@
+import { sentenceKey } from "../api/srs";
 /* A small in-memory stand-in for the FastAPI routes the app calls, installed as global fetch in jsdom tests. */
 import { buildLibrary, buildQueue, type LibCard } from "../data/fixtures";
 import type { ServerCard } from "../api/review";
@@ -159,6 +160,7 @@ interface Item {
 }
 
 export const fake = {
+  wordContexts: {} as Record<string, { meaning_en: string; why_en: string; meaning_zh: string; why_zh: string }>,
   /** Server-side lookup counts by lookupKey. */
   lookups: {} as Record<string, number>,
   lookupLast: {} as Record<string, number>,
@@ -198,6 +200,7 @@ export const fake = {
     this.attempts = [];
     this.episodes = demoEpisodes();
     this.heartbeats = {};
+    this.wordContexts = {};
     this.lookups = {};
     this.lookupLast = {};
     this.notes = [];
@@ -254,15 +257,26 @@ function route(method: string, url: URL, body: Record<string, unknown>): Respons
     }
     return json(200, { count, importance: importanceFor(count, saved), incremented });
   }
-  if (p === "/api/srs/notes/lookup") return json(200, { notes: [] });
+  if (p === "/api/srs/notes/lookup") {
+    const sentences = (body.sentences as string[]).map(sentenceKey);
+    const notes = new Map<string, Record<string, unknown>>();
+    for (const card of fake.srs.cards) {
+      if (!card.note || !sentences.includes(sentenceKey(card.note.sentence))) continue;
+      const note = notes.get(card.note.id) ?? { ...card.note, cards: [] };
+      (note.cards as unknown[]).push(card);
+      notes.set(card.note.id, note);
+    }
+    return json(200, { notes: [...notes.values()] });
+  }
   if (p === "/api/srs/notes") {
-    const id = `note-${++seq}`;
+    const existing = fake.srs.cards.filter(c => c.note && sentenceKey(c.note.sentence) === sentenceKey(String(body.sentence)));
+    const id = existing[0]?.note?.id ?? `note-${++seq}`;
     const cards = [
-      ...((body.modes as string[]) ?? []).map((m) => ({ id: `c-${++seq}`, note_id: id, mode: m, target: "", target_meta: {}, archived: false })),
+      ...((body.modes as string[]) ?? []).filter(m => !existing.some(c => c.mode === m)).map((m) => ({ id: `c-${++seq}`, note_id: id, mode: m, target: "", target_meta: {}, archived: false })),
       ...((body.targets as { text: string }[]) ?? []).map((t) => ({ id: `c-${++seq}`, note_id: id, mode: "cloze", target: t.text, target_meta: (t as { meta?: Record<string, string> }).meta ?? {}, archived: false })),
     ];
     fake.srs.cards.push(...cards.map(c => ({ ...c, mode: c.mode as ServerCard["mode"], importance: 3, state: "new" as const, due: new Date().toISOString(), created_at: new Date().toISOString(), note: { id, sentence: String(body.sentence), translation_en: String(body.translation_en ?? ""), translation_zh: String(body.translation_zh ?? "") } })));
-    return json(200, { id, sentence: body.sentence, translation_en: body.translation_en, translation_zh: body.translation_zh, cards });
+    return json(200, { id, sentence: body.sentence, translation_en: body.translation_en, translation_zh: body.translation_zh, cards: [...existing, ...cards] });
   }
   if (p === "/api/history" && method === "POST") {
     fake.studyRecords.unshift({ id: `h-${++seq}`, type: "study", created_at: new Date().toISOString(), ...(body.payload as object), text: String((body.payload as { text?: string })?.text ?? "") });
@@ -303,9 +317,9 @@ function route(method: string, url: URL, body: Record<string, unknown>): Respons
   /* ---------- word card context (routers/tutor.py) ---------- */
   if (p === "/api/word-context" && method === "POST") {
     return json(200, {
-      context: body.language === "zh"
+      context: fake.wordContexts[String(body.word)] ?? (body.language === "zh"
         ? { meaning_zh: "这里的意思", meaning_en: "the meaning here", why_zh: "它在这句话里的用法说明。", why_en: "" }
-        : { meaning_en: "the meaning here", why_en: "This word describes its role in this sentence.", meaning_zh: "", why_zh: "" },
+        : { meaning_en: "the meaning here", why_en: "This word describes its role in this sentence.", meaning_zh: "", why_zh: "" }),
       state: "ready",
     });
   }

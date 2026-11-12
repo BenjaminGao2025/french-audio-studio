@@ -7,6 +7,11 @@ export const RELEASES = [
   {
     version: APP_VERSION,
     date: "2026-11-12",
+    changes: ["Steps and Step by step open first. Save individual steps for review.", "Compact word-by-word layout, phrase-specific context, and single audio playback."],
+  },
+  {
+    version: "1.3.5",
+    date: "2026-11-12",
     changes: [
       "Importance uses five-point stars.",
       "Choose Simple English or 中文 for sentence explanations. Tap French words in explanations for nested lookup.",

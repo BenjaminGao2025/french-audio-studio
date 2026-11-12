@@ -37,6 +37,15 @@ export { estimate };
 
 let oneShot: HTMLAudioElement | null = null;
 let oneShotSeq = 0;
+let activeStop: (() => void) | null = null;
+function claimPlayback(stop: () => void) {
+  if (activeStop !== stop) activeStop?.();
+  activeStop = stop;
+}
+function stopOneShot() {
+  ++oneShotSeq;
+  oneShot?.pause();
+}
 
 /**
  * Reads one short piece of French aloud in its own <audio> element. It never creates or replaces
@@ -48,6 +57,7 @@ export function speakOnce(text: string, rate = 1, voice?: string): void {
   if (!clean) return;
   // jsdom (unit tests) exposes HTMLMediaElement but cannot actually play anything; skip it there.
   if (typeof navigator !== "undefined" && /jsdom/i.test(navigator.userAgent)) return;
+  claimPlayback(stopOneShot);
   const id = ++oneShotSeq;
   try {
     oneShot ??= new Audio();
@@ -90,10 +100,14 @@ export function playTexts(texts: string[], speed: number, ev: ClipEvents): Audio
   const durations = texts.map(estimate);
   let index = 0;
   let stopped = false;
+  let paused = false;
+  const cancel = () => { stopped = true; audio.pause(); };
+  claimPlayback(cancel);
   const total = () => durations.reduce((a, b) => a + b, 0);
   const position = () => durations.slice(0, index).reduce((a, b) => a + b, 0) + (audio.currentTime || 0);
 
   const load = (i: number) => {
+    if (stopped || paused) return;
     index = i;
     audio.src = ttsUrl(texts[i]);
     audio.playbackRate = speed;
@@ -116,11 +130,15 @@ export function playTexts(texts: string[], speed: number, ev: ClipEvents): Audio
   ensureAudioSession().then(() => !stopped && load(0));
 
   return {
-    pause: () => audio.pause(),
+    pause: () => { paused = true; audio.pause(); },
     resume: () => {
+      claimPlayback(cancel);
+      stopped = false;
+      paused = false;
+      if (!audio.getAttribute("src")) { ensureAudioSession().then(() => !stopped && !paused && load(index)); return; }
       audio.play().catch(() => !stopped && ev.onError());
     },
-    restart: () => load(0),
+    restart: () => { claimPlayback(cancel); stopped = false; paused = false; load(0); },
     setSpeed: (s) => {
       speed = s;
       audio.playbackRate = s;
@@ -140,6 +158,9 @@ export function playUrl(url: string, speed: number, startAt: number, ev: ClipEve
   const audio = new Audio();
   audio.preload = "auto";
   let stopped = false;
+  let paused = false;
+  const cancel = () => { stopped = true; audio.pause(); };
+  claimPlayback(cancel);
   let pendingSeek = startAt;
   const report = () => ev.onProgress(audio.currentTime || 0, Number.isFinite(audio.duration) ? audio.duration : 0);
   audio.addEventListener("loadedmetadata", () => {
@@ -156,18 +177,24 @@ export function playUrl(url: string, speed: number, startAt: number, ev: ClipEve
     ev.onEnded();
   });
   const start = () => {
-    if (stopped) return;
+    if (stopped || paused) return;
     audio.src = url;
     audio.playbackRate = speed;
     audio.play().catch(() => !stopped && ev.onError());
   };
   ensureAudioSession().then(start);
   return {
-    pause: () => audio.pause(),
+    pause: () => { paused = true; audio.pause(); },
     resume: () => {
+      claimPlayback(cancel);
+      stopped = false;
+      paused = false;
+      if (!audio.getAttribute("src")) { ensureAudioSession().then(() => !stopped && !paused && start()); return; }
       audio.play().catch(() => !stopped && ev.onError());
     },
     restart: () => {
+      claimPlayback(cancel); stopped = false; paused = false;
+      if (!audio.getAttribute("src")) { ensureAudioSession().then(start); return; }
       audio.currentTime = 0;
       audio.play().catch(() => !stopped && ev.onError());
     },

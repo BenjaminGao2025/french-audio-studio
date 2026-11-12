@@ -1,5 +1,4 @@
 import { useExplanationLanguage } from "../lib/explanationLanguage";
-import { Phonetic } from "../components/Phonetic";
 import { useEffect, useRef, useState } from "react";
 import { Check, Volume2, Map as MapIcon, Plus, Loader2 } from "lucide-react";
 import type { StudySentence } from "../data/fixtures";
@@ -12,7 +11,6 @@ import { build, FrText, type FrPick } from "../components/FrText";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger, Textarea } from "../components/ui";
 import { Toggle } from "../components/ui/toggle";
 import { ToggleGroup, ToggleGroupItem } from "../components/ui/toggle-group";
-import { formatFriendlyPhonetic } from "../lib/phonetic";
 import { StudyRecorder } from "../components/StudyRecorder";
 import { Button } from "../components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
@@ -22,7 +20,7 @@ import { cn } from "cn";
 type Tab = AppState["study"]["tab"];
 const GROUPS: { id: string; title: string; tabs: { id: Tab; label: string }[] }[] = [
   { id: "understand", title: "Understand", tabs: [{ id: "words", label: "Words" }, { id: "grammar", label: "Grammar" }, { id: "explain", label: "Explain it" }] },
-  { id: "listen", title: "Listen & speak", tabs: [{ id: "sounds", label: "Sounds" }, { id: "steps", label: "Steps" }, { id: "shadowing", label: "Say it" }] },
+  { id: "listen", title: "Listen & speak", tabs: [{ id: "steps", label: "Steps" }, { id: "sounds", label: "Sounds" }, { id: "shadowing", label: "Say it" }] },
   { id: "check", title: "Check yourself", tabs: [{ id: "recall", label: "Recall" }, { id: "dictation", label: "Dictation" }] },
 ];
 export function StudyNavigation({ value, onChange }: { value: Tab; onChange: (tab: Tab) => void }) {
@@ -63,23 +61,20 @@ export function StudyCheckTabs({ value, onChange }: { value: Tab; onChange: (tab
 
 export function WordsPanel({ sentence, onPick }: { sentence: StudySentence; onPick: (p: FrPick) => void }) {
   const raw = sentence.raw;
-  const aligned = build(sentence.segments).segs;
-  const words = (raw?.words ?? []).map((w, index) => ({ ...w, index, fr: aligned.find(s => s.wi === index)?.t ?? w.fr }))
-    .filter(w => !/^(?:l|d|j|n|m|t|s|c|qu|jusqu|lorsqu|puisqu)['’]$/i.test(w.fr));
-  const content = words.filter((w) => !/^(article|pronoun|preposition|conjunction|determiner|pronom|préposition|déterminant)\b/i.test(w.type));
-  const functionWords = words.filter((w) => !content.some((c) => c.index === w.index));
-  const alignment = (raw?.alignment ?? []).reduce<{fr: string; en: string}[]>((items, item) => {
+  const source = raw?.alignment?.length ? raw.alignment : build(sentence.segments.length ? sentence.segments : undefined, sentence.fr).segs.filter(s => s.w).map(s => ({
+    fr: s.t,
+    en: raw?.words.find(w => w.fr.toLocaleLowerCase("fr") === s.t.toLocaleLowerCase("fr"))?.meaning ?? "",
+  }));
+  const alignment = source.reduce<{fr: string; en: string}[]>((items, item) => {
     const previous = items.at(-1);
     if (previous && /^(?:l|d|j|n|m|t|s|c|qu|jusqu|lorsqu|puisqu)['’]$/i.test(previous.fr.trim())) {
       items[items.length - 1] = { fr: previous.fr.trim() + item.fr, en: `${previous.en} ${item.en}`.trim() };
     } else items.push(item);
     return items;
   }, []);
-  const list = (items: typeof content) => <div className="grid gap-3 sm:grid-cols-2">{items.map((w) => <article key={w.index} className="flex flex-col gap-3 rounded-lg border bg-card p-4"><div className="flex flex-wrap items-center justify-between gap-2"><FrText segments={[{ t: w.fr, w: true, wi: w.index }]} className="font-medium" onPick={onPick} /><span className="text-xs leading-4 text-muted-foreground">{w.type}</span></div><p>{w.meaning}</p>{formatFriendlyPhonetic(w.ipa) && <Phonetic word={w.fr} ipa={w.ipa} />}<Collapsible><CollapsibleTrigger className="flex min-h-11 items-center text-sm font-medium">Usage & memory</CollapsibleTrigger><CollapsibleContent><div className="flex flex-col gap-2">{w.lemma && w.lemma !== w.fr && <p className="text-xs leading-4 text-muted-foreground">Base form: {w.lemma}</p>}{w.why && <p>{w.why}</p>}{w.english_link && <p>{w.english_link}</p>}{w.false_friend && <p className="text-xs leading-4 text-muted-foreground">False friend: check the meaning carefully.</p>}</div></CollapsibleContent></Collapsible><Button type="button" variant="ghost" onClick={(e) => onPick({ text: w.fr, wordIndex: w.index, occurrence: 0, anchor: e.currentTarget })}>Meaning & save card</Button></article>)}</div>;
-  return <section className="flex flex-col gap-4"><div><h3 className="text-lg font-semibold text-balance">Words in this sentence</h3></div>
-    {!!alignment.length && <div className="grid gap-3 rounded-lg border p-4 sm:grid-cols-2" aria-label="Word by word">{alignment.map((a, i) => <div key={i}><FrText text={a.fr} onPick={onPick} /><span className="text-sm text-muted-foreground">{a.en}</span></div>)}</div>}
-    {raw?.order_note && <p className="rounded-md border-l-2 border-primary bg-muted px-3 py-2">{raw.order_note}</p>}
-    {words.length ? <>{list(content.length ? content : functionWords)}{!!content.length && !!functionWords.length && <Collapsible className="rounded-lg border bg-card p-4 text-card-foreground"><CollapsibleTrigger className="flex min-h-11 w-full items-center text-sm font-medium">Function words ({functionWords.length})</CollapsibleTrigger><CollapsibleContent>{list(functionWords)}</CollapsibleContent></Collapsible>}</> : <Alert variant="default"><AlertTitle>No saved word breakdown</AlertTitle></Alert>}
+  return <section className="flex flex-col gap-4"><h3 className="text-lg font-semibold">Word by word</h3>
+    <div className="flex flex-wrap gap-x-4 gap-y-3" aria-label="Word by word">{alignment.map((a, i) => <div key={i} className="flex flex-col items-start"><FrText text={a.fr} className="font-serif text-lg" onPick={onPick} /><span className="text-xs text-muted-foreground">{a.en}</span></div>)}</div>
+    {raw?.order_note && <p className="text-sm text-muted-foreground">{raw.order_note}</p>}
   </section>;
 }
 

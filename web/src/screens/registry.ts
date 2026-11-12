@@ -93,12 +93,12 @@ function demoExercise(kind: "Recall" | "Dictation", setup?: (key: string) => voi
 const DEFAULT_UI = { phase: "answering", hint: false, revealed: false };
 const qk = (index = 0, mode: "whole" | "step" = "whole", step = 0) => `${index}:${mode}:${mode === "step" ? step : "w"}`;
 function draft(key: string, text: string, k = qk()) {
-  set((s) => ({ exercises: { ...s.exercises, [key]: { ...s.exercises[key], drafts: { ...s.exercises[key].drafts, [k]: text } } } }));
+  set((s) => ({ exercises: { ...s.exercises, [key]: { ...s.exercises[key], mode: k.includes(":step:") ? "step" : "whole", drafts: { ...s.exercises[key].drafts, [k]: text } } } }));
 }
 function ui(key: string, p: Record<string, unknown>, k = qk()) {
   set((s) => {
     const sess = s.exercises[key];
-    return { exercises: { ...s.exercises, [key]: { ...sess, ui: { ...sess.ui, [k]: { ...DEFAULT_UI, ...(sess.ui[k] ?? {}), ...p } as never } } } };
+    return { exercises: { ...s.exercises, [key]: { ...sess, mode: k.includes(":step:") ? "step" : "whole", ui: { ...sess.ui, [k]: { ...DEFAULT_UI, ...(sess.ui[k] ?? {}), ...p } as never } } } };
   });
 }
 const T1 = QUEUE_PRACTICE[0].fr; // used only to pre-fill a learner response in post-submission demo states

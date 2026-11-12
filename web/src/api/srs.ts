@@ -43,12 +43,14 @@ export type SavedSet = ReadonlySet<string>;
 export const cardKey = (mode: string, target = "") => (["cloze", "recognize", "grammar"].includes(mode) ? `${mode === "recognize" ? "cloze" : mode}:${mode === "grammar" ? sentenceKey(target) : lookupKey(target)}` : mode);
 
 let saved: Record<string, SavedSet> = {};
+const savedNotes = new Map<string, ApiNote>();
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
 
 function remember(notes: ApiNote[]) {
   const next = { ...saved };
   for (const n of notes) {
+    savedNotes.set(sentenceKey(n.sentence), n);
     const keys = new Set(next[sentenceKey(n.sentence)] ?? []);
     for (const c of n.cards ?? []) keys.add(cardKey(c.mode, c.target));
     next[sentenceKey(n.sentence)] = keys;
@@ -95,6 +97,7 @@ export async function saveNote(req: {
 /** Test helper. */
 export function resetSavedCards() {
   saved = {};
+  savedNotes.clear();
   emit();
 }
 
@@ -145,7 +148,16 @@ export async function deleteSavedCard(id: string): Promise<void> {
   const card = get().cards.find(c => c.id === id);
   const sentence = get().sentences.find(s => s.id === card?.sentenceId);
   await apiFetch(`/api/srs/cards/${encodeURIComponent(id)}`, { method: "DELETE" });
-  if (card && sentence) {
+  const note = [...savedNotes.values()].find(n => n.cards.some(c => c.id === id));
+  if (note) {
+    const removed = note.cards.find(c => c.id === id)!;
+    note.cards = note.cards.filter(c => c.id !== id);
+    const key = sentenceKey(note.sentence);
+    const keys = new Set(saved[key] ?? []);
+    keys.delete(cardKey(removed.mode, removed.target));
+    saved = { ...saved, [key]: keys };
+    emit();
+  } else if (card && sentence) {
     const key = sentenceKey(sentence.fr);
     const keys = new Set(saved[key] ?? []);
     keys.delete(cardKey(card.mode ?? (card.kind === "Fill-in" ? "cloze" : card.kind.toLowerCase()), card.word));
@@ -153,4 +165,17 @@ export async function deleteSavedCard(id: string): Promise<void> {
     emit();
   }
   set(s => ({ cards: s.cards.filter(c => c.id !== id) }));
+}
+
+/** Shared lock prevents two visible copies of the same step from racing. */
+const togglingSentences = new Set<string>();
+export async function toggleSentenceReview(sentence: string, english: string): Promise<void> {
+  const key = sentenceKey(sentence);
+  if (togglingSentences.has(key)) return;
+  togglingSentences.add(key);
+  try {
+    const existing = savedNotes.get(key)?.cards.find(c => c.mode === "listen");
+    if (existing) await deleteSavedCard(existing.id);
+    else await saveNote({ sentence, translation_en: english, translation_zh: "", modes: ["listen"], targets: [] });
+  } finally { togglingSentences.delete(key); }
 }

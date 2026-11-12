@@ -1,3 +1,4 @@
+import { StepReview } from "../components/StepReview";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Lightbulb, Eye, Play, Turtle, RotateCcw, Loader2 } from "lucide-react";
 import type { PracticeItem, StudySentence } from "../data/fixtures";
@@ -29,7 +30,7 @@ import { cn } from "cn";
 
 export function ensureSession(key: string, kind: "Recall" | "Dictation", source: string, items: PracticeItem[]) {
   if (get().exercises[key]) return;
-  const session: ExerciseSession = { key, kind, source, items, index: 0, mode: "whole", steps: {}, drafts: {}, ui: {}, done: false, audio: "idle" };
+  const session: ExerciseSession = { key, kind, source, items, index: 0, mode: "step", steps: {}, drafts: {}, ui: {}, done: false, audio: "idle" };
   set((s) => ({ exercises: { ...s.exercises, [key]: session } }));
 }
 
@@ -303,8 +304,8 @@ export function Exercise({
             patchSession(sessionKey, { mode: next, modeNotice: "" });
             announce(next === "step" ? "Scope changed to step by step." : "Scope changed to whole sentence.");
           } }} aria-label="Practice scope">{([
-            { value: "whole", label: "Whole sentence" },
             { value: "step", label: "Step by step" },
+            { value: "whole", label: "Whole sentence" },
           ]).map((o) => (<ToggleGroupItem key={o.value} value={o.value} className="px-2 text-xs sm:text-sm">{o.label}</ToggleGroupItem>))}</ToggleGroup>
       </div>
       <p id={`ex-q-${sessionKey}`} tabIndex={-1} className="text-xs text-muted-foreground">
@@ -315,6 +316,7 @@ export function Exercise({
 
       <Card aria-label="Exercise card">
       <CardContent className="gap-4">
+      {sess.mode === "step" && <div><StepReview sentence={t.fr} english={t.en} /></div>}
       {/* Prompt — never the French target */}
       <div className="flex flex-col gap-3">
         {kind === "Recall" ? (
