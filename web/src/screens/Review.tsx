@@ -3,7 +3,6 @@ import { Play, Search, Archive, RotateCcw, Volume2, ChevronLeft, ChevronRight, L
 import {
   DEFAULT_SESSION_SIZE,
   planSession,
-  wordCardImportance,
   type LibCard,
   type LibSentence,
   type ReviewCard,
@@ -15,7 +14,7 @@ import { ApiError } from "../api/client";
 import { libraryReady, loadLibrary, loadQueue, masterCard, setCardArchived, rateCard, restoreMastered, toReviewCard as serverToReviewCard } from "../api/review";
 import { grade } from "../lib/grading";
 import { gradeFeedback, practiceFeedback } from "../lib/feedback";
-import { importanceFor } from "../lib/lookup";
+import { importanceFor, wordIsSaved } from "../lib/lookup";
 import { nf, plural } from "../lib/format";
 import { announce, get, getCardLookups, go, introduceNewCard, sayFrench, set, useApp, type ReviewUI } from "../state/store";
 import { Checkbox, DisabledReason, EntryCard, Importance, PageHead, Progress, Skeleton, Spinner, Stat, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, pageFrame, useNarrow } from "../components/ui";
@@ -893,7 +892,7 @@ function SavedCards() {
     const wordLookups = getCardLookups({ lookups }, c);
     return (
       (f.mastered === "hide" ? !c.mastered : f.mastered === "only" ? c.mastered : true) &&
-      (!f.minImportance || (wordLookups !== null && importanceFor(wordLookups) >= f.minImportance)) &&
+      (!f.minImportance || (wordLookups !== null && importanceFor(wordLookups, wordIsSaved(cards, c.word ?? "")) >= f.minImportance)) &&
       true
     );
   };
@@ -903,7 +902,7 @@ function SavedCards() {
     const value = (c: LibCard) => {
       if (savedSort.key === "saved") return c.savedAt;
       if (savedSort.key === "due") return Date.parse(c.due ?? "") || 0;
-      return wordCardImportance(c, lookups);
+      return importanceFor(getCardLookups({ lookups }, c) ?? 0, wordIsSaved(cards, c.word ?? ""));
     };
     return cards
       .filter(matchCard)
@@ -982,7 +981,7 @@ function SavedCards() {
       header: () => sortButton("importance", "Importance"),
       cell: ({ row }) => {
         const wordLookups = getCardLookups({ lookups }, row.original.c);
-        return wordLookups !== null ? <Importance count={wordLookups} lookups="muted" /> : "—";
+        return wordLookups !== null ? <Importance saved={wordIsSaved(cards, row.original.c.word ?? "")} count={wordLookups} lookups="muted" /> : "—";
       },
     },
     { id: "saved", header: () => sortButton("saved", "Saved"), cell: ({ row }) => <span className="tabular-nums">{shortSavedDate(row.original.c.savedAt)}</span> },

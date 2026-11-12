@@ -1,3 +1,4 @@
+import { loadLibrary } from "./review";
 /* Word lookups: the offline dictionary entry (routers/tutor.py) and the per-user lookup count (routers/srs.py). */
 import { useSyncExternalStore } from "react";
 import { apiFetch } from "./client";
@@ -67,11 +68,12 @@ export function useLookupCount(word: string): number | undefined {
 }
 
 /** Counts one look-up of a word on the server (it debounces repeats itself). */
-export async function recordLookup(word: string): Promise<LookupCount> {
-  const res = await apiFetch<LookupCount>("/api/srs/lookups", { body: { word } });
+export async function recordLookup(word: string, context?: { fr: string; en: string }): Promise<LookupCount> {
+  const res = await apiFetch<LookupCount>("/api/srs/lookups", { body: { word, ...(context ? { sentence: context.fr, translation_en: context.en } : {}) } });
   counts = { ...counts, [lookupKey(word)]: res.count };
   listeners.forEach((l) => l());
   set(s => ({ lookups: { ...s.lookups, [lookupKey(word)]: { count: res.count, lastCounted: null } } }));
+  if (res.incremented && res.importance >= 4) await loadLibrary(true);
   return res;
 }
 

@@ -350,8 +350,8 @@ export function Popover({
   );
 }
 
-export function Importance({ count, lookups = "inline" }: { count: number; lookups?: "inline" | "muted" }) {
-  const n = importanceFor(count);
+export function Importance({ count, saved = false, lookups = "inline" }: { count: number; saved?: boolean; lookups?: "inline" | "muted" }) {
+  const n = importanceFor(count, saved);
   const times = `${count} ${count === 1 ? "lookup" : "lookups"}`;
   return (
     <p className="flex flex-nowrap items-center gap-2">
@@ -361,7 +361,7 @@ export function Importance({ count, lookups = "inline" }: { count: number; looku
         ))}
       </span>
       <span className="text-sm text-muted-foreground">
-        <span className="sr-only">{importanceLabel(count)}</span>
+        <span className="sr-only">{importanceLabel(count, saved)}</span>
         <span aria-hidden>{lookups === "muted" ? times : `Importance ${n}/5`}</span>
         {lookups !== "muted" && <span className="ml-2 text-xs text-muted-foreground">{times}</span>}
       </span>

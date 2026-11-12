@@ -7,6 +7,11 @@ export const RELEASES = [
   {
     version: APP_VERSION,
     date: "2026-11-11",
+    changes: ["Word-deck stars and Importance now agree. Lookups can automatically save words.", "Removed duplicate answer praise below the page."],
+  },
+  {
+    version: "1.3.3",
+    date: "2026-11-11",
     changes: [
       "Importance uses dots. Recall and Dictation results show a score and inline corrections.",
       "Deployment tests keep source checks when Node is unavailable.",

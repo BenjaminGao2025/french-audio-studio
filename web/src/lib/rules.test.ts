@@ -65,7 +65,8 @@ describe("lookup", () => {
     expect(counts).toEqual([1, 1, 1, 2, 2, 2, 3]);
   });
   it("maps counts to importance", () => {
-    expect([0, 4, 5, 6, 9, 10].map(importanceFor)).toEqual([3, 3, 4, 4, 4, 5]);
+    expect([0, 1, 3, 5, 10].map(n => importanceFor(n, true))).toEqual([3, 3, 4, 5, 5]);
+    expect([0, 1, 3, 5, 10].map(n => importanceFor(n, false))).toEqual([0, 0, 0, 0, 0]);
   });
 });
 

@@ -3,15 +3,15 @@ import { Star } from "lucide-react";
 import type { StudySentence } from "../data/fixtures";
 import type { ApiWord } from "../api/study";
 import { toggleWordDeck } from "../api/wordDeck";
-import { lookupKey } from "../lib/lookup";
+import { wordIsSaved } from "../lib/lookup";
 import { announce, useApp } from "../state/store";
 import { Button } from "./ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 
 export function WordDeckStar({ word, sentence, details }: { word: string; sentence: StudySentence; details?: Partial<ApiWord> }) {
-  const member = useApp(s => s.cards.some(c => (c.mode === "cloze" || (!c.mode && c.kind === "Fill-in")) && lookupKey(c.word ?? "") === lookupKey(word)));
+  const member = useApp(s => wordIsSaved(s.cards, word));
   const [pending, setPending] = useState<boolean | null>(null);
-  const saved = pending ?? member;
+  const saved = member;
   const label = saved ? "Saved" : "Save word";
   const toggle = async () => {
     setPending(!saved);

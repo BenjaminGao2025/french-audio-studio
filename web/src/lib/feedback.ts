@@ -18,7 +18,6 @@ export const DEFAULT_FEEDBACK: FeedbackPrefs = {
   animation: true,
 };
 
-const PRAISE = ["Bravo !", "Parfait !", "Nickel !", "Super !"] as const;
 const SPOKEN_PRAISE = "Excellent !";
 
 export interface StreakEvent {
@@ -28,24 +27,13 @@ export interface StreakEvent {
   milestone: 0 | 3 | 5 | 10;
 }
 
-export interface GradeToastState {
-  id: number;
-  phrase: string;
-  glow: boolean;
-  celebrate: boolean;
-}
-
 type Listener = () => void;
 
 let cached: FeedbackPrefs | null = null;
 let streak = 0;
 let gestured = false;
 let audioCtx: AudioContext | null = null;
-let toast: GradeToastState | null = null;
-let toastSeq = 0;
-let toastTimer = 0;
 const prefListeners = new Set<Listener>();
-const toastListeners = new Set<Listener>();
 const praiseAudio = new Map<string, HTMLAudioElement>();
 
 function clampVolume(n: number) {
@@ -124,24 +112,6 @@ export function currentStreak() {
   return streak;
 }
 
-export function pickPraise(rand: () => number = Math.random) {
-  const i = Math.min(PRAISE.length - 1, Math.max(0, Math.floor(rand() * PRAISE.length)));
-  return PRAISE[i];
-}
-
-export function subscribeToast(fn: Listener) {
-  toastListeners.add(fn);
-  return () => toastListeners.delete(fn);
-}
-
-export function gradeToast() {
-  return toast;
-}
-
-function emitToast() {
-  for (const fn of toastListeners) fn();
-}
-
 function armAudio() {
   gestured = true;
   try {
@@ -213,28 +183,12 @@ function speakPraise(volume: number): Promise<void> {
 }
 
 /**
- * Record the outcome, then play and show praise without awaiting audio.
+ * Record the outcome, then play audio feedback without awaiting audio.
  * Answer-known checks should not call this: they are not an independent result.
  */
 export function gradeFeedback(correct: boolean, options: { pronunciation?: boolean } = {}) {
   const event = noteOutcome(correct);
   const prefs = feedbackPrefs();
-  const animate = animationOn(prefs);
-  if (correct && typeof window !== "undefined") {
-    toast = {
-      id: ++toastSeq,
-      phrase: pickPraise(),
-      glow: animate,
-      celebrate: animate && event.milestone === 10,
-    };
-    emitToast();
-    if (toastTimer) window.clearTimeout(toastTimer);
-    toastTimer = window.setTimeout(() => {
-      toast = null;
-      toastTimer = 0;
-      emitToast();
-    }, 1600);
-  }
   if (!prefs.sound || !gestured) return;
   if (!correct) {
     chime(196, prefs.volume * 0.45, 140);
@@ -255,9 +209,5 @@ export function practiceFeedback() {
 
 export function resetFeedbackState() {
   streak = 0;
-  toast = null;
   cached = null;
-  if (typeof window !== "undefined" && toastTimer) window.clearTimeout(toastTimer);
-  toastTimer = 0;
-  emitToast();
 }

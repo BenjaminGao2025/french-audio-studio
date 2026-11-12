@@ -24,7 +24,7 @@ import { WordNotes } from "./WordNotes";
 import { FrText } from "../components/FrText";
 import { Input } from "../components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent } from "../components/ui/popover";
-import { lookupKey } from "../lib/lookup";
+import { lookupKey, wordIsSaved } from "../lib/lookup";
 import { announce, get, patchStudy, sayFrench, useApp } from "../state/store";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger, Importance, Skeleton, Spinner, useAppWidth } from "../components/ui";
 import { Button } from "../components/ui/button";
@@ -126,6 +126,7 @@ export function WordPanel({
     if (scroller) scroller.scrollTop = 0;
     el?.focus({ preventScroll: true });
   }, [shown, compact]);
+  const saved = useApp(s => wordIsSaved(s.cards, shown));
   const liveCount = useLookupCount(shown);
   const storedCount = useApp(s => s.lookups[lookupKey(shown)]?.count ?? 0);
   const count = liveCount ?? storedCount;
@@ -136,7 +137,7 @@ export function WordPanel({
     // The headword, dictionary lookup and deck star still belong to the drilled word.
     const isLemma = dict?.entries?.some(entry => lookupKey(entry.lemma) === lookupKey(word));
     setStack(prev => [...prev, { word, surface: isLemma ? contextWord : word, occurrence: isLemma ? contextOccurrence : 0 }]);
-    recordLookup(word).catch(() => undefined);
+    recordLookup(word, sentence).catch(() => undefined);
   };
   const french = (value: string, className = "text-sm") => <FrText text={value} className={className} onPick={p => drill(p.text)} />;
   const [dict, setDict] = useState<DictionaryEntry | null>(null);
@@ -211,7 +212,7 @@ export function WordPanel({
     const openKey = JSON.stringify([sentence.id, text, wordIndex]);
     if (!compact && countedOpen.current !== openKey) {
       countedOpen.current = openKey;
-      recordLookup(text).catch(() => undefined);
+      recordLookup(text, sentence).catch(() => undefined);
     }
     if (!compact && wordIndex !== undefined) pick(sentence.id, wordIndex);
     // Phrase context is cached per sentence for the page, so it is fetched without this card's
@@ -295,7 +296,7 @@ export function WordPanel({
 
       <footer className="wp-footer flex flex-wrap items-center justify-between gap-2 border-t pt-3">
         <div className="wp-importance flex items-center gap-2 text-muted-foreground"><span className="text-xs">Importance</span>
-            <Importance count={count ?? 0} lookups="muted" />
+            <Importance saved={saved} count={count ?? 0} lookups="muted" />
         </div>
       </footer>
     </div>

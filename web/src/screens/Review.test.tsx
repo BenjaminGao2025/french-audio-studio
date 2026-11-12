@@ -393,6 +393,27 @@ describe("Task C — Saved as a table", () => {
     expect(store.get().cards.map(c => c.id)).toEqual(["keep-listen", "keep-speak", "keep-other-word"]);
     expect(host.querySelector('[data-card-id="star-word"]')).toBeNull();
   });
+  it("uses deck membership and the 3/5 lookup thresholds for dots and filters", async () => {
+    fake.delay = 0;
+    const template = fake.srs.cards[0];
+    fake.srs.cards = [
+      ...["chat", "chien", "oiseau"].map((target, i) => ({ ...template, id: `tier-${i}`, mode: "cloze" as const, target, archived: false })),
+      { ...template, id: "not-in-word-deck", mode: "recognize", target: "ancien", archived: false },
+    ];
+    fake.lookups = { chat: 1, chien: 3, oiseau: 5, ancien: 10 };
+    await act(async () => { store.resetDemo(); await loadLibrary(true); root.render(<ReviewScreen sub="saved" />); });
+    await wait(50);
+    for (const [id, dots] of [["tier-0", 3], ["tier-1", 4], ["tier-2", 5], ["not-in-word-deck", 0]] as const) {
+      expect(host.querySelectorAll(`[data-card-id="${id}"] [data-filled="true"]`)).toHaveLength(dots);
+    }
+    await act(async () => store.set(s => ({ libFilters: { ...s.libFilters, minImportance: 4 } })));
+    expect(host.querySelectorAll('tbody [data-card-id]')).toHaveLength(2);
+    expect(host.querySelector('[data-card-id="not-in-word-deck"]')).toBeNull();
+    await act(async () => store.set(s => ({ libFilters: { ...s.libFilters, minImportance: 5 } })));
+    expect(host.querySelectorAll('tbody [data-card-id]')).toHaveLength(1);
+    expect(host.querySelector('[data-card-id="tier-2"]')).toBeTruthy();
+  });
+
   it("shows at most 50 tbody rows plus a pager, and a sentence card's Importance cell is —", async () => {
     await act(async () => {
       store.resetDemo();

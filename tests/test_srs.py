@@ -237,16 +237,19 @@ class ImportanceAndWordsTests(unittest.TestCase):
         mid = srs.add_note(self.user_id, "Phrase normale.", modes=["listen"])
         self.assertEqual(mid["cards"][0]["importance"], 3)
 
+        start = datetime.datetime(2026, 11, 1, tzinfo=UTC)
+        for i in range(5):
+            srs.record_word_lookup(self.user_id, "très", now=start + datetime.timedelta(seconds=6*i))
         queue = srs.build_queue(self.user_id)
-        self.assertEqual([c["importance"] for c in queue["cards"]], [5, 3, 1])  # important first
+        self.assertEqual([c["importance"] for c in queue["cards"]], [5, 3, 3])  # important first
         only_top = srs.build_queue(self.user_id, min_importance=4)
         self.assertEqual([c["target"] for c in only_top["cards"]], ["très"])
 
         other_id, _ = _new_user()
         self.assertEqual(srs.set_importance(other_id, [low["cards"][0]["id"]], 5), 0)
-        self.assertEqual(srs.set_importance(self.user_id, [low["cards"][0]["id"]], 9), 1)  # clamped to 5
-        self.assertEqual(srs.build_queue(self.user_id, min_importance=5)["counts"]["total"], 2)
-        self.assertEqual(high["cards"][0]["importance"], 5)
+        self.assertEqual(srs.set_importance(self.user_id, [low["cards"][0]["id"]], 9), 1)  # derived word priority remains 3
+        self.assertEqual(srs.build_queue(self.user_id, min_importance=5)["counts"]["total"], 1)
+        self.assertEqual(high["cards"][0]["importance"], 3)
 
     def test_saved_words_span_all_sentences(self):
         srs.add_note(self.user_id, "Voici l'examen.", targets=[{"text": "Voici"}])
@@ -262,16 +265,16 @@ class ImportanceAndWordsTests(unittest.TestCase):
     def test_api_importance_and_words(self):
         note = self.client_post({"sentence": "Voici le test.", "targets": [{"text": "Voici", "importance": 4}]})
         card_id = note["cards"][0]["id"]
-        self.assertEqual(note["cards"][0]["importance"], 4)
+        self.assertEqual(note["cards"][0]["importance"], 3)
         from fastapi.testclient import TestClient
 
         client = TestClient(tts_service.app)
         res = client.post("/api/srs/importance", headers=self.headers, json={"card_ids": [card_id], "importance": 2})
         self.assertEqual(res.json(), {"updated": 1})
         words = client.get("/api/srs/words", headers=self.headers).json()["words"]
-        self.assertEqual([(w["text"], w["importance"]) for w in words], [("Voici", 2)])
+        self.assertEqual([(w["text"], w["importance"]) for w in words], [("Voici", 3)])
         self.assertEqual(
-            client.get("/api/srs/queue?min_importance=3", headers=self.headers).json()["counts"]["total"], 0
+            client.get("/api/srs/queue?min_importance=4", headers=self.headers).json()["counts"]["total"], 0
         )
 
     def client_post(self, body):
@@ -681,7 +684,7 @@ class SessionSizeAndFavoriteTests(unittest.TestCase):
         self.assertEqual(srs.favorite_words(self.user_id), [])
         self.assertEqual(self.client.get("/api/srs/favorites").status_code, 401)
 
-    def test_lookups_raise_the_word_cards_importance_but_never_lower_it(self):
+    def test_word_importance_ignores_manual_values_and_follows_lookups(self):
         note = srs.add_note(self.user_id, "J’ai oublié mon billet.", targets=[{"text": "oublié", "mode": "cloze"}])
         other = srs.add_note(self.user_id, "Le billet est cher.", targets=[{"text": "billet", "mode": "cloze", "importance": 5}])
         start = datetime.datetime(2026, 11, 1, tzinfo=UTC)
@@ -689,6 +692,6 @@ class SessionSizeAndFavoriteTests(unittest.TestCase):
             srs.record_word_lookup(self.user_id, "Oublié", now=start + datetime.timedelta(minutes=i))
         srs.record_word_lookup(self.user_id, "billet", now=start)
         cards = {c["target"]: c for c in srs.list_cards(self.user_id)}
-        self.assertEqual(cards["oublié"]["importance"], 4)
-        self.assertEqual(cards["billet"]["importance"], 5)
+        self.assertEqual(cards["oublié"]["importance"], 5)
+        self.assertEqual(cards["billet"]["importance"], 3)
         self.assertTrue(note["id"] and other["id"])

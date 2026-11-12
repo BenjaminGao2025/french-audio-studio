@@ -216,6 +216,8 @@ describe.each(["Recall", "Dictation"] as const)("%s result", kind => {
       await act(async () => { submitAnswer(sessionKey); });
       expect(host.querySelector('[aria-label="Score: ' + (correct ? 100 : 50) + '%"]')?.className).toContain("text-4xl");
       expect(host.textContent).toContain(correct ? "5 right · 0 wrong" : "2 right · 2 wrong · 1 accent");
+      expect(host.querySelector('.grade-toast')).toBeNull();
+      expect(host.textContent).not.toMatch(/Bravo !|Parfait !|Nickel !|Super !/);
       const inline = host.querySelector('[aria-label="Inline corrections"]')!;
       if (correct) {
         expect(inline.querySelector("del")).toBeNull();

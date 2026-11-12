@@ -505,10 +505,10 @@ export interface ReviewCard {
 }
 
 export function wordCardImportance(c: LibCard, lookups: Record<string, { count: number }> = {}): number {
-  if (c.kind !== "Fill-in" || !c.word) return 0;
+  if (!c.saved || c.kind !== "Fill-in" || !c.word) return 0;
   const k = lookupKey(c.word);
   const count = lookups[k]?.count ?? LOOKUP_FIXTURES[k] ?? c.lookups ?? 0;
-  return importanceFor(count);
+  return importanceFor(count, true);
 }
 
 /** Documented new-card introduction order: earliest Saved time first, higher importance for ties, then stable card ID. */

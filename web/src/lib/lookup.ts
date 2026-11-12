@@ -27,14 +27,21 @@ export function countLookup(c: LookupCounter, t: number): { next: LookupCounter;
   return { next: c, counted: false };
 }
 
-/** Automatic, read-only importance. 0–4 lookups → 3, 5–9 → 4, 10+ → 5. */
-export function importanceFor(count: number): 3 | 4 | 5 {
-  if (count >= 10) return 5;
-  if (count >= 5) return 4;
-  return 3;
+export const DEFAULT_SAVED_IMPORTANCE = 3;
+export const IMPORTANCE_FROM_LOOKUPS = [[5, 5], [3, 4]] as const;
+
+export function importanceFor(count: number, saved = false): 0 | 3 | 4 | 5 {
+  if (!saved) return 0;
+  for (const [threshold, level] of IMPORTANCE_FROM_LOOKUPS) if (count >= threshold) return level;
+  return DEFAULT_SAVED_IMPORTANCE;
 }
 
-export function importanceLabel(count: number): string {
-  const n = importanceFor(count);
+export function importanceLabel(count: number, saved = false): string {
+  const n = importanceFor(count, saved);
   return `Importance, ${n} out of 5, based on ${count} ${count === 1 ? "lookup" : "lookups"}.`;
+}
+
+/** The deck star represents Fill-in/cloze membership, never word_favorites. */
+export function wordIsSaved(cards: readonly { saved: boolean; mode?: string; kind: string; word?: string }[], word: string): boolean {
+  return cards.some(c => c.saved && (c.mode === "cloze" || (!c.mode && c.kind === "Fill-in")) && lookupKey(c.word ?? "") === lookupKey(word));
 }
