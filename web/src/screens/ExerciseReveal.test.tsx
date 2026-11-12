@@ -94,13 +94,13 @@ describe.each(["Recall", "Dictation"] as const)("%s exercise layout", kind => {
         expect(iconLabel.textContent).toBe(label);
         expect(iconLabel.className).toContain("flex");
       }
-      expect(card.querySelector('[aria-label="Answer"]')?.textContent).toContain("Try it now");
+      expect(card.querySelector('[aria-label="Answer"]')?.textContent).toContain("Try again");
     });
   });
 });
 
 describe("revealed recall answer", () => {
-  it("uses tappable words and Try it now hides the answer without forgetting it was shown", async () => {
+  it("uses tappable words and Try again hides the answer without forgetting it was shown", async () => {
     ensureSession("recall-test", "Recall", "Current sentence", items);
     const key = "0:whole:w";
     const picks: string[] = [];
@@ -139,7 +139,7 @@ describe("revealed recall answer", () => {
     await act(async () => failli!.click());
     expect(picks).toEqual(["failli"]);
 
-    const tryNow = [...host.querySelectorAll("button")].find((b) => b.textContent === "Try it now");
+    const tryNow = [...host.querySelectorAll("button")].find((b) => b.textContent === "Try again");
     expect(tryNow).toBeTruthy();
     await act(async () => tryNow!.click());
 
@@ -149,7 +149,14 @@ describe("revealed recall answer", () => {
     expect(document.activeElement).toBe(input);
     expect(get().exercises["recall-test"].ui[key].revealed).toBe(true);
     expect(get().exercises["recall-test"].ui[key].coverAnswer).toBe(true);
-    expect(host.querySelector('[aria-label="Answer actions"] button[aria-pressed="true"]')).toBeTruthy();
+    expect(host.querySelector('[aria-label="Hint"]')).toBeNull();
+    expect(host.querySelector('[aria-label="Answer actions"] button[aria-pressed="true"]')).toBeNull();
+    await act(async () => {
+      set(s => ({exercises:{...s.exercises, "recall-test":{...s.exercises["recall-test"], drafts:{[key]:"answer"}}}}));
+      submitAnswer("recall-test");
+    });
+    expect(get().attempts.at(-1)).toMatchObject({hinted:true, answerKnown:true});
+    expect(host.textContent).toContain("Answer known");
   });
 });
 
@@ -372,5 +379,40 @@ describe("normalization and visible grading marks", () => {
       expect(result.counts.different).toBe(0);
       expect(result.counts.accent).toBe(answer === "ete" ? 1 : 0);
     }
+  });
+});
+
+
+describe.each(["Recall", "Dictation"] as const)("%s panel toggles", kind => {
+  it.each(["whole", "step"] as const)("keeps scoring flags when toolbar or close controls hide %s panels", async mode => {
+    ensureSession("toggle", kind, "Fixture", items);
+    await act(async () => {
+      set(s => ({exercises:{...s.exercises, toggle:{...s.exercises.toggle, mode}}}));
+      root.render(<Exercise sessionKey="toggle" kind={kind} source="Fixture" items={items} onDone={() => {}} />);
+    });
+    const buttons = host.querySelector('[aria-label="Answer actions"]')!.querySelectorAll("button");
+    for (const [index, label] of [[1,"Hint"],[2,"Answer"]] as const) {
+      await act(async () => buttons[index].click());
+      expect(buttons[index].getAttribute("aria-pressed")).toBe("true");
+      expect(host.querySelector(`[aria-label="${label}"]`)).toBeTruthy();
+      await act(async () => buttons[index].click());
+      expect(buttons[index].getAttribute("aria-pressed")).toBe("false");
+      expect(host.querySelector(`[aria-label="${label}"]`)).toBeNull();
+      await act(async () => buttons[index].click());
+      await act(async () => host.querySelector<HTMLButtonElement>(`[aria-label="Hide ${label.toLowerCase()}"]`)!.click());
+      expect(buttons[index].getAttribute("aria-pressed")).toBe("false");
+      expect(host.querySelector(`[aria-label="${label}"]`)).toBeNull();
+    }
+    const key = mode === "whole" ? "0:whole:w" : "0:step:0";
+    await act(async () => {
+      set(s => ({exercises:{...s.exercises,toggle:{...s.exercises.toggle,drafts:{[key]:"answer"}}}}));
+      submitAnswer("toggle");
+    });
+    expect(get().attempts.at(-1)).toMatchObject({hinted:true, answerKnown:true});
+    expect(host.textContent).toContain("Answer known");
+    const retry = host.querySelector<HTMLButtonElement>('[aria-label="Result actions"] button')!;
+    await act(async () => retry.click());
+    expect(get().exercises.toggle.ui[key]).toMatchObject({hint:false, revealed:false});
+    expect(get().exercises.toggle.ui[key].hinted).toBeUndefined();
   });
 });

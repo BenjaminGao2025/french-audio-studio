@@ -1,6 +1,6 @@
 import { StepReview } from "../components/StepReview";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { Lightbulb, Eye, Play, Turtle, RotateCcw, Loader2 } from "lucide-react";
+import { Lightbulb, Eye, Play, Turtle, RotateCcw, Loader2, X } from "lucide-react";
 import type { PracticeItem, StudySentence } from "../data/fixtures";
 import { grade } from "../lib/grading";
 import { gradeFeedback } from "../lib/feedback";
@@ -133,7 +133,7 @@ function beginAttempt(key: string) {
       scope: sess.mode === "step" ? "Step by step" : "Whole sentence",
       step: sess.mode === "step" ? (sess.steps[sess.index] ?? 0) + 1 : undefined,
       response: draft,
-      hinted: ui.hint, // flags are frozen at submission (and updated if used before a techfail retry)
+      hinted: Boolean(ui.hinted || ui.hint), // flags are frozen at submission (and updated if used before a techfail retry)
       answerKnown: ui.revealed,
       status: "pending",
       history: "saving",
@@ -145,7 +145,7 @@ function beginAttempt(key: string) {
     const prev = get().attempts.find((x) => x.id === attemptId);
     patchAttempt(attemptId, {
       response: draft,
-      hinted: Boolean(prev?.hinted || ui.hint),
+      hinted: Boolean(prev?.hinted || ui.hinted || ui.hint),
       answerKnown: Boolean(prev?.answerKnown || ui.revealed),
     });
   }
@@ -183,7 +183,7 @@ export function submitAnswer(key: string) {
         status: "completed",
         outcome: r.correct ? "correct" : "incorrect",
         result: res,
-        hinted: Boolean(prev?.hinted || curUi?.hint),
+        hinted: Boolean(prev?.hinted || curUi?.hinted || curUi?.hint),
         answerKnown: Boolean(prev?.answerKnown || curUi?.revealed),
         history: r.saved ? "saved" : "failed",
       });
@@ -289,7 +289,7 @@ export function Exercise({
   const tryFromMemory = () => {
     // The answer stays "shown" for scoring. Only the French on screen is covered.
     setDraft("");
-    patchUI(sessionKey, qk, { coverAnswer: true });
+    patchUI(sessionKey, qk, { coverAnswer: true, hint: false, hinted: ui.hinted || ui.hint });
     inputRef.current?.focus();
   };
   const play = (slow: boolean) =>
@@ -343,15 +343,15 @@ export function Exercise({
         )}
         {ui.hint && ui.phase !== "graded" && (
           <div className="rounded-md bg-muted p-3 text-muted-foreground" role="status" aria-label="Hint">
-            <p className="mb-1 flex items-center gap-2 text-sm font-medium"><Lightbulb className="size-4" aria-hidden />Hint</p>
+            <p className="mb-1 flex items-center gap-2 text-sm font-medium"><Lightbulb className="size-4" aria-hidden />Hint<Button type="button" size="icon" variant="ghost" className="ml-auto" aria-label="Hide hint" onClick={() => patchUI(sessionKey, qk, { hint: false, hinted: true })}><X aria-hidden /></Button></p>
             <p lang={kind === "Recall" ? "fr" : "en"}>{hintFor(kind, t)}</p>
           </div>
         )}
         {ui.revealed && !ui.coverAnswer && ui.phase !== "graded" && (
           <div className="rounded-md bg-muted p-3 text-muted-foreground" role="status" aria-label="Answer">
-            <p className="mb-1 flex items-center gap-2 text-sm font-medium"><Eye className="size-4" aria-hidden />Answer</p>
+            <p className="mb-1 flex items-center gap-2 text-sm font-medium"><Eye className="size-4" aria-hidden />Answer<Button type="button" size="icon" variant="ghost" className="ml-auto" aria-label="Hide answer" onClick={() => patchUI(sessionKey, qk, { coverAnswer: true })}><X aria-hidden /></Button></p>
             <FrText text={t.fr} className="font-serif text-xl leading-snug wrap-break-word" onPick={handlePick} />
-            <Button type="button" variant="ghost" className="mt-2" onClick={tryFromMemory}>Try it now</Button>
+            <Button type="button" variant="outline" className="mt-2" onClick={tryFromMemory}><RotateCcw aria-hidden />Try again</Button>
           </div>
         )}
       </div>
@@ -393,17 +393,17 @@ export function Exercise({
           {busy && <Spinner label="Checking your answer…" />}
           <div className="flex items-center gap-2" aria-label="Answer actions">
               <Button type="button" variant="default" aria-disabled={(!!(busy)) || undefined} aria-busy={busy || undefined} className={cn((!!(busy)) ? "opacity-50" : "")} onClick={(event) => { if (!!(busy)) { event.preventDefault(); return; } (() => submitAnswer(sessionKey))(); }}>{busy ? <Loader2 className="animate-spin" aria-hidden /> : null}{ui.phase === "techfail" ? "Retry check" : busy ? "Checking…" : "Check"}</Button>
-              <Button type="button" variant="ghost" aria-pressed={ui.hint || undefined} onClick={() => {
-                  if (ui.hint || busy) return;
-                  patchUI(sessionKey, qk, { hint: true });
+              <Button type="button" variant="ghost" aria-pressed={ui.hint} onClick={() => {
+                  if (busy) return;
+                  patchUI(sessionKey, qk, { hint: !ui.hint, hinted: true });
                   if (ui.attemptId) patchAttempt(ui.attemptId, { hinted: true });
-                  announce("Hint shown.");
+                  announce(ui.hint ? "Hint hidden." : "Hint shown.");
                 }}>{<Lightbulb aria-hidden />}Hint</Button>
-              <Button type="button" variant="ghost" aria-pressed={ui.revealed || undefined} onClick={() => {
-                  if (ui.revealed || busy) return;
-                  patchUI(sessionKey, qk, { revealed: true, coverAnswer: false });
+              <Button type="button" variant="ghost" aria-pressed={ui.revealed && !ui.coverAnswer} onClick={() => {
+                  if (busy) return;
+                  patchUI(sessionKey, qk, { revealed: true, coverAnswer: ui.revealed && !ui.coverAnswer });
                   if (ui.attemptId) patchAttempt(ui.attemptId, { answerKnown: true });
-                  announce("Answer shown.");
+                  announce(ui.revealed && !ui.coverAnswer ? "Answer hidden." : "Answer shown.");
                 }}>{<Eye aria-hidden />}Answer</Button>
           </div>
         </div>
