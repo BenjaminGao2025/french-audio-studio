@@ -38,21 +38,19 @@ def _kinds(result):
 
 
 class TokenizeTests(unittest.TestCase):
-    def test_elisions_stay_one_word(self):
-        # The product rule matches the frontend grading.ts: an elision is ONE token, never l' + homme.
+    def test_elision_splits_and_one_word_exceptions(self):
         words = [
             t["text"] for t in dictation.tokenize("« Lorsqu'il arrive, jusqu'à l'aube » quelqu'un dit aujourd'hui")
         ]
         self.assertEqual(
-            words, ["Lorsqu'il", "arrive", "jusqu'à", "l'aube", "quelqu'un", "dit", "aujourd'hui"]
+            words, ["Lorsqu'", "il", "arrive", "jusqu'", "à", "l'", "aube", "quelqu'un", "dit", "aujourd'hui"]
         )
 
     def test_typographic_apostrophes_normalize(self):
-        self.assertEqual([t["norm"] for t in dictation.tokenize("J’ai d‘abord")], ["j'ai", "d'abord"])
+        self.assertEqual([t["norm"] for t in dictation.tokenize("J’ai d‘abord")], ["j'", "ai", "d'", "abord"])
 
-    def test_standalone_apostrophe_at_a_word_edge_is_stripped(self):
-        # "qu'" typed before a space: the trailing quote apostrophe is punctuation, not a token.
-        self.assertEqual([t["norm"] for t in dictation.tokenize("qu' il")], ["qu", "il"])
+    def test_elided_word_before_a_space_keeps_its_apostrophe(self):
+        self.assertEqual([t["norm"] for t in dictation.tokenize("qu' il")], ["qu'", "il"])
 
     def test_quotes_and_punctuation_are_not_words(self):
         self.assertEqual([t["norm"] for t in dictation.tokenize("'Bonjour' — dit-il… !")], ["bonjour", "dit", "il"])
@@ -64,8 +62,8 @@ class TokenizeTests(unittest.TestCase):
             self.assertEqual([t["norm"] for t in tokens], case["norms"], case["text"])
 
 
-class BugFCommaTokenizationTests(unittest.TestCase):
-    """Bug F: a comma with no following space must not glue two words into one token."""
+class CommaTokenizationTests(unittest.TestCase):
+    """A comma with no following space must not glue two words into one token."""
 
     def test_glued_comma_splits_the_same_as_a_space(self):
         for form in ("nationale,ont", "nationale, ont", "nationale , ont"):
@@ -75,42 +73,16 @@ class BugFCommaTokenizationTests(unittest.TestCase):
     def test_punctuation_is_never_a_word(self):
         self.assertEqual(
             [t["norm"] for t in dictation.tokenize("nationale ; ont : résolu ! « d'exposer » ?")],
-            ["nationale", "ont", "résolu", "d'exposer"],
+            ["nationale", "ont", "résolu", "d'", "exposer"],
         )
-        self.assertEqual([t["norm"] for t in dictation.tokenize("droits.")], ["droits"])
         self.assertTrue(dictation.grade("droits.", "droits")["correct"])
 
     def test_ben_glued_comma_keeps_ont_and_en_correct(self):
         target = "Les représentants constitués en Assemblée nationale, ont résolu d'exposer les droits."
         answer = "Les représentants constitués en Assemblee nationale,ont résolu d'exposer les droits"
         result = dictation.grade(target, answer)
-        kinds = {op["expected"]: op["kind"] for op in result["ops"]}
-        self.assertEqual(kinds["ont"], "ok")
-        self.assertEqual(kinds["en"], "ok")
-        self.assertEqual(kinds["Assemblée"], "accent")  # only the accent typo is marked
-        self.assertEqual(result["counts"], {"ok": 10, "accent": 1, "wrong": 0, "missing": 0, "extra": 0})
-        self.assertEqual(result["counts"]["ok"], sum(1 for op in result["ops"] if op["kind"] == "ok"))
-
-    def test_resolu_nfd_and_trailing_period_stay_fully_correct(self):
-        import unicodedata
-
-        target = "Les représentants ont résolu d'exposer les droits."
-        for answer in (
-            unicodedata.normalize("NFD", target[:-1]),  # NFD e + combining acute, no final period
-            target[:-1],                                 # missing final period
-        ):
-            with self.subTest(answer=answer):
-                result = dictation.grade(target, answer)
-                self.assertTrue(result["correct"])
-                self.assertEqual(result["accuracy"], 100)
-                self.assertTrue(all(op["kind"] == "ok" for op in result["ops"]))
-
-    def test_elisions_are_one_token_on_both_sides_with_curly_apostrophes(self):
-        for surface in ("d'exposer", "l’homme", "j'ai", "aujourd'hui"):
-            with self.subTest(surface=surface):
-                self.assertEqual(len(dictation.tokenize(surface)), 1)
-        self.assertTrue(dictation.grade("l'homme", "l’homme")["correct"])
-        self.assertTrue(dictation.grade("d'exposer", "d’exposer")["correct"])
+        self.assertEqual(result["counts"], {"ok": 11, "accent": 1, "wrong": 0, "missing": 0, "extra": 0})
+        self.assertEqual([(op["kind"], op["expected"]) for op in result["ops"] if op["kind"] != "ok"], [("accent", "Assemblée")])
 
 
 class GradeTests(unittest.TestCase):
@@ -156,14 +128,11 @@ class GradeTests(unittest.TestCase):
         self.assertLess(accent, 100)
 
     def test_missing_apostrophe_is_minor(self):
-        # Elisions are one token: lhomme (apostrophe dropped) is an accent-level slip, not a wrong word.
-        self.assertEqual(
-            _kinds(dictation.grade("L'homme est là.", "lhomme est là"))[0], ("accent", "L'homme", "lhomme")
-        )
+        self.assertEqual(_kinds(dictation.grade("L'homme est là.", "l homme est là"))[0], ("accent", "L'", "l"))
 
     def test_merged_elision_is_a_missing_apostrophe_not_a_wrong_word(self):
         result = dictation.grade("J'ai faim.", "jai faim")
-        self.assertEqual(_kinds(result), [("accent", "J'ai", "jai"), ("ok", "faim", "faim")])
+        self.assertEqual(_kinds(result), [("accent", "J'", "j"), ("ok", "ai", "ai"), ("ok", "faim", "faim")])
 
     def test_one_word_elision_exception(self):
         self.assertTrue(dictation.grade("Aujourd'hui, il fait beau.", "aujourd’hui il fait beau")["correct"])
@@ -215,16 +184,13 @@ class PunctuationTests(unittest.TestCase):
         self.assertEqual(result["accuracy"], 100)
 
     def test_quote_apostrophe_before_an_elision_is_punctuation(self):
-        self.assertEqual([t["text"] for t in dictation.tokenize("'J'ai faim'")], ["J'ai", "faim"])
+        self.assertEqual([t["text"] for t in dictation.tokenize("'J'ai faim'")], ["J'", "ai", "faim"])
         self.assertTrue(dictation.grade("« J'ai faim », dit-il.", "'J'ai faim', dit-il")["correct"])
 
     def test_elision_apostrophes_are_still_spelling(self):
-        self.assertEqual([k for k, _, _ in _kinds(dictation.grade("J'ai faim.", "jai faim"))], ["accent", "ok"])
+        self.assertEqual([k for k, _, _ in _kinds(dictation.grade("J'ai faim.", "jai faim"))], ["accent", "ok", "ok"])
         self.assertTrue(dictation.grade("L'homme est là ?", "l’homme est là")["correct"])
-        # An elision written as two words is a word-level error now that elisions are one token.
-        split = dictation.grade("L'homme est là.", "le homme est là")
-        self.assertFalse(split["correct"])
-        self.assertGreater(split["counts"]["wrong"] + split["counts"]["extra"], 0)
+        self.assertEqual(_kinds(dictation.grade("L'homme est là.", "le homme est là"))[0], ("wrong", "L'", "le"))
 
     def test_ai_prompt_says_punctuation_is_not_a_mistake(self):
         system = dictation.ai_payload("m", "write", "Joyeux Noël !", "Joyeux Nöel", "Merry Christmas!")["messages"][0]

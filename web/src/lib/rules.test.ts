@@ -29,7 +29,10 @@ describe("grading", () => {
   it("is strict on accents and apostrophes", () => {
     expect(grade("C’était l’été.", "c’était l’ete").correct).toBe(false);
     expect(grade("Ça va.", "ca va").issues[0].kind).toBe("accent");
-    expect(grade(T, "jai oublié mon rendez-vous").issues[0].kind).toBe("different");
+    // A missing apostrophe is a minor slip (half credit), not a wrong word.
+    const jai = grade(T, "jai oublié mon rendez-vous");
+    expect(jai.correct).toBe(false);
+    expect(jai.issues[0].kind).toBe("accent");
   });
   it("scores the aligned reference with half credit for accents", () => {
     const r = grade("Ma machine à laver fuit.", "Ma machine a lav fui");
@@ -86,7 +89,8 @@ describe("punctuation tokenization (Bug F)", () => {
     expect(ok).toContain("en");
     expect(r.alignment.find((w) => w.expected === "Assemblée")).toMatchObject({ mark: "accent", given: "Assemblee" });
     // The glued comma no longer drifts the alignment: one accent, no wrong/missing/extra words.
-    expect(r.counts).toEqual({ ok: 10, accent: 1, different: 0, missing: 0, extra: 0 });
+    expect(r.counts).toEqual({ ok: 11, accent: 1, different: 0, missing: 0, extra: 0 });
+    expect(r.accuracy).toBe(96);
     // "N right / M wrong" is derived from the same alignment as the marks.
     expect(r.counts.ok).toBe(r.alignment.filter((w) => w.mark === "ok").length);
     expect(r.counts.accent + r.counts.different + r.counts.missing + r.counts.extra).toBe(
@@ -112,12 +116,17 @@ describe("punctuation tokenization (Bug F)", () => {
     }
   });
 
-  it("keeps elisions as a single token on both sides", () => {
+  it("splits elisions the same way as the server, and accepts a space after the apostrophe", () => {
     expect(tokenize("d'exposer l'homme j'ai aujourd'hui").keys.map((k) => k.key)).toEqual([
-      "d'exposer", "l'homme", "j'ai", "aujourd'hui",
+      "d'", "exposer", "l'", "homme", "j'", "ai", "aujourd'hui",
     ]);
-    expect(tokenize("l’homme d’exposer").keys.map((k) => k.key)).toEqual(["l'homme", "d'exposer"]);
+    expect(tokenize("l’homme d’exposer").keys.map((k) => k.key)).toEqual(["l'", "homme", "d'", "exposer"]);
     expect(grade("l'homme", "l’homme").correct).toBe(true);
+    expect(grade("Je l'ai vu.", "Je l' ai vu").correct).toBe(true);
+    // No apostrophe at all is half credit on that word, never "correct".
+    const r = grade("l'homme est là", "l homme est là");
+    expect(r.correct).toBe(false);
+    expect(r.counts.accent).toBe(1);
   });
 });
 

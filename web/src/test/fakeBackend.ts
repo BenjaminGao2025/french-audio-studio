@@ -234,7 +234,7 @@ function route(method: string, url: URL, body: Record<string, unknown>): Respons
     if (!expected) return json(422, { detail: "Bad step" });
     const g = grade(expected, String(body.answer));
     const saved = fake.saveFails > 0 ? (fake.saveFails--, false) : true;
-    return json(200, { attempt_id: `a-${++seq}`, correct: g.correct, accent_only: false, accuracy: g.correct ? 100 : 50, saved, expected });
+    return json(200, { attempt_id: `a-${++seq}`, correct: g.correct, accent_only: false, accuracy: g.accuracy, saved, expected });
   }
   if (p === "/api/lookup") {
     const word = url.searchParams.get("word") ?? "";

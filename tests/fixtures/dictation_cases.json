@@ -1,27 +1,35 @@
 {
- "_comment": "Generated from dictation.py and checked by hand; the frontend grading.ts follows the same word rules, including one-token elisions (tests/test_dictation.py).",
+ "_comment": "Generated from dictation.py and checked by hand; dictation.js must give the same results (tests/test_dictation.py, tests/test_dictation.cjs).",
  "accent_credit": 0.5,
  "tokenize": [
   {
    "text": "« Lorsqu'il arrive, jusqu'à l'aube… » quelqu'un dit : “C’est ça !”",
    "tokens": [
-    "Lorsqu'il",
+    "Lorsqu'",
+    "il",
     "arrive",
-    "jusqu'à",
-    "l'aube",
+    "jusqu'",
+    "à",
+    "l'",
+    "aube",
     "quelqu'un",
     "dit",
-    "C’est",
+    "C’",
+    "est",
     "ça"
    ],
    "norms": [
-    "lorsqu'il",
+    "lorsqu'",
+    "il",
     "arrive",
-    "jusqu'à",
-    "l'aube",
+    "jusqu'",
+    "à",
+    "l'",
+    "aube",
     "quelqu'un",
     "dit",
-    "c'est",
+    "c'",
+    "est",
     "ça"
    ]
   },
@@ -29,33 +37,39 @@
    "text": "'Bonjour' l' ami d’aujourd’hui",
    "tokens": [
     "Bonjour",
-    "l",
+    "l'",
     "ami",
-    "d’aujourd’hui"
+    "d’",
+    "aujourd’hui"
    ],
    "norms": [
     "bonjour",
-    "l",
+    "l'",
     "ami",
-    "d'aujourd'hui"
+    "d'",
+    "aujourd'hui"
    ]
   },
   {
    "text": "'J'ai faim', dit-il ; « L’homme ? » : “oui” !",
    "tokens": [
-    "J'ai",
+    "J'",
+    "ai",
     "faim",
     "dit",
     "il",
-    "L’homme",
+    "L’",
+    "homme",
     "oui"
    ],
    "norms": [
-    "j'ai",
+    "j'",
+    "ai",
     "faim",
     "dit",
     "il",
-    "l'homme",
+    "l'",
+    "homme",
     "oui"
    ]
   },
@@ -73,13 +87,15 @@
   {
    "text": "‘Qu’il vienne’ dit-elle",
    "tokens": [
-    "Qu’il",
+    "Qu’",
+    "il",
     "vienne",
     "dit",
     "elle"
    ],
    "norms": [
-    "qu'il",
+    "qu'",
+    "il",
     "vienne",
     "dit",
     "elle"
@@ -192,8 +208,13 @@
     "ops": [
      {
       "kind": "ok",
-      "expected": "J'ai",
-      "actual": "J’ai"
+      "expected": "J'",
+      "actual": "J’"
+     },
+     {
+      "kind": "ok",
+      "expected": "ai",
+      "actual": "ai"
      },
      {
       "kind": "ok",
@@ -202,7 +223,7 @@
      }
     ],
     "counts": {
-     "ok": 2,
+     "ok": 3,
      "accent": 0,
      "wrong": 0,
      "missing": 0,
@@ -220,13 +241,13 @@
    "result": {
     "ops": [
      {
-      "kind": "extra",
-      "expected": "",
-      "actual": "qu"
+      "kind": "ok",
+      "expected": "Qu'",
+      "actual": "qu'"
      },
      {
-      "kind": "wrong",
-      "expected": "Qu'il",
+      "kind": "ok",
+      "expected": "il",
       "actual": "il"
      },
      {
@@ -236,14 +257,14 @@
      }
     ],
     "counts": {
-     "ok": 1,
+     "ok": 3,
      "accent": 0,
-     "wrong": 1,
+     "wrong": 0,
      "missing": 0,
-     "extra": 1
+     "extra": 0
     },
-    "accuracy": 33,
-    "correct": false,
+    "accuracy": 100,
+    "correct": true,
     "accent_only": false
    }
   },
@@ -254,13 +275,13 @@
    "result": {
     "ops": [
      {
-      "kind": "extra",
-      "expected": "",
+      "kind": "accent",
+      "expected": "L'",
       "actual": "l"
      },
      {
-      "kind": "wrong",
-      "expected": "L'homme",
+      "kind": "ok",
+      "expected": "homme",
       "actual": "homme"
      },
      {
@@ -275,15 +296,15 @@
      }
     ],
     "counts": {
-     "ok": 2,
-     "accent": 0,
-     "wrong": 1,
+     "ok": 3,
+     "accent": 1,
+     "wrong": 0,
      "missing": 0,
-     "extra": 1
+     "extra": 0
     },
-    "accuracy": 50,
+    "accuracy": 88,
     "correct": false,
-    "accent_only": false
+    "accent_only": true
    }
   },
   {
@@ -294,8 +315,13 @@
     "ops": [
      {
       "kind": "accent",
-      "expected": "J'ai",
-      "actual": "jai"
+      "expected": "J'",
+      "actual": "j"
+     },
+     {
+      "kind": "ok",
+      "expected": "ai",
+      "actual": "ai"
      },
      {
       "kind": "ok",
@@ -304,13 +330,13 @@
      }
     ],
     "counts": {
-     "ok": 1,
+     "ok": 2,
      "accent": 1,
      "wrong": 0,
      "missing": 0,
      "extra": 0
     },
-    "accuracy": 75,
+    "accuracy": 83,
     "correct": false,
     "accent_only": true
    }
@@ -498,8 +524,13 @@
     "ops": [
      {
       "kind": "ok",
-      "expected": "C'est",
-      "actual": "c'est"
+      "expected": "C'",
+      "actual": "c'"
+     },
+     {
+      "kind": "ok",
+      "expected": "est",
+      "actual": "est"
      },
      {
       "kind": "ok",
@@ -513,7 +544,7 @@
      }
     ],
     "counts": {
-     "ok": 3,
+     "ok": 4,
      "accent": 0,
      "wrong": 0,
      "missing": 0,
@@ -668,18 +699,18 @@
       "actual": "autorites"
      },
      {
-      "kind": "extra",
-      "expected": "",
+      "kind": "wrong",
+      "expected": "canadiennes",
       "actual": "canadienne"
      },
      {
-      "kind": "wrong",
-      "expected": "canadiennes",
+      "kind": "accent",
+      "expected": "n'",
       "actual": "n"
      },
      {
-      "kind": "wrong",
-      "expected": "n'autorisent",
+      "kind": "ok",
+      "expected": "autorisent",
       "actual": "autorisent"
      },
      {
@@ -694,13 +725,13 @@
      }
     ],
     "counts": {
-     "ok": 2,
-     "accent": 1,
-     "wrong": 3,
+     "ok": 3,
+     "accent": 2,
+     "wrong": 2,
      "missing": 0,
-     "extra": 1
+     "extra": 0
     },
-    "accuracy": 36,
+    "accuracy": 57,
     "correct": false,
     "accent_only": false
    }
@@ -713,8 +744,13 @@
     "ops": [
      {
       "kind": "ok",
-      "expected": "Lorsqu'il",
-      "actual": "lorsqu'il"
+      "expected": "Lorsqu'",
+      "actual": "lorsqu'"
+     },
+     {
+      "kind": "ok",
+      "expected": "il",
+      "actual": "il"
      },
      {
       "kind": "ok",
@@ -723,18 +759,33 @@
      },
      {
       "kind": "ok",
-      "expected": "jusqu'à",
-      "actual": "jusqu'à"
+      "expected": "jusqu'",
+      "actual": "jusqu'"
      },
      {
       "kind": "ok",
-      "expected": "l'aube",
-      "actual": "l'aube"
+      "expected": "à",
+      "actual": "à"
      },
      {
       "kind": "ok",
-      "expected": "s'il",
-      "actual": "s'il"
+      "expected": "l'",
+      "actual": "l'"
+     },
+     {
+      "kind": "ok",
+      "expected": "aube",
+      "actual": "aube"
+     },
+     {
+      "kind": "ok",
+      "expected": "s'",
+      "actual": "s'"
+     },
+     {
+      "kind": "ok",
+      "expected": "il",
+      "actual": "il"
      },
      {
       "kind": "ok",
@@ -743,7 +794,7 @@
      }
     ],
     "counts": {
-     "ok": 6,
+     "ok": 10,
      "accent": 0,
      "wrong": 0,
      "missing": 0,
@@ -791,8 +842,13 @@
     "ops": [
      {
       "kind": "ok",
-      "expected": "C'est",
-      "actual": "c'est"
+      "expected": "C'",
+      "actual": "c'"
+     },
+     {
+      "kind": "ok",
+      "expected": "est",
+      "actual": "est"
      },
      {
       "kind": "ok",
@@ -811,7 +867,7 @@
      }
     ],
     "counts": {
-     "ok": 4,
+     "ok": 5,
      "accent": 0,
      "wrong": 0,
      "missing": 0,
@@ -1000,8 +1056,13 @@
     "ops": [
      {
       "kind": "ok",
-      "expected": "J'ai",
-      "actual": "J'ai"
+      "expected": "J'",
+      "actual": "J'"
+     },
+     {
+      "kind": "ok",
+      "expected": "ai",
+      "actual": "ai"
      },
      {
       "kind": "ok",
@@ -1020,7 +1081,7 @@
      }
     ],
     "counts": {
-     "ok": 4,
+     "ok": 5,
      "accent": 0,
      "wrong": 0,
      "missing": 0,
@@ -1039,8 +1100,13 @@
     "ops": [
      {
       "kind": "accent",
-      "expected": "J'ai",
-      "actual": "jai"
+      "expected": "J'",
+      "actual": "j"
+     },
+     {
+      "kind": "ok",
+      "expected": "ai",
+      "actual": "ai"
      },
      {
       "kind": "ok",
@@ -1049,13 +1115,13 @@
      }
     ],
     "counts": {
-     "ok": 1,
+     "ok": 2,
      "accent": 1,
      "wrong": 0,
      "missing": 0,
      "extra": 0
     },
-    "accuracy": 75,
+    "accuracy": 83,
     "correct": false,
     "accent_only": true
    }
@@ -1068,8 +1134,13 @@
     "ops": [
      {
       "kind": "ok",
-      "expected": "L'homme",
-      "actual": "l’homme"
+      "expected": "L'",
+      "actual": "l’"
+     },
+     {
+      "kind": "ok",
+      "expected": "homme",
+      "actual": "homme"
      },
      {
       "kind": "ok",
@@ -1083,7 +1154,7 @@
      }
     ],
     "counts": {
-     "ok": 3,
+     "ok": 4,
      "accent": 0,
      "wrong": 0,
      "missing": 0,
@@ -1101,13 +1172,13 @@
    "result": {
     "ops": [
      {
-      "kind": "extra",
-      "expected": "",
+      "kind": "wrong",
+      "expected": "L'",
       "actual": "le"
      },
      {
-      "kind": "wrong",
-      "expected": "L'homme",
+      "kind": "ok",
+      "expected": "homme",
       "actual": "homme"
      },
      {
@@ -1122,13 +1193,13 @@
      }
     ],
     "counts": {
-     "ok": 2,
+     "ok": 3,
      "accent": 0,
      "wrong": 1,
      "missing": 0,
-     "extra": 1
+     "extra": 0
     },
-    "accuracy": 50,
+    "accuracy": 75,
     "correct": false,
     "accent_only": false
    }
@@ -1164,6 +1235,202 @@
     },
     "accuracy": 100,
     "correct": true,
+    "accent_only": false
+   }
+  },
+  {
+   "name": "glued comma",
+   "expected": "Les représentants constitués en Assemblée nationale, ont résolu d'exposer les droits.",
+   "answer": "Les représentants constitués en Assemblée nationale,ont résolu d'exposer les droits",
+   "result": {
+    "ops": [
+     {
+      "kind": "ok",
+      "expected": "Les",
+      "actual": "Les"
+     },
+     {
+      "kind": "ok",
+      "expected": "représentants",
+      "actual": "représentants"
+     },
+     {
+      "kind": "ok",
+      "expected": "constitués",
+      "actual": "constitués"
+     },
+     {
+      "kind": "ok",
+      "expected": "en",
+      "actual": "en"
+     },
+     {
+      "kind": "ok",
+      "expected": "Assemblée",
+      "actual": "Assemblée"
+     },
+     {
+      "kind": "ok",
+      "expected": "nationale",
+      "actual": "nationale"
+     },
+     {
+      "kind": "ok",
+      "expected": "ont",
+      "actual": "ont"
+     },
+     {
+      "kind": "ok",
+      "expected": "résolu",
+      "actual": "résolu"
+     },
+     {
+      "kind": "ok",
+      "expected": "d'",
+      "actual": "d'"
+     },
+     {
+      "kind": "ok",
+      "expected": "exposer",
+      "actual": "exposer"
+     },
+     {
+      "kind": "ok",
+      "expected": "les",
+      "actual": "les"
+     },
+     {
+      "kind": "ok",
+      "expected": "droits",
+      "actual": "droits"
+     }
+    ],
+    "counts": {
+     "ok": 12,
+     "accent": 0,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 100,
+    "correct": true,
+    "accent_only": false
+   }
+  },
+  {
+   "name": "glued colon and guillemets",
+   "expected": "Il a dit : « oui ».",
+   "answer": "Il a dit:«oui»",
+   "result": {
+    "ops": [
+     {
+      "kind": "ok",
+      "expected": "Il",
+      "actual": "Il"
+     },
+     {
+      "kind": "ok",
+      "expected": "a",
+      "actual": "a"
+     },
+     {
+      "kind": "ok",
+      "expected": "dit",
+      "actual": "dit"
+     },
+     {
+      "kind": "ok",
+      "expected": "oui",
+      "actual": "oui"
+     }
+    ],
+    "counts": {
+     "ok": 4,
+     "accent": 0,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 100,
+    "correct": true,
+    "accent_only": false
+   }
+  },
+  {
+   "name": "space after elision before a vowel word",
+   "expected": "Je l'ai vu.",
+   "answer": "Je l' ai vu",
+   "result": {
+    "ops": [
+     {
+      "kind": "ok",
+      "expected": "Je",
+      "actual": "Je"
+     },
+     {
+      "kind": "ok",
+      "expected": "l'",
+      "actual": "l'"
+     },
+     {
+      "kind": "ok",
+      "expected": "ai",
+      "actual": "ai"
+     },
+     {
+      "kind": "ok",
+      "expected": "vu",
+      "actual": "vu"
+     }
+    ],
+    "counts": {
+     "ok": 4,
+     "accent": 0,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 100,
+    "correct": true,
+    "accent_only": false
+   }
+  },
+  {
+   "name": "elision written with a space and no apostrophe",
+   "expected": "Aujourd'hui il pleut.",
+   "answer": "aujourd hui il pleut",
+   "result": {
+    "ops": [
+     {
+      "kind": "extra",
+      "expected": "",
+      "actual": "aujourd"
+     },
+     {
+      "kind": "wrong",
+      "expected": "Aujourd'hui",
+      "actual": "hui"
+     },
+     {
+      "kind": "ok",
+      "expected": "il",
+      "actual": "il"
+     },
+     {
+      "kind": "ok",
+      "expected": "pleut",
+      "actual": "pleut"
+     }
+    ],
+    "counts": {
+     "ok": 2,
+     "accent": 0,
+     "wrong": 1,
+     "missing": 0,
+     "extra": 1
+    },
+    "accuracy": 50,
+    "correct": false,
     "accent_only": false
    }
   }

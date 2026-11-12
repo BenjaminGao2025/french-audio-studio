@@ -175,8 +175,9 @@ export function submitAnswer(key: string) {
   gradeAttempt(grading.src, kind, grading.step, draft)
     .then((r) => {
       if (!get().attempts.some((x) => x.id === attemptId)) return;
-      // The server decides right or wrong; the word marks come from the same rules on this side.
-      const res = { ...grade(target.fr, draft), correct: r.correct };
+      // The server decides right or wrong and the score; the word marks come from the same rules on this side.
+      const local = grade(target.fr, draft);
+      const res = { ...local, correct: r.correct, accuracy: typeof r.accuracy === "number" ? r.accuracy : local.accuracy };
       const curUi = get().exercises[key]?.ui[qk];
       const prev = get().attempts.find((x) => x.id === attemptId);
       patchAttempt(attemptId, {
@@ -500,7 +501,7 @@ function Result({
         <p aria-label="Inline corrections" className="font-serif text-2xl leading-relaxed wrap-break-word" lang="fr">
           {r.alignment.map((word, i) => (
             <Fragment key={i}>
-              {i > 0 && " "}
+              {i > 0 && !/['’]$/.test(r.alignment[i - 1].given ?? r.alignment[i - 1].expected ?? "") && " "}
               <span data-mark={word.mark} className={word.mark === "different" || word.mark === "accent" ? "inline-block max-w-full" : undefined}>
                 {word.mark === "ok" ? word.given : word.mark === "missing" ? (
                   <span className="text-destructive font-medium underline underline-offset-4" aria-label={`Missing word: ${word.expected}`}>{word.expected}</span>
