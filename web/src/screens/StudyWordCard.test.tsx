@@ -151,6 +151,40 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(host.querySelector(".wp-headword")?.textContent).toBe("ont");
   });
 
+  it.each(["marked explanation", "base form"])("gives avoir its own sentence context via %s", async source => {
+    const sentence: StudySentence = { ...SENTENCE, fr: "Les représentants ont résolu d'exposer les droits." };
+    vi.spyOn(lookupApi, "lookupWord").mockImplementation(async token => ({
+      token, lemma: "avoir", pos: "verb", phonetic: "", explanation_cn: "", explanation_en: "",
+      entries: [{ lemma: "avoir", pos: "verb", phonetic: "", language: "en", senses: ["have"], source_url: "", history_url: "" }],
+    }));
+    const context = vi.spyOn(lookupApi, "wordContext").mockImplementation(async ({ word }) => ({
+      context: { meaning_en: "", meaning_zh: "", why_zh: "", why_en: word === "avoir"
+        ? "⟦avoir⟧ is the infinitive behind ⟦ont⟧, the auxiliary with ⟦résolu⟧."
+        : "⟦ont⟧ is the 3rd person plural present tense of ⟦avoir⟧." }, state: "ready",
+    }));
+    await act(async () => root.render(<WordPanel sentence={sentence} text="ont" onClose={() => {}} />));
+    const avoir = source === "marked explanation"
+      ? Array.from(host.querySelectorAll<HTMLButtonElement>('[aria-label="In this sentence"] button[lang="fr"]')).find(button => button.textContent === "avoir")!
+      : findButton("avoir");
+    await act(async () => avoir.click());
+    expect(context.mock.calls.at(-1)?.[0]).toMatchObject({ word: "avoir", occurrence: 0, sentence: sentence.fr });
+    expect(host.querySelector(".wp-headword")?.textContent).toBe("avoir");
+    expect(host.querySelector('[aria-label="In this sentence"]')?.textContent).toContain("is the infinitive behind");
+    expect(findButton("Back to ont")).toBeTruthy();
+    await act(async () => findButton("Back to ont").click());
+    expect(host.querySelector('[aria-label="In this sentence"]')?.textContent).toContain("3rd person plural");
+  });
+
+  it("selects the closest repeated surface when drilling within a sentence", async () => {
+    const sentence: StudySentence = { ...SENTENCE, fr: "Ils ont résolu ceci ; ils ont résolu cela." };
+    const context = vi.spyOn(lookupApi, "wordContext").mockResolvedValue({
+      context: { meaning_en: "", meaning_zh: "", why_zh: "", why_en: "With ⟦résolu⟧ it forms the passé composé." }, state: "ready",
+    });
+    await act(async () => root.render(<WordPanel sentence={sentence} text="ont" occurrence={1} onClose={() => {}} />));
+    await act(async () => findButton("résolu").click());
+    expect(context.mock.calls.at(-1)?.[0]).toMatchObject({ word: "résolu", occurrence: 1 });
+  });
+
   it("keeps unmarked French and English words plain in the explanation", async () => {
     vi.spyOn(lookupApi, "wordContext").mockResolvedValue({ context: { meaning_en: "have", meaning_zh: "", why_zh: "", why_en: "avoir is used here with résolu." }, state: "ready" });
     await act(async () => root.render(<WordPanel sentence={SENTENCE} text="ont" onClose={() => {}} />));
@@ -303,7 +337,7 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(host.querySelector(".wp-headword")?.textContent).toBe("machine à laver");
   });
 
-  it("drills nuisibles → nuisible with its own deck star, source occurrence, dictionary fallback and retry", async () => {
+  it("drills nuisibles → nuisible with its own deck star, target context, dictionary fallback and retry", async () => {
     const sentence: StudySentence = { ...SENTENCE, fr: "Ces insectes sont nuisibles.", en: "These insects are harmful." };
     const lookup = vi.spyOn(lookupApi, "lookupWord").mockImplementation(async token => ({
       token, lemma: "nuisible", pos: "adj", phonetic: "", explanation_cn: "", explanation_en: "",
@@ -324,7 +358,7 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(section.textContent).toContain("harmful");
     expect(section.textContent).toContain("Dictionary meaning");
     expect(section.textContent).not.toContain("Couldn’t load");
-    expect(context.mock.calls.at(-1)?.[0]).toMatchObject({ word: "nuisibles", occurrence: 0, sentence: sentence.fr });
+    expect(context.mock.calls.at(-1)?.[0]).toMatchObject({ word: "nuisible", occurrence: 0, sentence: sentence.fr });
     context.mockResolvedValue({ context: { meaning_en: "harmful to people", meaning_zh: "", why_zh: "" }, state: "ready" } as Awaited<ReturnType<typeof lookupApi.wordContext>>);
     await act(async () => findButton("Retry").click());
     await wait(100);

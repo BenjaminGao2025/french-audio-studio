@@ -48,7 +48,7 @@ def _user_message(post_chat) -> str:
 
 
 class OccurrenceTests(unittest.TestCase):
-    def test_drilled_lemma_needs_the_original_inflected_surface(self):
+    def test_absent_lemma_has_no_surface_span(self):
         sentence = "Ces insectes sont nuisibles."
         self.assertEqual(word_context.word_spans("nuisible", sentence), [])
         spans = word_context.word_spans("nuisibles", sentence)
@@ -189,6 +189,43 @@ class EndpointTests(unittest.TestCase):
             json={"sentence": sentence, "word": word, "language": "zh", **extra},
             headers=self.headers if headers is None else headers,
         )
+
+    def test_cited_avoir_and_surface_ont_have_distinct_contexts_and_caches(self):
+        sentence = "Les représentants ont résolu d'exposer les droits."
+        answers = {
+            "ont": {"why_en": "⟦ont⟧ is the 3rd person plural present tense of ⟦avoir⟧; with ⟦résolu⟧ it forms the passé composé."},
+            "avoir": {"why_en": "⟦avoir⟧ is the infinitive behind ⟦ont⟧, the auxiliary used with ⟦résolu⟧ in the passé composé."},
+        }
+        def reply(client, payload, headers):
+            user = payload["messages"][1]["content"]
+            cited = "Target cited base form (not a surface token): avoir" in user
+            if cited:
+                self.assertIn("Explain the TARGET base form", payload["messages"][0]["content"])
+                self.assertNotIn("⟦avoir⟧", user)
+            self.assertIn("Les représentants ⟦ont⟧ résolu", user)
+            return _reply(answers["avoir" if cited else "ont"])
+        with mock.patch("services.ai.post_chat", side_effect=reply) as chat:
+            for word in ("ont", "avoir"):
+                response = self._post(sentence, word, language="en")
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json()["context"]["why_en"], answers[word]["why_en"])
+                self.assertFalse(response.json()["cached"])
+                self.assertTrue(self._post(sentence, word, language="en").json()["cached"])
+            self.assertEqual(chat.call_count, 2)
+            self.assertEqual(self._post(sentence, "avoir", occurrence=1).status_code, 422)
+            with mock.patch("offline_dictionary.lookup", return_value=None):
+                self.assertEqual(self._post(sentence, "banane", hints={"lemma": "banane"}).status_code, 422)
+            self.assertEqual(chat.call_count, 2)
+
+    def test_absent_lemma_requires_exact_dictionary_relation(self):
+        sentence = "Ces insectes sont nuisibles."
+        for match_type, expected in (("exact", (18, 27)), ("related", None)):
+            with mock.patch("offline_dictionary.lookup", side_effect=lambda token: {
+                "match_type": match_type, "entries": [{"lemma": "nuisible"}]
+            } if token == "nuisibles" else None):
+                self.assertEqual(word_context.related_lemma_span("nuisible", sentence), expected)
+        with mock.patch("offline_dictionary.lookup", side_effect=word_context.offline_dictionary.DictionaryUnavailable):
+            self.assertIsNone(word_context.related_lemma_span("banane", sentence))
 
     def test_thin_cached_gloss_is_upgraded_on_lookup(self):
         sentence = "Le mépris ou l'oubli est nuisible."

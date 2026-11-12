@@ -607,7 +607,10 @@ async def _compute_word_context(
     request: WordContextRequest,
     api_key: str,
 ) -> dict:
-    payload = word_context.ai_payload(ai.AGY_MODEL, sentence, span, request.translation_zh, request.hints.model_dump(), language=request.language)
+    payload = word_context.ai_payload(
+        ai.AGY_MODEL, sentence, span, request.translation_zh, request.hints.model_dump(),
+        language=request.language, cited_word=word if not word_context.word_spans(word, sentence) else "",
+    )
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     async with httpx.AsyncClient(timeout=30.0) as client:
         _, raw_text = await ai.post_chat(client, payload, headers)
@@ -637,8 +640,10 @@ async def word_context_for(
     if not sentence or not word:
         raise HTTPException(status_code=422, detail={"code": "word_context_invalid", "message": "请提供句子和单词"})
     spans = word_context.word_spans(word, sentence)
-    if request.occurrence >= len(spans):
-        # Not a word of this sentence: there is nothing to explain, and no model call is spent on it
+    span = spans[request.occurrence] if request.occurrence < len(spans) else None
+    if not spans and request.occurrence == 0:
+        span = await run_in_threadpool(word_context.related_lemma_span, word, sentence)
+    if span is None:
         raise HTTPException(status_code=422, detail={"code": "word_not_in_sentence", "message": "这个词不在这句话里。"})
     key = word_context.cache_key(sentence, word, request.occurrence, request.language)
     cached = await run_in_threadpool(word_context.get_cached, user_id, key)
@@ -651,7 +656,7 @@ async def word_context_for(
         api_key = ai.upstream_key(authorization)  # checks the account and spends the shared "ai" bucket
         task = asyncio.ensure_future(
             _compute_word_context(
-                user_id, key, sentence, word, request.occurrence, spans[request.occurrence], request, api_key
+                user_id, key, sentence, word, request.occurrence, span, request, api_key
             )
         )
         _word_context_in_flight[(user_id, key)] = task

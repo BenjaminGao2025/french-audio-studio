@@ -137,10 +137,12 @@ export function WordPanel({
   const drill = (word: string) => {
     if (lookupKey(word) === lookupKey(shown)) return;
     sayFrench(word);
-    // Dictionary lemmas retain the clicked inflection and occurrence for sentence context.
-    // The headword, dictionary lookup and deck star still belong to the drilled word.
-    const isLemma = dict?.entries?.some(entry => lookupKey(entry.lemma) === lookupKey(word));
-    setStack(prev => [...prev, { word, surface: isLemma ? contextWord : word, occurrence: isLemma ? contextOccurrence : 0 }]);
+    // Explanation links have no sentence offset: choose the occurrence nearest the current one.
+    const sourceStart = findWordSpans(sentence.fr, contextWord)[contextOccurrence]?.[0] ?? 0;
+    const spans = findWordSpans(sentence.fr, word);
+    const nextOccurrence = spans.reduce((best, span, i) =>
+      Math.abs(span[0] - sourceStart) < Math.abs(spans[best][0] - sourceStart) ? i : best, 0);
+    setStack(prev => [...prev, { word, surface: word, occurrence: nextOccurrence }]);
     recordLookup(word, sentence).catch(() => undefined);
   };
   const french = (value: string, className = "text-sm") => <FrText text={value} className={className} onPick={p => drill(p.text)} />;
