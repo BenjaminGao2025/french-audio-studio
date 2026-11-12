@@ -48,3 +48,72 @@ All required screenshots were captured and visually inspected at 1280 and 390 pi
 The additional copy to /workspace/polish-1.3.3/screenshots/ was unavailable: /workspace does not exist and attempting to create it returned Permission denied. Screenshots, node_modules, preview-main.tsx and vite.audit.config.ts are excluded from commits.
 
 The report is also copied to /home/mgacai/polish-1.3.3-out/REPORT.md. Delivery uses only `git push -u origin design/polish-1.3.3` to retarget this branch's upstream.
+
+
+## TASK 4 — Recall word-chip activation
+
+Follow-up implementation: af99adc71bce69aa18545e95eadac11880b09928. Tool: Codex CLI; model: gpt-6.1-sol. Version remains 1.3.3; the earlier Importance, result hierarchy and CI Node-skip changes are retained.
+
+Root cause: FrText discarded every click with detail > 1 and gated clicks with a non-collapsed native selection on the remembered lastWasClick flag. A rapid/repeated click after dismissal could therefore highlight/select a chip without emitting onPick; a stale native phrase selection could also swallow an accessibility/programmatic click without a new pointer sequence. The analysis phrase-overlap logic only supplies card content and does not block opening. Both Exercise and Study already create fresh pick objects; no parent text-equality guard needed removal.
+
+Reproduced against the original committed FrText on the fixture-only 127.0.0.1:8030 Playwright harness: open laver, dismiss, send a browser click with clickCount=2 → zero open cards. The identical check with the fix → one open laver card. The new regression test fails against the original component (no picks) and passes with the fix. Evidence: baseline-browser.log, baseline-test.log, fixed-browser.log and reproduce-baseline.cjs under /home/mgacai/polish-1.3.3-out/.
+
+The shared component now suppresses only the immediate click belonging to a deliberate mouse drag. A new pointer gesture or the end-of-event-loop cleanup clears suppression; click counts and old selections cannot suppress a fresh word activation. Explicit word taps clear the old native range and always emit a new pick. Keyboard activation and selection position deduplication remain. The Recall desktop host now passes the clicked element as the popover anchor, keeping the correct-answer line visible above the card.
+
+Browser checks cover native drag-selection of Ma machine, close then laver, repeated laver close/reopen, neighbouring machine/à/fuit clicks, and a multi-click activation. Existing selection/keyboard tests and the Study/Review suites pass. Browser engine: Chromium on Linux; desktop Mac Safari was not available in this environment.
+
+Screenshots: /home/mgacai/polish-1.3.3-out/screenshots/polish-after-recall-laver-card-1280.png and polish-after-recall-laver-card-390.png. The laver card is open and has no grammar entry point.
+
+## TASK 5 — Correct result focuses Next
+
+The shared Recall/Dictation Result focuses its Next control, including the final-item Done destination, after a correct grade. Document capture listeners track whether Enter is still held. Focus waits until keyup and a subsequent animation frame, so the submitting event cannot activate the new control. Repeated Enter keydowns are ignored both in the textarea check path and on Next. A fresh Enter on Next advances once; normal pointer and Space activation remain. Incorrect results retain result-container focus and do not auto-advance. The focus listener stops after the initial transfer so later keyboard work in a word card cannot steal focus back.
+
+ExerciseReveal tests cover Recall and Dictation in whole and step scopes, final Done controls, a held textarea submission, repeat suppression, fresh Enter once, Check-button Enter release, ordinary Next navigation and incorrect results. Browser assertions hold Enter through the asynchronous grade, verify Next is not yet focused, release Enter, verify Next focus, then press a fresh Enter to advance.
+
+Screenshots: /home/mgacai/polish-1.3.3-out/screenshots/polish-after-recall-correct-next-1280.png and polish-after-recall-correct-next-390.png, showing the focus ring.
+
+## TASK 6 — Remove word-card grammar entry point
+
+Removed the ghost grammar action and onGrammar prop from the shared WordPanel API and its Study/Exercise callers. This covers desktop popovers, mobile drawers, Review and other shared hosts. StudyWordCard no longer expects or clicks the removed label; it asserts the card has no grammar entry point. Sentence-level Study grammar and all backend grammar data, analysis and endpoints are unchanged. All newly captured word-card shots show the removal; no replacement copy was added.
+
+## TASK 7 — Old navy-slate dark palette and theme preference
+
+Mapped /home/mgacai/projects/tts-old-src/static/tokens.css dark tokens onto shadcn: background #141a23, card/popover/sidebar #1b2430, secondary #202b38, muted #273444, foreground #d5deea, muted text #a5b4c7, border #354357, primary/ring #91b5e6, accent text #a3bfd3, danger #eca1a9 and success #8dcca5. Chart tokens use the same palette. The light warm-paper/olive palette remains. The .dark block sets color-scheme: dark.
+
+The account dropdown uses stock DropdownMenuRadioGroup/DropdownMenuRadioItem with Light, Dark, System. Default is System; localStorage key theme persists the explicit choice. The helper reads stored values, applies the html .dark class, and attaches/cleans up a live prefers-color-scheme change listener. The no-flash bootstrap is the small blocking external /static/theme-boot.js in web/index.html's head. It reads storage and system preference before paint, uses no inline script or eval, and is compatible with script-src 'self'. web/index.html is the sole SPA HTML entry. PWA theme-color metas have light/dark media queries (#f7f4ee / #141a23). Apple status-bar-style remains default for both schemes: the opaque native status bar avoids a translucent overlay; no unsupported per-scheme Apple meta was introduced. The PWA manifest retains its light installation fallback.
+
+Audited application color literals and utilities: word cards, drawers, Study player, Review, result corrections, charts and toast surfaces inherit tokens. TypeAnswerDiff now uses a theme-aware success token instead of green-700; legacy error references use destructive, the OCR warning uses primary, and the account initials have contrasting primary-foreground. Design gallery literal swatches remain reference samples; stock UI component styling is retained.
+
+Theme tests execute the actual external boot script for light/dark/system/invalid/missing stored choices with both OS schemes, and check storage reading/writing, html class application, live System updates and listener cleanup. PWA tests verify both theme-color metas and the blocking script in source and built SPA shells.
+
+Follow-up verification:
+
+- cd web && npm test: 435 passed across 19 files (15 added). Log: followup-tests-verified.log.
+- cd web && npm run build: passed; existing classic PWA-script and large-bundle warnings remain. Log: followup-build-final.log.
+- PYTHONPATH=".:tests" python3 -m unittest test_pwa -v: 10 passed using testenv/temp DBs. Log: followup-pwa-final.log.
+- bash /home/mgacai/polish-1.3.3-out/audit.sh: raw button/select/input/textarea/details/summary counts all 0; 38 app TSX files, 34 importing UI, 1334 className uses, 232 CSS lines. Log: followup-audit.log.
+- git diff --check: passed.
+- Playwright fixture assertions passed at 1280 and 390, with no horizontal page overflow. Dark screenshots were visually inspected: navy-slate page, lighter cards, readable text and light-blue accents. Menu captures wait for the opening animation to finish.
+
+All 18 follow-up screenshots are under /home/mgacai/polish-1.3.3-out/screenshots/:
+
+- polish-after-recall-laver-card-1280.png
+- polish-after-recall-laver-card-390.png
+- polish-after-recall-correct-next-1280.png
+- polish-after-recall-correct-next-390.png
+- polish-after-study-light-1280.png
+- polish-after-study-light-390.png
+- polish-after-study-dark-1280.png
+- polish-after-study-dark-390.png
+- polish-after-recall-light-1280.png
+- polish-after-recall-light-390.png
+- polish-after-recall-dark-1280.png
+- polish-after-recall-dark-390.png
+- polish-after-wordcard-light-1280.png
+- polish-after-wordcard-light-390.png
+- polish-after-wordcard-dark-1280.png
+- polish-after-wordcard-dark-390.png
+- polish-after-theme-menu-light-1280.png
+- polish-after-theme-menu-dark-1280.png
+
+The optional /workspace copy remains unavailable because /workspace is absent/not writable. Browser script and logs remain in the external output directory. The fixture preview bound only 127.0.0.1:8030 after checking it was free; it is stopped and the port is confirmed free. Temporary preview source/config were removed from the checkout. No screenshot PNGs, node_modules or preview files are committed. No protected production resources or other processes were touched. Delivery is restricted to origin design/polish-1.3.3.
