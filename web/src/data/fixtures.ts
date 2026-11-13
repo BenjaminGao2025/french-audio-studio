@@ -320,6 +320,8 @@ export interface LibCard {
   mastered: boolean;
   favorite: boolean;
   lookups: number;
+  /** Stored importance 1-5 (word cards: lookup tier or the learner's choice). */
+  importance?: number;
   /** Deck membership. Legacy favorite fields are retained for old demo state only. */
   saved: boolean;
   /** ISO due date from the server (real library); demo fixtures leave it undefined. */

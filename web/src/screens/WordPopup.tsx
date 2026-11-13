@@ -16,7 +16,7 @@ import {
   type WordContextHints,
   type WordContextResult,
 } from "../api/lookup";
-import { loadLibrary } from "../api/review";
+import { loadLibrary, setWordImportance } from "../api/review";
 import { WordDeckStar } from "../components/WordDeckStar";
 import { Phonetic } from "../components/Phonetic";
 import type { StudySentence } from "../data/fixtures";
@@ -25,7 +25,7 @@ import { WordNotes } from "./WordNotes";
 import { findWordSpans, FrText } from "../components/FrText";
 import { Input } from "../components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent } from "../components/ui/popover";
-import { lookupKey, wordIsSaved } from "../lib/lookup";
+import { lookupKey, wordImportance, wordIsSaved } from "../lib/lookup";
 import { announce, get, patchStudy, sayFrench, useApp } from "../state/store";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger, Importance, Skeleton, Spinner, useAppWidth } from "../components/ui";
 import { Button } from "../components/ui/button";
@@ -124,6 +124,7 @@ function WordPanelContent({
     el?.focus({ preventScroll: true });
   }, [shown, compact]);
   const saved = useApp(s => wordIsSaved(s.cards, shown));
+  const importance = useApp(s => wordImportance(s.cards, shown));
   const liveCount = useLookupCount(shown);
   const storedCount = useApp(s => s.lookups[lookupKey(shown)]?.count ?? 0);
   const count = liveCount ?? storedCount;
@@ -285,7 +286,7 @@ function WordPanelContent({
 
       <footer className="wp-footer flex flex-wrap items-center justify-between gap-2 border-t pt-3">
         <div className="wp-importance flex items-center gap-2 text-muted-foreground"><span className="text-xs">Importance</span>
-            <Importance saved={saved} count={count ?? 0} lookups="muted" />
+            <Importance saved={saved} count={count ?? 0} value={saved ? importance : 0} onChange={saved ? (level) => void setWordImportance(shown, level) : undefined} lookups="muted" />
         </div>
       </footer>
     </div>
@@ -347,8 +348,9 @@ function French({ value, onWord, language = "fr" }: { value: string; onWord: (wo
 function Module({ title, defaultOpen = false, inner = false, children }: { title: string; defaultOpen?: boolean; inner?: boolean; children: ReactNode }) {
   return <section aria-label={title} className={inner ? "rounded-md bg-muted/50 px-3" : ""}>
     <Collapsible defaultOpen={defaultOpen}>
-      <h3><CollapsibleTrigger className="flex min-h-10 w-full items-center justify-between gap-2 text-xs font-medium tracking-wide text-muted-foreground">
-        {title}<ChevronDown className="size-4" aria-hidden />
+      {/* Section title outranks its content: same size as the body, heavier, full colour; the chevron stays quiet. */}
+      <h3><CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between gap-2 text-sm font-semibold text-foreground">
+        {title}<ChevronDown className="size-4 text-muted-foreground" aria-hidden />
       </CollapsibleTrigger></h3>
       <CollapsibleContent className="flex flex-col gap-3 pb-3 text-sm font-normal text-foreground">{children}</CollapsibleContent>
     </Collapsible>

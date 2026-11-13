@@ -33,11 +33,8 @@ class NormalizeTests(unittest.TestCase):
         self.assertEqual(srs.normalize_lookup_word("Bonjour"), "bonjour")
 
     def test_importance_tiers(self):
-        self.assertEqual(srs.importance_for_lookups(1), 3)
-        self.assertEqual(srs.importance_for_lookups(3), 4)
-        self.assertEqual(srs.importance_for_lookups(5), 5)
-        self.assertEqual(srs.importance_for_lookups(9), 5)
-        self.assertEqual(srs.importance_for_lookups(10), 5)
+        for count, stars in [(0, 3), (1, 3), (4, 3), (5, 4), (7, 4), (9, 4), (10, 5), (30, 5)]:
+            self.assertEqual(srs.importance_for_lookups(count), stars, count)
 
 
 class RecordLookupTests(unittest.TestCase):
@@ -60,14 +57,17 @@ class RecordLookupTests(unittest.TestCase):
         after = srs.record_word_lookup(self.user_id, "bonjour", now=self.now + datetime.timedelta(seconds=5))
         self.assertEqual((after["count"], after["incremented"]), (2, True))
 
-    def test_counts_are_per_user_and_reach_the_importance_tiers(self):
+    def test_counts_are_per_user_and_each_five_lookups_after_saving_add_a_star(self):
         other_id, _ = _new_user()
-        for i in range(10):
+        stars = []
+        for i in range(13):
             result = srs.record_word_lookup(
                 self.user_id, "très", now=self.now + datetime.timedelta(seconds=6 * i)
             )
-        self.assertEqual(result["count"], 10)
-        self.assertEqual(result["importance"], 5)
+            stars.append(result["importance"])
+        # Auto-saved at the 3rd lookup with 3 stars, then +1 at the 8th and the 13th.
+        self.assertEqual(stars, [0, 0, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 5])
+        self.assertEqual(result["count"], 13)
         self.assertEqual(srs.record_word_lookup(other_id, "très", now=self.now)["count"], 1)
 
         nine = srs.record_word_lookup(
@@ -78,7 +78,7 @@ class RecordLookupTests(unittest.TestCase):
             result = srs.record_word_lookup(
                 self.user_id, "beaucoup", now=self.now + datetime.timedelta(seconds=6 * i)
             )
-        self.assertEqual((result["count"], result["importance"]), (9, 5))
+        self.assertEqual((result["count"], result["importance"]), (9, 4))
 
     def test_en_debounce_does_not_slide_and_count_persists(self):
         for seconds, count, incremented in [(0, 1, True), (1, 1, False), (4, 1, False), (5, 2, True), (9, 2, False), (10, 3, True)]:
@@ -102,30 +102,43 @@ class RecordLookupTests(unittest.TestCase):
     def test_autosave_unstar_suppression_and_later_resave(self):
         for i in range(3):
             result = srs.record_word_lookup(self.user_id, "bonjour", now=self.now + datetime.timedelta(seconds=5*i), sentence="Bonjour à tous.")
-            self.assertEqual(result["importance"], 0 if i < 2 else 4)
+            self.assertEqual(result["importance"], 0 if i < 2 else 3)
         cards = [c for c in srs.list_cards(self.user_id) if c["mode"] == "cloze"]
         self.assertEqual(len(cards), 1)
-        self.assertEqual(cards[0]["importance"], 4)
+        self.assertEqual(cards[0]["importance"], 3)
         srs.delete_card(self.user_id, cards[0]["id"])
         suppressed = srs.record_word_lookup(self.user_id, "bonjour", now=self.now + datetime.timedelta(seconds=11))
         self.assertEqual((suppressed["count"], suppressed["importance"], suppressed["incremented"]), (3, 0, False))
         self.assertEqual(srs.list_cards(self.user_id), [])
         later = srs.record_word_lookup(self.user_id, "bonjour", now=self.now + datetime.timedelta(seconds=15))
-        self.assertEqual((later["count"], later["importance"]), (4, 4))
-        top = srs.record_word_lookup(self.user_id, "bonjour", now=self.now + datetime.timedelta(seconds=20))
-        self.assertEqual((top["count"], top["importance"]), (5, 5))
-        self.assertEqual(srs.list_cards(self.user_id)[0]["importance"], 5)
+        self.assertEqual((later["count"], later["importance"]), (4, 3))
+        # Saved again at the 4th lookup: the climb counts from there, so the 9th adds the star.
+        stars = [srs.record_word_lookup(self.user_id, "bonjour", now=self.now + datetime.timedelta(seconds=20 + 6 * i))["importance"]
+                 for i in range(5)]
+        self.assertEqual(stars, [3, 3, 3, 3, 4])
+        self.assertEqual(srs.list_cards(self.user_id)[0]["importance"], 4)
 
-    def test_manual_save_uses_historical_counts_without_autosaving_on_read(self):
+    def test_manual_save_uses_historical_counts_and_the_learner_choice_stands(self):
         with srs._connect() as conn:
-            conn.execute("INSERT INTO word_lookup_counts VALUES (?, 'bonjour', 5, ?, ?)", (self.user_id, srs._iso(self.now), srs._iso(self.now)))
-        self.assertEqual(srs.lookup_counts(self.user_id), {"bonjour": 5})
+            conn.execute("INSERT INTO word_lookup_counts VALUES (?, 'bonjour', 7, ?, ?)", (self.user_id, srs._iso(self.now), srs._iso(self.now)))
+        self.assertEqual(srs.lookup_counts(self.user_id), {"bonjour": 7})
         self.assertEqual(srs.list_cards(self.user_id), [])
         note = srs.add_note(self.user_id, "Bonjour à tous.", targets=[{"text": "Bonjour", "mode": "cloze", "importance": 1}])
         card = note["cards"][0]
-        self.assertEqual(card["importance"], 5)
-        srs.set_importance(self.user_id, [card["id"]], 1)
-        self.assertEqual(srs.list_cards(self.user_id)[0]["importance"], 5)
+        self.assertEqual(card["importance"], 3)  # saving gives 3 stars, whatever the earlier lookups
+        # The learner can pick another level, up or down; the next 5 lookups add one star to it.
+        self.assertEqual(srs.set_importance(self.user_id, [card["id"]], 2), 1)
+        self.assertEqual(srs.list_cards(self.user_id)[0]["importance"], 2)
+        stars = [srs.record_word_lookup(self.user_id, "bonjour", now=self.now + datetime.timedelta(seconds=6 * i))["importance"]
+                 for i in range(1, 6)]
+        self.assertEqual(stars, [2, 2, 2, 2, 3])  # lookups 8-12
+        self.assertEqual(srs.set_importance(self.user_id, [card["id"]], 4), 1)
+        stars = [srs.record_word_lookup(self.user_id, "bonjour", now=self.now + datetime.timedelta(seconds=6 * i))["importance"]
+                 for i in range(6, 12)]
+        self.assertEqual(stars, [4, 4, 4, 4, 5, 5])  # lookups 13-18; 5 is the top
+        # Saving the word again from another sentence keeps the word's importance.
+        other = srs.add_note(self.user_id, "Bonjour, madame.", targets=[{"text": "Bonjour", "mode": "cloze"}])
+        self.assertEqual(other["cards"][0]["importance"], 5)
 
     def test_migration_recomputes_only_existing_cards_and_preserves_content(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -134,9 +147,9 @@ class RecordLookupTests(unittest.TestCase):
                 srs.init_db()
                 srs.add_note(self.user_id, "Bonjour à tous.", targets=[{"text": "Bonjour", "mode": "cloze", "meta": {"meaning_en": "Hello"}}])
                 with srs._connect() as conn:
-                    conn.execute("DELETE FROM srs_migrations WHERE name = 'importance-1.3.4'")
-                    conn.execute("UPDATE srs_cards SET importance = 1")
-                    for word, count in [("bonjour", 3), ("historical", 10)]:
+                    conn.execute("DELETE FROM srs_migrations WHERE name = 'importance-tiers-1.3.7'")
+                    conn.execute("UPDATE srs_cards SET importance = 5")
+                    for word, count in [("bonjour", 7), ("historical", 10)]:
                         conn.execute("INSERT INTO word_lookup_counts VALUES (?, ?, ?, ?, ?)", (self.user_id, word, count, srs._iso(self.now), srs._iso(self.now)))
                     before = [tuple(r) for r in conn.execute("SELECT id, note_id, target_json, fsrs_json, due FROM srs_cards")]
                 srs._initialized_db_paths.discard(str(path))
@@ -145,6 +158,9 @@ class RecordLookupTests(unittest.TestCase):
                     self.assertEqual([tuple(r) for r in conn.execute("SELECT id, note_id, target_json, fsrs_json, due FROM srs_cards")], before)
                     self.assertEqual(conn.execute("SELECT importance FROM srs_cards").fetchone()[0], 4)
                     self.assertEqual(conn.execute("SELECT count(*) FROM word_lookup_counts").fetchone()[0], 2)
+                    # As if saved before the first lookup: the climb continues from the last 5-lookup step.
+                    self.assertEqual(dict(conn.execute("SELECT word, lookups FROM word_importance_base").fetchall()),
+                                     {"bonjour": 5, "historical": 10})
                 srs._initialized_db_paths.discard(str(path))
                 srs.init_db()
                 self.assertEqual(len(srs.list_cards(self.user_id)), 1)

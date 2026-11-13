@@ -3,7 +3,7 @@ import { sentenceKey } from "../api/srs";
 import { buildLibrary, buildQueue, type LibCard } from "../data/fixtures";
 import type { ServerCard } from "../api/review";
 import { grade } from "../lib/grading";
-import { importanceFor, lookupKey } from "../lib/lookup";
+import { lookupKey } from "../lib/lookup";
 
 const BASE = Date.UTC(2026, 0, 1);
 const MODE = { Listen: "listen", Speak: "speak", "Fill-in": "cloze" } as const;
@@ -163,6 +163,8 @@ export const fake = {
   wordContexts: {} as Record<string, { meaning_en: string; why_en: string; meaning_zh: string; why_zh: string }>,
   /** Server-side lookup counts by lookupKey. */
   lookups: {} as Record<string, number>,
+  /** Lookup count when a saved word's importance last changed (srs word_importance_base). */
+  lookupBase: {} as Record<string, number>,
   lookupLast: {} as Record<string, number>,
   /** Path prefixes whose next request fails with a 503. */
   failNext: new Set<string>(),
@@ -202,6 +204,7 @@ export const fake = {
     this.heartbeats = {};
     this.wordContexts = {};
     this.lookups = {};
+    this.lookupBase = {};
     this.lookupLast = {};
     this.notes = [];
     this.nextNote = 1;
@@ -252,10 +255,30 @@ function route(method: string, url: URL, body: Record<string, unknown>): Respons
     let saved = fake.srs.cards.some(c => c.mode === "cloze" && lookupKey(c.target) === k);
     if (incremented && count >= 3 && !saved) {
       const id = `auto-${++seq}`;
-      fake.srs.cards.push({ id, note_id: id, mode: "cloze", target: String(body.word), target_meta: {}, archived: false, importance: importanceFor(count, true), state: "new", due: new Date().toISOString(), created_at: new Date().toISOString(), note: { id, sentence: String(body.sentence || body.word), translation_en: String(body.translation_en || ""), translation_zh: "" } });
+      fake.srs.cards.push({ id, note_id: id, mode: "cloze", target: String(body.word), target_meta: {}, archived: false, importance: 3, state: "new", due: new Date().toISOString(), created_at: new Date().toISOString(), note: { id, sentence: String(body.sentence || body.word), translation_en: String(body.translation_en || ""), translation_zh: "" } });
+      fake.lookupBase[k] = count;
       saved = true;
     }
-    return json(200, { count, importance: importanceFor(count, saved), incremented });
+    const mine = fake.srs.cards.filter(c => (c.mode === "cloze" || c.mode === "recognize") && lookupKey(c.target) === k);
+    // Like srs.record_word_lookup: each 5 lookups since the importance last changed add one star, up to 5.
+    let importance = mine.length ? Math.max(...mine.map(c => c.importance)) : 0;
+    if (incremented && importance > 0 && importance < 5 && count - (fake.lookupBase[k] ?? 0) >= 5) {
+      importance += 1;
+      for (const c of mine) c.importance = importance;
+      fake.lookupBase[k] = count;
+    }
+    return json(200, { count, importance, incremented });
+  }
+  if (p === "/api/srs/importance") {
+    const ids = new Set(body.card_ids as string[]);
+    const level = Math.min(5, Math.max(1, Number(body.importance)));
+    let updated = 0;
+    for (const c of fake.srs.cards) if (ids.has(c.id)) {
+      c.importance = level;
+      updated++;
+      if (c.mode === "cloze" || c.mode === "recognize") fake.lookupBase[lookupKey(c.target)] = fake.lookups[lookupKey(c.target)] ?? 0;
+    }
+    return json(200, { updated });
   }
   if (p === "/api/srs/notes/lookup") {
     const sentences = (body.sentences as string[]).map(sentenceKey);
@@ -275,8 +298,17 @@ function route(method: string, url: URL, body: Record<string, unknown>): Respons
       ...((body.modes as string[]) ?? []).filter(m => !existing.some(c => c.mode === m)).map((m) => ({ id: `c-${++seq}`, note_id: id, mode: m, target: "", target_meta: {}, archived: false })),
       ...((body.targets as { text: string }[]) ?? []).map((t) => ({ id: `c-${++seq}`, note_id: id, mode: "cloze", target: t.text, target_meta: (t as { meta?: Record<string, string> }).meta ?? {}, archived: false })),
     ];
-    fake.srs.cards.push(...cards.map(c => ({ ...c, mode: c.mode as ServerCard["mode"], importance: 3, state: "new" as const, due: new Date().toISOString(), created_at: new Date().toISOString(), note: { id, sentence: String(body.sentence), translation_en: String(body.translation_en ?? ""), translation_zh: String(body.translation_zh ?? "") } })));
-    return json(200, { id, sentence: body.sentence, translation_en: body.translation_en, translation_zh: body.translation_zh, cards: [...existing, ...cards] });
+    // Like srs.add_note: a word keeps its importance if already saved, else starts at 3.
+    const wordImportance = (target: string) => {
+      const k = lookupKey(target);
+      const same = fake.srs.cards.filter(c => (c.mode === "cloze" || c.mode === "recognize") && lookupKey(c.target) === k);
+      if (same.length) return Math.max(...same.map(c => c.importance));
+      fake.lookupBase[k] = fake.lookups[k] ?? 0;
+      return 3;
+    };
+    const added = cards.map(c => ({ ...c, mode: c.mode as ServerCard["mode"], importance: c.mode === "cloze" ? wordImportance(c.target) : 3, state: "new" as const, due: new Date().toISOString(), created_at: new Date().toISOString(), note: { id, sentence: String(body.sentence), translation_en: String(body.translation_en ?? ""), translation_zh: String(body.translation_zh ?? "") } }));
+    fake.srs.cards.push(...added);
+    return json(200, { id, sentence: body.sentence, translation_en: body.translation_en, translation_zh: body.translation_zh, cards: [...existing, ...added.map(({ note: _note, ...c }) => c)] });
   }
   if (p === "/api/history" && method === "POST") {
     fake.studyRecords.unshift({ id: `h-${++seq}`, type: "study", created_at: new Date().toISOString(), ...(body.payload as object), text: String((body.payload as { text?: string })?.text ?? "") });

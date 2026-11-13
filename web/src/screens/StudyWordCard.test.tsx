@@ -388,7 +388,34 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(importance.querySelectorAll('[data-filled="true"]')).toHaveLength(0);
     expect(importance.querySelectorAll("svg.lucide-star")).toHaveLength(5);
     expect(importance.textContent).toContain("1 lookup");
-    expect(importance.textContent).toContain("Importance, 0 out of 5, based on 1 lookup.");
+    expect(importance.textContent).toContain("Importance, 0 out of 5. Looked up 1 time.");
+    // Not saved yet: nothing to rate, so the stars are not buttons.
+    expect(importance.querySelector('[role="radio"]')).toBeNull();
+  });
+
+  it("saves a word with 3 stars, lets the learner choose 2-5, and adds a star every 5 lookups after that", async () => {
+    fake.lookups.madame = 6;
+    await act(async () => root.render(<WordPanel sentence={SENTENCE} text="madame" onClose={() => {}} />));
+    await wait(150);
+    expect(host.querySelector('[aria-label="Saved"]')).toBeTruthy();
+    expect(host.querySelectorAll('.wp-importance [data-filled="true"]')).toHaveLength(3); // auto-saved at the 7th lookup
+    const radios = host.querySelectorAll<HTMLButtonElement>('.wp-importance [role="radio"]');
+    expect([...radios].map(r => r.getAttribute("aria-label"))).toEqual([2, 3, 4, 5].map(i => `Importance ${i} out of 5`));
+    expect(radios[1].getAttribute("aria-checked")).toBe("true");
+    await act(async () => radios[0].click());
+    await wait(50);
+    expect(host.querySelectorAll('.wp-importance [data-filled="true"]')).toHaveLength(2);
+    const call = fake.calls.filter(c => c.path === "/api/srs/importance").at(-1)!;
+    expect(call.body).toMatchObject({ importance: 2 });
+    expect(fake.srs.cards.filter(c => c.target === "madame").every(c => c.importance === 2)).toBe(true);
+    const filled: number[] = [];
+    for (let i = 0; i < 5; i++) { // lookups 8-12, each outside the repeat window
+      fake.lookupLast.madame = 0;
+      await act(async () => { await lookupApi.recordLookup("madame", SENTENCE); });
+      await wait(20);
+      filled.push(host.querySelectorAll('.wp-importance [data-filled="true"]').length);
+    }
+    expect(filled).toEqual([2, 2, 2, 2, 3]);
   });
 
   it("fills the deck star and three stars when saved", async () => {
@@ -407,7 +434,7 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(host.querySelector(".wp-importance")?.textContent).toContain("1 lookup");
   });
 
-  it.each([[2, 4], [4, 5]])("auto-saves on the next lookup after %i and shows %i stars", async (previous, stars) => {
+  it.each([[2, 3], [4, 3], [9, 3]])("auto-saves on the next lookup after %i and shows %i stars", async (previous, stars) => {
     fake.lookups.madame = previous;
     await act(async () => root.render(<WordPanel sentence={SENTENCE} text="madame" onClose={() => {}} />));
     await wait(150);
@@ -511,6 +538,31 @@ describe("Task B — Study word card, selection and steps", () => {
     await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Component words"] button')!.click());
     await wait(100);
     expect(fake.calls.filter(c => c.path === "/api/srs/lookups" && c.method === "POST").map(c => ({ word: (c.body as { word: string }).word }))).toEqual([{ word: "machine à laver" }, { word: "machine" }]);
+  });
+
+  it("adds a note with ⌘ Enter or Ctrl Enter, and plain Enter stays a new line", async () => {
+    await act(async () => root.render(<WordPanel sentence={SENTENCE} text="madame" onClose={() => {}} />));
+    await wait(100);
+    await act(async () => findButton("Notes").click());
+    await wait(100);
+    const area = host.querySelector<HTMLTextAreaElement>('[aria-label="Note text"]')!;
+    const type = async (value: string) => act(async () => { Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(area, value); area.dispatchEvent(new Event("input", { bubbles: true })); });
+    const press = async (init: KeyboardEventInit) => act(async () => { area.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, ...init })); });
+    await type("mépris\nscorn");
+    await press({});
+    await wait(100);
+    expect(fake.notes).toHaveLength(0);
+    await press({ metaKey: true });
+    await wait(150);
+    expect(fake.notes.map(n => n.text)).toEqual(["mépris\nscorn"]);
+    expect(area.value).toBe("");
+    await type("second");
+    await press({ ctrlKey: true });
+    await wait(150);
+    expect(fake.notes.map(n => n.text)).toEqual(["mépris\nscorn", "second"]);
+    await press({ metaKey: true }); // empty: nothing is sent
+    await wait(100);
+    expect(fake.notes).toHaveLength(2);
   });
 
   it("adds, edits and deletes multiple notes, and asks AI with sentence context", async () => {
