@@ -1,7 +1,7 @@
 import { useExplanationLanguage } from "../lib/explanationLanguage";
 import { useTheme } from "../lib/theme";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { BarChart3, BookOpen, CloudOff, Dumbbell, Layers, LogOut, Pause, Play, RefreshCw, RotateCcw, Settings as SettingsIcon, Square, CheckCircle2, AlertCircle, Clock, User, Loader2 } from "lucide-react";
+import { BarChart3, BookOpen, CloudOff, Dumbbell, Layers, LogOut, Pause, Play, RefreshCw, RotateCcw, Settings as SettingsIcon, Square, CheckCircle2, AlertCircle, Clock, User, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useSession } from "../api/auth";
 import { undoMastered } from "../api/review";
@@ -188,6 +188,8 @@ export function Shell({ children }: { children: ReactNode }) {
   const focused = path === "review/session" || path === "study/run";
   const top = path.split("/")[0];
   const section = NAV.find((n) => n.key === top)?.label ?? "1000H French";
+  // On a studied text, starting a new one is a visible action, not something hidden in a menu.
+  const studying = useApp((s) => pathOf(s.route) === "study" && s.study.analysis.status === "done" && s.study.sentences.length > 0);
   return (
     <TooltipProvider>
       <SidebarProvider className="pl-[var(--safe-left)] pr-[var(--safe-right)]">
@@ -215,6 +217,7 @@ export function Shell({ children }: { children: ReactNode }) {
               </>
             )}
             <div className="ml-auto flex items-center gap-2">
+              {studying && !focused && <Button type="button" variant="ghost" onClick={() => go("study/new")}><Plus aria-hidden />New text</Button>}
               {focused && path !== "review/session" && <VersionInfo />}
               <AccountSlot />
             </div>

@@ -8,6 +8,16 @@ export const RELEASES = [
     version: APP_VERSION,
     date: "2026-11-13",
     changes: [
+      "Study has a visible New text button at the top while you study a text.",
+      "Build-up steps for a new analysis are small: each step adds a few words with a plain note, and a long sentence gets more steps.",
+      "In Steps, the words a step adds stand out and the words you already met fade back.",
+      "An answer the server has graded is never shown as “Checking didn’t finish”.",
+    ],
+  },
+  {
+    version: "1.3.14",
+    date: "2026-11-13",
+    changes: [
       "Settings → Text size makes the whole app larger on this device (115%, 130% or 145%), like an editor’s font size.",
       "Study is calmer: one More menu at the end of the player row, and no header row for a single sentence.",
       "Check yourself is calmer: a quieter Step by step / Whole sentence switch, only the step count, Review as a bookmark icon, and a right answer is no longer shown twice.",

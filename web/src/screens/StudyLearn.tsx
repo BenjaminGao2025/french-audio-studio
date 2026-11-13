@@ -161,9 +161,6 @@ export function StudyLearn() {
               <DropdownMenuItem onSelect={() => go("progress/history?tab=analyses")}>
                 <HistoryIcon aria-hidden /> Analyses in History
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => go("study/new")}>
-                <Plus aria-hidden /> New text
-              </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => setSrcOpen((open) => !open)}>
                 {srcOpen ? "Hide source" : "Edit source"}
               </DropdownMenuItem>

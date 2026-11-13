@@ -17,6 +17,7 @@ import {
   type QuestionUI,
 } from "../state/store";
 import { gradeAttempt } from "../api/dictation";
+import { ApiError } from "../api/client";
 import { FrText, type FrPick } from "../components/FrText";
 import { Spinner, Textarea, useNarrow } from "../components/ui";
 import { WordOverlay, WordPanel } from "./WordPopup";
@@ -196,10 +197,19 @@ export function submitAnswer(key: string) {
       track("check_answer", { screen: "exercise", kind: slug(String(kind)), correct: r.correct, answer_known: Boolean(a.answerKnown) });
       announce(a.answerKnown ? "Checked. Recorded as answer known." : r.correct ? "Correct." : `Not quite. ${plural(res.issues.length, "difference")}.`);
       if (!r.correct) requestAnimationFrame(() => document.getElementById(`ex-result-${key}`)?.focus());
-    })
-    .catch(() => {
+    }, (err) => {
+      // Only a request that did not come back is a technical failure.
+      track("check_failed", { stage: "request", status: err instanceof ApiError ? err.status : 0, error: slug(err instanceof Error ? err.name : "unknown") });
       patchUI(key, qk, { phase: "techfail" });
       announce("Checking didn’t finish. This is not a wrong answer. Your answer is kept.", true);
+    })
+    .catch((err) => {
+      // The server already graded it: a glitch in sound, recording or focus must not turn that into "Checking didn’t finish".
+      track("check_failed", { stage: "after", error: slug(err instanceof Error ? `${err.name}-${err.message}` : "unknown") });
+      if (get().exercises[key]?.ui[qk]?.phase === "submitting") {
+        patchUI(key, qk, { phase: "techfail" });
+        announce("Checking didn’t finish. This is not a wrong answer. Your answer is kept.", true);
+      }
     });
 }
 
@@ -504,7 +514,7 @@ function Result({
         <div className="flex flex-wrap items-center gap-4">
           <div className="relative">
             <p key={attempt.id} className={cn("text-4xl font-semibold tabular-nums", perfect && "perfect-score")} aria-label={`Score: ${r.accuracy}%`}>{r.accuracy}%</p>
-            {perfect && <PerfectBurst key={attempt.id} />}
+            {perfect && <PerfectBurst key={`${attempt.id}-burst`} />}
           </div>
           <div>
             <p className="font-medium">{attempt.answerKnown ? "Answer known" : perfect ? <span className="perfect-label inline-flex items-center gap-1.5"><Sparkles aria-hidden className="size-4" />{attempt.hinted ? "Perfect · hint used" : "Perfect spelling"}</span> : correct ? attempt.hinted ? "Correct · hint used" : "Correct" : "Not quite"}</p>
