@@ -8,6 +8,13 @@ export const RELEASES = [
     version: APP_VERSION,
     date: "2026-11-13",
     changes: [
+      "The word card and menus now stand out from the page: a lighter surface, a clear edge and a soft shadow.",
+    ],
+  },
+  {
+    version: "1.3.10",
+    date: "2026-11-13",
+    changes: [
       "The app now records which screens you use, for how long, and its main buttons, so it can be improved around how you study. This stays on our own server for 180 days and never includes what you type (see Privacy).",
     ],
   },
