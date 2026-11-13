@@ -65,6 +65,8 @@ export function Write() {
   const [genErr, setGenErr] = useState("");
   const elapsed = useElapsed();
   const poll = useRef<AbortController | null>(null);
+  const sendRef = useRef<HTMLButtonElement>(null);
+  const reviseRef = useRef<HTMLButtonElement>(null);
 
   const load = () => {
     setLoadErr("");
@@ -227,7 +229,7 @@ export function Write() {
           <>
             <div className="grid gap-2">
               <label htmlFor="write-ta" className="text-sm font-medium">Your text in French</label>
-              <Textarea id="write-ta" lang="fr" rows={10} value={draft} readOnly={phase === "wait1"} aria-describedby="write-count" onChange={(e) => { setDraft(e.target.value); setError(""); }} />
+              <Textarea id="write-ta" onCmdEnter={() => sendRef.current?.click()} lang="fr" rows={10} value={draft} readOnly={phase === "wait1"} aria-describedby="write-count" onChange={(e) => { setDraft(e.target.value); setError(""); }} />
               <p id="write-count" className={over ? "text-sm text-destructive" : "text-sm text-muted-foreground"}>
                 {n} {n === 1 ? "word" : "words"}{spec ? ` · target ${spec.min_words}–${spec.max_words}` : ""}
               </p>
@@ -236,7 +238,7 @@ export function Write() {
             {phase === "wait1" && <Spinner label="Reading your text… this usually takes 10–40 seconds." />}
             <div className="sticky bottom-0 z-10 bg-background py-3 pb-[calc(0.75rem+var(--safe-bottom))]">
               <div className="flex flex-wrap items-center gap-2">
-                <Button type="button" variant="default" aria-disabled={(!!(phase === "wait1")) || undefined} aria-busy={phase === "wait1" || undefined} className={cn((!!(phase === "wait1")) ? "opacity-50" : "")} onClick={(event) => { if (!!(phase === "wait1")) { event.preventDefault(); return; } (() => void submit1())(); }}>{phase === "wait1" ? <Loader2 className="animate-spin" aria-hidden /> : null}{error ? "Retry" : "Get feedback"}</Button>
+                <Button ref={sendRef} type="button" variant="default" aria-disabled={(!!(phase === "wait1")) || undefined} aria-busy={phase === "wait1" || undefined} className={cn((!!(phase === "wait1")) ? "opacity-50" : "")} onClick={(event) => { if (!!(phase === "wait1")) { event.preventDefault(); return; } (() => void submit1())(); }}>{phase === "wait1" ? <Loader2 className="animate-spin" aria-hidden /> : null}{error ? "Retry" : "Get feedback"}</Button>
               </div>
             </div>
           </>
@@ -267,13 +269,13 @@ export function Write() {
                   <p className="text-lg font-semibold text-balance">Round 2 · fix it yourself</p>
                   <div className="grid gap-2">
                     <label htmlFor="write-rev" className="text-sm font-medium">Your revised text</label>
-                    <Textarea id="write-rev" lang="fr" rows={10} value={revision} readOnly={phase === "wait2"} onChange={(e) => { setRevision(e.target.value); setError(""); }} />
+                    <Textarea id="write-rev" onCmdEnter={() => reviseRef.current?.click()} lang="fr" rows={10} value={revision} readOnly={phase === "wait2"} onChange={(e) => { setRevision(e.target.value); setError(""); }} />
                     <p className={over ? "text-sm text-destructive" : "text-sm text-muted-foreground"}>{n} {n === 1 ? "word" : "words"}</p>
                   </div>
                   {error && <Alert variant="destructive" role="alert"><AlertTitle>Corrections didn’t load</AlertTitle><AlertDescription>{error} Your revision is kept.</AlertDescription></Alert>}
                   {phase === "wait2" && <Spinner label="Checking your revision…" />}
                   <div className="flex flex-wrap items-center gap-2">
-                    <Button type="button" variant="default" aria-disabled={(!!(phase === "wait2") || !!(!revision.trim() ? "Write your revision first." : undefined)) || undefined} aria-busy={phase === "wait2" || undefined} className={cn((!!(phase === "wait2") || !!(!revision.trim() ? "Write your revision first." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(phase === "wait2") || !!(!revision.trim() ? "Write your revision first." : undefined)) { event.preventDefault(); return; } (() => void submit2())(); }}>{phase === "wait2" ? <Loader2 className="animate-spin" aria-hidden /> : null}{error ? "Retry" : "Get corrections"}{(!revision.trim() ? "Write your revision first." : undefined) ? <span className="sr-only">{!revision.trim() ? "Write your revision first." : undefined}</span> : null}</Button>
+                    <Button ref={reviseRef} type="button" variant="default" aria-disabled={(!!(phase === "wait2") || !!(!revision.trim() ? "Write your revision first." : undefined)) || undefined} aria-busy={phase === "wait2" || undefined} className={cn((!!(phase === "wait2") || !!(!revision.trim() ? "Write your revision first." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(phase === "wait2") || !!(!revision.trim() ? "Write your revision first." : undefined)) { event.preventDefault(); return; } (() => void submit2())(); }}>{phase === "wait2" ? <Loader2 className="animate-spin" aria-hidden /> : null}{error ? "Retry" : "Get corrections"}{(!revision.trim() ? "Write your revision first." : undefined) ? <span className="sr-only">{!revision.trim() ? "Write your revision first." : undefined}</span> : null}</Button>
                     <Button type="button" variant="ghost" onClick={reset}>Start over</Button>
                   </div>
                 </div>
