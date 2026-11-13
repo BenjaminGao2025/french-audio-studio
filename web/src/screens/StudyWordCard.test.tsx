@@ -657,6 +657,23 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(document.querySelector(".wp-headword")?.textContent).toBe("madame");
   });
 
+  it("a second tap on the same word keeps the card open, and a tap outside the text still closes it", async () => {
+    const tap = async (el: Element) => {
+      await act(async () => {
+        el.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0 }));
+        el.dispatchEvent(new MouseEvent("pointerup", { bubbles: true, button: 0 }));
+        (el as HTMLElement).click();
+        await wait(20);
+      });
+    };
+    await tap(headerWord("madame"));
+    expect(document.querySelector(".wp-headword")?.textContent).toBe("madame");
+    await tap(headerWord("madame"));
+    expect(document.querySelector(".wp-headword")?.textContent).toBe("madame");
+    await tap(document.body);
+    expect(document.querySelector(".word-card")).toBeNull();
+  });
+
   it("a Range across madame…que + pointerup says the phrase and asks word-context with the right occurrence", async () => {
     const spy = vi.spyOn(store, "sayFrench");
     const header = host.querySelector<HTMLElement>(".sentence-fr")!;

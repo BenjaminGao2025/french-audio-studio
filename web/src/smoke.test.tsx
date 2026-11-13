@@ -462,7 +462,7 @@ describe("8. feedback and copy cleanups", () => {
     expect(main.querySelector(".issues")).toBeNull();
   });
 
-  it("History analysis Open in Study loads that analysis's sentences, and Find saved card filters by full sentence", async () => {
+  it("History analysis Open goes straight to Study with that analysis's sentences, and Find saved card filters by full sentence", async () => {
     await act(async () => resetDemo());
     fake.attempts = [attemptRow("t1", "Nous avons pris un café près de la gare.")];
     fake.studyRecords = [studyRecord("r1", ["Le plat du jour est excellent.", "Nous avons pris un café."])];
@@ -475,7 +475,6 @@ describe("8. feedback and copy cleanups", () => {
     await act(async () => go("progress/history?tab=analyses"));
     await wait(200);
     await act(async () => openHistoryRow("Le plat du jour").click());
-    await act(async () => buttonWith("Open this analysis in Study").click());
     expect(get().study.sentences.map((x) => x.fr)).toEqual(["Le plat du jour est excellent.", "Nous avons pris un café."]);
     expect(get().route).toBe("study");
   });

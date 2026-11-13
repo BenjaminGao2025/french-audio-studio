@@ -6,6 +6,15 @@ export const APP_VERSION = version;
 export const RELEASES = [
   {
     version: APP_VERSION,
+    date: "2026-11-13",
+    changes: [
+      "Tapping the same word again keeps its word card open.",
+      "A dictation or recall answer with every word right gets a short celebration.",
+      "Open in History goes straight to the analysis in Study.",
+    ],
+  },
+  {
+    version: "1.3.8",
     date: "2026-11-12",
     changes: [
       "Calmer Study page: one row for sentence navigation and More, quiet audio controls, Add to review as the main action.",
