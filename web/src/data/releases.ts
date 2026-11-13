@@ -8,6 +8,15 @@ export const RELEASES = [
     version: APP_VERSION,
     date: "2026-11-13",
     changes: [
+      "The player bar at the bottom glides smoothly instead of moving in small jumps.",
+      "Continue with Google on the sign-in page, once Google sign-in is set up for this site.",
+      "An account can have no device limit; Settings → Signed-in devices says so.",
+    ],
+  },
+  {
+    version: "1.3.18",
+    date: "2026-11-13",
+    changes: [
       "When a new version is live, an open window offers Reload, so you no longer need to quit and reopen the app.",
       "With large text, the collapsed sidebar shows just the logo, and Settings labels stay on one line.",
     ],

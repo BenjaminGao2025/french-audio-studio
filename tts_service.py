@@ -69,16 +69,19 @@ for _routes in (
     app.include_router(_routes.router)
 
 
+# Sign in with Google loads its button script, style and frame from accounts.google.com/gsi/.
+_GSI = " https://accounts.google.com/gsi/" if routers.auth.GOOGLE_CLIENT_ID else ""
 CONTENT_SECURITY_POLICY = "; ".join(
     [
         "default-src 'self'",
         # Cloudflare Web Analytics beacon is injected by the tunnel/CDN, not by our pages
-        "script-src 'self' https://static.cloudflareinsights.com",
-        "style-src 'self' 'unsafe-inline'",  # style="" attributes in markup; scripts stay strict
+        f"script-src 'self' https://static.cloudflareinsights.com{_GSI}",
+        f"style-src 'self' 'unsafe-inline'{_GSI}",  # style="" attributes in markup; scripts stay strict
         "img-src 'self' data: blob:",
         "media-src 'self' blob:",
         "font-src 'self' data:",
-        "connect-src 'self' https://cloudflareinsights.com",
+        f"connect-src 'self' https://cloudflareinsights.com{_GSI}",
+        *([f"frame-src{_GSI}"] if _GSI else []),
         "object-src 'none'",
         "base-uri 'self'",
         "form-action 'self'",

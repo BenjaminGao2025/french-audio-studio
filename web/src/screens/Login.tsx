@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { LogIn, UserPlus, Loader2, AlertCircle } from "lucide-react";
 import { ApiError } from "../api/client";
-import { login, register } from "../api/auth";
+import { googleSignIn, login, register } from "../api/auth";
+import { GoogleSignIn } from "../components/GoogleSignIn";
 import { Card, CardContent, CardHeader } from "../components/ui";
 import { Brand } from "../components/Brand";
 import { Button } from "../components/ui/button";
@@ -49,6 +50,20 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: (next: string) => void
     }
   };
 
+  const withGoogle = async (credential: string) => {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    const next = safeNext(location.search);
+    try {
+      await googleSignIn(credential, mode === "register" ? invite.trim() : "");
+      onSignedIn(next);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn’t reach the server. Check your connection and try again.");
+      setBusy(false);
+    }
+  };
+
   const isLogin = mode === "login";
   return (
     <main className="flex min-h-dvh items-center justify-center bg-background p-4" id="main">
@@ -67,6 +82,7 @@ export function LoginScreen({ onSignedIn }: { onSignedIn: (next: string) => void
           <Button type="submit" variant="default" aria-disabled={busy || undefined} aria-busy={busy || undefined} className={cn(busy && "opacity-50")} onClick={(event) => { if (busy) { event.preventDefault(); return; } }}>{busy ? <Loader2 className="animate-spin" aria-hidden /> : (isLogin ? <LogIn aria-hidden /> : <UserPlus aria-hidden />)}{busy ? (isLogin ? "Signing in…" : "Creating account…") : isLogin ? "Sign in" : "Create account"}</Button>
           <Button type="button" variant="ghost" aria-disabled={(!!(busy)) || undefined} className={cn((!!(busy)) ? "opacity-50" : "")} onClick={(event) => { if (!!(busy)) { event.preventDefault(); return; } (() => { setMode(isLogin ? "register" : "login"); setError(""); setMissing(false); })(); }}>{isLogin ? "I have an invite code" : "I already have an account"}</Button>
         </div>
+        <GoogleSignIn onCredential={(c) => void withGoogle(c)} disabled={busy} />
         </CardContent>
       </form>
       </Card>

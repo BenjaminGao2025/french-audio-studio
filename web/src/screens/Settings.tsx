@@ -329,7 +329,7 @@ function Account({ onSignOut }: { onSignOut: () => void }) {
 }
 
 function Devices() {
-  const [list, setList] = useState<{ devices: Device[]; max: number } | null>(null);
+  const [list, setList] = useState<{ devices: Device[]; max: number | null } | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const load = () => {
@@ -371,7 +371,7 @@ function Devices() {
               </li>
             ))}
           </ul>
-          <p className="text-xs leading-4 text-muted-foreground">Up to {list.max} devices can be signed in at once; signing in on another one signs out the one used least recently.</p>
+          <p className="text-xs leading-4 text-muted-foreground">{list.max === null ? "This account has no device limit: every device stays signed in until you sign it out." : `Up to ${list.max} devices can be signed in at once; signing in on another one signs out the one used least recently.`}</p>
         </>
       )}
       </CardContent>
