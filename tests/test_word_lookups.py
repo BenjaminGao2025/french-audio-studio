@@ -132,7 +132,7 @@ class RecordLookupTests(unittest.TestCase):
             path = Path(directory) / "users.db"
             with patch("auth_db._get_db_path", return_value=path):
                 srs.init_db()
-                note = srs.add_note(self.user_id, "Bonjour à tous.", targets=[{"text": "Bonjour", "mode": "cloze", "meta": {"meaning_en": "Hello"}}])
+                srs.add_note(self.user_id, "Bonjour à tous.", targets=[{"text": "Bonjour", "mode": "cloze", "meta": {"meaning_en": "Hello"}}])
                 with srs._connect() as conn:
                     conn.execute("DELETE FROM srs_migrations WHERE name = 'importance-1.3.4'")
                     conn.execute("UPDATE srs_cards SET importance = 1")

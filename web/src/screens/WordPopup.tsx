@@ -1,3 +1,4 @@
+import { QuestionMic } from "../components/QuestionMic";
 import { MarkedExplanation } from "../components/MarkedExplanation";
 import { useExplanationLanguage } from "../lib/explanationLanguage";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -7,13 +8,11 @@ import { ApiError } from "../api/client";
 import {
   etymology,
   lookupWord,
-  phraseContext,
   recordLookup,
   useLookupCount,
   wordContext,
   type DictionaryEntry,
   type EtymologyResponse,
-  type Phrase,
   type WordContextHints,
   type WordContextResult,
 } from "../api/lookup";
@@ -54,16 +53,6 @@ const wordChars = (s: string) =>
     .split(/\s+/)
     .filter(Boolean);
 
-/** Does a fixed expression overlap the picked word or phrase? */
-function phraseOverlaps(pick: string, phraseText: string): boolean {
-  const a = wordChars(pick).filter((w) => w.length > 1);
-  const b = wordChars(phraseText);
-  if (a.some((w) => b.includes(w)) || b.some((w) => w.length > 1 && a.includes(w))) return true;
-  const p = pick.toLocaleLowerCase("fr").trim();
-  const q = phraseText.toLocaleLowerCase("fr").trim();
-  return Boolean(p && q && (p.includes(q) || q.includes(p)));
-}
-
 const plain = (value: string) => value.trim().toLocaleLowerCase("fr").replace(/\s+/g, " ");
 
 /** A gloss that only repeats the word, the whole sentence, or an error is not a meaning. */
@@ -85,7 +74,11 @@ const EMPTY_HINTS: WordContextHints = { meaning_zh: "", meaning_en: "", note_en:
  * One card for the desktop popover and mobile drawer: word, speaker, bracket phonetics,
  * the meaning of this word in this sentence, then the dictionary. No example sentence.
  */
-export function WordPanel({
+export function WordPanel(props: Parameters<typeof WordPanelContent>[0]) {
+  return <WordPanelContent key={JSON.stringify([props.sentence.fr, props.text, props.wordIndex, props.occurrence])} {...props} />;
+}
+
+function WordPanelContent({
   sentence,
   text,
   wordIndex,
@@ -137,10 +130,12 @@ export function WordPanel({
   const drill = (word: string) => {
     if (lookupKey(word) === lookupKey(shown)) return;
     sayFrench(word);
-    // Dictionary lemmas retain the clicked inflection and occurrence for sentence context.
-    // The headword, dictionary lookup and deck star still belong to the drilled word.
-    const isLemma = dict?.entries?.some(entry => lookupKey(entry.lemma) === lookupKey(word));
-    setStack(prev => [...prev, { word, surface: isLemma ? contextWord : word, occurrence: isLemma ? contextOccurrence : 0 }]);
+    // Explanation links have no sentence offset: choose the occurrence nearest the current one.
+    const sourceStart = findWordSpans(sentence.fr, contextWord)[contextOccurrence]?.[0] ?? 0;
+    const spans = findWordSpans(sentence.fr, word);
+    const nextOccurrence = spans.reduce((best, span, i) =>
+      Math.abs(span[0] - sourceStart) < Math.abs(spans[best][0] - sourceStart) ? i : best, 0);
+    setStack(prev => [...prev, { word, surface: word, occurrence: nextOccurrence }]);
     recordLookup(word, sentence).catch(() => undefined);
   };
   const french = (value: string, className = "text-sm") => <FrText text={value} className={className} onPick={p => drill(p.text)} />;
@@ -152,11 +147,11 @@ export function WordPanel({
   const [dictSt, setDictSt] = useState<LoadState>(tooLong ? "idle" : "loading");
   const [dictErr, setDictErr] = useState("");
 
-  const [ctx, setCtx] = useState<WordContextResult | null>(null);
+  const [contextResult, setContextResult] = useState<{ key: string; value: WordContextResult } | null>(null);
+  const contextKey = JSON.stringify([sentence.fr, contextWord, contextOccurrence, language, nested]);
+  const ctx = contextResult?.key === contextKey ? contextResult.value : null;
+  const setCtx = (value: WordContextResult | null) => setContextResult(value ? { key: contextKey, value } : null);
   const [ctxSt, setCtxSt] = useState<LoadState>(tooLong ? "idle" : "loading");
-
-  const [phrases, setPhrases] = useState<Phrase[]>([]);
-
 
   const abort = useRef(new AbortController());
   const alive = () => !abort.current.signal.aborted;
@@ -191,8 +186,8 @@ export function WordPanel({
 
   const loadCtx = useCallback(() => {
     const request = ++ctxRequest.current;
-    if (tooLong) return;
     setCtx(null);
+    if (tooLong) { setCtxSt("idle"); return; }
     setCtxSt("loading");
     wordContext({ language, sentence: sentence.fr, word: contextWord, occurrence: contextOccurrence, translation_zh, hints: nested ? EMPTY_HINTS : hints }, abort.current.signal)
       .then((r) => {
@@ -212,33 +207,23 @@ export function WordPanel({
   const countedOpen = useRef("");
   useEffect(() => {
     setStack([]);
-    setPhrases([]);
     const openKey = JSON.stringify([sentence.id, text, wordIndex]);
     if (!compact && countedOpen.current !== openKey) {
       countedOpen.current = openKey;
       recordLookup(text, sentence).catch(() => undefined);
     }
     if (!compact && wordIndex !== undefined) pick(sentence.id, wordIndex);
-    // Phrase context is cached per sentence for the page, so it is fetched without this card's
-    // abort signal (closing a card must not forget the shared answer).
-    phraseContext(sentence.fr, translation_zh).then((r) => {
-      if (alive()) setPhrases(r.phrases ?? []);
-    }).catch(() => undefined);
+
   }, [text, sentence.id, wordIndex, sentence.fr, translation_zh, compact]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { loadCtx(); }, [loadCtx]);
 
-  const overlapping = phrases.find((p) => findWordSpans(sentence.fr, p.text).length > 0 && phraseOverlaps(contextWord, p.text));
   // Context follows the global preference; dictionary entries stay English.
   const englishOnly = (value?: string) => value && !/\p{Script=Han}/u.test(value) ? value : "";
-  const expressionMeaning = language === "en" ? overlapping?.meaning_en : overlapping?.meaning_zh;
-  const expressionNote = expressionMeaning && overlapping && plain(overlapping.text) !== plain(contextWord)
-    ? (language === "en" ? `Fixed expression ⟦${overlapping.text}⟧: ${expressionMeaning}.` : `固定表达 ⟦${overlapping.text}⟧：${expressionMeaning}。`) : "";
-  const contextNote = [language === "en" ? ctx?.why_en?.trim() : ctx?.why_zh?.trim(), expressionNote].filter(Boolean).join(" ");
+  const contextNote = (language === "en" ? ctx?.why_en?.trim() : ctx?.why_zh?.trim()) || "";
   const chineseMeaning = language === "zh" ? ctx?.meaning_zh?.trim() || "" : "";
   const meaning = usableMeaning(ctx?.meaning_en, shown, sentence.en ?? "") || (!nested ? storedMeaning : "");
   const dictionaryMeaning = dictSt === "ready" ? (dict?.entries ?? []).filter(e => e.language === "en").flatMap(e => e.senses).map(s => usableMeaning(s, shown, sentence.en ?? "")).find(Boolean) : "";
-  const phraseMeaning = overlapping ? usableMeaning(overlapping.meaning_en, text, sentence.en ?? "") : "";
 
   return (
     <div className="word-card flex flex-col gap-4 wrap-break-word" aria-busy={dictSt === "loading" || ctxSt === "loading"}>
@@ -273,7 +258,7 @@ export function WordPanel({
                 <p className="wp-definition text-sm font-normal text-foreground" lang={language}><MarkedExplanation text={[chineseMeaning, contextNote].filter(Boolean).join(language === "zh" ? "。 " : " ").replace(/。。/g, "。")} onWord={drill} /></p>
                 {meaning && !plain(contextNote.replace(/[⟦⟧]/g, "")).includes(plain(meaning)) && <p className="text-sm text-muted-foreground" lang="en">{meaning}</p>}
               </>
-            ) : ctxSt === "loading" ? (
+            ) : ctxSt === "loading" || (contextResult && contextResult.key !== contextKey) ? (
               <><Spinner label="Finding the meaning…" /><Skeleton lines={1} /></>
             ) : meaning || dictionaryMeaning ? (
               <div className="flex flex-col gap-2"><p className="wp-definition text-sm">{meaning || dictionaryMeaning}</p><p className="text-xs text-muted-foreground">{meaning ? "Sentence explanation unavailable" : "Dictionary meaning"}</p>{ctxSt === "error" && <Button type="button" variant="outline" onClick={loadCtx}>Retry</Button>}</div>
@@ -282,13 +267,7 @@ export function WordPanel({
             ) : (
               <p className="text-sm text-muted-foreground">No meaning for this sentence</p>
             )}
-            {!nested && phraseMeaning && plain(overlapping?.text ?? "") !== plain(text) && phraseMeaning !== meaning && (
-              <p className="text-sm text-muted-foreground">
-                <MarkedExplanation text={`⟦${overlapping?.phrase || overlapping?.text || ""}⟧`} onWord={drill} />
-                {" "}
-                {phraseMeaning}
-              </p>
-            )}
+
         </Module>
 
         <Module key={`dictionary-${sentence.id}-${shown}`} title="Dictionary" defaultOpen>
@@ -390,11 +369,11 @@ function Origin({ word, lemma, onWord }: { word: string; lemma: string; onWord: 
     {value.memory_zh && <div className="grid gap-1"><dt className="text-xs font-medium tracking-wide text-muted-foreground">记忆提示</dt><dd>{value.memory_zh}</dd></div>}
   </dl> : <p className="whitespace-pre-line text-sm" lang="zh">{value.text}</p>;
 }
-function Ask({ sentence, word }: { sentence: StudySentence; word: string }) {
+export function Ask({ sentence, word }: { sentence: StudySentence; word: string }) {
   const [language] = useExplanationLanguage();
   const [question, setQuestion] = useState(""); const [answer, setAnswer] = useState(""); const [busy, setBusy] = useState(false); const [error, setError] = useState(false);
   const send = async () => { setBusy(true); setError(false); try { setAnswer((await askQuestion(sentence, question, [], undefined, { word, language })).answer); } catch { setError(true); } finally { setBusy(false); } };
-  return <><form className="flex gap-2" onSubmit={e => { e.preventDefault(); void send(); }}><Input aria-label="Ask about this word" value={question} onChange={e => setQuestion(e.target.value)} /><Button disabled={busy || !question.trim()} type="submit">Send</Button></form>{busy && <Spinner label="Asking…" />}{error && <Button variant="outline" onClick={() => void send()}>Retry</Button>}{answer && <p className="whitespace-pre-wrap text-sm">{answer}</p>}</>;
+  return <><form className="flex flex-wrap gap-2" onSubmit={e => { e.preventDefault(); void send(); }}><Input className="min-w-0 flex-1" aria-label="Ask about this word" value={question} onChange={e => setQuestion(e.target.value)} /><QuestionMic sentence={sentence.fr} disabled={busy} onText={text => setQuestion(prev => [prev.trimEnd(), text].filter(Boolean).join(" "))} /><Button disabled={busy || !question.trim()} type="submit">Send</Button></form>{busy && <Spinner label="Asking…" />}{error && <Button variant="outline" onClick={() => void send()}>Retry</Button>}{answer && <p className="whitespace-pre-wrap text-sm">{answer}</p>}</>;
 }
 
 /** Desktop floats at the original selection; Radix handles collision, Escape and outside dismissal. */

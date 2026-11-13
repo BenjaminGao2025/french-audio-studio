@@ -1,3 +1,4 @@
+import { StepReview } from "../components/StepReview";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, MoreHorizontal, Pause, Play, Repeat, RotateCcw, History as HistoryIcon, Plus, Check, Loader2 } from "lucide-react";
 import { ApiError } from "../api/client";
@@ -357,6 +358,8 @@ function StepsPanel({ sentence, onPick }: { sentence: StudySentence; onPick: (p:
   const [revealed, setRevealed] = useState<number[]>([]);
   const [recordStep, setRecordStep] = useState<number | null>(null);
 
+  const dragStart = useRef<{ x: number; y: number } | null>(null);
+  const dragged = useRef(false);
   const playStep = (i: number) => {
     const texts = [stepText(sentence.steps[i])];
     const p = get().player;
@@ -391,14 +394,20 @@ function StepsPanel({ sentence, onPick }: { sentence: StudySentence; onPick: (p:
         <Button type="button" variant="outline" onClick={playAllSteps}>{allStepsPlaying ? <Pause aria-hidden /> : <Play aria-hidden />}{allStepsPlaying ? "Pause all steps" : "Play all steps"}</Button>
         {blind && <Button type="button" variant="ghost" onClick={() => setRevealed(revealed.length ? [] : sentence.steps.map((_, i) => i))}>{revealed.length ? "Hide again" : "Reveal all"}</Button>}
       </div>
-      <ol className="divide-y overflow-hidden rounded-lg border" style={{ padding: "0 16px" }}>
+      <ol className="divide-y">
         {sentence.steps.map((st, i) => {
           const isPlaying = liveLabel === STEP_LABEL(i + 1);
           return (
             <li
               key={i}
               className={cx("grid grid-cols-[2rem_minmax(0,1fr)] gap-3 border-b py-3", isPlaying && "is-playing")}
+              onPointerDown={(e) => { dragStart.current = { x: e.clientX, y: e.clientY }; dragged.current = false; }}
+              onPointerUpCapture={(e) => {
+                const start = dragStart.current;
+                dragged.current ||= !!start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 4;
+              }}
               onClick={(e) => {
+                if (dragged.current || window.getSelection()?.toString().trim()) { dragged.current = false; return; }
                 const t = e.target as HTMLElement;
                 if (t.closest(".fr-word, button, a, summary, input, label")) return;
                 playStep(i);
@@ -406,22 +415,23 @@ function StepsPanel({ sentence, onPick }: { sentence: StudySentence; onPick: (p:
             >
               <span className="grid size-8 place-items-center rounded-full border text-sm font-medium" aria-hidden>{i + 1}</span>
               <div className="flex flex-col gap-2">
-                {blind && !revealed.includes(i) ? <p className="step-fr font-serif text-xl leading-snug wrap-break-word" lang="fr">{st.parts.map((part, j) => part.added || i === 0 ? <Button type="button" variant="outline" key={j} aria-label={`Reveal new words in step ${i + 1}`} className="h-9 border-dashed px-3" onClick={(e) => { e.stopPropagation(); setRevealed([...revealed, i]); }}>…</Button> : <span key={j}>{part.t}</span>)}</p> : <FrText segments={stepSegments(st.parts)} className="step-fr font-serif text-xl leading-snug wrap-break-word" onPick={onPick} />}
+                {blind && !revealed.includes(i) ? <p className="step-fr font-serif text-xl leading-snug wrap-break-word" lang="fr">{st.parts.map((part, j) => part.added || i === 0 ? <Button type="button" variant="outline" key={j} aria-label={`Reveal new words in step ${i + 1}`} className="h-9 border-dashed px-3" onClick={(e) => { e.stopPropagation(); setRevealed([...revealed, i]); }}>…</Button> : <span key={j}>{part.t}</span>)}</p> : <FrText segments={stepSegments(st.parts)} className="step-fr font-serif text-xl leading-snug wrap-break-word" onPick={(pick) => { dragged.current = true; onPick(pick); }} />}
                 <p className="text-sm text-muted-foreground">{st.en}</p>
                 {(!blind || revealed.includes(i)) && <p className="text-base">
                   <span className="font-medium">{/[.!?…]$/.test(st.addedLabel) ? st.addedLabel : `${st.addedLabel}.`}</span>
                   {st.how && ` ${st.how}`}
                 </p>}
-                <Button type="button" variant="ghost" className="h-8 self-start px-2 text-sm md:-ml-3" onClick={(e) => { e.stopPropagation(); playStep(i); }}>{isPlaying ? <Pause aria-hidden /> : <Play aria-hidden />}{isPlaying ? `Pause step ${i + 1}` : `Play step ${i + 1}`}</Button>
-                <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                  <Button type="button" variant="ghost" aria-pressed={!!player?.repeat && liveLabel === STEP_LABEL(i + 1)} onClick={() => {
+              </div>
+                <Button type="button" variant="ghost" className="col-span-2 h-8 justify-self-start px-0 text-sm" onClick={(e) => { e.stopPropagation(); playStep(i); }}>{isPlaying ? <Pause aria-hidden /> : <Play aria-hidden />}{isPlaying ? `Pause step ${i + 1}` : `Play step ${i + 1}`}</Button>
+                <div className="col-span-2 flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                  <Button type="button" variant="outline" size="sm" aria-pressed={!!player?.repeat && liveLabel === STEP_LABEL(i + 1)} onClick={() => {
                     if (liveLabel === STEP_LABEL(i + 1) && player?.repeat) stopPlayback();
                     else startPlayback({ kind: "study", label: STEP_LABEL(i + 1), route: "study" }, estimate(stepText(st)), { texts: [stepText(st)], repeat: true });
                   }}>Repeat this step</Button>
-                  <Button type="button" variant="outline" aria-expanded={recordStep === i} onClick={() => setRecordStep(recordStep === i ? null : i)}>{recordStep === i ? "Close recorder" : "Say this step"}</Button>
+                  <Button type="button" variant="outline" size="sm" aria-expanded={recordStep === i} onClick={() => setRecordStep(recordStep === i ? null : i)}>{recordStep === i ? "Close recorder" : "Say this step"}</Button>
+                  <StepReview sentence={stepText(st)} english={st.en} />
                 </div>
-                {recordStep === i && <div onClick={(e) => e.stopPropagation()}><ShadowingPanel key={i} id={`shadow:${sentence.id}:step:${i}`} text={stepText(st)} compact onPick={onPick} /></div>}
-              </div>
+                {recordStep === i && <div className="col-span-2" onClick={(e) => e.stopPropagation()}><ShadowingPanel key={i} id={`shadow:${sentence.id}:step:${i}`} text={stepText(st)} compact onPick={onPick} /></div>}
             </li>
           );
         })}

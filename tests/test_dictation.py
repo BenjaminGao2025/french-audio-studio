@@ -62,7 +62,48 @@ class TokenizeTests(unittest.TestCase):
             self.assertEqual([t["norm"] for t in tokens], case["norms"], case["text"])
 
 
+class CommaTokenizationTests(unittest.TestCase):
+    """A comma with no following space must not glue two words into one token."""
+
+    def test_glued_comma_splits_the_same_as_a_space(self):
+        for form in ("nationale,ont", "nationale, ont", "nationale , ont"):
+            with self.subTest(form=form):
+                self.assertEqual([t["norm"] for t in dictation.tokenize(form)], ["nationale", "ont"])
+
+    def test_punctuation_is_never_a_word(self):
+        self.assertEqual(
+            [t["norm"] for t in dictation.tokenize("nationale ; ont : résolu ! « d'exposer » ?")],
+            ["nationale", "ont", "résolu", "d'", "exposer"],
+        )
+        self.assertTrue(dictation.grade("droits.", "droits")["correct"])
+
+    def test_ben_glued_comma_keeps_ont_and_en_correct(self):
+        target = "Les représentants constitués en Assemblée nationale, ont résolu d'exposer les droits."
+        answer = "Les représentants constitués en Assemblee nationale,ont résolu d'exposer les droits"
+        result = dictation.grade(target, answer)
+        self.assertEqual(result["counts"], {"ok": 11, "accent": 1, "wrong": 0, "missing": 0, "extra": 0})
+        self.assertEqual([(op["kind"], op["expected"]) for op in result["ops"] if op["kind"] != "ok"], [("accent", "Assemblée")])
+
+
 class GradeTests(unittest.TestCase):
+    def test_ben_normalization_regressions(self):
+        target = "Les représentants ont résolu d'exposer les droits."
+        import unicodedata
+
+        for expected, answer in [
+            (target, unicodedata.normalize("NFD", target[:-1])),
+            (unicodedata.normalize("NFD", target), target[:-1]),
+            (target, target[:-1]),
+            ("d'exposer", "d’exposer"),
+            ("d’exposer", "d'exposer"),
+            ("d'exposer", "d′exposer"),
+        ]:
+            with self.subTest(expected=expected, answer=answer):
+                result = dictation.grade(expected, answer)
+                self.assertTrue(result["correct"])
+                self.assertEqual(result["accuracy"], 100)
+                self.assertTrue(all(op["kind"] == "ok" for op in result["ops"]))
+
     def test_case_punctuation_and_spacing_ignored(self):
         result = dictation.grade("Bonjour, Marie !", "  bonjour   MARIE ")
         self.assertTrue(result["correct"])

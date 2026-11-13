@@ -133,7 +133,7 @@ describe("9. whole-document answer-leak checks (Recall, Dictation, Review)", () 
         set((s) => ({
           exercises: {
             ...s.exercises,
-            [key]: { ...s.exercises[key], drafts: { "0:whole:w": "J’ai oublié mon billet." } },
+            [key]: { ...s.exercises[key], mode: "whole", drafts: { "0:whole:w": "J’ai oublié mon billet." } },
           },
         }));
       });
@@ -283,14 +283,14 @@ describe("4. clearing practice history resets derived counts", () => {
     await act(async () => REGISTRY.find((r) => r.id === "SCR-REC-01")!.states.find((s) => s.key === "empty")!.apply());
     const k1 = get().activeRun!;
     await act(async () => {
-      set((s) => ({ exercises: { ...s.exercises, [k1]: { ...s.exercises[k1], drafts: { "0:whole:w": TARGET } } } }));
+      set((s) => ({ exercises: { ...s.exercises, [k1]: { ...s.exercises[k1], mode: "whole", drafts: { "0:whole:w": TARGET } } } }));
       submitAnswer(k1);
     });
     await wait(300);
     const tryAgainBtn = Array.from(document.querySelectorAll("button")).find((b) => b.textContent === "Try again")!;
     await act(async () => tryAgainBtn.click());
     await act(async () => {
-      set((s) => ({ exercises: { ...s.exercises, [k1]: { ...s.exercises[k1], drafts: { "0:whole:w": TARGET } } } }));
+      set((s) => ({ exercises: { ...s.exercises, [k1]: { ...s.exercises[k1], mode: "whole", drafts: { "0:whole:w": TARGET } } } }));
       submitAnswer(k1);
     });
     await wait(300);

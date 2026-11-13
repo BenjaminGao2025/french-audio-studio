@@ -94,13 +94,13 @@ describe.each(["Recall", "Dictation"] as const)("%s exercise layout", kind => {
         expect(iconLabel.textContent).toBe(label);
         expect(iconLabel.className).toContain("flex");
       }
-      expect(card.querySelector('[aria-label="Answer"]')?.textContent).toContain("Try it now");
+      expect(card.querySelector('[aria-label="Answer"]')?.textContent).toContain("Try again");
     });
   });
 });
 
 describe("revealed recall answer", () => {
-  it("uses tappable words and Try it now hides the answer without forgetting it was shown", async () => {
+  it("uses tappable words and Try again hides the answer without forgetting it was shown", async () => {
     ensureSession("recall-test", "Recall", "Current sentence", items);
     const key = "0:whole:w";
     const picks: string[] = [];
@@ -109,7 +109,7 @@ describe("revealed recall answer", () => {
         exercises: {
           ...s.exercises,
           "recall-test": {
-            ...s.exercises["recall-test"],
+            ...s.exercises["recall-test"], mode: "whole",
             drafts: { [key]: "bonjour" },
             ui: { [key]: { phase: "answering", hint: true, revealed: true } },
           },
@@ -139,7 +139,7 @@ describe("revealed recall answer", () => {
     await act(async () => failli!.click());
     expect(picks).toEqual(["failli"]);
 
-    const tryNow = [...host.querySelectorAll("button")].find((b) => b.textContent === "Try it now");
+    const tryNow = [...host.querySelectorAll("button")].find((b) => b.textContent === "Try again");
     expect(tryNow).toBeTruthy();
     await act(async () => tryNow!.click());
 
@@ -149,7 +149,14 @@ describe("revealed recall answer", () => {
     expect(document.activeElement).toBe(input);
     expect(get().exercises["recall-test"].ui[key].revealed).toBe(true);
     expect(get().exercises["recall-test"].ui[key].coverAnswer).toBe(true);
-    expect(host.querySelector('[aria-label="Answer actions"] button[aria-pressed="true"]')).toBeTruthy();
+    expect(host.querySelector('[aria-label="Hint"]')).toBeNull();
+    expect(host.querySelector('[aria-label="Answer actions"] button[aria-pressed="true"]')).toBeNull();
+    await act(async () => {
+      set(s => ({exercises:{...s.exercises, "recall-test":{...s.exercises["recall-test"], drafts:{[key]:"answer"}}}}));
+      submitAnswer("recall-test");
+    });
+    expect(get().attempts.at(-1)).toMatchObject({hinted:true, answerKnown:true});
+    expect(host.textContent).toContain("Answer known");
   });
 });
 
@@ -160,7 +167,7 @@ describe.each(["Recall", "Dictation"] as const)("%s answer keyboard", (kind) => 
     ensureSession(sessionKey, kind, "Current sentence", items);
     await act(async () => {
       set((s) => ({ exercises: { ...s.exercises, [sessionKey]: {
-        ...s.exercises[sessionKey], drafts: { [key]: "Bonjour" },
+        ...s.exercises[sessionKey], mode: "whole", drafts: { [key]: "Bonjour" },
       } } }));
       root.render(<Exercise sessionKey={sessionKey} kind={kind} source="Current sentence" items={items} onDone={() => {}} />);
     });
@@ -275,7 +282,7 @@ describe.each(["Recall", "Dictation"] as const)("%s Next focus", kind => {
     const fixture = [...items, { ...items[0], id: "second" }];
     ensureSession("check-focus", kind, "Fixture", fixture);
     await act(async () => {
-      set(s => ({ exercises: { ...s.exercises, "check-focus": { ...s.exercises["check-focus"], drafts: { "0:whole:w": "answer" } } } }));
+      set(s => ({ exercises: { ...s.exercises, "check-focus": { ...s.exercises["check-focus"], mode: "whole", drafts: { "0:whole:w": "answer" } } } }));
       set(() => ({ activeRun: "check-focus", route: "study/run" }));
       root.render(<RunScreen />);
     });
@@ -293,7 +300,7 @@ describe.each(["Recall", "Dictation"] as const)("%s Next focus", kind => {
     const done = vi.fn();
     ensureSession("wrong-focus", kind, "Fixture", items);
     await act(async () => {
-      set(s => ({ exercises: { ...s.exercises, "wrong-focus": { ...s.exercises["wrong-focus"], drafts: { "0:whole:w": "wrong" } } } }));
+      set(s => ({ exercises: { ...s.exercises, "wrong-focus": { ...s.exercises["wrong-focus"], mode: "whole", drafts: { "0:whole:w": "wrong" } } } }));
       root.render(<Exercise sessionKey="wrong-focus" kind={kind} source="Fixture" items={items} onDone={done} />);
       submitAnswer("wrong-focus");
       await new Promise(r => setTimeout(r, 30));
@@ -302,5 +309,138 @@ describe.each(["Recall", "Dictation"] as const)("%s Next focus", kind => {
     expect(document.activeElement).not.toBe(next);
     await act(async () => { document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); });
     expect(done).not.toHaveBeenCalled();
+  });
+});
+
+it("new sessions default to Step by step first, preserve existing modes, and Review works in question and result", async () => {
+  const { fake, installFakeBackend } = await import("../test/fakeBackend");
+  const { resetSavedCards } = await import("../api/srs");
+  installFakeBackend(); fake.reset(); resetSavedCards();
+  ensureSession("default-review", "Recall", "Fixture", items);
+  expect(get().exercises["default-review"].mode).toBe("step");
+  await act(async () => root.render(<Exercise sessionKey="default-review" kind="Recall" source="Fixture" items={items} onDone={() => {}} />));
+  expect(host.querySelector('[aria-label="Practice scope"] button')?.textContent).toBe("Step by step");
+  const review = () => [...host.querySelectorAll("button")].find(b => /^(Review|In review)$/.test(b.textContent!))!;
+  await act(async () => { review().click(); await new Promise(r => setTimeout(r, 100)); });
+  expect(fake.calls.find(c => c.path === "/api/srs/notes")?.body).toMatchObject({sentence:items[0].steps[0].fr,translation_en:items[0].steps[0].en,modes:["listen"],targets:[]});
+  expect(review().getAttribute("aria-pressed")).toBe("true");
+  await act(async () => {
+    set(s => ({ exercises: { ...s.exercises, "default-review": { ...s.exercises["default-review"], drafts: {"0:step:0":"answer"} } } }));
+    submitAnswer("default-review");
+  });
+  expect(host.querySelector('[aria-label="Result actions"]')).toBeTruthy();
+  await act(async () => { review().click(); await new Promise(r => setTimeout(r, 100)); });
+  expect(review().getAttribute("aria-pressed")).toBe("false");
+  expect(fake.srs.cards.filter(c => c.note?.sentence === items[0].steps[0].fr && c.mode === "listen")).toHaveLength(0);
+  set(s => ({ exercises: { ...s.exercises, "default-review": { ...s.exercises["default-review"], mode:"whole" } } }));
+  ensureSession("default-review", "Recall", "Fixture", items);
+  expect(get().exercises["default-review"].mode).toBe("whole");
+});
+
+
+describe("normalization and visible grading marks", () => {
+  it.each([
+    ["Les représentants ont résolu d'exposer les droits.", "Les représentants ont résolu d'exposer les droits".normalize("NFD"), true],
+    ["Les représentants ont résolu d'exposer les droits.".normalize("NFD"), "Les représentants ont résolu d'exposer les droits", true],
+    ["d'exposer", "d’exposer", true],
+    ["d’exposer", "d'exposer", true],
+    ["Les représentants ont résolu d'exposer les droits.", "Les représentants ont résolu d'exposer les droits", true],
+    ["résolu", "fini", false],
+    ["été", "ete", false],
+    ["été ici", "été", false],
+    ["été", "été ici", false],
+  ])("renders %s / %s from the counted alignment", async (target, answer, correct) => {
+    vi.mocked(gradeAttempt).mockResolvedValueOnce({correct, saved:true} as Awaited<ReturnType<typeof gradeAttempt>>);
+    const fixture = [{...items[0], fr: target}];
+    ensureSession("marks", "Recall", "Fixture", fixture);
+    await act(async () => {
+      set(s => ({exercises:{...s.exercises, marks:{...s.exercises.marks, mode:"whole", drafts:{"0:whole:w":answer}}}}));
+      root.render(<Exercise sessionKey="marks" kind="Recall" source="Fixture" items={fixture} onDone={() => {}} />);
+      submitAnswer("marks");
+    });
+    const result = get().attempts.at(-1)!.result!;
+    const line = host.querySelector('[aria-label="Inline corrections"]')!;
+    const marks = line.querySelectorAll('[data-mark]:not([data-mark="ok"])');
+    expect(marks.length).toBe(result.counts.different + result.counts.missing + result.counts.extra + result.counts.accent);
+    if (correct) {
+      expect(host.textContent).toContain("100%");
+      expect(host.textContent).toContain("0 wrong");
+      expect(host.textContent).not.toContain("Not quite");
+    }
+    for (const mark of marks) {
+      const kind = mark.getAttribute("data-mark");
+      if (kind !== "missing") {
+        expect(mark.querySelector("del")?.classList.contains("line-through")).toBe(true);
+        expect(mark.querySelector("del")?.classList.contains("text-foreground")).toBe(true);
+      }
+      if (kind !== "extra") expect(mark.textContent).toContain(result.alignment.find(w => w.mark === kind)!.expected);
+    }
+    if (target === "été") {
+      expect(result.counts.different).toBe(0);
+      expect(result.counts.accent).toBe(answer === "ete" ? 1 : 0);
+    }
+  });
+});
+
+describe("glued comma result display (Bug F)", () => {
+  it("keeps ont/en correct and strikes a wrong word with its correct form", async () => {
+    const target = "Les représentants constitués en Assemblée nationale, ont résolu d'exposer les droits.";
+    const answer = "Les représentants constitués en Assemblee nationale,ont fini d'exposer les droits";
+    vi.mocked(gradeAttempt).mockResolvedValueOnce({ correct: false, saved: true } as Awaited<ReturnType<typeof gradeAttempt>>);
+    const fixture = [{ ...items[0], fr: target }];
+    ensureSession("comma-f", "Recall", "Fixture", fixture);
+    await act(async () => {
+      set(s => ({ exercises: { ...s.exercises, "comma-f": { ...s.exercises["comma-f"], mode: "whole", drafts: { "0:whole:w": answer } } } }));
+      root.render(<Exercise sessionKey="comma-f" kind="Recall" source="Fixture" items={fixture} onDone={() => {}} />);
+      submitAnswer("comma-f");
+    });
+    const result = get().attempts.at(-1)!.result!;
+    const line = host.querySelector('[aria-label="Inline corrections"]')!;
+    const marks = [...line.querySelectorAll('[data-mark]:not([data-mark="ok"])')];
+    // "N right / M wrong" and the visible marks both come from the same alignment.
+    expect(marks.length).toBe(result.counts.different + result.counts.missing + result.counts.extra + result.counts.accent);
+    expect(host.textContent).toContain(
+      `${result.counts.ok} right · ${result.counts.different + result.counts.missing + result.counts.extra} wrong`,
+    );
+    const wrong = marks.find(m => m.getAttribute("data-mark") === "different")!;
+    expect(wrong.querySelector("del")?.classList.contains("line-through")).toBe(true);
+    expect(wrong.querySelector("del")?.textContent).toBe("fini");
+    expect(wrong.textContent).toContain("résolu");
+    expect(result.alignment.filter(w => w.expected === "ont" || w.expected === "en").every(w => w.mark === "ok")).toBe(true);
+  });
+});
+
+
+describe.each(["Recall", "Dictation"] as const)("%s panel toggles", kind => {
+  it.each(["whole", "step"] as const)("keeps scoring flags when toolbar or close controls hide %s panels", async mode => {
+    ensureSession("toggle", kind, "Fixture", items);
+    await act(async () => {
+      set(s => ({exercises:{...s.exercises, toggle:{...s.exercises.toggle, mode}}}));
+      root.render(<Exercise sessionKey="toggle" kind={kind} source="Fixture" items={items} onDone={() => {}} />);
+    });
+    const buttons = host.querySelector('[aria-label="Answer actions"]')!.querySelectorAll("button");
+    for (const [index, label] of [[1,"Hint"],[2,"Answer"]] as const) {
+      await act(async () => buttons[index].click());
+      expect(buttons[index].getAttribute("aria-pressed")).toBe("true");
+      expect(host.querySelector(`[aria-label="${label}"]`)).toBeTruthy();
+      await act(async () => buttons[index].click());
+      expect(buttons[index].getAttribute("aria-pressed")).toBe("false");
+      expect(host.querySelector(`[aria-label="${label}"]`)).toBeNull();
+      await act(async () => buttons[index].click());
+      await act(async () => host.querySelector<HTMLButtonElement>(`[aria-label="Hide ${label.toLowerCase()}"]`)!.click());
+      expect(buttons[index].getAttribute("aria-pressed")).toBe("false");
+      expect(host.querySelector(`[aria-label="${label}"]`)).toBeNull();
+    }
+    const key = mode === "whole" ? "0:whole:w" : "0:step:0";
+    await act(async () => {
+      set(s => ({exercises:{...s.exercises,toggle:{...s.exercises.toggle,drafts:{[key]:"answer"}}}}));
+      submitAnswer("toggle");
+    });
+    expect(get().attempts.at(-1)).toMatchObject({hinted:true, answerKnown:true});
+    expect(host.textContent).toContain("Answer known");
+    const retry = host.querySelector<HTMLButtonElement>('[aria-label="Result actions"] button')!;
+    await act(async () => retry.click());
+    expect(get().exercises.toggle.ui[key]).toMatchObject({hint:false, revealed:false});
+    expect(get().exercises.toggle.ui[key].hinted).toBeUndefined();
   });
 });

@@ -7,7 +7,8 @@ Answers (including empty ones) are cached per user, language, sentence, word and
 
 The target is the n-th whole-word occurrence of `word` in `sentence`: case does not matter, accents do
 (à is not a), and a word glued to an apostrophe (the "une" of "d'une") is not a whole word.
-static/word-context.js counts the same way; tests/fixtures/word_context_cases.json keeps the two equal.
+Absent cited lemmas instead require a verified relation to a sentence token.
+static/word-context.js counts surface occurrences the same way; tests/fixtures/word_context_cases.json keeps the two equal.
 """
 
 from __future__ import annotations
@@ -22,10 +23,11 @@ from contextlib import contextmanager
 from typing import Any
 
 import auth_db
+import offline_dictionary
 import phrase_context
 
 # Part of every cache key: bump it when the prompt or the cleaning rules change.
-VERSION = 5
+VERSION = 6
 SENTENCE_MAX_CHARS = phrase_context.SENTENCE_MAX_CHARS
 TRANSLATION_MAX_CHARS = 600
 WORD_MAX_CHARS = 40
@@ -85,6 +87,37 @@ def word_spans(word: str, sentence: str) -> list[tuple[int, int]]:
             spans.append((at, end))
         at = have.find(want, at + 1)
     return spans
+
+
+# Guaranteed even when no dictionary index is installed. Other lemmas need dictionary evidence.
+_AVOIR_FORMS = frozenset((
+    "ai as a avons avez ont avais avait avions aviez avaient aurai auras aura aurons aurez auront "
+    "aurais aurait aurions auriez auraient aie aies ait ayons ayez aient ayant eu eus eue eues "
+    "eut eûmes eûtes eurent eusse eusses eût eussions eussiez eussent"
+).split())
+
+
+def related_lemma_span(word: str, sentence: str) -> tuple[int, int] | None:
+    """Accept absent base forms only with a known avoir form or an exact dictionary lemma link.
+
+    Client hints alone are not evidence. Spelling suggestions from the dictionary are excluded.
+    """
+    target = _fold_case(word)
+    tokens = list(re.finditer(r"[^\W\d_]+(?:['’][^\W\d_]+)*", sentence))
+    if target == "avoir":
+        for token in tokens:
+            if _fold_case(token.group()) in _AVOIR_FORMS:
+                return token.span()
+    for token in tokens:
+        try:
+            result = offline_dictionary.lookup(token.group())
+        except offline_dictionary.DictionaryUnavailable:
+            return None
+        if result and result.get("match_type") != "related" and any(
+            _fold_case(entry.get("lemma", "")) == target for entry in result.get("entries", [])
+        ):
+            return token.span()
+    return None
 
 
 def marked_sentence(sentence: str, span: tuple[int, int]) -> str:
@@ -242,7 +275,8 @@ def system_prompt(language: str) -> str:
 
 
 def ai_payload(
-    model: str, sentence: str, span: tuple[int, int], translation_zh: str = "", hints: dict | None = None, language: str = "en"
+    model: str, sentence: str, span: tuple[int, int], translation_zh: str = "", hints: dict | None = None, language: str = "en",
+    cited_word: str = "",
 ) -> dict:
     notes = clean_hints(hints)
     translation = phrase_context.clean_text(translation_zh, TRANSLATION_MAX_CHARS)
@@ -252,9 +286,20 @@ def ai_payload(
     ]
     known = [f"{key}: {value}" for key, value in notes.items() if value]
     lines.append("Notes from the sentence analysis (may be incomplete): " + ("; ".join(known) if known else "(none)"))
+    prompt = system_prompt(language)
+    if cited_word:
+        prompt += (
+            "\nFor this request the target is the cited base form, which is ABSENT from the sentence. "
+            "The marked sentence token is only evidence of its relation to the target. "
+            "Explain the TARGET base form and its connection to that token and this sentence. "
+            "Do not describe the target as if it were the conjugated or inflected surface token. "
+            "Example only when ont and résolu occur in the sentence: avoir is the infinitive behind ont, "
+            "the auxiliary with résolu in the passé composé. Never invent a participle or construction."
+        )
+        lines.insert(0, f"Target cited base form (not a surface token): {cited_word}")
     return {
         "model": model,
-        "messages": [{"role": "system", "content": system_prompt(language)}, {"role": "user", "content": "\n".join(lines)}],
+        "messages": [{"role": "system", "content": prompt}, {"role": "user", "content": "\n".join(lines)}],
         "response_format": {"type": "json_object"},
         "stream": False,
         "temperature": 0.1,

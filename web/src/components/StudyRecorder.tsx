@@ -12,6 +12,10 @@ export function takeAudioFocus(origin?: HTMLMediaElement | null) {
   stopPlayback();
   window.dispatchEvent(new CustomEvent(EXCLUSIVE_AUDIO, { detail: origin }));
 }
+/** Shared with the compact Ask AI recorder; mp4 covers iPhone Safari. */
+export function recordingMime() {
+  return ["audio/webm;codecs=opus", "audio/mp4", "audio/webm", "audio/ogg"].find(x => MediaRecorder.isTypeSupported(x));
+}
 const takes = new Map<string, { blob: Blob; url: string; saved: boolean }>();
 
 /** Keeps the last take while switching study tabs; failed processing can retry the same recording. */
@@ -81,7 +85,7 @@ export function StudyRecorder({ id, label, actionLabel = "Check recording", onTa
       const media = await navigator.mediaDevices.getUserMedia({ audio: true });
       if (!mounted.current || request !== capture.current) { media.getTracks().forEach((t) => t.stop()); if (mounted.current) setPhase("idle"); return; }
       stream.current = media;
-      const mime = ["audio/webm;codecs=opus", "audio/mp4", "audio/webm", "audio/ogg"].find((x) => MediaRecorder.isTypeSupported(x));
+      const mime = recordingMime();
       const r = new MediaRecorder(media, mime ? { mimeType: mime } : undefined);
       recorder.current = r;
       const chunks: Blob[] = [];

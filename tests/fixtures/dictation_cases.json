@@ -1237,6 +1237,202 @@
     "correct": true,
     "accent_only": false
    }
+  },
+  {
+   "name": "glued comma",
+   "expected": "Les représentants constitués en Assemblée nationale, ont résolu d'exposer les droits.",
+   "answer": "Les représentants constitués en Assemblée nationale,ont résolu d'exposer les droits",
+   "result": {
+    "ops": [
+     {
+      "kind": "ok",
+      "expected": "Les",
+      "actual": "Les"
+     },
+     {
+      "kind": "ok",
+      "expected": "représentants",
+      "actual": "représentants"
+     },
+     {
+      "kind": "ok",
+      "expected": "constitués",
+      "actual": "constitués"
+     },
+     {
+      "kind": "ok",
+      "expected": "en",
+      "actual": "en"
+     },
+     {
+      "kind": "ok",
+      "expected": "Assemblée",
+      "actual": "Assemblée"
+     },
+     {
+      "kind": "ok",
+      "expected": "nationale",
+      "actual": "nationale"
+     },
+     {
+      "kind": "ok",
+      "expected": "ont",
+      "actual": "ont"
+     },
+     {
+      "kind": "ok",
+      "expected": "résolu",
+      "actual": "résolu"
+     },
+     {
+      "kind": "ok",
+      "expected": "d'",
+      "actual": "d'"
+     },
+     {
+      "kind": "ok",
+      "expected": "exposer",
+      "actual": "exposer"
+     },
+     {
+      "kind": "ok",
+      "expected": "les",
+      "actual": "les"
+     },
+     {
+      "kind": "ok",
+      "expected": "droits",
+      "actual": "droits"
+     }
+    ],
+    "counts": {
+     "ok": 12,
+     "accent": 0,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 100,
+    "correct": true,
+    "accent_only": false
+   }
+  },
+  {
+   "name": "glued colon and guillemets",
+   "expected": "Il a dit : « oui ».",
+   "answer": "Il a dit:«oui»",
+   "result": {
+    "ops": [
+     {
+      "kind": "ok",
+      "expected": "Il",
+      "actual": "Il"
+     },
+     {
+      "kind": "ok",
+      "expected": "a",
+      "actual": "a"
+     },
+     {
+      "kind": "ok",
+      "expected": "dit",
+      "actual": "dit"
+     },
+     {
+      "kind": "ok",
+      "expected": "oui",
+      "actual": "oui"
+     }
+    ],
+    "counts": {
+     "ok": 4,
+     "accent": 0,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 100,
+    "correct": true,
+    "accent_only": false
+   }
+  },
+  {
+   "name": "space after elision before a vowel word",
+   "expected": "Je l'ai vu.",
+   "answer": "Je l' ai vu",
+   "result": {
+    "ops": [
+     {
+      "kind": "ok",
+      "expected": "Je",
+      "actual": "Je"
+     },
+     {
+      "kind": "ok",
+      "expected": "l'",
+      "actual": "l'"
+     },
+     {
+      "kind": "ok",
+      "expected": "ai",
+      "actual": "ai"
+     },
+     {
+      "kind": "ok",
+      "expected": "vu",
+      "actual": "vu"
+     }
+    ],
+    "counts": {
+     "ok": 4,
+     "accent": 0,
+     "wrong": 0,
+     "missing": 0,
+     "extra": 0
+    },
+    "accuracy": 100,
+    "correct": true,
+    "accent_only": false
+   }
+  },
+  {
+   "name": "elision written with a space and no apostrophe",
+   "expected": "Aujourd'hui il pleut.",
+   "answer": "aujourd hui il pleut",
+   "result": {
+    "ops": [
+     {
+      "kind": "extra",
+      "expected": "",
+      "actual": "aujourd"
+     },
+     {
+      "kind": "wrong",
+      "expected": "Aujourd'hui",
+      "actual": "hui"
+     },
+     {
+      "kind": "ok",
+      "expected": "il",
+      "actual": "il"
+     },
+     {
+      "kind": "ok",
+      "expected": "pleut",
+      "actual": "pleut"
+     }
+    ],
+    "counts": {
+     "ok": 2,
+     "accent": 0,
+     "wrong": 1,
+     "missing": 0,
+     "extra": 1
+    },
+    "accuracy": 50,
+    "correct": false,
+    "accent_only": false
+   }
   }
  ]
 }

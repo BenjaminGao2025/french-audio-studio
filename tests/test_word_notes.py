@@ -1,7 +1,9 @@
 """Word notes use the testenv temporary database, never live user data."""
 import unittest
+
 import testenv
 from fastapi.testclient import TestClient
+
 import tts_service
 
 

@@ -1,5 +1,6 @@
+import { StepReview } from "../components/StepReview";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { Lightbulb, Eye, Play, Turtle, RotateCcw, Loader2 } from "lucide-react";
+import { Lightbulb, Eye, Play, Turtle, RotateCcw, Loader2, X } from "lucide-react";
 import type { PracticeItem, StudySentence } from "../data/fixtures";
 import { grade } from "../lib/grading";
 import { gradeFeedback } from "../lib/feedback";
@@ -29,7 +30,7 @@ import { cn } from "cn";
 
 export function ensureSession(key: string, kind: "Recall" | "Dictation", source: string, items: PracticeItem[]) {
   if (get().exercises[key]) return;
-  const session: ExerciseSession = { key, kind, source, items, index: 0, mode: "whole", steps: {}, drafts: {}, ui: {}, done: false, audio: "idle" };
+  const session: ExerciseSession = { key, kind, source, items, index: 0, mode: "step", steps: {}, drafts: {}, ui: {}, done: false, audio: "idle" };
   set((s) => ({ exercises: { ...s.exercises, [key]: session } }));
 }
 
@@ -132,7 +133,7 @@ function beginAttempt(key: string) {
       scope: sess.mode === "step" ? "Step by step" : "Whole sentence",
       step: sess.mode === "step" ? (sess.steps[sess.index] ?? 0) + 1 : undefined,
       response: draft,
-      hinted: ui.hint, // flags are frozen at submission (and updated if used before a techfail retry)
+      hinted: Boolean(ui.hinted || ui.hint), // flags are frozen at submission (and updated if used before a techfail retry)
       answerKnown: ui.revealed,
       status: "pending",
       history: "saving",
@@ -144,7 +145,7 @@ function beginAttempt(key: string) {
     const prev = get().attempts.find((x) => x.id === attemptId);
     patchAttempt(attemptId, {
       response: draft,
-      hinted: Boolean(prev?.hinted || ui.hint),
+      hinted: Boolean(prev?.hinted || ui.hinted || ui.hint),
       answerKnown: Boolean(prev?.answerKnown || ui.revealed),
     });
   }
@@ -174,15 +175,16 @@ export function submitAnswer(key: string) {
   gradeAttempt(grading.src, kind, grading.step, draft)
     .then((r) => {
       if (!get().attempts.some((x) => x.id === attemptId)) return;
-      // The server decides right or wrong; the word marks come from the same rules on this side.
-      const res = { ...grade(target.fr, draft), correct: r.correct };
+      // The server decides right or wrong and the score; the word marks come from the same rules on this side.
+      const local = grade(target.fr, draft);
+      const res = { ...local, correct: r.correct, accuracy: typeof r.accuracy === "number" ? r.accuracy : local.accuracy };
       const curUi = get().exercises[key]?.ui[qk];
       const prev = get().attempts.find((x) => x.id === attemptId);
       patchAttempt(attemptId, {
         status: "completed",
         outcome: r.correct ? "correct" : "incorrect",
         result: res,
-        hinted: Boolean(prev?.hinted || curUi?.hint),
+        hinted: Boolean(prev?.hinted || curUi?.hinted || curUi?.hint),
         answerKnown: Boolean(prev?.answerKnown || curUi?.revealed),
         history: r.saved ? "saved" : "failed",
       });
@@ -288,7 +290,7 @@ export function Exercise({
   const tryFromMemory = () => {
     // The answer stays "shown" for scoring. Only the French on screen is covered.
     setDraft("");
-    patchUI(sessionKey, qk, { coverAnswer: true });
+    patchUI(sessionKey, qk, { coverAnswer: true, hint: false, hinted: ui.hinted || ui.hint });
     inputRef.current?.focus();
   };
   const play = (slow: boolean) =>
@@ -303,8 +305,8 @@ export function Exercise({
             patchSession(sessionKey, { mode: next, modeNotice: "" });
             announce(next === "step" ? "Scope changed to step by step." : "Scope changed to whole sentence.");
           } }} aria-label="Practice scope">{([
-            { value: "whole", label: "Whole sentence" },
             { value: "step", label: "Step by step" },
+            { value: "whole", label: "Whole sentence" },
           ]).map((o) => (<ToggleGroupItem key={o.value} value={o.value} className="px-2 text-xs sm:text-sm">{o.label}</ToggleGroupItem>))}</ToggleGroup>
       </div>
       <p id={`ex-q-${sessionKey}`} tabIndex={-1} className="text-xs text-muted-foreground">
@@ -315,6 +317,7 @@ export function Exercise({
 
       <Card aria-label="Exercise card">
       <CardContent className="gap-4">
+      {sess.mode === "step" && <div><StepReview sentence={t.fr} english={t.en} /></div>}
       {/* Prompt — never the French target */}
       <div className="flex flex-col gap-3">
         {kind === "Recall" ? (
@@ -341,15 +344,15 @@ export function Exercise({
         )}
         {ui.hint && ui.phase !== "graded" && (
           <div className="rounded-md bg-muted p-3 text-muted-foreground" role="status" aria-label="Hint">
-            <p className="mb-1 flex items-center gap-2 text-sm font-medium"><Lightbulb className="size-4" aria-hidden />Hint</p>
+            <p className="mb-1 flex items-center gap-2 text-sm font-medium"><Lightbulb className="size-4" aria-hidden />Hint<Button type="button" size="icon" variant="ghost" className="ml-auto" aria-label="Hide hint" onClick={() => patchUI(sessionKey, qk, { hint: false, hinted: true })}><X aria-hidden /></Button></p>
             <p lang={kind === "Recall" ? "fr" : "en"}>{hintFor(kind, t)}</p>
           </div>
         )}
         {ui.revealed && !ui.coverAnswer && ui.phase !== "graded" && (
           <div className="rounded-md bg-muted p-3 text-muted-foreground" role="status" aria-label="Answer">
-            <p className="mb-1 flex items-center gap-2 text-sm font-medium"><Eye className="size-4" aria-hidden />Answer</p>
+            <p className="mb-1 flex items-center gap-2 text-sm font-medium"><Eye className="size-4" aria-hidden />Answer<Button type="button" size="icon" variant="ghost" className="ml-auto" aria-label="Hide answer" onClick={() => patchUI(sessionKey, qk, { coverAnswer: true })}><X aria-hidden /></Button></p>
             <FrText text={t.fr} className="font-serif text-xl leading-snug wrap-break-word" onPick={handlePick} />
-            <Button type="button" variant="ghost" className="mt-2" onClick={tryFromMemory}>Try it now</Button>
+            <Button type="button" variant="outline" className="mt-2" onClick={tryFromMemory}><RotateCcw aria-hidden />Try again</Button>
           </div>
         )}
       </div>
@@ -391,17 +394,17 @@ export function Exercise({
           {busy && <Spinner label="Checking your answer…" />}
           <div className="flex items-center gap-2" aria-label="Answer actions">
               <Button type="button" variant="default" aria-disabled={(!!(busy)) || undefined} aria-busy={busy || undefined} className={cn((!!(busy)) ? "opacity-50" : "")} onClick={(event) => { if (!!(busy)) { event.preventDefault(); return; } (() => submitAnswer(sessionKey))(); }}>{busy ? <Loader2 className="animate-spin" aria-hidden /> : null}{ui.phase === "techfail" ? "Retry check" : busy ? "Checking…" : "Check"}</Button>
-              <Button type="button" variant="ghost" aria-pressed={ui.hint || undefined} onClick={() => {
-                  if (ui.hint || busy) return;
-                  patchUI(sessionKey, qk, { hint: true });
+              <Button type="button" variant="ghost" aria-pressed={ui.hint} onClick={() => {
+                  if (busy) return;
+                  patchUI(sessionKey, qk, { hint: !ui.hint, hinted: true });
                   if (ui.attemptId) patchAttempt(ui.attemptId, { hinted: true });
-                  announce("Hint shown.");
+                  announce(ui.hint ? "Hint hidden." : "Hint shown.");
                 }}>{<Lightbulb aria-hidden />}Hint</Button>
-              <Button type="button" variant="ghost" aria-pressed={ui.revealed || undefined} onClick={() => {
-                  if (ui.revealed || busy) return;
-                  patchUI(sessionKey, qk, { revealed: true, coverAnswer: false });
+              <Button type="button" variant="ghost" aria-pressed={ui.revealed && !ui.coverAnswer} onClick={() => {
+                  if (busy) return;
+                  patchUI(sessionKey, qk, { revealed: true, coverAnswer: ui.revealed && !ui.coverAnswer });
                   if (ui.attemptId) patchAttempt(ui.attemptId, { answerKnown: true });
-                  announce("Answer shown.");
+                  announce(ui.revealed && !ui.coverAnswer ? "Answer hidden." : "Answer shown.");
                 }}>{<Eye aria-hidden />}Answer</Button>
           </div>
         </div>
@@ -498,13 +501,13 @@ function Result({
         <p aria-label="Inline corrections" className="font-serif text-2xl leading-relaxed wrap-break-word" lang="fr">
           {r.alignment.map((word, i) => (
             <Fragment key={i}>
-              {i > 0 && " "}
+              {i > 0 && !/['’]$/.test(r.alignment[i - 1].given ?? r.alignment[i - 1].expected ?? "") && " "}
               <span data-mark={word.mark} className={word.mark === "different" || word.mark === "accent" ? "inline-block max-w-full" : undefined}>
                 {word.mark === "ok" ? word.given : word.mark === "missing" ? (
-                  <span className="text-muted-foreground" aria-label={`Missing word: ${word.expected}`}>{word.expected}</span>
+                  <span className="text-destructive font-medium underline underline-offset-4" aria-label={`Missing word: ${word.expected}`}>{word.expected}</span>
                 ) : (
                   <>
-                    <del className={word.mark === "accent" ? "text-muted-foreground decoration-dotted" : "text-muted-foreground"}>{word.given}</del>
+                    <del className={word.mark === "accent" ? "text-foreground line-through decoration-2 decoration-dotted" : "text-foreground line-through decoration-2"}>{word.given}</del>
                     {word.expected && <> <span className={word.mark === "accent" ? "underline decoration-dotted underline-offset-4" : "text-destructive font-medium"} aria-label={word.mark === "accent" ? `Accent correction: ${word.expected}` : undefined}>{word.expected}</span></>}
                   </>
                 )}

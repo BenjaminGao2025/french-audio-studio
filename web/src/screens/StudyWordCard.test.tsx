@@ -151,6 +151,40 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(host.querySelector(".wp-headword")?.textContent).toBe("ont");
   });
 
+  it.each(["marked explanation", "base form"])("gives avoir its own sentence context via %s", async source => {
+    const sentence: StudySentence = { ...SENTENCE, fr: "Les représentants ont résolu d'exposer les droits." };
+    vi.spyOn(lookupApi, "lookupWord").mockImplementation(async token => ({
+      token, lemma: "avoir", pos: "verb", phonetic: "", explanation_cn: "", explanation_en: "",
+      entries: [{ lemma: "avoir", pos: "verb", phonetic: "", language: "en", senses: ["have"], source_url: "", history_url: "" }],
+    }));
+    const context = vi.spyOn(lookupApi, "wordContext").mockImplementation(async ({ word }) => ({
+      context: { meaning_en: "", meaning_zh: "", why_zh: "", why_en: word === "avoir"
+        ? "⟦avoir⟧ is the infinitive behind ⟦ont⟧, the auxiliary with ⟦résolu⟧."
+        : "⟦ont⟧ is the 3rd person plural present tense of ⟦avoir⟧." }, state: "ready",
+    }));
+    await act(async () => root.render(<WordPanel sentence={sentence} text="ont" onClose={() => {}} />));
+    const avoir = source === "marked explanation"
+      ? Array.from(host.querySelectorAll<HTMLButtonElement>('[aria-label="In this sentence"] button[lang="fr"]')).find(button => button.textContent === "avoir")!
+      : findButton("avoir");
+    await act(async () => avoir.click());
+    expect(context.mock.calls.at(-1)?.[0]).toMatchObject({ word: "avoir", occurrence: 0, sentence: sentence.fr });
+    expect(host.querySelector(".wp-headword")?.textContent).toBe("avoir");
+    expect(host.querySelector('[aria-label="In this sentence"]')?.textContent).toContain("is the infinitive behind");
+    expect(findButton("Back to ont")).toBeTruthy();
+    await act(async () => findButton("Back to ont").click());
+    expect(host.querySelector('[aria-label="In this sentence"]')?.textContent).toContain("3rd person plural");
+  });
+
+  it("selects the closest repeated surface when drilling within a sentence", async () => {
+    const sentence: StudySentence = { ...SENTENCE, fr: "Ils ont résolu ceci ; ils ont résolu cela." };
+    const context = vi.spyOn(lookupApi, "wordContext").mockResolvedValue({
+      context: { meaning_en: "", meaning_zh: "", why_zh: "", why_en: "With ⟦résolu⟧ it forms the passé composé." }, state: "ready",
+    });
+    await act(async () => root.render(<WordPanel sentence={sentence} text="ont" occurrence={1} onClose={() => {}} />));
+    await act(async () => findButton("résolu").click());
+    expect(context.mock.calls.at(-1)?.[0]).toMatchObject({ word: "résolu", occurrence: 1 });
+  });
+
   it("keeps unmarked French and English words plain in the explanation", async () => {
     vi.spyOn(lookupApi, "wordContext").mockResolvedValue({ context: { meaning_en: "have", meaning_zh: "", why_zh: "", why_en: "avoir is used here with résolu." }, state: "ready" });
     await act(async () => root.render(<WordPanel sentence={SENTENCE} text="ont" onClose={() => {}} />));
@@ -205,12 +239,12 @@ describe("Task B — Study word card, selection and steps", () => {
     const picked = vi.fn();
     await act(async () => root.render(<WordsPanel sentence={sentence} onPick={picked} />));
     const tokens = Array.from(host.querySelectorAll<HTMLElement>(".fr-word"));
-    expect(tokens.map(t => t.textContent)).toEqual(["l'homme", "l'homme"]);
-    await act(async () => tokens[1].click());
+    expect(tokens.map(t => t.textContent)).toEqual(["l'homme"]);
+    await act(async () => tokens[0].click());
     expect(picked.mock.calls[0][0].text).toBe("l'homme");
   });
 
-  it("shows the full selected elision and a Chinese fixed expression only when present", async () => {
+  it("shows the full selected elision with its own Chinese context", async () => {
     localStorage.setItem("explanationLanguage", "zh");
     const fr = "Il défend les droits de l'homme.";
     vi.spyOn(lookupApi, "phraseContext").mockResolvedValue({phrases: [{text:"droits de l’homme", phrase:"droits de l’homme", meaning_zh:"人权", meaning_en:"human rights", literal_zh:""}]});
@@ -227,7 +261,8 @@ describe("Task B — Study word card, selection and steps", () => {
     await act(async () => root.render(<WordPanel sentence={sentence} text={picked.mock.calls[0][0].text} wordIndex={0} onClose={() => {}} />));
     expect(host.querySelector(".wp-headword")?.textContent).toBe("l'homme");
     expect(host.querySelector('[aria-label="Elision breakdown"]')?.textContent).toContain("l' = le");
-    expect(host.querySelector('[aria-label="In this sentence"] [lang="zh"]')?.textContent).toContain("droits de l’homme：人权");
+    expect(host.querySelector('[aria-label="In this sentence"] [lang="zh"]')?.textContent).toContain("这里泛指人");
+    expect(host.querySelector('[aria-label="In this sentence"]')?.textContent).not.toContain("人权");
     await act(async () => root.render(<WordPanel sentence={{...sentence,fr:"Il voit l'homme."}} text="l'homme" onClose={() => {}} />));
     expect(host.querySelector('[aria-label="In this sentence"]')?.textContent).not.toContain("人权");
   });
@@ -303,7 +338,7 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(host.querySelector(".wp-headword")?.textContent).toBe("machine à laver");
   });
 
-  it("drills nuisibles → nuisible with its own deck star, source occurrence, dictionary fallback and retry", async () => {
+  it("drills nuisibles → nuisible with its own deck star, target context, dictionary fallback and retry", async () => {
     const sentence: StudySentence = { ...SENTENCE, fr: "Ces insectes sont nuisibles.", en: "These insects are harmful." };
     const lookup = vi.spyOn(lookupApi, "lookupWord").mockImplementation(async token => ({
       token, lemma: "nuisible", pos: "adj", phonetic: "", explanation_cn: "", explanation_en: "",
@@ -324,7 +359,7 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(section.textContent).toContain("harmful");
     expect(section.textContent).toContain("Dictionary meaning");
     expect(section.textContent).not.toContain("Couldn’t load");
-    expect(context.mock.calls.at(-1)?.[0]).toMatchObject({ word: "nuisibles", occurrence: 0, sentence: sentence.fr });
+    expect(context.mock.calls.at(-1)?.[0]).toMatchObject({ word: "nuisible", occurrence: 0, sentence: sentence.fr });
     context.mockResolvedValue({ context: { meaning_en: "harmful to people", meaning_zh: "", why_zh: "" }, state: "ready" } as Awaited<ReturnType<typeof lookupApi.wordContext>>);
     await act(async () => findButton("Retry").click());
     await wait(100);
@@ -633,4 +668,71 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(panel.querySelector(".wp-headword")?.textContent).toBe("fin");
     expect(fake.calls.filter(call => call.path === "/api/etymology")).toHaveLength(2);
   });
+});
+
+it("a whole-step selection speaks once and the trailing row click never starts the store player", async () => {
+  const say = vi.spyOn(store, "sayFrench").mockImplementation(() => {});
+  const start = vi.spyOn(store, "startPlayback");
+  const row = host.querySelectorAll("ol li")[2] as HTMLElement;
+  const paragraph = row.querySelector(".step-fr")!;
+  const range = document.createRange();
+  range.selectNodeContents(paragraph);
+  window.getSelection()!.addRange(range);
+  await act(async () => paragraph.dispatchEvent(new Event("pointerup", { bubbles: true })));
+  await act(async () => row.click());
+  expect(say).toHaveBeenCalledTimes(1);
+  expect(say).toHaveBeenCalledWith(FR.replace(/ \?$/, ""));
+  expect(start).not.toHaveBeenCalled();
+});
+
+it.each(["en", "zh"])("uses exact phrase context in %s and clears it on a long pick", async language => {
+  localStorage.setItem("explanationLanguage", language);
+  const sentence = { ...SENTENCE, fr: "Les représentants ont résolu d'exposer les droits de l'homme." };
+  vi.spyOn(lookupApi, "phraseContext").mockResolvedValue({phrases:[{text:"droits de l'homme",phrase:"droits de l'homme",meaning_en:"human rights",meaning_zh:"人权",literal_zh:""}]});
+  const exact = "ont résolu";
+  fake.wordContexts[exact] = {meaning_en:"have resolved",why_en:`⟦${exact}⟧ describes their completed decision.`,meaning_zh:"已经决定",why_zh:`⟦${exact}⟧ 表示他们已经作出决定。`};
+  const context = vi.spyOn(lookupApi, "wordContext");
+  await act(async () => root.render(<WordPanel sentence={sentence} text={exact} onClose={() => {}} />));
+  await wait(100);
+  expect(context.mock.calls.at(-1)?.[0]).toMatchObject({word:exact, language});
+  expect(host.querySelector('[aria-label="In this sentence"]')?.textContent).toContain(language === "en" ? "completed decision" : "作出决定");
+  await act(async () => root.render(<WordPanel sentence={sentence} text={sentence.fr} onClose={() => {}} />));
+  const section = host.querySelector('[aria-label="In this sentence"]')!;
+  expect(section.textContent).toContain("Select a word or a short phrase");
+  expect(section.textContent).not.toMatch(/human rights|人权|completed decision|作出决定|droits de l'homme/);
+  expect(context).toHaveBeenCalledTimes(1);
+});
+
+it("Steps Review saves one listen card, shares state and removes it", async () => {
+  await act(async () => set(s => ({study:{...s.study,sentences:[{...SENTENCE, steps:[SENTENCE.steps[0], SENTENCE.steps[0]]}]}})));
+  const row = host.querySelector("ol li")!;
+  const review = () => [...row.querySelectorAll("button")].find(b => /^(Review|In review)$/.test(b.textContent!))!;
+  await act(async () => { review().click(); await new Promise(r => setTimeout(r, 100)); });
+  const posts = fake.calls.filter(c => c.path === "/api/srs/notes");
+  expect(posts).toHaveLength(1);
+  expect(posts[0].body).toMatchObject({sentence:STEP0,translation_en:"Hello",modes:["listen"],targets:[]});
+  expect(review().getAttribute("aria-pressed")).toBe("true");
+  expect(host.querySelectorAll('ol button[aria-pressed="true"]')).toHaveLength(2);
+  expect(fake.srs.cards.filter(c => c.note?.sentence === STEP0 && c.mode === "listen")).toHaveLength(1);
+  await act(async () => { review().click(); await new Promise(r => setTimeout(r, 100)); });
+  expect(review().getAttribute("aria-pressed")).toBe("false");
+  expect(fake.srs.cards.filter(c => c.note?.sentence === STEP0 && c.mode === "listen")).toHaveLength(0);
+  expect(fake.calls.filter(c => c.path === "/api/srs/notes")).toHaveLength(1);
+});
+
+it("removes a pre-existing step listen card using lookup metadata before the library is loaded", async () => {
+  const { saveNote } = await import("../api/srs");
+  const { StepReview } = await import("../components/StepReview");
+  await act(async () => {
+    await saveNote({sentence:STEP0,translation_en:"Hello",translation_zh:"",modes:["listen"],targets:[]});
+    resetSavedCards();
+    set(() => ({cards:[], sentences:[]}));
+    root.render(<StepReview sentence={STEP0} english="Hello" />);
+  });
+  await wait(100);
+  const button = host.querySelector("button")!;
+  expect(button.getAttribute("aria-pressed")).toBe("true");
+  await act(async () => { button.click(); await new Promise(r => setTimeout(r, 100)); });
+  expect(button.getAttribute("aria-pressed")).toBe("false");
+  expect(fake.srs.cards.filter(c => c.note?.sentence === STEP0 && c.mode === "listen")).toHaveLength(0);
 });

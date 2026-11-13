@@ -1,12 +1,26 @@
 import { describe, expect, it } from "vitest";
 import { planSession, type ReviewCard } from "../data/fixtures";
-import { grade } from "./grading";
+import { grade, tokenize } from "./grading";
 import { countLookup, importanceFor, lookupKey, wordIsSaved, type LookupCounter } from "./lookup";
 import { countedMinutesFor, mergeIntervals, pace, splitAtMidnight } from "./progress";
 
 const T = "J’ai oublié mon rendez-vous.";
 
 describe("grading", () => {
+  it.each([
+    ["NFD answer", "Les représentants ont résolu d'exposer les droits.", "Les représentants ont résolu d'exposer les droits".normalize("NFD")],
+    ["NFD target", "Les représentants ont résolu d'exposer les droits.".normalize("NFD"), "Les représentants ont résolu d'exposer les droits"],
+    ["curly answer", "d'exposer", "d’exposer"],
+    ["curly target", "d’exposer", "d'exposer"],
+    ["Ben's exact pair", "Les représentants ont résolu d'exposer les droits.", "Les représentants ont résolu d'exposer les droits"],
+    ["prime apostrophe", "d'exposer", "d′exposer"],
+  ])("fully accepts %s", (_, target, answer) => {
+    const r = grade(target, answer);
+    expect(r.correct).toBe(true);
+    expect(r.accuracy).toBe(100);
+    expect(r.alignment.every(w => w.mark === "ok")).toBe(true);
+    expect(r.counts.accent + r.counts.different + r.counts.missing + r.counts.extra).toBe(0);
+  });
   it("accepts equivalent forms", () => {
     expect(grade(T, "j'ai oublié mon rendez vous").correct).toBe(true);
     expect(grade(T, "  J’ai   OUBLIÉ mon rendez-vous ").correct).toBe(true);
@@ -15,7 +29,10 @@ describe("grading", () => {
   it("is strict on accents and apostrophes", () => {
     expect(grade("C’était l’été.", "c’était l’ete").correct).toBe(false);
     expect(grade("Ça va.", "ca va").issues[0].kind).toBe("accent");
-    expect(grade(T, "jai oublié mon rendez-vous").issues[0].kind).toBe("different");
+    // A missing apostrophe is a minor slip (half credit), not a wrong word.
+    const jai = grade(T, "jai oublié mon rendez-vous");
+    expect(jai.correct).toBe(false);
+    expect(jai.issues[0].kind).toBe("accent");
   });
   it("scores the aligned reference with half credit for accents", () => {
     const r = grade("Ma machine à laver fuit.", "Ma machine a lav fui");
@@ -46,6 +63,70 @@ describe("grading", () => {
     const word = grade(T, "J’ai oublié mon billet.");
     expect(word.issues[0]).toMatchObject({ kind: "different", given: "billet" });
     expect(word.target[3].mark).toBe("different");
+  });
+});
+
+describe("punctuation tokenization (Bug F)", () => {
+  const target = "Les représentants constitués en Assemblée nationale, ont résolu d'exposer les droits.";
+  const glued = "Les représentants constitués en Assemblee nationale,ont résolu d'exposer les droits";
+
+  it("splits a glued comma into the same two tokens whatever the spacing", () => {
+    for (const form of ["nationale,ont", "nationale, ont", "nationale , ont"]) {
+      expect(tokenize(form).keys.map((k) => k.key)).toEqual(["nationale", "ont"]);
+    }
+    expect(tokenize("nationale,ont").keys.map((k) => k.key)).not.toContain("nationaleont");
+  });
+
+  it("never makes punctuation a word or a counted mark", () => {
+    expect(tokenize(" , . ; : ! ? « » \" “ ” … ").keys).toHaveLength(0);
+    expect(grade("droits.", "droits").counts).toEqual({ ok: 1, accent: 0, different: 0, missing: 0, extra: 0 });
+  });
+
+  it("keeps ont and en correct and marks only the accent typo in Ben's example", () => {
+    const r = grade(target, glued);
+    const ok = r.alignment.filter((w) => w.mark === "ok").map((w) => w.expected);
+    expect(ok).toContain("ont");
+    expect(ok).toContain("en");
+    expect(r.alignment.find((w) => w.expected === "Assemblée")).toMatchObject({ mark: "accent", given: "Assemblee" });
+    // The glued comma no longer drifts the alignment: one accent, no wrong/missing/extra words.
+    expect(r.counts).toEqual({ ok: 11, accent: 1, different: 0, missing: 0, extra: 0 });
+    expect(r.accuracy).toBe(96);
+    // "N right / M wrong" is derived from the same alignment as the marks.
+    expect(r.counts.ok).toBe(r.alignment.filter((w) => w.mark === "ok").length);
+    expect(r.counts.accent + r.counts.different + r.counts.missing + r.counts.extra).toBe(
+      r.alignment.filter((w) => w.mark !== "ok").length,
+    );
+  });
+
+  it("keeps the NFD, trailing-period, curly-apostrophe and elision cases fully correct", () => {
+    const sentence = "Les représentants ont résolu d'exposer les droits.";
+    const nfd = sentence.normalize("NFD");
+    for (const [t, a] of [
+      [sentence, nfd.slice(0, -1)],      // NFD answer, no final period
+      [nfd, sentence.slice(0, -1)],      // NFD target, no final period in answer
+      [sentence, sentence.slice(0, -1)], // missing final period
+      ["droits.", "droits"],             // period is not a word
+      ["d'exposer", "d’exposer"],        // curly apostrophe, one token
+      ["l'homme", "l’homme"],            // elision, one token, curly match
+    ] as const) {
+      const r = grade(t, a);
+      expect(r.correct).toBe(true);
+      expect(r.accuracy).toBe(100);
+      expect(r.alignment.every((w) => w.mark === "ok")).toBe(true);
+    }
+  });
+
+  it("splits elisions the same way as the server, and accepts a space after the apostrophe", () => {
+    expect(tokenize("d'exposer l'homme j'ai aujourd'hui").keys.map((k) => k.key)).toEqual([
+      "d'", "exposer", "l'", "homme", "j'", "ai", "aujourd'hui",
+    ]);
+    expect(tokenize("l’homme d’exposer").keys.map((k) => k.key)).toEqual(["l'", "homme", "d'", "exposer"]);
+    expect(grade("l'homme", "l’homme").correct).toBe(true);
+    expect(grade("Je l'ai vu.", "Je l' ai vu").correct).toBe(true);
+    // No apostrophe at all is half credit on that word, never "correct".
+    const r = grade("l'homme est là", "l homme est là");
+    expect(r.correct).toBe(false);
+    expect(r.counts.accent).toBe(1);
   });
 });
 
