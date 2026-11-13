@@ -191,6 +191,10 @@
   box-shadow: inset 0 -1px 0 var(--primary);
 }
 
+/* Build-up steps: words met in the step before fade back, the words this step adds stand out. */
+.step-fr:has(.fr-added):has(.fr-word:not(.fr-added)) { color: var(--muted-foreground); }
+.step-fr:has(.fr-word:not(.fr-added)) .fr-added { color: var(--foreground); font-weight: 600; }
+
 @utility pt-safe {
   padding-top: var(--safe-top);
 }

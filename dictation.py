@@ -25,7 +25,7 @@ from typing import Any, Iterator
 import auth_db
 
 MODES = ("write", "listen")  # 默写, 听写
-MAX_STEPS = 8
+MAX_STEPS = 12  # analysis asks for up to 10 build-up steps on a very long sentence
 SENTENCE_MAX_CHARS = 600  # the /tts snippet limit: every target must be playable
 PROMPT_MAX_CHARS = 1000
 NOTE_MAX_CHARS = 500

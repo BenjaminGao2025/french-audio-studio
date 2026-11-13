@@ -272,19 +272,22 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
         '- For very short phrases of 4 words or fewer where word order is identical to English, you may leave "alignment": [] and "order_note": "".\n\n'
         "Build-up (layers):\n"
         "- CRITICAL RULE FOR SHORT SENTENCES: If the sentence or phrase has 5 words or fewer (e.g. 'Délivrance des résultats', 'Bonjour tout le monde', 'Merci beaucoup', short titles/headings), DO NOT create a build-up! Return empty array: \"build_up\": []. Do NOT artificially split short phrases.\n"
-        "- For longer sentences (more than 5 words), build it like a tree: trunk first, then branches.\n"
-        "  1. Step 1 is the bare trunk: the FIRST main clause reduced to its core (subject + verb + object; for an imperative, verb + object), "
+        "- For longer sentences (more than 5 words), build it like a tree: the short core first, then small pieces. The learner is a beginner: every step must be easy.\n"
+        "  1. Step 1 is the bare core: the FIRST main clause reduced to subject + verb + object (for an imperative, verb + object), "
         "even if it feels very short, with nothing of a relative clause in it (e.g. 'Choisissez celle.', not 'Choisissez celle qui correspond.'). "
         "Never start from a later clause, a clause after et/mais, or a subordinate clause.\n"
-        "  2. Each next step adds ONE branch, in the sentence's own order: what hangs on the trunk first (a relative clause qui/que/dont, an object, a complement), "
-        "then a coordinated main clause (et/mais/ou + verb), then place/time phrases.\n"
-        "  3. Keep the original word order in every step, and end with the exact original sentence (3–5 steps).\n"
+        "  2. Each next step adds ONE small piece of at most 6 new words, in the sentence's own order: what hangs on the core first (an object, a de … group, a relative clause qui/que/dont), "
+        "then a coordinated main clause (et/mais/ou + verb), then place/time phrases. "
+        "A longer piece is cut into two or more steps. A list (a, b et c) or a part between commas is added one item at a time.\n"
+        "  3. Keep the original word order in every step, and end with the exact original sentence. "
+        "Use as many steps as the sentence needs: 3–5 for a normal sentence, up to 10 for a very long one. Never add 10 or more words in one step.\n"
         "  Example: 'Choisissez celle qui correspond à l'image et cochez une case sur la feuille de réponses.' → "
-        "1 'Choisissez celle.' (trunk) → 2 'Choisissez celle qui correspond à l'image.' (relative clause describing celle) → "
-        "3 '… et cochez une case.' (second main verb, joined by et) → 4 the full sentence (place: sur la feuille de réponses). "
+        "1 'Choisissez celle.' → 2 'Choisissez celle qui correspond à l'image.' → "
+        "3 '… et cochez une case.' → 4 the full sentence (adds sur la feuille de réponses). "
         "Wrong: starting with 'Cochez une case.'\n"
-        '- Each step has: French, English, and "new": what was added and its role, in simple English, without a "New:" prefix '
-        '(e.g. "Trunk: choose the one." / "Branch: qui correspond à l\'image describes celle.").\n\n'
+        '- Each step has: French, English, and "new": the added French words, a colon, then what they tell in at most 10 easy English words. '
+        "No grammar words such as trunk, branch, clause, complement, subordinate, modifier. No \"New:\" prefix. "
+        '(e.g. step 1 "Start: choose the one." / "qui correspond à l\'image: says which one.").\n\n'
         "Grammar points:\n"
         "- 1–3 points, the most useful ones for this sentence.\n"
         "- Each has: a short title, a simple explanation, and a memory hook (word history, a comparison with English or Chinese, or a simple picture).\n\n"
@@ -330,11 +333,11 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
         "      ],\n"
         '      "order_note": "Almost the same order as English. Only difference: French puts canadiennes after the noun. English says Canadian authorities.",\n'
         '      "build_up": [\n'
-        '        {"fr": "Les autorités autorisent.", "en": "The authorities authorize.", "new": "Basic sentence: who + does what."},\n'
-        '        {"fr": "Les autorités canadiennes autorisent.", "en": "The Canadian authorities authorize.", "new": "canadiennes = Canadian. In French it goes after the noun."},\n'
-        '        {"fr": "Les autorités canadiennes n\'autorisent pas la dispense.", "en": "The Canadian authorities do not authorize the exemption.", "new": "ne … pas = not. It wraps around the verb."},\n'
-        '        {"fr": "Les autorités canadiennes n\'autorisent aucune dispense.", "en": "The Canadian authorities authorize no exemption.", "new": "pas changes to aucune = no / not any."},\n'
-        '        {"fr": "Aucune dispense n\'est autorisée par les autorités canadiennes.", "en": "No exemption is authorized by the Canadian authorities.", "new": "Passive, just like English: is authorized by = est autorisée par."}\n'
+        '        {"fr": "Les autorités autorisent.", "en": "The authorities authorize.", "new": "Start: who does what."},\n'
+        '        {"fr": "Les autorités canadiennes autorisent.", "en": "The Canadian authorities authorize.", "new": "canadiennes: Canadian. It comes after the noun."},\n'
+        '        {"fr": "Les autorités canadiennes n\'autorisent pas la dispense.", "en": "The Canadian authorities do not authorize the exemption.", "new": "ne … pas la dispense: not, and what they allow."},\n'
+        '        {"fr": "Les autorités canadiennes n\'autorisent aucune dispense.", "en": "The Canadian authorities authorize no exemption.", "new": "aucune: no, not any. It takes the place of pas."},\n'
+        '        {"fr": "Aucune dispense n\'est autorisée par les autorités canadiennes.", "en": "No exemption is authorized by the Canadian authorities.", "new": "est autorisée par: is authorized by, like English."}\n'
         "      ],\n"
         '      "words": [\n'
         '        {"fr": "aucune", "ipa": "okyn", "lemma": "aucun", "type": "describing word", "meaning": "no, not any", "meaning_zh": "没有任何", "why": "Ends in -e because dispense is a feminine word. Used with ne, but without pas.", "english_link": "", "false_friend": false},\n'

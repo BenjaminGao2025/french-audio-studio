@@ -836,7 +836,7 @@ describe("1.3.8 Study layout", () => {
     expect(more).toHaveLength(1);
     expect(host.querySelector("[data-sentence-player]")?.contains(more[0])).toBe(true);
     expect(host.querySelector('button[aria-label="More playback controls"]')).toBeNull();
-    expect((await openMore()).map((x) => x.textContent?.trim())).toEqual(["Play all sentences", "Analyses in History", "New text", "Edit source"]);
+    expect((await openMore()).map((x) => x.textContent?.trim())).toEqual(["Play all sentences", "Analyses in History", "Edit source"]);
     await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
   });
 
