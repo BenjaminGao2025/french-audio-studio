@@ -483,6 +483,14 @@ class SrsApiTests(unittest.TestCase):
         ).json()["notes"]
         self.assertEqual(len(lookup), 1)
 
+    def test_review_saves_when_the_card_was_open_for_hours(self):
+        self.client.post("/api/srs/notes", headers=self.headers, json={
+            "sentence": "Le week-end, j'ai pris le bus.", "translation_en": "On weekends, I took the bus.", "modes": ["listen"]})
+        card = self.client.get("/api/srs/queue?tz_offset=240", headers=self.headers).json()["cards"][0]
+        res = self.client.post(f"/api/srs/cards/{card['id']}/review", headers=self.headers,
+                               json={"rating": 2, "duration_ms": 3 * 3_600_000, "tz_offset": 480})
+        self.assertEqual(res.status_code, 200)
+
 class ChooseCardsTests(unittest.TestCase):
     def setUp(self):
         self.user_id, _ = _new_user()

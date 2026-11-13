@@ -8,6 +8,13 @@ export const RELEASES = [
     version: APP_VERSION,
     date: "2026-11-13",
     changes: [
+      "A review card left open for more than an hour can be rated again; before, saving the rating kept failing.",
+    ],
+  },
+  {
+    version: "1.3.12",
+    date: "2026-11-13",
+    changes: [
       "Fill-in cards blank and highlight only the whole word: “ma” no longer cuts into “mais”.",
       "The importance stars sit closer together.",
     ],
