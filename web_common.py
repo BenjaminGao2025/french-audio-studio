@@ -161,6 +161,11 @@ RATE_LIMITS: dict[str, tuple[float, float]] = {
         float(os.getenv("RATE_WORD_CONTEXT_AI_BURST", "40")),
         float(os.getenv("RATE_WORD_CONTEXT_AI_PER_HOUR", "180")) / 3600,
     ),
+    # First-party usage events (POST /api/events): the app flushes every 30 s and when the page hides
+    "events": (
+        float(os.getenv("RATE_EVENTS_BURST", "20")),
+        float(os.getenv("RATE_EVENTS_PER_MIN", "10")) / 60,
+    ),
 }
 _rate_buckets: dict[tuple[object, str], tuple[float, float]] = {}
 _rate_lock = threading.Lock()

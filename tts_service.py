@@ -32,6 +32,7 @@ import routers.speaking
 import routers.srs
 import routers.studio
 import routers.tutor
+import routers.usage
 import routers.writing
 import speaking
 import writing
@@ -63,6 +64,7 @@ for _routes in (
     routers.coach,
     routers.homework,
     routers.dictation,
+    routers.usage,
 ):
     app.include_router(_routes.router)
 

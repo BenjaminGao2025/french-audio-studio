@@ -13,6 +13,7 @@ import { SettingsScreen } from "./screens/Settings";
 import { DesignReference } from "./screens/Design";
 import { Gate, Legacy, NotFound } from "./screens/Auth";
 import { startStudyTime } from "./api/time";
+import { startTracking } from "./lib/track";
 import { go, parseLocation, resetPlaybackClock, set, tick, useApp } from "./state/store";
 
 function Routes() {
@@ -62,8 +63,11 @@ export default function App() {
     const t = setInterval(() => tick(), 250);
     // Study time toward 1,000 hours (page use + playing audio), sent to the server as heartbeats.
     const stopTime = startStudyTime();
+    // First-party usage events (screens, tabs, main actions) for improving the app; see lib/track.ts.
+    const stopTracking = startTracking();
     return () => {
       stopTime();
+      stopTracking();
       window.removeEventListener("popstate", onPop);
       document.removeEventListener("visibilitychange", resetPlaybackClock);
       clearInterval(t);

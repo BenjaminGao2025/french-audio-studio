@@ -26,6 +26,7 @@ import { Badge } from "../components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { cn } from "cn";
+import { track } from "../lib/track";
 
 type Tab = "analyses" | "time" | "attempts";
 const TABS: Tab[] = ["analyses", "time", "attempts"];
@@ -60,7 +61,7 @@ export function HistoryScreen() {
         title="History"
       />
       <div className="flex flex-col gap-6">
-        <Tabs value={tab} onValueChange={(next) => ((t) => go(`progress/history?tab=${t}`, { focus: false }))(next)}><TabsList aria-label={"History type"} className="h-auto max-w-full flex-wrap justify-start">{([
+        <Tabs value={tab} onValueChange={(next) => { track("tab_view", { screen: "history", tab: next }); go(`progress/history?tab=${next}`, { focus: false }); }}><TabsList aria-label={"History type"} className="h-auto max-w-full flex-wrap justify-start">{([
             { value: "analyses", label: "Study analyses" },
             { value: "time", label: "Study time" },
             { value: "attempts", label: "Recall & Dictation" },
@@ -155,7 +156,14 @@ function Analyses() {
             { header: "Source", cell: ({ row }) => sourceLabel(row.original) },
             { header: "Sentences", cell: ({ row }) => plural(sentenceCount(row.original), "sentence") },
             // Open goes straight to the analysis; only entries saved without sentences need the detail page.
-            { id: "open", header: "", cell: ({ row }) => <Button type="button" variant="ghost" className="h-8 px-2" onClick={() => (canReopen(row.original) ? openAnalysisInStudy(row.original) : setDetail(row.original.id))}>Open</Button> },
+            { id: "open", header: "", cell: ({ row }) => <Button type="button" variant="ghost" className="h-8 px-2" onClick={() => {
+              const direct = canReopen(row.original);
+              track("history_open", { kind: "analysis", direct });
+              if (direct) {
+                track("history_reopen", { how: "analysis" });
+                openAnalysisInStudy(row.original);
+              } else setDetail(row.original.id);
+            }}>Open</Button> },
           ]}
         />
       )}
@@ -180,6 +188,7 @@ function AnalysisDetail({ r, onBack }: { r: StudyRecord; onBack: () => void }) {
       <DisabledReason>This entry was saved without its analysed sentences, so it can’t be opened.</DisabledReason>
       <div className="flex flex-wrap items-center gap-2">
         <Button type="button" variant="default" onClick={() => {
+            track("history_reopen", { how: "text" });
             patchStudy({ drafts: { ...study.drafts, text: r.text } });
             go("study/new");
           }}>Put the text in Study</Button>
@@ -298,7 +307,7 @@ function Attempts() {
             { header: "Accuracy", cell: ({ row }) => <span className="tabular-nums">{row.original.accuracy}%</span> },
             { id: "sentence", header: "Sentence", cell: ({ row }) => <span lang="fr" className="whitespace-normal">{preview(row.original.sentence)}</span> },
             { header: "When", cell: ({ row }) => `${fmtWhen(row.original.created_at)}${row.original.step ? ` · step ${row.original.step}` : ""}` },
-            { id: "open", header: "", cell: ({ row }) => <Button type="button" variant="ghost" className="h-8 px-2" onClick={() => setDetail(row.original.id)}>Open</Button> },
+            { id: "open", header: "", cell: ({ row }) => <Button type="button" variant="ghost" className="h-8 px-2" onClick={() => { track("history_open", { kind: "attempt" }); setDetail(row.original.id); }}>Open</Button> },
           ]}
         />
       )}

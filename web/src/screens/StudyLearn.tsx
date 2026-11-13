@@ -31,6 +31,7 @@ import { Button } from "../components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { cn } from "cn";
+import { track } from "../lib/track";
 
 
 interface Pick {
@@ -571,6 +572,7 @@ function AddToReview({ sentence }: { sentence: StudySentence }) {
       });
       setCount(chosen.length);
       setPhase("added");
+      track("add_review_saved", { cards: chosen.length, words: chosen.filter((c) => c.word).length });
       announce(`${plural(chosen.length, "card")} saved to your library.`);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "");
@@ -623,7 +625,7 @@ function AddToReview({ sentence }: { sentence: StudySentence }) {
 
   return (
     <div ref={wrap} style={{ position: "relative" }}>
-      <Button type="button" variant={allSaved ? "secondary" : "default"} aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen(!open)}>{allSaved ? <Check aria-hidden /> : <Plus aria-hidden />}{label}</Button>
+      <Button type="button" variant={allSaved ? "secondary" : "default"} aria-expanded={open} aria-haspopup="dialog" onClick={() => { if (!open) track("add_review_open", { saved: savedCount, all_saved: allSaved }); setOpen(!open); }}>{allSaved ? <Check aria-hidden /> : <Plus aria-hidden />}{label}</Button>
       {open &&
         (sheet ? (
           <Dialog sheet title="Add to review" onClose={() => setOpen(false)} footer={footer}>
