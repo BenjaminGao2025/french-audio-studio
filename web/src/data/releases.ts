@@ -8,6 +8,14 @@ export const RELEASES = [
     version: APP_VERSION,
     date: "2026-11-13",
     changes: [
+      "Fill-in cards blank and highlight only the whole word: “ma” no longer cuts into “mais”.",
+      "The importance stars sit closer together.",
+    ],
+  },
+  {
+    version: "1.3.11",
+    date: "2026-11-13",
+    changes: [
       "The word card and menus now stand out from the page: a lighter surface, a clear edge and a soft shadow.",
     ],
   },

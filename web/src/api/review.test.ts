@@ -59,6 +59,13 @@ describe("toReviewCard", () => {
     expect(blankOut("C’est la vie.", "")).toBeNull();
     expect(blankOut("C’est la vie.", "mort")).toBeNull();
   });
+
+  it("blankOut only blanks whole words, like the server's target_in_sentence", () => {
+    expect(blankOut("Oui, mais j’ai laissé ma carte à la maison.", "ma")).toBe("Oui, mais j’ai laissé _____ carte à la maison.");
+    expect(blankOut("Je prends le train.", "en")).toBeNull();
+    expect(blankOut("Voici l’homme.", "l'")).toBe("Voici _____homme.");
+    expect(blankOut("Voici l’homme.", "homme")).toBe("Voici l’_____.");
+  });
 });
 
 describe("ratings and dates", () => {

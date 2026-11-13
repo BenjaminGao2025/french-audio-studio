@@ -44,12 +44,20 @@ const tz = () => new Date().getTimezoneOffset();
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/['’]/g, "['’]");
 
-/** The sentence with the first occurrence of `word` blanked, or null when the sentence doesn't contain it. */
+/** First whole-word, case-insensitive occurrence of `target`, like srs.py target_in_sentence ("ma" never inside "mais"). */
+export function targetSpan(sentence: string, target: string): [number, number] | null {
+  const t = target.trim();
+  if (!t) return null;
+  const edge = (ch: string) => /[\p{L}\p{N}]/u.test(ch);
+  const re = new RegExp((edge(t[0]) ? "(?<![\\p{L}\\p{N}_])" : "") + escapeRe(t) + (edge(t[t.length - 1]) ? "(?![\\p{L}\\p{N}_])" : ""), "iu");
+  const m = re.exec(sentence);
+  return m ? [m.index, m.index + m[0].length] : null;
+}
+
+/** The sentence with the first whole-word occurrence of `word` blanked, or null when the sentence doesn't contain it. */
 export function blankOut(sentence: string, word: string): string | null {
-  const w = word.trim();
-  if (!w) return null;
-  const re = new RegExp(escapeRe(w), "i");
-  return re.test(sentence) ? sentence.replace(re, "_____") : null;
+  const span = targetSpan(sentence, word);
+  return span ? sentence.slice(0, span[0]) + "_____" + sentence.slice(span[1]) : null;
 }
 
 // Keep in sync with srs.py; existing cards retain their stored identity and scheduling.

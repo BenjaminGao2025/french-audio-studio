@@ -11,7 +11,7 @@ import {
   type StudySentence,
 } from "../data/fixtures";
 import { ApiError } from "../api/client";
-import { libraryReady, loadLibrary, loadQueue, masterCard, setCardArchived, rateCard, restoreMastered, toReviewCard as serverToReviewCard } from "../api/review";
+import { libraryReady, loadLibrary, loadQueue, masterCard, setCardArchived, rateCard, restoreMastered, targetSpan, toReviewCard as serverToReviewCard } from "../api/review";
 import { grade } from "../lib/grading";
 import { gradeFeedback, practiceFeedback } from "../lib/feedback";
 import { wordImportance, wordIsSaved } from "../lib/lookup";
@@ -145,13 +145,9 @@ const LEARN_AHEAD_MS = 20 * 60 * 1000;
 /** The full sentence as FrText segments, with the target word(s) highlighted using --mark-bg. */
 export function markedSegments(full: string, target: string): FrSegment[] {
   const segs = tokenizeFrench(full);
-  const t = (target || "").trim();
-  if (!t) return segs;
-  const fold = (s: string) => s.replace(/[’ʼ]/g, "'").toLocaleLowerCase("fr");
-  let start = full.toLocaleLowerCase("fr").indexOf(t.toLocaleLowerCase("fr"));
-  if (start < 0) start = fold(full).indexOf(fold(t)); // curly vs straight apostrophes
-  if (start < 0) return segs;
-  const end = start + t.length;
+  const span = targetSpan(full, target || "");
+  if (!span) return segs;
+  const [start, end] = span;
   let pos = 0;
   return segs.map((s) => {
     const a = pos;

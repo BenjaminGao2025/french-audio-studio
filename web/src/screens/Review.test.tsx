@@ -518,6 +518,12 @@ describe("Review focus and mastered shortcut", () => {
   });
 });
 
+it("review marks the whole word ma, not the ma inside mais", () => {
+  const marked = markedSegments("Oui, mais j’ai laissé ma carte.", "ma").filter(s => s.mark);
+  expect(marked).toEqual([{t:"ma",w:true,mark:true}]);
+  expect(markedSegments("Je prends le train.", "en").some(s => s.mark)).toBe(false);
+});
+
 for (const apostrophe of ["'", "’"]) for (const form of ["l'homme", "l'oubli", "j'ai", "n'ai", "qu'il"]) {
   const surface = form.replace("'", apostrophe);
   it(`review marks the full ${surface} when the saved target is its remainder`, () => {
