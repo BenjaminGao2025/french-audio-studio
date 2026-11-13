@@ -49,6 +49,7 @@
 
 - 每屏最多一个 `default`（主）按钮，放在最主要的动作上；已完成状态降为 `secondary`。
 - 工具条和每一行重复出现的动作用 `ghost` 图标按钮，带 Tooltip 和 aria-label，点击区域至少 44×44（`size-11`）。
+  - 例外：Importance 评分星要挨在一起，每颗是 28×44（`h-11 w-7`），仍高于 WCAG 的 24 px。
 - `outline` 只给单独出现的次要动作；相关的控件放在一起（同一行、同一组），不要一排边框按钮。
 - 视图切换用 Tabs：一级用默认 Tabs（填充的选中态），二级用 `variant="line"`。不要用 ToggleGroup 或按钮来做导航。
 - 页面统一用 `pageFrame()`（max-w-3xl）；只有表格类页面（Saved 列表）可以用宽版。

@@ -354,16 +354,16 @@ export function Popover({
 export function Importance({ count, saved = false, value, onChange, lookups = "inline" }: { count: number; saved?: boolean; value?: number; onChange?: (level: number) => void; lookups?: "inline" | "muted" }) {
   const n = value ?? importanceFor(count, saved);
   const times = `${count} ${count === 1 ? "lookup" : "lookups"}`;
-  const star = (i: number) => <Star data-filled={i <= n} className={cn("size-4", i <= n ? "fill-current text-foreground" : "text-muted-foreground")} />;
+  const star = (i: number) => <Star data-filled={i <= n} className={cn(onChange ? "size-5" : "size-4", i <= n ? "fill-current text-foreground" : "text-muted-foreground")} />;
   return (
     <div className="flex flex-wrap items-center gap-x-2">
       {onChange ? (
         <span role="radiogroup" aria-label="Importance" className="inline-flex items-center">
           {[1, 2, 3, 4, 5].map((i) => i < MIN_CHOSEN_IMPORTANCE ? (
-            <span key={i} className="inline-flex size-11 items-center justify-center" aria-hidden>{star(i)}</span>
+            <span key={i} className="inline-flex h-11 w-7 items-center justify-center" aria-hidden>{star(i)}</span>
           ) : (
             <Button key={i} type="button" variant="ghost" size="icon" role="radio" aria-checked={i === n} aria-label={`Importance ${i} out of 5`}
-              className="size-11" onClick={() => i !== n && onChange(i)}>{star(i)}</Button>
+              className="h-11 w-7 hover:bg-transparent dark:hover:bg-transparent" onClick={() => i !== n && onChange(i)}>{star(i)}</Button>
           ))}
         </span>
       ) : (
