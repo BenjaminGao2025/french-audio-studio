@@ -17,6 +17,7 @@ import {
   type QuestionUI,
 } from "../state/store";
 import { gradeAttempt } from "../api/dictation";
+import { letterDiff } from "../lib/letterDiff";
 import { ApiError } from "../api/client";
 import { FrText, type FrPick } from "../components/FrText";
 import { Spinner, Textarea, useNarrow } from "../components/ui";
@@ -453,10 +454,26 @@ export function Exercise({
   );
 }
 
+/** A wrong word: what was typed, struck through, then the right word. Only the letters that differ are red. */
+function WordFix({ given, expected, accent }: { given?: string; expected?: string; accent: boolean }) {
+  const d = given && expected ? letterDiff(given, expected) : null;
+  const red = accent ? "text-destructive underline decoration-dotted underline-offset-4" : "text-destructive font-semibold";
+  return (
+    <>
+      <del className={cn("text-muted-foreground line-through decoration-2", accent && "decoration-dotted")}>
+        {d ? d.given.map((r, i) => (r.diff ? <span key={i} className="text-destructive">{r.text}</span> : r.text)) : given}
+      </del>
+      {expected && <> <span aria-label={accent ? `Accent correction: ${expected}` : `Correction: ${expected}`}>
+        {d ? d.expected.map((r, i) => (r.diff ? <span key={i} className={red}>{r.text}</span> : r.text)) : <span className={red}>{expected}</span>}
+      </span></>}
+    </>
+  );
+}
+
 function ExerciseWord({ sentence, pick, onClose, narrow }: { sentence: StudySentence; pick: FrPick; narrow: boolean; onClose: () => void }) {
   return (
     <WordOverlay anchor={pick.anchor} label={`Meaning of ${pick.text}`} onClose={onClose}>
-      <WordPanel sentence={sentence} text={pick.text} occurrence={pick.occurrence} onClose={onClose} inSheet={narrow} />
+      <WordPanel sentence={sentence} text={pick.text} occurrence={pick.occurrence} context={pick.context} onClose={onClose} inSheet={narrow} />
     </WordOverlay>
   );
 }
@@ -529,10 +546,7 @@ function Result({
                 {word.mark === "ok" ? word.given : word.mark === "missing" ? (
                   <span className="text-destructive font-medium underline underline-offset-4" aria-label={`Missing word: ${word.expected}`}>{word.expected}</span>
                 ) : (
-                  <>
-                    <del className={word.mark === "accent" ? "text-foreground line-through decoration-2 decoration-dotted" : "text-foreground line-through decoration-2"}>{word.given}</del>
-                    {word.expected && <> <span className={word.mark === "accent" ? "underline decoration-dotted underline-offset-4" : "text-destructive font-medium"} aria-label={word.mark === "accent" ? `Accent correction: ${word.expected}` : undefined}>{word.expected}</span></>}
-                  </>
+                  <WordFix given={word.given} expected={word.expected} accent={word.mark === "accent"} />
                 )}
               </span>
             </Fragment>

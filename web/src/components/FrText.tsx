@@ -31,6 +31,8 @@ export interface FrPick {
   occurrence: number;
   /** A real element: the desktop Popover only accepts an element as its anchor. */
   anchor: HTMLElement;
+  /** The text the word was picked in: a build-up step can differ from the sentence. */
+  context?: string;
 }
 
 const WORD_RE = /([A-Za-zÀ-ÖØ-öø-ÿŒœ0-9]+(?:['’-][A-Za-zÀ-ÖØ-öø-ÿŒœ]+)*)/;
@@ -191,8 +193,8 @@ export function FrText({
   /** A deliberate word tap / keyboard activation always speaks and opens the card. */
   const emit = useCallback((p: FrPick) => {
     sayFrench(p.text);
-    onPickRef.current(p);
-  }, []);
+    onPickRef.current({ ...p, context: full });
+  }, [full]);
 
   /** Dedupe by the selection's start/end word positions, never by time. */
   const fireSelection = useCallback(

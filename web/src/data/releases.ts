@@ -8,6 +8,15 @@ export const RELEASES = [
     version: APP_VERSION,
     date: "2026-11-13",
     changes: [
+      "A word tapped in a build-up step is explained in that step: “a” in “La loi a le droit” is “has”, not the letter A.",
+      "When the meaning in the sentence can’t load, the card says so instead of showing a dictionary sense that may not fit.",
+      "A wrong word marks only the letters that differ in red: activit[ies] → activit[és].",
+    ],
+  },
+  {
+    version: "1.3.16",
+    date: "2026-11-13",
+    changes: [
       "⌘ Enter (Ctrl Enter on Windows) sends the text: Analyse text in Study, and the main button in Write, Speak, Audio Studio, Explain, Ask and My own ideas.",
       "The first build-up step now says which French words are who, does what and what, for example “La loi: who. a: has. le droit: what.”",
     ],

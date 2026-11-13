@@ -241,5 +241,12 @@ describe("FrText — keyboard access and native selection", () => {
     expect(picks.mock.calls.map(([p]) => p.text)).toEqual(["laver", "laver", "laver", "machine", "à", "fuit"]);
     expect(new Set(picks.mock.calls.map(([p]) => p)).size).toBe(6);
   });
+  it("tells which text a word was picked in, so a build-up step is explained in that step", async () => {
+    const picks = vi.fn();
+    await act(async () => root.render(<FrText text="La loi a le droit." onPick={picks} />));
+    const a = [...host.querySelectorAll<HTMLElement>(".fr-word")].find(el => el.textContent === "a")!;
+    await act(async () => a.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 })));
+    expect(picks.mock.calls.at(-1)?.[0]).toMatchObject({ text: "a", occurrence: 0, context: "La loi a le droit." });
+  });
 
 });

@@ -39,6 +39,7 @@ interface Pick {
   el: HTMLElement;
   wordIndex?: number;
   occurrence: number;
+  context?: string;
 }
 
 /** The player owns a list of texts; a button must restart fresh when it wants a different list. */
@@ -90,7 +91,7 @@ export function StudyLearn() {
   }, [forcedSentence, forcedWord]);
 
   if (!s) return null;
-  const onPick = (p: FrPick) => setPick({ text: p.text, el: p.anchor, wordIndex: p.wordIndex, occurrence: p.occurrence });
+  const onPick = (p: FrPick) => setPick({ text: p.text, el: p.anchor, wordIndex: p.wordIndex, occurrence: p.occurrence, context: p.context });
   const goSentence = (i: number) => {
     setPick(null);
     patchStudy({ index: i });
@@ -209,6 +210,7 @@ export function StudyLearn() {
             text={pick.text}
             wordIndex={pick.wordIndex}
             occurrence={pick.occurrence}
+            context={pick.context}
             onClose={() => setPick(null)}
             inSheet
           />

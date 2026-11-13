@@ -238,7 +238,8 @@ describe.each(["Recall", "Dictation"] as const)("%s result", kind => {
         expect([...inline.querySelectorAll("del")].map(el => el.textContent)).toEqual(["a", "lav", "fui"]);
         expect(inline.querySelector('[data-mark="accent"]')?.textContent?.trim()).toBe("a à");
         expect(inline.querySelector('[data-mark="accent"] .decoration-dotted')).toBeTruthy();
-        expect([...inline.querySelectorAll(".text-destructive")].map(el => el.textContent)).toEqual(["laver", "fuit"]);
+        // Only the letters that differ are red: a/à, lav→laver, fui→fuit.
+        expect([...inline.querySelectorAll(".text-destructive")].map(el => el.textContent)).toEqual(["a", "à", "er", "t"]);
       }
       // A fully right answer is not repeated under itself.
       if (correct) expect(host.querySelector('[aria-label="Correct answer"]')).toBeNull();
@@ -378,7 +379,7 @@ describe("normalization and visible grading marks", () => {
       const kind = mark.getAttribute("data-mark");
       if (kind !== "missing") {
         expect(mark.querySelector("del")?.classList.contains("line-through")).toBe(true);
-        expect(mark.querySelector("del")?.classList.contains("text-foreground")).toBe(true);
+        expect(mark.querySelector("del")?.classList.contains("text-muted-foreground")).toBe(true);
       }
       if (kind !== "extra") expect(mark.textContent).toContain(result.alignment.find(w => w.mark === kind)!.expected);
     }
