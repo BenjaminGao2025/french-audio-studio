@@ -385,21 +385,24 @@ def word_forms(word: str, pos: str = ""):
         return None
 
 
+def _participle(row) -> bool:
+    return row["pos"] != "VER" or "par:pas" in (row["info"] or "")
+
+
 @functools.lru_cache(maxsize=2048)
 def _forms(path, inode, mtime, size, word, hint):
     query = word.replace("œ", "oe")  # Lexique spells œil as oeil
     with closing(sqlite3.connect(Path(path).as_uri() + "?mode=ro&immutable=1", uri=True)) as conn:
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA query_only=ON")
-        participle = lambda r: r["pos"] != "VER" or "par:pas" in (r["info"] or "")
         rows = [r for r in conn.execute("SELECT * FROM lexique WHERE word=?", (query,))
-                if r["pos"] in INFLECTING and participle(r)]
+                if r["pos"] in INFLECTING and _participle(r)]
         if not rows:
             return None
         want = {"adj": "ADJ", "noun": "NOM", "verb": "VER"}.get(hint)
         top = min(rows, key=lambda r: (bool(want) and r["pos"] != want, -float(r["frequency"] or 0)))
         found = [r for r in conn.execute("SELECT * FROM lexique WHERE lemma=? AND pos=?", (top["lemma"], top["pos"]))
-                 if participle(r)]
+                 if _participle(r)]
         # Lexique writes œ as oe (oeil, coeur); use the œ spelling when Wiktionnaire has it.
         spelled = {}
         for value in {r["word"] for r in found} | {top["lemma"]}:
