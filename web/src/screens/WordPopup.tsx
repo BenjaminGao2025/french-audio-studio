@@ -76,7 +76,7 @@ const EMPTY_HINTS: WordContextHints = { meaning_zh: "", meaning_en: "", note_en:
  * the meaning of this word in this sentence, then the dictionary. No example sentence.
  */
 export function WordPanel(props: Parameters<typeof WordPanelContent>[0]) {
-  return <WordPanelContent key={JSON.stringify([props.sentence.fr, props.text, props.wordIndex, props.occurrence])} {...props} />;
+  return <WordPanelContent key={JSON.stringify([props.sentence.fr, props.context, props.text, props.wordIndex, props.occurrence])} {...props} />;
 }
 
 function WordPanelContent({
@@ -84,6 +84,7 @@ function WordPanelContent({
   text,
   wordIndex,
   occurrence = 0,
+  context,
   onClose,
   inSheet,
   compact = false,
@@ -95,6 +96,8 @@ function WordPanelContent({
   wordIndex?: number;
   /** Index of this text among its occurrences in the sentence (for /api/word-context). */
   occurrence?: number;
+  /** The text the word was picked in, when it is not the sentence itself (a build-up step). */
+  context?: string;
   onClose: () => void;
   inSheet?: boolean;
   compact?: boolean;
@@ -103,7 +106,9 @@ function WordPanelContent({
   const w = wordIndex !== undefined ? sentence.raw?.words?.[wordIndex] : undefined;
   // A long free selection is still spoken, but the server rejects it: show a hint instead of asking
   // /api/word-context or the dictionary. Analysis words always keep a lookup.
-  const translation_zh = sentence.raw?.translation_zh ?? "";
+  // A word picked in a build-up step is explained in that step: "a" in "La loi a le droit" is not in "… n'a le droit …".
+  const contextFr = context?.trim() && context.trim() !== sentence.fr.trim() ? context.trim() : sentence.fr;
+  const translation_zh = contextFr === sentence.fr ? sentence.raw?.translation_zh ?? "" : "";
   const hints = useMemo<WordContextHints>(
     () => (w ? { meaning_zh: w.meaning_zh, meaning_en: w.meaning, note_en: w.why, lemma: w.lemma, pos: w.type } : EMPTY_HINTS),
     [w],
@@ -133,8 +138,8 @@ function WordPanelContent({
     if (lookupKey(word) === lookupKey(shown)) return;
     sayFrench(word);
     // Explanation links have no sentence offset: choose the occurrence nearest the current one.
-    const sourceStart = findWordSpans(sentence.fr, contextWord)[contextOccurrence]?.[0] ?? 0;
-    const spans = findWordSpans(sentence.fr, word);
+    const sourceStart = findWordSpans(contextFr, contextWord)[contextOccurrence]?.[0] ?? 0;
+    const spans = findWordSpans(contextFr, word);
     const nextOccurrence = spans.reduce((best, span, i) =>
       Math.abs(span[0] - sourceStart) < Math.abs(spans[best][0] - sourceStart) ? i : best, 0);
     setStack(prev => [...prev, { word, surface: word, occurrence: nextOccurrence }]);
@@ -151,7 +156,7 @@ function WordPanelContent({
   const [dictErr, setDictErr] = useState("");
 
   const [contextResult, setContextResult] = useState<{ key: string; value: WordContextResult } | null>(null);
-  const contextKey = JSON.stringify([sentence.fr, contextWord, contextOccurrence, language, nested]);
+  const contextKey = JSON.stringify([contextFr, contextWord, contextOccurrence, language, nested]);
   const ctx = contextResult?.key === contextKey ? contextResult.value : null;
   const setCtx = (value: WordContextResult | null) => setContextResult(value ? { key: contextKey, value } : null);
   const [ctxSt, setCtxSt] = useState<LoadState>(tooLong ? "idle" : "loading");
@@ -192,7 +197,7 @@ function WordPanelContent({
     setCtx(null);
     if (tooLong) { setCtxSt("idle"); return; }
     setCtxSt("loading");
-    wordContext({ language, sentence: sentence.fr, word: contextWord, occurrence: contextOccurrence, translation_zh, hints: nested ? EMPTY_HINTS : hints }, abort.current.signal)
+    wordContext({ language, sentence: contextFr, word: contextWord, occurrence: contextOccurrence, translation_zh, hints: nested ? EMPTY_HINTS : hints }, abort.current.signal)
       .then((r) => {
         if (!alive() || request !== ctxRequest.current) return;
         setCtx(r.context);
@@ -201,7 +206,7 @@ function WordPanelContent({
       .catch(() => {
         if (alive() && request === ctxRequest.current) setCtxSt("error");
       });
-  }, [language, tooLong, sentence.fr, shown, contextWord, contextOccurrence, nested, translation_zh, hints]);
+  }, [language, tooLong, contextFr, shown, contextWord, contextOccurrence, nested, translation_zh, hints]);
 
   useEffect(() => {
     loadDict();
@@ -264,7 +269,7 @@ function WordPanelContent({
               </>
             ) : ctxSt === "loading" || (contextResult && contextResult.key !== contextKey) ? (
               <><Spinner label="Finding the meaning…" /><Skeleton lines={1} /></>
-            ) : meaning || dictionaryMeaning ? (
+            ) : meaning || (ctxSt !== "error" && dictionaryMeaning) ? (
               <div className="flex flex-col gap-2"><p className="wp-definition text-sm">{meaning || dictionaryMeaning}</p><p className="text-xs text-muted-foreground">{meaning ? "Sentence explanation unavailable" : "Dictionary meaning"}</p>{ctxSt === "error" && <Button type="button" variant="outline" onClick={loadCtx}>Retry</Button>}</div>
             ) : ctxSt === "error" ? (
               <div className="flex flex-col gap-2"><p className="text-sm text-muted-foreground">Couldn’t load the meaning in this sentence.</p><Button type="button" variant="outline" onClick={loadCtx}>Retry</Button></div>

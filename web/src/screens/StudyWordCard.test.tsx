@@ -350,7 +350,17 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(host.querySelector(".wp-headword")?.textContent).toBe("machine à laver");
   });
 
-  it("drills nuisibles → nuisible with its own deck star, target context, dictionary fallback and retry", async () => {
+  it("explains a word picked in a build-up step in that step, not in the full sentence", async () => {
+    const sentence: StudySentence = { ...SENTENCE, fr: "La loi n'a le droit de défendre que les activités nuisibles à la société.", en: "The law only has the right to forbid harmful activities." };
+    vi.spyOn(lookupApi, "lookupWord").mockResolvedValue({ token: "a", lemma: "avoir", pos: "", phonetic: "", explanation_cn: "", explanation_en: "", entries: [] });
+    const context = vi.spyOn(lookupApi, "wordContext").mockResolvedValue({ context: { meaning_en: "has", meaning_zh: "", why_zh: "" }, state: "ready" } as Awaited<ReturnType<typeof lookupApi.wordContext>>);
+    await act(async () => root.render(<WordPanel sentence={sentence} text="a" occurrence={0} context="La loi a le droit." onClose={() => {}} />));
+    await wait(100);
+    expect(context.mock.calls.at(-1)?.[0]).toMatchObject({ word: "a", occurrence: 0, sentence: "La loi a le droit.", translation_zh: "" });
+    expect(host.querySelector('[aria-label="In this sentence"]')?.textContent).toContain("has");
+  });
+
+  it("drills nuisibles → nuisible with its own deck star, target context, no dictionary guess on a failed context, and retry", async () => {
     const sentence: StudySentence = { ...SENTENCE, fr: "Ces insectes sont nuisibles.", en: "These insects are harmful." };
     const lookup = vi.spyOn(lookupApi, "lookupWord").mockImplementation(async token => ({
       token, lemma: "nuisible", pos: "adj", phonetic: "", explanation_cn: "", explanation_en: "",
@@ -368,9 +378,9 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(lookup).toHaveBeenLastCalledWith("nuisible", "");
     expect(host.querySelector('[aria-label="Save word"]')?.getAttribute("aria-pressed")).toBe("false");
     const section = host.querySelector('[aria-label="In this sentence"]')!;
-    expect(section.textContent).toContain("harmful");
-    expect(section.textContent).toContain("Dictionary meaning");
-    expect(section.textContent).not.toContain("Couldn’t load");
+    // A failed context never shows the dictionary's first sense as "in this sentence" ("a" once became the letter A).
+    expect(section.textContent).toContain("Couldn’t load the meaning in this sentence");
+    expect(section.textContent).not.toContain("Dictionary meaning");
     expect(context.mock.calls.at(-1)?.[0]).toMatchObject({ word: "nuisible", occurrence: 0, sentence: sentence.fr });
     context.mockResolvedValue({ context: { meaning_en: "harmful to people", meaning_zh: "", why_zh: "" }, state: "ready" } as Awaited<ReturnType<typeof lookupApi.wordContext>>);
     await act(async () => findButton("Retry").click());
