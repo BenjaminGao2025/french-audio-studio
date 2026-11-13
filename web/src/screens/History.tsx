@@ -154,7 +154,8 @@ function Analyses() {
             { header: "When", cell: ({ row }) => fmtWhen(row.original.created_at) },
             { header: "Source", cell: ({ row }) => sourceLabel(row.original) },
             { header: "Sentences", cell: ({ row }) => plural(sentenceCount(row.original), "sentence") },
-            { id: "open", header: "", cell: ({ row }) => <Button type="button" variant="ghost" className="h-8 px-2" onClick={() => setDetail(row.original.id)}>Open</Button> },
+            // Open goes straight to the analysis; only entries saved without sentences need the detail page.
+            { id: "open", header: "", cell: ({ row }) => <Button type="button" variant="ghost" className="h-8 px-2" onClick={() => (canReopen(row.original) ? openAnalysisInStudy(row.original) : setDetail(row.original.id))}>Open</Button> },
           ]}
         />
       )}
@@ -163,9 +164,9 @@ function Analyses() {
   );
 }
 
+/** Only for entries saved without their sentences; the others open straight in Study. */
 function AnalysisDetail({ r, onBack }: { r: StudyRecord; onBack: () => void }) {
   const study = useApp((s) => s.study);
-  const isOpen = study.analysis.status === "done" && study.analysis.input === r.text;
   const n = sentenceCount(r);
   return (
     <div className="flex flex-col gap-4">
@@ -176,18 +177,12 @@ function AnalysisDetail({ r, onBack }: { r: StudyRecord; onBack: () => void }) {
         <div className="flex flex-col gap-0.5"><dt className="text-sm text-muted-foreground">Sentences</dt><dd style={{ margin: 0 }}>{n}</dd></div>
       </dl>
       <p lang="fr" style={{ whiteSpace: "pre-wrap" }}>{r.text}</p>
-      {canReopen(r) ? null : (
-        <DisabledReason>This entry was saved without its analysed sentences, so it can’t be opened.</DisabledReason>
-      )}
+      <DisabledReason>This entry was saved without its analysed sentences, so it can’t be opened.</DisabledReason>
       <div className="flex flex-wrap items-center gap-2">
-        {canReopen(r) ? (
-          <Button type="button" variant="default" onClick={() => openAnalysisInStudy(r)}>{isOpen ? "Open in Study" : "Open this analysis in Study"}</Button>
-        ) : (
-          <Button type="button" variant="default" onClick={() => {
-              patchStudy({ drafts: { ...study.drafts, text: r.text } });
-              go("study/new");
-            }}>Put the text in Study</Button>
-        )}
+        <Button type="button" variant="default" onClick={() => {
+            patchStudy({ drafts: { ...study.drafts, text: r.text } });
+            go("study/new");
+          }}>Put the text in Study</Button>
         <Button type="button" variant="outline" onClick={() => go("review/saved")}>Saved cards</Button>
       </div>
     </div>

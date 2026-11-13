@@ -1,6 +1,6 @@
 import { StepReview } from "../components/StepReview";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { Lightbulb, Eye, Play, Turtle, RotateCcw, Loader2, X } from "lucide-react";
+import { Lightbulb, Eye, Play, Turtle, RotateCcw, Loader2, Sparkles, X } from "lucide-react";
 import type { PracticeItem, StudySentence } from "../data/fixtures";
 import { grade } from "../lib/grading";
 import { gradeFeedback } from "../lib/feedback";
@@ -472,6 +472,8 @@ function Result({
 }) {
   const r = attempt.result!;
   const correct = attempt.outcome === "correct";
+  // Every word spelled right on your own: a short, quiet celebration (motion is skipped with reduced motion).
+  const perfect = correct && !attempt.answerKnown && r.accuracy === 100;
   const nextRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!correct) return;
@@ -492,9 +494,12 @@ function Result({
     <div className="flex flex-col gap-4">
       <div id={`ex-result-${sessionKey}`} tabIndex={-1} className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-4">
-          <p className="text-4xl font-semibold tabular-nums" aria-label={`Score: ${r.accuracy}%`}>{r.accuracy}%</p>
+          <div className="relative">
+            <p key={attempt.id} className={cn("text-4xl font-semibold tabular-nums", perfect && "perfect-score")} aria-label={`Score: ${r.accuracy}%`}>{r.accuracy}%</p>
+            {perfect && <PerfectBurst key={attempt.id} />}
+          </div>
           <div>
-            <p className="font-medium">{attempt.answerKnown ? "Answer known" : correct ? attempt.hinted ? "Correct · hint used" : "Correct" : "Not quite"}</p>
+            <p className="font-medium">{attempt.answerKnown ? "Answer known" : perfect ? <span className="perfect-label inline-flex items-center gap-1.5"><Sparkles aria-hidden className="size-4" />{attempt.hinted ? "Perfect · hint used" : "Perfect spelling"}</span> : correct ? attempt.hinted ? "Correct · hint used" : "Correct" : "Not quite"}</p>
             <p className="text-sm text-muted-foreground">{r.counts.ok} right · {r.counts.different + r.counts.missing + r.counts.extra} wrong{r.counts.accent > 0 && ` · ${plural(r.counts.accent, "accent")}`}</p>
           </div>
         </div>
@@ -502,7 +507,7 @@ function Result({
           {r.alignment.map((word, i) => (
             <Fragment key={i}>
               {i > 0 && !/['’]$/.test(r.alignment[i - 1].given ?? r.alignment[i - 1].expected ?? "") && " "}
-              <span data-mark={word.mark} className={word.mark === "different" || word.mark === "accent" ? "inline-block max-w-full" : undefined}>
+              <span data-mark={word.mark} className={word.mark === "different" || word.mark === "accent" ? "inline-block max-w-full" : perfect ? "perfect-word" : undefined} style={perfect ? { "--i": i } as React.CSSProperties : undefined}>
                 {word.mark === "ok" ? word.given : word.mark === "missing" ? (
                   <span className="text-destructive font-medium underline underline-offset-4" aria-label={`Missing word: ${word.expected}`}>{word.expected}</span>
                 ) : (
@@ -569,5 +574,19 @@ function SessionSummary({ attempts, items }: { attempts: Attempt[]; items: numbe
       </dl>
 
     </section>
+  );
+}
+
+/** Soft sparks drifting out from the score once; purely decorative. */
+function PerfectBurst() {
+  const sparks = Array.from({ length: 14 }, (_, i) => ({
+    "--a": `${(360 / 14) * i}deg`,
+    "--r": `${i % 2 ? 46 : 64}px`,
+    "--d": `${(i % 3) * 60}ms`,
+  }) as React.CSSProperties);
+  return (
+    <span aria-hidden className="perfect-burst">
+      {sparks.map((style, i) => <span key={i} className={i % 2 ? "spark spark-alt" : "spark"} style={style} />)}
+    </span>
   );
 }
