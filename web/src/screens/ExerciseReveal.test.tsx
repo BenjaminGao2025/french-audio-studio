@@ -74,9 +74,9 @@ describe.each(["Recall", "Dictation"] as const)("%s exercise layout", kind => {
       expect(host.querySelectorAll('[data-slot="card"]')).toHaveLength(1);
       expect(toolbar.querySelector('[aria-label="Practice scope"]')).toBeTruthy();
       expect(host.querySelector("h2")).toBeNull();
-      expect(host.querySelector('[id="ex-q-layout-test"]')?.textContent).toContain(
-        mode === "whole" ? "Question 1 of 1 · Current sentence" : "Question 1 of 1 · Step 1 of 1 · Current sentence",
-      );
+      // One question from the current sentence: only the step position is shown; whole scope keeps the line for screen readers.
+      expect(meta.textContent).toBe(mode === "whole" ? "Question 1 of 1" : "Step 1 of 1");
+      expect(meta.className.includes("sr-only")).toBe(mode === "whole");
       const card = host.querySelector('[data-slot="card"]')!;
       expect(card.querySelector("textarea")).toBeTruthy();
       if (kind === "Recall") expect(card.textContent).toContain(mode === "whole" ? items[0].en : items[0].steps[0].en);
@@ -240,12 +240,14 @@ describe.each(["Recall", "Dictation"] as const)("%s result", kind => {
         expect(inline.querySelector('[data-mark="accent"] .decoration-dotted')).toBeTruthy();
         expect([...inline.querySelectorAll(".text-destructive")].map(el => el.textContent)).toEqual(["laver", "fuit"]);
       }
-      expect(host.querySelector('[aria-label="Correct answer"]')?.textContent).toBe(target);
+      // A fully right answer is not repeated under itself.
+      if (correct) expect(host.querySelector('[aria-label="Correct answer"]')).toBeNull();
+      else expect(host.querySelector('[aria-label="Correct answer"]')?.textContent).toBe(target);
       expect(host.textContent).not.toMatch(/Accent: you wrote|Different word:|Your answer/);
       expect(host.querySelector(".compare-note")).toBeNull();
       const card = host.querySelector('[data-slot="card"]')!;
       expect(card.contains(inline)).toBe(true);
-      expect(card.querySelector('[aria-label="Correct answer"]')).toBeTruthy();
+      expect(Boolean(card.querySelector('[aria-label="Correct answer"]'))).toBe(!correct);
       const actions = host.querySelector('[aria-label="Result actions"]')!;
       expect(card.contains(actions)).toBe(true);
       expect([...actions.querySelectorAll("button")].map(el => el.textContent)).toEqual(["Try again", "Done — return to Study"]);
@@ -325,7 +327,7 @@ it("new sessions default to Step by step first, preserve existing modes, and Rev
   expect(get().exercises["default-review"].mode).toBe("step");
   await act(async () => root.render(<Exercise sessionKey="default-review" kind="Recall" source="Fixture" items={items} onDone={() => {}} />));
   expect(host.querySelector('[aria-label="Practice scope"] button')?.textContent).toBe("Step by step");
-  const review = () => [...host.querySelectorAll("button")].find(b => /^(Review|In review)$/.test(b.textContent!))!;
+  const review = () => [...host.querySelectorAll("button")].find(b => /^(Review|In review)$/.test(b.getAttribute("aria-label") ?? ""))!;
   await act(async () => { review().click(); await new Promise(r => setTimeout(r, 100)); });
   expect(fake.calls.find(c => c.path === "/api/srs/notes")?.body).toMatchObject({sentence:items[0].steps[0].fr,translation_en:items[0].steps[0].en,modes:["listen"],targets:[]});
   expect(review().getAttribute("aria-pressed")).toBe("true");

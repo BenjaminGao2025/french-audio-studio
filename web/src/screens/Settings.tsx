@@ -13,6 +13,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Slider } from "../components/ui/slider";
 import { Switch } from "../components/ui/switch";
 import { animationOn, feedbackPrefs, prefersReducedMotion, saveFeedback, subscribeFeedback } from "../lib/feedback";
+import { TEXT_SIZES, readTextSize, saveTextSize, subscribeTextSize, type TextSize } from "../lib/textSize";
+import { ToggleGroup, ToggleGroupItem } from "../components/ui/toggle-group";
 import { Button } from "../components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
 import { Badge } from "../components/ui/badge";
@@ -171,6 +173,7 @@ export function SettingsScreen({ sub }: { sub?: string }) {
     <div className={pageFrame()}>
       <PageHead title="Settings" />
       <div className="flex flex-col gap-4">
+        <TextSizeSetting />
         <Card>
           <CardHeader><CardTitle id="pref-h">Review</CardTitle></CardHeader>
           <CardContent className="flex flex-col gap-6">
@@ -197,6 +200,24 @@ export function SettingsScreen({ sub }: { sub?: string }) {
       </div>
       {signOut && <SignOutDialog onClose={() => { setSignOut(false); if (get().route.includes("signout")) history.replaceState(null, "", routeUrl("settings/account")); }} />}
     </div>
+  );
+}
+
+/** Scales the whole app on this device, like an editor's font size. */
+function TextSizeSetting() {
+  const size = useSyncExternalStore(subscribeTextSize, readTextSize, () => 100 as TextSize);
+  return (
+    <Card aria-labelledby="text-size-h">
+      <CardHeader><CardTitle id="text-size-h">Text size</CardTitle></CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <ToggleGroup type="single" variant="outline" spacing={0} value={String(size)} aria-label="Text size"
+          onValueChange={(v) => { if (!v) return; saveTextSize(Number(v) as TextSize); announce(`Text size ${v}%, saved on this device.`); }}>
+          {TEXT_SIZES.map((v) => <ToggleGroupItem key={v} value={String(v)} className="min-w-16 tabular-nums">{v}%</ToggleGroupItem>)}
+        </ToggleGroup>
+        <p className="font-serif text-xl" lang="fr">L’oubli ou le mépris des droits de l’homme</p>
+        <p className="text-sm text-muted-foreground">Everything on the page grows together. Saved on this device.</p>
+      </CardContent>
+    </Card>
   );
 }
 

@@ -141,15 +141,16 @@ function pitchFor(n: number) {
   return 587;
 }
 
-function chime(freq: number, volume: number, ms: number) {
+/** One soft note. `at` delays it (seconds); `scale` sets its share of the 0.12 × volume peak. */
+function chime(freq: number, volume: number, ms: number, at = 0, type: OscillatorType = "sine", scale = 1) {
   if (!gestured || !audioCtx) return;
   try {
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
-    osc.type = "sine";
+    osc.type = type;
     osc.frequency.value = freq;
-    const t = audioCtx.currentTime;
-    const peak = Math.max(0.0001, Math.min(0.2, volume * 0.12));
+    const t = audioCtx.currentTime + at;
+    const peak = Math.max(0.0001, Math.min(0.2, volume * 0.12 * scale));
     gain.gain.setValueAtTime(0.0001, t);
     gain.gain.exponentialRampToValueAtTime(peak, t + 0.015);
     gain.gain.exponentialRampToValueAtTime(0.0001, t + ms / 1000);
@@ -160,6 +161,21 @@ function chime(freq: number, volume: number, ms: number) {
   } catch {
     /* ignore a closed context */
   }
+}
+
+/** Every word right: a quick rising C-major run that lands on a ringing chord, about as long as the spark burst. */
+const FANFARE_RUN = [784, 1047, 1319, 1568];
+const FANFARE_CHORD = [1047, 1319, 1568, 2093];
+export const FANFARE_MS = 1150;
+
+function fanfare(volume: number) {
+  FANFARE_RUN.forEach((f, i) => {
+    chime(f, volume, 200, i * 0.07, "triangle", 0.6);
+    chime(f * 2, volume, 140, i * 0.07, "sine", 0.15);
+  });
+  const land = FANFARE_RUN.length * 0.07;
+  FANFARE_CHORD.forEach((f, i) => chime(f, volume, FANFARE_MS - land * 1000, land + i * 0.012, i === 3 ? "sine" : "triangle", i === 3 ? 0.3 : 0.4));
+  chime(2637, volume, 500, land + 0.08, "sine", 0.12);
 }
 
 function speakPraise(volume: number): Promise<void> {
@@ -186,7 +202,7 @@ function speakPraise(volume: number): Promise<void> {
  * Record the outcome, then play audio feedback without awaiting audio.
  * Answer-known checks should not call this: they are not an independent result.
  */
-export function gradeFeedback(correct: boolean, options: { pronunciation?: boolean } = {}) {
+export function gradeFeedback(correct: boolean, options: { pronunciation?: boolean; perfect?: boolean } = {}) {
   const event = noteOutcome(correct);
   const prefs = feedbackPrefs();
   if (!prefs.sound || !gestured) return;
@@ -196,6 +212,10 @@ export function gradeFeedback(correct: boolean, options: { pronunciation?: boole
   }
   if (event.milestone === 5 && prefs.spoken && !options.pronunciation) {
     void speakPraise(prefs.volume).catch(() => chime(880, prefs.volume, 280));
+    return;
+  }
+  if (options.perfect) {
+    fanfare(prefs.volume);
     return;
   }
   chime(pitchFor(event.streak), prefs.volume, event.milestone === 10 ? 420 : 260);

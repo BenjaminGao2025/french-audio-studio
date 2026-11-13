@@ -155,6 +155,8 @@
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
+/* shadcn buttons draw their own focus ring; a second outline around it looked doubled. */
+[data-slot="button"]:focus-visible { outline: none; }
 [data-page-title]:focus,
 [data-page-title]:focus-visible,
 #current-sentence-heading:focus,
