@@ -64,6 +64,8 @@ export function Speak() {
   const [error, setError] = useState("");
   const since = useRef(Date.now());
   const poll = useRef<AbortController | null>(null);
+  const sendRef = useRef<HTMLButtonElement>(null);
+  const retakeRef = useRef<HTMLButtonElement>(null);
 
   const load = () => {
     setLoadErr("");
@@ -247,13 +249,13 @@ export function Speak() {
             <Recorder label={task === "T2" ? "Ask the examiner a question" : "Record your answer"} onText={(r) => void onTake(r)} disabled={phase === "wait1"} />
             <div className="grid gap-2">
               <label htmlFor="speak-ta" className="text-sm font-medium">Transcript (you can correct it or type)</label>
-              <Textarea id="speak-ta" lang="fr" rows={6} value={transcript} readOnly={phase === "wait1"} onChange={(e) => { setTranscript(e.target.value); setError(""); }} />
+              <Textarea id="speak-ta" onCmdEnter={() => sendRef.current?.click()} lang="fr" rows={6} value={transcript} readOnly={phase === "wait1"} onChange={(e) => { setTranscript(e.target.value); setError(""); }} />
               <p className="text-sm tabular-nums text-muted-foreground">{wordCount(transcript)} words{audioSecs ? ` · ${fmtClock(audioSecs)} recorded` : ""}</p>
             </div>
             {error && <Alert variant="destructive" role="alert"><AlertTitle>Feedback didn’t load</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
             {phase === "wait1" && <Spinner label="Listening to your answer… this usually takes 10–40 seconds." />}
             <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" variant="default" aria-disabled={(!!(phase === "wait1") || !!(!transcript.trim() ? "Record or type your answer first." : undefined)) || undefined} aria-busy={phase === "wait1" || undefined} className={cn((!!(phase === "wait1") || !!(!transcript.trim() ? "Record or type your answer first." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(phase === "wait1") || !!(!transcript.trim() ? "Record or type your answer first." : undefined)) { event.preventDefault(); return; } (() => void submit1())(); }}>{phase === "wait1" ? <Loader2 className="animate-spin" aria-hidden /> : null}{error ? "Retry" : "Get feedback"}{(!transcript.trim() ? "Record or type your answer first." : undefined) ? <span className="sr-only">{!transcript.trim() ? "Record or type your answer first." : undefined}</span> : null}</Button>
+              <Button ref={sendRef} type="button" variant="default" aria-disabled={(!!(phase === "wait1") || !!(!transcript.trim() ? "Record or type your answer first." : undefined)) || undefined} aria-busy={phase === "wait1" || undefined} className={cn((!!(phase === "wait1") || !!(!transcript.trim() ? "Record or type your answer first." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(phase === "wait1") || !!(!transcript.trim() ? "Record or type your answer first." : undefined)) { event.preventDefault(); return; } (() => void submit1())(); }}>{phase === "wait1" ? <Loader2 className="animate-spin" aria-hidden /> : null}{error ? "Retry" : "Get feedback"}{(!transcript.trim() ? "Record or type your answer first." : undefined) ? <span className="sr-only">{!transcript.trim() ? "Record or type your answer first." : undefined}</span> : null}</Button>
               {(transcript || turns.length > 0) && phase === "answer" && <Button type="button" variant="ghost" onClick={reset}>Clear</Button>}
             </div>
           </>
@@ -285,12 +287,12 @@ export function Speak() {
                   <Recorder label="Record your second take" onText={(r) => { setRetakeSecs((s) => s + r.seconds); setRetake(retake ? `${retake} ${r.text}` : r.text); }} disabled={phase === "wait2"} />
                   <div className="grid gap-2">
                     <label htmlFor="speak-rev" className="text-sm font-medium">Second take transcript</label>
-                    <Textarea id="speak-rev" lang="fr" rows={6} value={retake} readOnly={phase === "wait2"} onChange={(e) => { setRetake(e.target.value); setError(""); }} />
+                    <Textarea id="speak-rev" onCmdEnter={() => retakeRef.current?.click()} lang="fr" rows={6} value={retake} readOnly={phase === "wait2"} onChange={(e) => { setRetake(e.target.value); setError(""); }} />
                   </div>
                   {error && <Alert variant="destructive" role="alert"><AlertTitle>Corrections didn’t load</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
                   {phase === "wait2" && <Spinner label="Checking your second take…" />}
                   <div className="flex flex-wrap items-center gap-2">
-                    <Button type="button" variant="default" aria-disabled={(!!(phase === "wait2") || !!(!retake.trim() ? "Record or type your second take first." : undefined)) || undefined} aria-busy={phase === "wait2" || undefined} className={cn((!!(phase === "wait2") || !!(!retake.trim() ? "Record or type your second take first." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(phase === "wait2") || !!(!retake.trim() ? "Record or type your second take first." : undefined)) { event.preventDefault(); return; } (() => void submit2())(); }}>{phase === "wait2" ? <Loader2 className="animate-spin" aria-hidden /> : null}{error ? "Retry" : "Get corrections"}{(!retake.trim() ? "Record or type your second take first." : undefined) ? <span className="sr-only">{!retake.trim() ? "Record or type your second take first." : undefined}</span> : null}</Button>
+                    <Button ref={retakeRef} type="button" variant="default" aria-disabled={(!!(phase === "wait2") || !!(!retake.trim() ? "Record or type your second take first." : undefined)) || undefined} aria-busy={phase === "wait2" || undefined} className={cn((!!(phase === "wait2") || !!(!retake.trim() ? "Record or type your second take first." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(phase === "wait2") || !!(!retake.trim() ? "Record or type your second take first." : undefined)) { event.preventDefault(); return; } (() => void submit2())(); }}>{phase === "wait2" ? <Loader2 className="animate-spin" aria-hidden /> : null}{error ? "Retry" : "Get corrections"}{(!retake.trim() ? "Record or type your second take first." : undefined) ? <span className="sr-only">{!retake.trim() ? "Record or type your second take first." : undefined}</span> : null}</Button>
                     <Button type="button" variant="ghost" onClick={reset}>Start over</Button>
                   </div>
                 </div>

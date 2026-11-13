@@ -4,7 +4,7 @@ import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
 import { ToggleGroup, ToggleGroupItem } from "../components/ui/toggle-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { cn } from "cn";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Download, Pause, Play, Loader2 } from "lucide-react";
 import { type TransformLevel, type TransformStyle, VOICES, makeSpeech, transformToFrench } from "../api/practice";
 import { fmtClock } from "../lib/format";
@@ -29,6 +29,8 @@ function useDraft(key: string, initial = ""): [string, (v: string) => void] {
 
 export function Studio() {
   const [input, setInput] = useDraft("studio");
+  const frenchRef = useRef<HTMLButtonElement>(null);
+  const audioRef = useRef<HTMLButtonElement>(null);
   const [french, setFrench] = useDraft("studio:french");
   const [voice, setVoice] = useDraft("studio:voice", VOICES[0].id);
   const [style, setStyle] = useState<TransformStyle>("spoken");
@@ -91,21 +93,21 @@ export function Studio() {
       <div className="flex flex-col gap-6">
         <div className="grid gap-2">
           <label htmlFor="studio-in" className="text-sm font-medium">What you want to say (Chinese, English or French)</label>
-          <Textarea id="studio-in" rows={4} value={input} onChange={(e) => setInput(e.target.value)} />
+          <Textarea id="studio-in" onCmdEnter={() => frenchRef.current?.click()} rows={4} value={input} onChange={(e) => setInput(e.target.value)} />
         </div>
         <div className="flex flex-wrap items-center gap-2 gap-4" style={{ flexWrap: "wrap", alignItems: "flex-end" }}>
           <ToggleGroup type="single" variant="outline" value={style} onValueChange={(next) => { if (STYLES.some((o) => o.value === next)) setStyle(next as TransformStyle); }} aria-label="Style">{(STYLES).map((o) => (<ToggleGroupItem key={o.value} value={o.value}>{o.label}</ToggleGroupItem>))}</ToggleGroup>
           <ToggleGroup type="single" variant="outline" value={level} onValueChange={(next) => { if (LEVELS.some((o) => o.value === next)) setLevel(next as TransformLevel); }} aria-label="Level">{(LEVELS).map((o) => (<ToggleGroupItem key={o.value} value={o.value}>{o.label}</ToggleGroupItem>))}</ToggleGroup>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" variant="outline" aria-disabled={(!!(phase === "transforming") || !!(!input.trim() ? "Write something first." : undefined)) || undefined} aria-busy={phase === "transforming" || undefined} className={cn((!!(phase === "transforming") || !!(!input.trim() ? "Write something first." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(phase === "transforming") || !!(!input.trim() ? "Write something first." : undefined)) { event.preventDefault(); return; } (() => void transform())(); }}>{phase === "transforming" ? <Loader2 className="animate-spin" aria-hidden /> : null}Make it French{(!input.trim() ? "Write something first." : undefined) ? <span className="sr-only">{!input.trim() ? "Write something first." : undefined}</span> : null}</Button>
+          <Button ref={frenchRef} type="button" variant="outline" aria-disabled={(!!(phase === "transforming") || !!(!input.trim() ? "Write something first." : undefined)) || undefined} aria-busy={phase === "transforming" || undefined} className={cn((!!(phase === "transforming") || !!(!input.trim() ? "Write something first." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(phase === "transforming") || !!(!input.trim() ? "Write something first." : undefined)) { event.preventDefault(); return; } (() => void transform())(); }}>{phase === "transforming" ? <Loader2 className="animate-spin" aria-hidden /> : null}Make it French{(!input.trim() ? "Write something first." : undefined) ? <span className="sr-only">{!input.trim() ? "Write something first." : undefined}</span> : null}</Button>
           <Button type="button" variant="ghost" aria-disabled={(!!(!input.trim())) || undefined} className={cn((!!(!input.trim())) ? "opacity-50" : "")} onClick={(event) => { if (!!(!input.trim())) { event.preventDefault(); return; } (() => { setFrench(input.trim()); setNote("Your own French, unchanged"); setAudio(null); })(); }}>It’s already French</Button>
         </div>
         {phase === "transforming" && <Spinner label="Writing natural French…" />}
 
         <div className="grid gap-2">
           <label htmlFor="studio-fr" className="text-sm font-medium">French text for the audio</label>
-          <Textarea id="studio-fr" lang="fr" rows={5} value={french} onChange={(e) => setFrench(e.target.value)} />
+          <Textarea id="studio-fr" onCmdEnter={() => audioRef.current?.click()} lang="fr" rows={5} value={french} onChange={(e) => setFrench(e.target.value)} />
           {note && <p className="text-sm text-muted-foreground">{note} · AI-written French can contain mistakes</p>}
         </div>
         <label className="grid gap-2" style={{ maxWidth: 320 }}>
@@ -128,7 +130,7 @@ export function Studio() {
               </Button>
             </>
           ) : (
-            <Button type="button" variant="default" aria-disabled={(!!(phase === "speaking") || !!(!french.trim() ? "Add the French text first." : undefined)) || undefined} aria-busy={phase === "speaking" || undefined} className={cn((!!(phase === "speaking") || !!(!french.trim() ? "Add the French text first." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(phase === "speaking") || !!(!french.trim() ? "Add the French text first." : undefined)) { event.preventDefault(); return; } (() => void speak())(); }}>{phase === "speaking" ? <Loader2 className="animate-spin" aria-hidden /> : null}{stale ? "Make audio again" : "Make audio"}{(!french.trim() ? "Add the French text first." : undefined) ? <span className="sr-only">{!french.trim() ? "Add the French text first." : undefined}</span> : null}</Button>
+            <Button ref={audioRef} type="button" variant="default" aria-disabled={(!!(phase === "speaking") || !!(!french.trim() ? "Add the French text first." : undefined)) || undefined} aria-busy={phase === "speaking" || undefined} className={cn((!!(phase === "speaking") || !!(!french.trim() ? "Add the French text first." : undefined)) ? "opacity-50" : "")} onClick={(event) => { if (!!(phase === "speaking") || !!(!french.trim() ? "Add the French text first." : undefined)) { event.preventDefault(); return; } (() => void speak())(); }}>{phase === "speaking" ? <Loader2 className="animate-spin" aria-hidden /> : null}{stale ? "Make audio again" : "Make audio"}{(!french.trim() ? "Add the French text first." : undefined) ? <span className="sr-only">{!french.trim() ? "Add the French text first." : undefined}</span> : null}</Button>
           )}
           {french.trim() && (
             <Button type="button" variant="ghost" onClick={() => { patchStudy({ drafts: { ...studyDrafts, text: french.trim() } }); go("study/new"); }}>Study this text</Button>

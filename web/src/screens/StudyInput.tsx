@@ -52,6 +52,7 @@ export function StudyInput() {
     if (forced === "clear") setConfirmClear(true);
   }, [forced]);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const analyseRef = useRef<HTMLButtonElement>(null);
   const mode = study.mode;
   const draft = study.drafts[mode];
   const a = study.analysis;
@@ -99,7 +100,7 @@ export function StudyInput() {
               {mode === "text" ? "French text" : "Your idea"}
             </label>
             <Textarea
-              id="study-input"
+              id="study-input" onCmdEnter={() => analyseRef.current?.click()}
               name="study-draft"
               autoComplete="off"
               ref={taRef}
@@ -145,7 +146,7 @@ export function StudyInput() {
 
           <div className="flex flex-col gap-2">
             <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" variant="default" aria-disabled={(!!(v === "empty") || !!(busy) || !!(reason)) || undefined} aria-busy={busy || undefined} className={cn((!!(v === "empty") || !!(busy) || !!(reason)) ? "opacity-50" : "")} onClick={(event) => { if (!!(v === "empty") || !!(busy) || !!(reason)) { event.preventDefault(); return; } (() => runAnalysis(source))(); }}>{busy ? <Loader2 className="animate-spin" aria-hidden /> : null}{busy ? "Analysing…" : mode === "text" ? "Analyse text" : "Create French example"}{(reason) ? <span className="sr-only">{reason}</span> : null}</Button>
+              <Button ref={analyseRef} type="button" variant="default" aria-disabled={(!!(v === "empty") || !!(busy) || !!(reason)) || undefined} aria-busy={busy || undefined} className={cn((!!(v === "empty") || !!(busy) || !!(reason)) ? "opacity-50" : "")} onClick={(event) => { if (!!(v === "empty") || !!(busy) || !!(reason)) { event.preventDefault(); return; } (() => runAnalysis(source))(); }}>{busy ? <Loader2 className="animate-spin" aria-hidden /> : null}{busy ? "Analysing…" : mode === "text" ? "Analyse text" : "Create French example"}{(reason) ? <span className="sr-only">{reason}</span> : null}</Button>
               {mode === "text" && (
                 <Button type="button" variant="outline" aria-disabled={(!!(busy)) || undefined} className={cn((!!(busy)) ? "opacity-50" : "")} onClick={(event) => { if (!!(busy)) { event.preventDefault(); return; } (() => { patchStudy({ ocr: { ...study.ocr, phase: study.ocr.phase === "results" ? "results" : "select" } }); go("study/photo"); })(); }}>{<Camera aria-hidden />}Import from photo</Button>
               )}

@@ -60,6 +60,34 @@ describe("14. History, Progress and Episodes on the server", () => {
     expect(get().route).toBe("study");
   });
 
+  it("⌘ Enter or Ctrl Enter in the Study text box starts the analysis; plain Enter stays a new line", async () => {
+    await act(async () => resetDemo());
+    await act(async () => go("study/new"));
+    await wait(100);
+    const ta = document.getElementById("study-input") as HTMLTextAreaElement;
+    expect(ta.getAttribute("aria-keyshortcuts")).toBe("Meta+Enter Control+Enter");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(ta, "La loi a le droit de défendre.");
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const press = (init: KeyboardEventInit) => act(async () => { ta.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, ...init })); });
+    await press({});
+    expect(get().study.analysis.status).toBe("idle");
+    await press({ metaKey: true });
+    expect(get().study.analysis.status).not.toBe("idle");
+    expect(get().study.analysis.input).toBe("La loi a le droit de défendre.");
+    await act(async () => resetDemo());
+    await act(async () => go("study/new"));
+    await wait(100);
+    const ta2 = document.getElementById("study-input") as HTMLTextAreaElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(ta2, "Il fait beau aujourd'hui.");
+      ta2.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => { ta2.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true, cancelable: true })); });
+    expect(get().study.analysis.input).toBe("Il fait beau aujourd'hui.");
+  });
+
   it("Progress shows the server's totals and the episode player shows the transcript", async () => {
     await act(async () => resetDemo());
     await act(async () => go("progress"));

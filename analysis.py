@@ -287,7 +287,13 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
         "Wrong: starting with 'Cochez une case.'\n"
         '- Each step has: French, English, and "new": the added French words, a colon, then what they tell in at most 10 easy English words. '
         "No grammar words such as trunk, branch, clause, complement, subordinate, modifier. No \"New:\" prefix. "
-        '(e.g. step 1 "Start: choose the one." / "qui correspond à l\'image: says which one.").\n\n'
+        '(e.g. "qui correspond à l\'image: says which one."). '
+        'Step 1\'s note names each part by its own French words, so the learner sees which word does what: '
+        '"La loi: who. a: has. le droit: what." / "Choisissez: do what (choose). celle: which (the one)." '
+        'Never a formula such as "subject + verb + object" or "who does what" without the French words. '
+        'Write the added French words in full (no "..." or "…") and say what they mean, never just "adds the second idea". '
+        'A second clause after et / mais / ou gets a note like step 1, naming its own parts: '
+        '"et joignez: and attach. une copie: what." The French of a step never ends with "..." or "…".\n\n'
         "Grammar points:\n"
         "- 1–3 points, the most useful ones for this sentence.\n"
         "- Each has: a short title, a simple explanation, and a memory hook (word history, a comparison with English or Chinese, or a simple picture).\n\n"
@@ -333,7 +339,7 @@ def _analyze_payload(request: AnalyzeRequest) -> dict:
         "      ],\n"
         '      "order_note": "Almost the same order as English. Only difference: French puts canadiennes after the noun. English says Canadian authorities.",\n'
         '      "build_up": [\n'
-        '        {"fr": "Les autorités autorisent.", "en": "The authorities authorize.", "new": "Start: who does what."},\n'
+        '        {"fr": "Les autorités autorisent.", "en": "The authorities authorize.", "new": "Les autorités: who. autorisent: do what (authorize)."},\n'
         '        {"fr": "Les autorités canadiennes autorisent.", "en": "The Canadian authorities authorize.", "new": "canadiennes: Canadian. It comes after the noun."},\n'
         '        {"fr": "Les autorités canadiennes n\'autorisent pas la dispense.", "en": "The Canadian authorities do not authorize the exemption.", "new": "ne … pas la dispense: not, and what they allow."},\n'
         '        {"fr": "Les autorités canadiennes n\'autorisent aucune dispense.", "en": "The Canadian authorities authorize no exemption.", "new": "aucune: no, not any. It takes the place of pas."},\n'

@@ -8,6 +8,14 @@ export const RELEASES = [
     version: APP_VERSION,
     date: "2026-11-13",
     changes: [
+      "⌘ Enter (Ctrl Enter on Windows) sends the text: Analyse text in Study, and the main button in Write, Speak, Audio Studio, Explain, Ask and My own ideas.",
+      "The first build-up step now says which French words are who, does what and what, for example “La loi: who. a: has. le droit: what.”",
+    ],
+  },
+  {
+    version: "1.3.15",
+    date: "2026-11-13",
+    changes: [
       "Study has a visible New text button at the top while you study a text.",
       "Build-up steps for a new analysis are small: each step adds a few words with a plain note, and a long sentence gets more steps.",
       "In Steps, the words a step adds stand out and the words you already met fade back.",
