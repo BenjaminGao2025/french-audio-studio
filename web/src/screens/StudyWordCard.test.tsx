@@ -829,6 +829,17 @@ describe("1.3.8 Study layout", () => {
     return t;
   };
 
+  it("one sentence has no header row; the single More menu sits at the end of the player row", async () => {
+    await act(async () => set((s) => ({ study: { ...s.study, sentences: [SENTENCE], index: 0 } })));
+    expect(host.querySelector("[data-sentence-header]")).toBeNull();
+    const more = host.querySelectorAll('button[aria-label="More sentence actions"]');
+    expect(more).toHaveLength(1);
+    expect(host.querySelector("[data-sentence-player]")?.contains(more[0])).toBe(true);
+    expect(host.querySelector('button[aria-label="More playback controls"]')).toBeNull();
+    expect((await openMore()).map((x) => x.textContent?.trim())).toEqual(["Play all sentences", "Analyses in History", "New text", "Edit source"]);
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+  });
+
   it("the sentence header More menu plays and pauses all sentences like the old bar button", async () => {
     await act(async () => set((s) => ({ study: { ...s.study, sentences: [SENTENCE, SECOND], index: 0 } })));
     const header = host.querySelector("[data-sentence-header]")!;

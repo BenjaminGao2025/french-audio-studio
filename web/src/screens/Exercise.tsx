@@ -24,6 +24,7 @@ import { Card, CardContent } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
 import { ToggleGroup, ToggleGroupItem } from "../components/ui/toggle-group";
+import { TooltipProvider } from "../components/ui/tooltip";
 import { cn } from "cn";
 import { slug, track } from "../lib/track";
 
@@ -191,7 +192,7 @@ export function submitAnswer(key: string) {
       });
       patchUI(key, qk, { phase: "graded" });
       const a = get().attempts.find((x) => x.id === attemptId)!;
-      if (!a.answerKnown) gradeFeedback(r.correct);
+      if (!a.answerKnown) gradeFeedback(r.correct, { perfect: r.correct && res.accuracy === 100 });
       track("check_answer", { screen: "exercise", kind: slug(String(kind)), correct: r.correct, answer_known: Boolean(a.answerKnown) });
       announce(a.answerKnown ? "Checked. Recorded as answer known." : r.correct ? "Correct." : `Not quite. ${plural(res.issues.length, "difference")}.`);
       if (!r.correct) requestAnimationFrame(() => document.getElementById(`ex-result-${key}`)?.focus());
@@ -295,6 +296,11 @@ export function Exercise({
     patchUI(sessionKey, qk, { coverAnswer: true, hint: false, hinted: ui.hinted || ui.hint });
     inputRef.current?.focus();
   };
+  const meta = [
+    sess.items.length > 1 && `Question ${sess.index + 1} of ${sess.items.length}`,
+    sess.mode === "step" && `Step ${step + 1} of ${stepCount}`,
+    sess.source !== "Current sentence" && sess.source,
+  ].filter(Boolean).join(" · ");
   const play = (slow: boolean) =>
     startPlayback({ kind: "exercise", label: "Practice audio", route }, Math.max(1, t.fr.length / 13), { speed: slow ? 0.75 : 1, texts: [t.fr] });
 
@@ -302,24 +308,24 @@ export function Exercise({
     <section className="exercise flex flex-col gap-6" aria-label={`${kind} exercise`}>
       <div className={cn("flex items-center gap-2", modeTabs && "justify-between")} aria-label="Exercise toolbar">
         {modeTabs}
-        <ToggleGroup type="single" variant="outline" size="sm" spacing={0} value={sess.mode} onValueChange={(next) => { if (next === "step" || next === "whole") {
+        <ToggleGroup type="single" size="sm" spacing={0} value={sess.mode} onValueChange={(next) => { if (next === "step" || next === "whole") {
             if (busy) return;
             patchSession(sessionKey, { mode: next, modeNotice: "" });
             announce(next === "step" ? "Scope changed to step by step." : "Scope changed to whole sentence.");
           } }} aria-label="Practice scope">{([
             { value: "step", label: "Step by step" },
             { value: "whole", label: "Whole sentence" },
-          ]).map((o) => (<ToggleGroupItem key={o.value} value={o.value} className="px-2 text-xs sm:text-sm">{o.label}</ToggleGroupItem>))}</ToggleGroup>
+          ]).map((o) => (<ToggleGroupItem key={o.value} value={o.value} className="px-2 text-xs text-muted-foreground data-[state=on]:text-foreground sm:text-sm">{o.label}</ToggleGroupItem>))}</ToggleGroup>
       </div>
-      <p id={`ex-q-${sessionKey}`} tabIndex={-1} className="text-xs text-muted-foreground">
-        Question {sess.index + 1} of {sess.items.length}
-        {sess.mode === "step" && ` · Step ${step + 1} of ${stepCount}`}
-        {` · ${sess.source}`}
-      </p>
-
       <Card aria-label="Exercise card">
       <CardContent className="gap-4">
-      {sess.mode === "step" && <div><StepReview sentence={t.fr} english={t.en} /></div>}
+      {/* Only the position that tells you something: one question from the current sentence needs no "Question 1 of 1". */}
+      <div className={cn("flex min-w-0 items-center gap-2", !meta && sess.mode !== "step" && "sr-only")}>
+        <p id={`ex-q-${sessionKey}`} tabIndex={-1} className={cn("text-xs text-muted-foreground", !meta && "sr-only")}>
+          {meta || `Question ${sess.index + 1} of ${sess.items.length}`}
+        </p>
+        {sess.mode === "step" && <div className="-my-2 ml-auto"><TooltipProvider><StepReview compact sentence={t.fr} english={t.en} /></TooltipProvider></div>}
+      </div>
       {/* Prompt — never the French target */}
       <div className="flex flex-col gap-3">
         {kind === "Recall" ? (
@@ -522,9 +528,12 @@ function Result({
             </Fragment>
           ))}
         </p>
-        <div className="rounded-md bg-muted p-4" aria-label="Correct answer">
-          <FrText text={target} className="font-serif text-xl leading-relaxed wrap-break-word" onPick={onPick} />
-        </div>
+        {/* When every word is already right, the line above is the answer; showing it twice is noise. */}
+        {!r.alignment.every((w) => w.mark === "ok") && (
+          <div className="rounded-md bg-muted p-4" aria-label="Correct answer">
+            <FrText text={target} className="font-serif text-xl leading-relaxed wrap-break-word" onPick={onPick} />
+          </div>
+        )}
         <HistoryStatus attempt={attempt} />
       </div>
 

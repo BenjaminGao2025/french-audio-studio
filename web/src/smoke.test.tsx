@@ -439,12 +439,13 @@ describe("7. Review quota numbers and frozen session cards", () => {
 });
 
 describe("8. feedback and copy cleanups", () => {
-  it("correct result shows one correct-answer block and clean inline text, with no leftover input", async () => {
+  it("correct result shows the answer once, as clean inline text, with no leftover input", async () => {
     await act(async () => resetDemo());
     await act(async () => REGISTRY.find((r) => r.id === "SCR-ANS-01")!.states[0].apply());
     await wait(1700);
     const text = document.getElementById("main")!.textContent!;
-    expect(document.querySelectorAll('[aria-label="Correct answer"]')).toHaveLength(1);
+    expect(document.querySelectorAll('[aria-label="Correct answer"]')).toHaveLength(0);
+    expect(document.querySelector('[aria-label="Inline corrections"]')?.textContent?.trim()).toBeTruthy();
     expect(document.querySelector('[aria-label="Inline corrections"] del')).toBeNull();
     expect(document.querySelector("#main textarea")).toBeNull();
     expect(text).not.toContain("Hint and answer flags were recorded when you checked.");

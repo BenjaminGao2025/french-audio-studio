@@ -8,6 +8,17 @@ export const RELEASES = [
     version: APP_VERSION,
     date: "2026-11-13",
     changes: [
+      "Settings → Text size makes the whole app larger on this device (115%, 130% or 145%), like an editor’s font size.",
+      "Study is calmer: one More menu at the end of the player row, and no header row for a single sentence.",
+      "Check yourself is calmer: a quieter Step by step / Whole sentence switch, only the step count, Review as a bookmark icon, and a right answer is no longer shown twice.",
+      "A 100% answer now plays a short rising fanfare.",
+      "Buttons show one focus ring instead of two.",
+    ],
+  },
+  {
+    version: "1.3.13",
+    date: "2026-11-13",
+    changes: [
       "A review card left open for more than an hour can be rated again; before, saving the rating kept failing.",
     ],
   },

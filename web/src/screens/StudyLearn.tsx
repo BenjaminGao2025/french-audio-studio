@@ -1,5 +1,5 @@
 import { StepReview } from "../components/StepReview";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { ChevronLeft, ChevronRight, Mic, MoreHorizontal, Pause, Play, Repeat, RotateCcw, History as HistoryIcon, Plus, Check, Loader2 } from "lucide-react";
 import { ApiError } from "../api/client";
 import { cardKey, clozeTarget, saveNote, useSavedCards } from "../api/srs";
@@ -118,39 +118,13 @@ export function StudyLearn() {
       <div className="flex flex-col gap-4 min-w-0">
         {!!study.analysis.failedParts && <Alert variant="default"><AlertTitle>Some text could not be analysed</AlertTitle><AlertDescription>{study.analysis.failedParts} parts failed. Your original text is kept. Open New text to retry the missing parts.</AlertDescription></Alert>}
         {!practising && s.raw?.accent_fixed_from && <Alert variant="default"><AlertTitle>Accents corrected</AlertTitle><AlertDescription>Original: <span lang="fr">{s.raw.accent_fixed_from}</span>. The sentence below uses corrected French accents.</AlertDescription></Alert>}
-        {!practising && (
+        {!practising && (total > 1 || srcOpen) && (
           <div className="flex flex-col gap-3">
-            <div className="flex min-w-0 items-center gap-2" data-sentence-header>
-              {total > 1 && sentencePager("ghost", <span className="whitespace-nowrap px-1 text-sm tabular-nums text-muted-foreground">Sentence {study.index + 1} of {total}</span>)}
-              <DropdownMenu>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <DropdownMenuTrigger asChild>
-                      <Button type="button" variant="ghost" size="icon" aria-label="More sentence actions" className="ml-auto size-11">
-                        <MoreHorizontal aria-hidden />
-                      </Button>
-                    </DropdownMenuTrigger>
-                  </TooltipTrigger>
-                  <TooltipContent>More</TooltipContent>
-                </Tooltip>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuItem onSelect={() => allSentences.toggleAll()}>
-                    {allSentences.allPlaying ? <Pause aria-hidden /> : <Play aria-hidden />}
-                    {allSentences.allPlaying ? "Pause all sentences" : "Play all sentences"}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onSelect={() => go("progress/history?tab=analyses")}>
-                    <HistoryIcon aria-hidden /> Analyses in History
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => go("study/new")}>
-                    <Plus aria-hidden /> New text
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => setSrcOpen((open) => !open)}>
-                    {srcOpen ? "Hide source" : "Edit source"}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+            {total > 1 && (
+              <div className="flex min-w-0 items-center gap-2" data-sentence-header>
+                {sentencePager("ghost", <span className="whitespace-nowrap px-1 text-sm tabular-nums text-muted-foreground">Sentence {study.index + 1} of {total}</span>)}
+              </div>
+            )}
             {srcOpen && (
               <div id="source-panel" className="rounded-lg border bg-card p-4 text-card-foreground flex flex-col gap-3">
                 <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"><span>{study.analysis.source}</span><span>{plural(total, "sentence")}</span></p>
@@ -175,7 +149,26 @@ export function StudyLearn() {
             <FrText segments={s.segments} className="sentence-fr font-serif text-3xl leading-snug tracking-tight wrap-break-word" onPick={onPick} />
             <p className="mt-3 text-sm text-muted-foreground">{s.en}</p>
           </div>
-          <StudyPlayer practising={practising} addReview={<AddToReview sentence={s} />} />
+          <StudyPlayer
+            practising={practising}
+            addReview={<AddToReview sentence={s} />}
+            sentenceActions={<>
+              <DropdownMenuItem onSelect={() => allSentences.toggleAll()}>
+                {allSentences.allPlaying ? <Pause aria-hidden /> : <Play aria-hidden />}
+                {allSentences.allPlaying ? "Pause all sentences" : "Play all sentences"}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => go("progress/history?tab=analyses")}>
+                <HistoryIcon aria-hidden /> Analyses in History
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => go("study/new")}>
+                <Plus aria-hidden /> New text
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setSrcOpen((open) => !open)}>
+                {srcOpen ? "Hide source" : "Edit source"}
+              </DropdownMenuItem>
+            </>}
+          />
           </CardContent>
         </Card>}
 
@@ -230,7 +223,7 @@ export function StudyLearn() {
   );
 }
 
-/** "Play all sentences" lives in the sentence header's More menu; it drives the same study playback as before. */
+/** "Play all sentences" lives in the player row's More menu; it drives the same study playback as before. */
 function useAllSentences() {
   const study = useApp((s) => s.study);
   const p = useApp((s) => s.player);
@@ -251,7 +244,22 @@ function useAllSentences() {
 }
 
 /* ---------------- SCR-AUD-01: the sentence player ---------------- */
-function StudyPlayer({ practising, addReview }: { practising: boolean; addReview: ReactNode }) {
+/** True when the element is narrower than `px`, so a menu can take over the controls the row hides. */
+function useNarrowerThan(ref: RefObject<HTMLElement | null>, px: number) {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([entry]) => setNarrow(entry.contentRect.width < px));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref, px]);
+  return narrow;
+}
+
+function StudyPlayer({ practising, addReview, sentenceActions }: { practising: boolean; addReview: ReactNode; sentenceActions: ReactNode }) {
+  const rowRef = useRef<HTMLDivElement>(null);
+  const narrow = useNarrowerThan(rowRef, 600);
   const study = useApp((s) => s.study);
   const p = useApp((s) => s.player);
   const label = `Sentence ${study.index + 1}`;
@@ -295,7 +303,7 @@ function StudyPlayer({ practising, addReview }: { practising: boolean; addReview
   const timeLabel = `${fmtClock(mine?.position ?? 0)} / ${fmtClock(mine?.duration ?? dur(wanted))}`;
   return (
     <div className="flex w-full min-w-0 flex-col gap-2 border-t pt-3">
-      <div data-sentence-player className="@container flex w-full min-w-0 flex-nowrap items-center gap-2 overflow-x-auto">
+      <div ref={rowRef} data-sentence-player className="@container flex w-full min-w-0 flex-nowrap items-center gap-2 overflow-x-auto">
         <Button type="button" variant="secondary" size="icon" aria-disabled={loading || undefined} aria-busy={loading || undefined} aria-label={`${playing ? "Pause" : errored ? "Retry" : "Play"} ${label}`} className={cn("shrink-0", loading ? "opacity-50" : "")} onClick={(event) => { if (loading) { event.preventDefault(); return; } toggle(); }}>{loading ? <Loader2 className="animate-spin" aria-hidden /> : (playing ? <Pause aria-hidden /> : errored ? <RotateCcw aria-hidden /> : <Play aria-hidden />)}</Button>
         <Progress value={pct} className="hidden w-28 shrink-0 @[520px]:flex" aria-label={`${statusText}. ${fmtClock(mine?.position ?? 0)} of ${fmtClock(mine?.duration ?? dur(wanted))}`} />
         <span className="hidden shrink-0 whitespace-nowrap text-sm tabular-nums text-muted-foreground @[520px]:inline">{timeLabel}</span>
@@ -314,25 +322,37 @@ function StudyPlayer({ practising, addReview }: { practising: boolean; addReview
         </div>
         {/* The page's one primary action stays visible at every width. */}
         <div className="ml-auto shrink-0">{addReview}</div>
-        <div className="shrink-0 @[600px]:hidden">
+        {/* One More menu: sentence actions, plus the playback controls the row hides when narrow. */}
+        <div className="shrink-0">
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button type="button" variant="ghost" size="icon" aria-label="More playback controls">
-                <MoreHorizontal aria-hidden />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel className="whitespace-nowrap tabular-nums">{timeLabel}</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel>Speed</DropdownMenuLabel>
-              <DropdownMenuRadioGroup value={speed} onValueChange={setSpeed}>
-                {[0.75, 1, 1.25, 1.5, 2].map((v) => (
-                  <DropdownMenuRadioItem key={v} value={String(v)}>{v}×</DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuCheckboxItem checked={repeatOn} onCheckedChange={() => toggleRepeat()}>Repeat</DropdownMenuCheckboxItem>
-              {errored && <DropdownMenuItem onSelect={() => retryPlayback()}>Retry</DropdownMenuItem>}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="ghost" size="icon" aria-label="More sentence actions">
+                    <MoreHorizontal aria-hidden />
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent>More</TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent align="end" className="w-56">
+              {narrow && (
+                <>
+                  <DropdownMenuLabel className="whitespace-nowrap tabular-nums">{timeLabel}</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Speed</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup value={speed} onValueChange={setSpeed}>
+                    {[0.75, 1, 1.25, 1.5, 2].map((v) => (
+                      <DropdownMenuRadioItem key={v} value={String(v)}>{v}×</DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuCheckboxItem checked={repeatOn} onCheckedChange={() => toggleRepeat()}>Repeat</DropdownMenuCheckboxItem>
+                  {errored && <DropdownMenuItem onSelect={() => retryPlayback()}>Retry</DropdownMenuItem>}
+                  <DropdownMenuSeparator />
+                </>
+              )}
+              {sentenceActions}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

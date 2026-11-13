@@ -70,7 +70,7 @@ export function WordsPanel({ sentence, onPick }: { sentence: StudySentence; onPi
     } else items.push(item);
     return items;
   }, []);
-  return <section className="flex flex-col gap-4"><h3 className="text-lg font-semibold">Word by word</h3>
+  return <section className="flex flex-col gap-4"><h3 className="sr-only">Word by word</h3>
     <div className="flex flex-wrap gap-x-4 gap-y-3" aria-label="Word by word">{alignment.map((a, i) => <div key={i} className="flex flex-col items-start"><FrText text={a.fr} className="font-serif text-lg" onPick={onPick} /><span className="text-xs text-muted-foreground">{a.en}</span></div>)}</div>
     {raw?.order_note && <p className="text-sm text-muted-foreground">{raw.order_note}</p>}
   </section>;

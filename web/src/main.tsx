@@ -7,6 +7,9 @@ import { Spinner } from "./components/ui";
 import { LoginScreen, safeNext } from "./screens/Login";
 import { BASE, routeUrl } from "./state/store";
 import "./styles.css";
+import { applyTextSize } from "./lib/textSize";
+
+applyTextSize();
 
 const onLoginPage = () => location.pathname.replace(/\/+$/, "") === BASE + "login";
 

@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   animationOn,
   currentStreak,
   DEFAULT_FEEDBACK,
+  FANFARE_MS,
   FEEDBACK_KEY,
+  gradeFeedback,
   loadFeedback,
+  markGesture,
   noteOutcome,
   resetFeedbackState,
   saveFeedback,
@@ -59,5 +62,42 @@ describe("practice feedback", () => {
     expect(noteOutcome(false)).toMatchObject({ streak: 0, milestone: 0, correct: false });
     expect(currentStreak()).toBe(0);
     expect(noteOutcome(true).streak).toBe(1);
+  });
+});
+
+describe("perfect answer sound", () => {
+  it("plays a rising run that lands on a chord, longer than the plain correct chime", () => {
+    const notes: { freq: number; start: number; stop: number }[] = [];
+    class FakeCtx {
+      currentTime = 0;
+      state = "running";
+      destination = {};
+      resume() { return Promise.resolve(); }
+      createGain() { return { gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {} }; }
+      createOscillator() {
+        const note = { freq: 0, start: 0, stop: 0 };
+        notes.push(note);
+        return { type: "sine", frequency: { set value(v: number) { note.freq = v; } }, connect() {}, start(t: number) { note.start = t; }, stop(t: number) { note.stop = t; } };
+      }
+    }
+    vi.stubGlobal("AudioContext", FakeCtx);
+    markGesture();
+
+    gradeFeedback(true);
+    expect(notes).toHaveLength(1);
+    const plain = notes[0].stop - notes[0].start;
+
+    notes.length = 0;
+    gradeFeedback(true, { perfect: true });
+    const starts = [...new Set(notes.map((n) => n.start))].sort((a, b) => a - b);
+    expect(starts.length).toBeGreaterThan(3);
+    const end = Math.max(...notes.map((n) => n.stop));
+    expect(end).toBeGreaterThan(plain * 3);
+    expect(end).toBeLessThanOrEqual(FANFARE_MS / 1000 + 0.2);
+    // The lowest note at each of the first four onsets climbs.
+    const run = starts.slice(0, 4).map((t) => Math.min(...notes.filter((n) => n.start === t).map((n) => n.freq)));
+    expect(run).toEqual([...run].sort((a, b) => a - b));
+    expect(new Set(run).size).toBe(4);
+    vi.unstubAllGlobals();
   });
 });
