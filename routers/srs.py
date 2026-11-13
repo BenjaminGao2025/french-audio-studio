@@ -48,9 +48,12 @@ class SrsLookupRequest(BaseModel):
     sentences: list[str] = Field(default_factory=list, max_length=1000)
 
 
+MAX_REVIEW_DURATION_MS = 3_600_000
+
+
 class SrsReviewRequest(BaseModel):
     rating: int = Field(ge=1, le=4)
-    duration_ms: int | None = Field(default=None, ge=0, le=3_600_000)
+    duration_ms: int | None = Field(default=None, ge=0)  # capped below; a card left open for hours must still save
     score: int | None = Field(default=None, ge=0, le=100)
     answer: str | None = Field(default=None, max_length=5000)  # srs stores the first 500 chars
     tz_offset: int = Field(default=0, ge=-840, le=840)
@@ -256,7 +259,8 @@ def srs_review_card(
 ):
     user_id = _require_user_id(authorization)
     try:
-        card = srs.review_card(user_id, card_id, req.rating, req.duration_ms, req.score, req.answer)
+        duration_ms = None if req.duration_ms is None else min(req.duration_ms, MAX_REVIEW_DURATION_MS)
+        card = srs.review_card(user_id, card_id, req.rating, duration_ms, req.score, req.answer)
     except KeyError:
         raise HTTPException(status_code=404, detail={"message": "卡片不存在。"})
     coach.record(user_id, "review", f"{coach.date_for(user_id)}:{card_id}", {"rating": req.rating}, 0)

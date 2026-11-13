@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { blankOut, ratingFor, toLibrary, toReviewCard, type ServerCard } from "./review";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { blankOut, rateCard, ratingFor, toLibrary, toReviewCard, type ServerCard } from "./review";
 import { compactDue, dueIn, shortSavedDate } from "../screens/Review";
 
 const card = (p: Partial<ServerCard> & Pick<ServerCard, "id" | "mode">): ServerCard => ({
@@ -117,5 +117,21 @@ describe("toLibrary", () => {
       ["n2", 2, "你好。"],
     ]);
     expect(lib.cards.find((c) => c.id === "b")).toMatchObject({ kind: "Fill-in", word: "oublié", mastered: true, status: "review", saved: true });
+  });
+});
+
+describe("rateCard", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("caps the answer time at one hour, so a card left open for hours still saves", async () => {
+    let body: Record<string, unknown> = {};
+    vi.stubGlobal("fetch", async (_: string, init: RequestInit) => {
+      body = JSON.parse(String(init.body));
+      return new Response(JSON.stringify(card({ id: "a", mode: "listen", state: "learning" })), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    await rateCard("a", 2, { durationMs: 3 * 3_600_000 });
+    expect(body.duration_ms).toBe(3_600_000);
+    await rateCard("a", 3, { durationMs: 4200 });
+    expect(body.duration_ms).toBe(4200);
   });
 });
