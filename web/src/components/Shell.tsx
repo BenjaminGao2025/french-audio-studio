@@ -110,7 +110,7 @@ function AppSidebar() {
   const top = pathOf(route).split("/")[0];
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="pt-safe">
+      <SidebarHeader className="pt-[calc(0.5rem+var(--safe-top))]">
         <Brand />
       </SidebarHeader>
       <SidebarContent>
@@ -204,7 +204,7 @@ export function Shell({ children }: { children: ReactNode }) {
             {focused ? <FocusBar /> : (
               <>
                 <SidebarTrigger />
-                <Separator orientation="vertical" className="mx-1 h-4" />
+                <Separator orientation="vertical" className="mr-1 data-vertical:h-4 data-vertical:self-auto" />
                 <Breadcrumb>
                   <BreadcrumbList>
                     <BreadcrumbItem>

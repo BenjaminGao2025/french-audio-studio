@@ -38,12 +38,20 @@
 
 ## 组件
 
-`web/src/components/ui.tsx` 提供共用组件，新功能先用它们：
+`web/src/components/ui/` 是 shadcn/ui 组件（风格 radix-vega），`web/src/components/ui/index.tsx` 补充 `pageFrame()`、`PageHead`、`Dialog`、`Popover`、`Spinner`、`Skeleton` 等共用件，新功能先用它们：
 
-- `Button`：只有 primary / secondary / tertiary / destructive 四种角色。禁用时仍可聚焦，并通过 `disabledReason` 说明原因；`busy` 显示进行中。
-- `Banner`：success / error / warning / info 四种语气。错误要用 assertive 播报，并给出恢复操作。
-- `PageHead`、`Tabs`、`Segmented`、`Disclosure`、`Dialog`、`Popover`、`Pill`、`Stat`、`Importance`、`Spinner`、`Skeleton`。
+- `Button`：variant 只有 `default`（主）、`secondary`、`outline`、`ghost`、`destructive`、`link`。不能用时保留焦点，用 `aria-disabled` 加 sr-only 原因说明；进行中用 `aria-busy`。
+- `Alert`：default / destructive。错误要用 assertive 播报，并给出恢复操作。
+- `Tabs`、`ToggleGroup`、`Toggle`、`Select`、`DropdownMenu`、`Tooltip`、`Collapsible`、`Card`、`Badge`、`Progress`。
 - `Shell.tsx`：导航、全局播放器和同步状态。`Recorder.tsx`：麦克风录音后调用 `/api/transcribe`。
+
+## 控件权重
+
+- 每屏最多一个 `default`（主）按钮，放在最主要的动作上；已完成状态降为 `secondary`。
+- 工具条和每一行重复出现的动作用 `ghost` 图标按钮，带 Tooltip 和 aria-label，点击区域至少 44×44（`size-11`）。
+- `outline` 只给单独出现的次要动作；相关的控件放在一起（同一行、同一组），不要一排边框按钮。
+- 视图切换用 Tabs：一级用默认 Tabs（填充的选中态），二级用 `variant="line"`。不要用 ToggleGroup 或按钮来做导航。
+- 页面统一用 `pageFrame()`（max-w-3xl）；只有表格类页面（Saved 列表）可以用宽版。
 
 ## 无障碍
 
