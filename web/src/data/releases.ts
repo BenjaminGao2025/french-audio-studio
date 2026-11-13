@@ -8,6 +8,13 @@ export const RELEASES = [
     version: APP_VERSION,
     date: "2026-11-13",
     changes: [
+      "Drag the grip at the top of a word card to move it off the sentence; with the grip focused, the arrow keys move it too.",
+    ],
+  },
+  {
+    version: "1.3.19",
+    date: "2026-11-13",
+    changes: [
       "The player bar at the bottom glides smoothly instead of moving in small jumps.",
       "Continue with Google on the sign-in page, once Google sign-in is set up for this site.",
       "An account can have no device limit; Settings → Signed-in devices says so.",

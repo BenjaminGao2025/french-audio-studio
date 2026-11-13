@@ -2,7 +2,7 @@ import { QuestionMic } from "../components/QuestionMic";
 import { MarkedExplanation } from "../components/MarkedExplanation";
 import { useExplanationLanguage } from "../lib/explanationLanguage";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, ChevronDown, Volume2, X } from "lucide-react";
+import { ArrowLeft, ChevronDown, GripHorizontal, Volume2, X } from "lucide-react";
 import { formatFriendlyPhonetic } from "../lib/phonetic";
 import { ApiError } from "../api/client";
 import {
@@ -397,6 +397,55 @@ export function WordOverlay({ label, anchor, onClose, children }: { label: strin
   const focusWord = (event: Event) => { event.preventDefault(); requestAnimationFrame(() => document.querySelector<HTMLElement>(".word-card [data-autofocus]")?.focus()); };
   // A tap on French text picks a word itself; dismissing here first made a second tap on the same word close the card.
   const keepForWordTap = (event: Event) => { if (event.target instanceof Element && event.target.closest(".fr-text")) event.preventDefault(); };
-  if (desktop) return <Popover open onOpenChange={open => { if (!open) onClose(); }}><PopoverAnchor virtualRef={{ current: { getBoundingClientRect: () => (anchor?.closest(".sentence-fr") ?? anchor?.closest("[lang=fr]") ?? anchor)?.getBoundingClientRect() ?? new DOMRect(100, 100, 1, 1) } }} /><PopoverContent aria-label={label} align="start" side="bottom" sideOffset={16} avoidCollisions sticky="always" collisionPadding={16} onOpenAutoFocus={focusWord} onInteractOutside={keepForWordTap} className="w-[28rem] max-w-[calc(100vw-2rem)] max-h-[min(80vh,var(--radix-popover-content-available-height))] overflow-y-auto p-4">{children}</PopoverContent></Popover>;
+  // The learner can drag the card off the sentence; the offset stays while they tap other words.
+  // No transition: duration-100 would otherwise animate translate and lag behind the pointer.
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  if (desktop) return <Popover open onOpenChange={open => { if (!open) onClose(); }}><PopoverAnchor virtualRef={{ current: { getBoundingClientRect: () => (anchor?.closest(".sentence-fr") ?? anchor?.closest("[lang=fr]") ?? anchor)?.getBoundingClientRect() ?? new DOMRect(100, 100, 1, 1) } }} /><PopoverContent aria-label={label} align="start" side="bottom" sideOffset={16} avoidCollisions sticky="always" collisionPadding={16} onOpenAutoFocus={focusWord} onInteractOutside={keepForWordTap} style={{ translate: `${offset.x}px ${offset.y}px`, transitionProperty: "none" }} className="w-[28rem] max-w-[calc(100vw-2rem)] max-h-[min(80vh,var(--radix-popover-content-available-height))] overflow-y-auto p-4"><MoveHandle offset={offset} onMove={setOffset} />{children}</PopoverContent></Popover>;
   return <Drawer open modal={false} onOpenChange={open => { if (!open) onClose(); }}><DrawerContent className="max-h-[85vh] gap-4" onOpenAutoFocus={focusWord} onInteractOutside={keepForWordTap} aria-describedby={undefined}><DrawerHeader className="sr-only"><DrawerTitle>{label}</DrawerTitle></DrawerHeader><div className="overflow-y-auto p-4">{children}</div></DrawerContent></Drawer>;
+}
+
+type Offset = { x: number; y: number };
+
+/** Moves the card by (dx, dy) from offset, keeping it 8px inside the window. */
+function moved(card: Element, offset: Offset, dx: number, dy: number, from: Offset = offset): Offset {
+  const r = card.getBoundingClientRect();
+  // r reflects the current offset; shift it back to where it was when the drag began.
+  const left = r.left - (offset.x - from.x), top = r.top - (offset.y - from.y);
+  const right = left + r.width, bottom = top + r.height;
+  return {
+    x: from.x + Math.min(Math.max(dx, 8 - left), window.innerWidth - 8 - right),
+    y: from.y + Math.min(Math.max(dy, 8 - top), window.innerHeight - 8 - bottom),
+  };
+}
+
+/** A grip at the top of the desktop word card: drag it, or focus it and use the arrow keys. */
+function MoveHandle({ offset, onMove }: { offset: Offset; onMove: (offset: Offset) => void }) {
+  const drag = useRef<{ x: number; y: number; from: Offset } | null>(null);
+  const card = (el: Element) => el.closest('[data-slot="popover-content"]') ?? el;
+  const STEP = 24;
+  const keys: Record<string, [number, number]> = { ArrowLeft: [-STEP, 0], ArrowRight: [STEP, 0], ArrowUp: [0, -STEP], ArrowDown: [0, STEP] };
+  return <button
+    type="button"
+    aria-label="Move word card"
+    title="Drag to move"
+    className="wp-move sticky -top-4 z-10 -mx-4 -mt-4 -mb-3 flex h-6 shrink-0 cursor-grab touch-none select-none items-center justify-center bg-popover text-muted-foreground hover:text-foreground active:cursor-grabbing"
+    onPointerDown={e => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+      drag.current = { x: e.clientX, y: e.clientY, from: offset };
+    }}
+    onPointerMove={e => {
+      const d = drag.current;
+      if (d) onMove(moved(card(e.currentTarget), offset, e.clientX - d.x, e.clientY - d.y, d.from));
+    }}
+    onPointerUp={() => { drag.current = null; }}
+    onPointerCancel={() => { drag.current = null; }}
+    onKeyDown={e => {
+      const step = keys[e.key];
+      if (!step) return;
+      e.preventDefault();
+      onMove(moved(card(e.currentTarget), offset, step[0], step[1]));
+    }}
+  ><GripHorizontal className="size-4" aria-hidden /></button>;
 }
