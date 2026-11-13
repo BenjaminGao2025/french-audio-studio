@@ -285,6 +285,10 @@
   right: calc(1rem + var(--safe-right));
 }
 
+/* The collapsed rail keeps only the symbol, sized to the rail so large text never clips it. */
+[data-collapsible="icon"] [data-slot="sidebar-header"] .brand-wordmark { display: none; }
+[data-collapsible="icon"] [data-slot="sidebar-header"] .brand-symbol { width: 2rem; height: 2rem; flex-basis: 2rem; }
+
 [data-slot="sidebar-container"][data-side="left"] {
   margin-left: var(--safe-left);
 }
