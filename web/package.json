@@ -1,7 +1,7 @@
 {
   "name": "french-audio-studio-web",
   "private": true,
-  "version": "1.3.7",
+  "version": "1.3.8",
   "description": "French Audio Studio web app (1000H French). React SPA served by FastAPI under /app/.",
   "type": "module",
   "scripts": {
