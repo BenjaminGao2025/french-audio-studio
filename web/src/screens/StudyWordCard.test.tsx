@@ -695,6 +695,66 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(document.querySelector(".wp-headword")?.textContent).toBe("madame");
   });
 
+  it("the forms table shows tout / tous / toute / toutes, marks the form in this sentence, and speaks a tapped form", async () => {
+    vi.spyOn(lookupApi, "lookupWord").mockResolvedValue({
+      token: "tous", lemma: "tout", pos: "adj", phonetic: "", explanation_cn: "", explanation_en: "",
+      entries: [{ lemma: "tout", pos: "adj", phonetic: "", language: "en", senses: ["all"], source_url: "", history_url: "" }],
+      forms: { lemma: "tout", kind: "adjective", rows: [
+        { gender: "m", cells: [{ number: "s", forms: ["tout"], current: false }, { number: "p", forms: ["tous"], current: true }] },
+        { gender: "f", cells: [{ number: "s", forms: ["toute"], current: false }, { number: "p", forms: ["toutes"], current: false }] },
+      ] },
+    });
+    const say = vi.spyOn(store, "sayFrench");
+    await act(async () => root.render(<WordPanel sentence={SENTENCE} text="tous" onClose={() => {}} />));
+    await wait(20);
+    const section = host.querySelector('[aria-label="Forms"]')!;
+    expect(section).toBeTruthy();
+    const order = Array.from(host.querySelectorAll("section[aria-label]")).map(el => el.getAttribute("aria-label"));
+    expect(order.slice(0, 3)).toEqual(["In this sentence", "Forms", "Dictionary"]);
+    expect(Array.from(section.querySelectorAll("th")).map(th => th.textContent)).toEqual(["Singular", "Plural", "Masculine", "Feminine"]);
+    const current = section.querySelector('[aria-current="true"]')!;
+    expect(current.textContent).toBe("tous(in this sentence)");
+    expect(section.querySelectorAll('[aria-current="true"]')).toHaveLength(1);
+    say.mockClear();
+    await act(async () => Array.from(section.querySelectorAll<HTMLButtonElement>("button[lang=fr]")).find(b => b.textContent === "toutes")!.click());
+    expect(say).toHaveBeenCalledWith("toutes");
+  });
+
+  it("a word without forms has no Forms section, and the extras sit quieter than the meaning", async () => {
+    await act(async () => root.render(<WordPanel sentence={SENTENCE} text="madame" onClose={() => {}} />));
+    await wait(20);
+    expect(host.querySelector('[aria-label="Forms"]')).toBeNull();
+    const title = (name: string) => host.querySelector(`[aria-label="${name}"] button`)!.className;
+    expect(title("Dictionary")).toContain("font-semibold");
+    for (const name of ["Word origin", "Ask AI", "Notes"]) expect(title(name)).toContain("text-muted-foreground");
+  });
+
+  it("the desktop word card resizes from its corner, remembers the size, and double-click resets it", async () => {
+    localStorage.removeItem("frenchStudio.wordCardSize");
+    await act(async () => headerWord("madame").click());
+    const corner = document.querySelector<HTMLButtonElement>('button[aria-label="Resize word card"]')!;
+    const card = document.querySelector<HTMLElement>('[data-slot="popover-content"]')!;
+    expect(corner).toBeTruthy();
+    // jsdom has no layout: a 448×500 card at (40, 100) that follows its inline size.
+    card.getBoundingClientRect = () => new DOMRect(40, 100, parseFloat(card.style.width) || 448, parseFloat(card.style.height) || 500);
+    const pointer = (type: string, x: number, y: number) => corner.dispatchEvent(new MouseEvent(type, { bubbles: true, button: 0, clientX: x, clientY: y }));
+    await act(async () => { pointer("pointerdown", 500, 600); });
+    await act(async () => { pointer("pointermove", 560, 500); });
+    await act(async () => { pointer("pointerup", 560, 500); });
+    expect([card.style.width, card.style.height]).toEqual(["508px", "400px"]);
+    expect(JSON.parse(localStorage.getItem("frenchStudio.wordCardSize")!)).toEqual({ w: 508, h: 400 });
+    // Never smaller than 320×240.
+    await act(async () => { pointer("pointerdown", 0, 0); });
+    await act(async () => { pointer("pointermove", -2000, -2000); });
+    await act(async () => { pointer("pointerup", -2000, -2000); });
+    expect([card.style.width, card.style.height]).toEqual(["320px", "240px"]);
+    await act(async () => { corner.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })); });
+    expect(card.style.width).toBe("344px");
+    await act(async () => { corner.dispatchEvent(new MouseEvent("dblclick", { bubbles: true })); });
+    expect(card.style.width).toBe("");
+    expect(localStorage.getItem("frenchStudio.wordCardSize")).toBeNull();
+  });
+
   it("a second tap on the same word keeps the card open, and a tap outside the text still closes it", async () => {
     const tap = async (el: Element) => {
       await act(async () => {

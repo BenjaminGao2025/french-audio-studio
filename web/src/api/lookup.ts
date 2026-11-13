@@ -5,6 +5,13 @@ import { apiFetch } from "./client";
 import { get, set } from "../state/store";
 import { lookupKey, wordImportance } from "../lib/lookup";
 
+/** How a word changes with gender and number (offline_dictionary.word_forms); current marks the clicked form. */
+export interface WordForms {
+  lemma: string;
+  kind: string;
+  rows: { gender: "m" | "f" | "mf"; cells: { number: "s" | "p"; forms: string[]; current: boolean }[] }[];
+}
+
 export interface DictionaryEntry {
   token: string;
   lemma: string;
@@ -33,6 +40,7 @@ export interface DictionaryEntry {
   attribution?: string;
   license_url?: string;
   changes?: string;
+  forms?: WordForms;
 }
 
 const entries = new Map<string, Promise<DictionaryEntry>>();

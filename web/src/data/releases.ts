@@ -8,6 +8,15 @@ export const RELEASES = [
     version: APP_VERSION,
     date: "2026-11-13",
     changes: [
+      "The word card has a Forms table: tap tous and see tout, tous, toute and toutes, with the form in your sentence highlighted. Tap a form to hear it.",
+      "Drag the bottom-right corner of the word card to make it bigger or smaller; it keeps that size next time. Double-click the corner to go back to the usual size.",
+      "The word card is easier to scan: the meaning in this sentence sits in its own panel, and Word origin, Ask AI and Notes step back.",
+    ],
+  },
+  {
+    version: "1.3.20",
+    date: "2026-11-13",
+    changes: [
       "Drag the grip at the top of a word card to move it off the sentence; with the grip focused, the arrow keys move it too.",
     ],
   },
