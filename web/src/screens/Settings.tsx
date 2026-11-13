@@ -70,9 +70,9 @@ export function DailyLimitField({ compact }: { compact?: boolean }) {
       });
   };
   return (
-    <div className="flex flex-col gap-3" style={{ maxWidth: 520 }}>
+    <div className="flex flex-col gap-3" style={{ maxWidth: "32.5rem" }}>
       <div className="flex flex-wrap items-start gap-2 gap-3" style={{ alignItems: "flex-end" }}>
-        <div style={{ width: 200 }}>
+        <div style={{ width: "12.5rem" }}>
           <div className="grid gap-2"><Label htmlFor="daily-new-cards-daily-new">Daily new cards</Label>{!compact && <p id="daily-new-cards-daily-new-help" className="text-sm text-muted-foreground">0 to 200</p>}<Input id="daily-new-cards-daily-new" value={value} onChange={(e) => { setValue(e.target.value); setState("idle"); }} inputMode="numeric" name="daily-new" spellCheck={false} onKeyDown={(e) => e.key === "Enter" && save()} autoComplete="off" aria-describedby={error ? "daily-new-cards-daily-new-err" : undefined} aria-invalid={error ? true : undefined} />{error ? <p id="daily-new-cards-daily-new-err" className="flex items-start gap-1.5 text-sm text-destructive"><AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden /><span>{error}</span></p> : null}</div>
         </div>
         <Button type="button" variant="outline" aria-disabled={(!!(state === "saving")) || undefined} aria-busy={state === "saving" || undefined} style={{ marginBottom: error ? 28 : 0 }} className={cn((!!(state === "saving")) ? "opacity-50" : "")} onClick={(event) => { if (!!(state === "saving")) { event.preventDefault(); return; } (save)(); }}>{state === "saving" ? <Loader2 className="animate-spin" aria-hidden /> : null}{state === "failed" ? "Retry" : "Save limit"}</Button>
@@ -134,9 +134,9 @@ export function SessionSizeField() {
       });
   };
   return (
-    <div className="flex flex-col gap-3" style={{ maxWidth: 520 }}>
+    <div className="flex flex-col gap-3" style={{ maxWidth: "32.5rem" }}>
       <div className="flex flex-wrap items-start gap-2 gap-3" style={{ alignItems: "flex-end" }}>
-        <div style={{ width: 200 }}>
+        <div style={{ width: "12.5rem" }}>
           <div className="grid gap-2"><Label htmlFor="cards-per-review-session-session-size">Cards per review session</Label><p id="cards-per-review-session-session-size-help" className="text-sm text-muted-foreground">{MIN_SESSION_SIZE} to {MAX_SESSION_SIZE}</p><Input id="cards-per-review-session-session-size" value={value} onChange={(e) => { setValue(e.target.value); setState("idle"); }} inputMode="numeric" name="session-size" spellCheck={false} onKeyDown={(e) => e.key === "Enter" && save()} autoComplete="off" aria-describedby={error ? "cards-per-review-session-session-size-err" : "cards-per-review-session-session-size-help"} aria-invalid={error ? true : undefined} />{error ? <p id="cards-per-review-session-session-size-err" className="flex items-start gap-1.5 text-sm text-destructive"><AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden /><span>{error}</span></p> : null}</div>
         </div>
         <Button type="button" variant="outline" aria-disabled={(!!(state === "saving")) || undefined} aria-busy={state === "saving" || undefined} style={{ marginBottom: error ? 28 : 0 }} className={cn((!!(state === "saving")) ? "opacity-50" : "")} onClick={(event) => { if (!!(state === "saving")) { event.preventDefault(); return; } (save)(); }}>{state === "saving" ? <Loader2 className="animate-spin" aria-hidden /> : null}{state === "failed" ? "Retry" : "Save size"}</Button>

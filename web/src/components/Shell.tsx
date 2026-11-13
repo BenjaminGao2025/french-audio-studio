@@ -23,6 +23,7 @@ import {
 import { WidthContext } from "./ui";
 import { Brand } from "./Brand";
 import { VersionInfo } from "./VersionInfo";
+import { useUpdatePrompt } from "../lib/updateCheck";
 import { Progress } from "./ui/progress";
 import { Toaster } from "./ui/sonner";
 import {
@@ -144,7 +145,7 @@ function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter className="pb-safe">
-        <VersionInfo />
+        <VersionInfo className="group-data-[collapsible=icon]:hidden" />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
@@ -190,6 +191,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const section = NAV.find((n) => n.key === top)?.label ?? "1000H French";
   // On a studied text, starting a new one is a visible action, not something hidden in a menu.
   const studying = useApp((s) => pathOf(s.route) === "study" && s.study.analysis.status === "done" && s.study.sentences.length > 0);
+  useUpdatePrompt();
   return (
     <TooltipProvider>
       <SidebarProvider className="pl-[var(--safe-left)] pr-[var(--safe-right)]">

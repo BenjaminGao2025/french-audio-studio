@@ -8,6 +8,14 @@ export const RELEASES = [
     version: APP_VERSION,
     date: "2026-11-13",
     changes: [
+      "When a new version is live, an open window offers Reload, so you no longer need to quit and reopen the app.",
+      "With large text, the collapsed sidebar shows just the logo, and Settings labels stay on one line.",
+    ],
+  },
+  {
+    version: "1.3.17",
+    date: "2026-11-13",
+    changes: [
       "A word tapped in a build-up step is explained in that step: “a” in “La loi a le droit” is “has”, not the letter A.",
       "When the meaning in the sentence can’t load, the card says so instead of showing a dictionary sense that may not fit.",
       "A wrong word marks only the letters that differ in red: activit[ies] → activit[és].",
