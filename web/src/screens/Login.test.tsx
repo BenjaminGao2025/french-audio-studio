@@ -41,3 +41,31 @@ describe("invite links (old /?invite= links redirect to /app/login?invite=)", ()
     expect(inviteField(el)).toBeUndefined();
   });
 });
+
+describe("Continue with Google", () => {
+  it("stays hidden when the server has no Google client ID", async () => {
+    const fetchBefore = globalThis.fetch;
+    globalThis.fetch = (async () => new Response(JSON.stringify({ google_client_id: null }), { status: 200, headers: { "content-type": "application/json" } })) as typeof fetch;
+    try {
+      const el = render("/app/login");
+      await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+      expect(el.querySelector("[data-google-signin]")).toBeNull();
+      expect(document.querySelector('script[src*="accounts.google.com"]')).toBeNull();
+    } finally {
+      globalThis.fetch = fetchBefore;
+    }
+  });
+
+  it("loads Google's button when the server names a client ID", async () => {
+    const fetchBefore = globalThis.fetch;
+    globalThis.fetch = (async () => new Response(JSON.stringify({ google_client_id: "abc.apps.googleusercontent.com" }), { status: 200, headers: { "content-type": "application/json" } })) as typeof fetch;
+    try {
+      const el = render("/app/login");
+      await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+      expect(el.querySelector("[data-google-signin]")).not.toBeNull();
+      expect(document.querySelector('script[src="https://accounts.google.com/gsi/client"]')).not.toBeNull();
+    } finally {
+      globalThis.fetch = fetchBefore;
+    }
+  });
+});

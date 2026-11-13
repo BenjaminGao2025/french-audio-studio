@@ -314,6 +314,24 @@ function SyncIndicator({ sync, offline }: { sync: string; offline: boolean }) {
   );
 }
 
+/* The audio element reports its time only a few times a second; between reports the bar
+   keeps moving at the playback speed, so it glides instead of stepping. */
+function SmoothProgress({ position, duration, playing, speed }: { position: number; duration: number; playing: boolean; speed: number }) {
+  const [shown, setShown] = useState(position);
+  useEffect(() => {
+    setShown(position);
+    if (!playing || !duration) return;
+    const start = performance.now();
+    let frame = requestAnimationFrame(function tick(now) {
+      setShown(Math.min(duration, position + ((now - start) / 1000) * (speed || 1)));
+      frame = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [position, duration, playing, speed]);
+  const pct = duration ? Math.min(100, (shown / duration) * 100) : 0;
+  return <Progress value={pct} className="mt-1 [&_[data-slot=progress-indicator]]:transition-none" />;
+}
+
 function GlobalPlayer() {
   const p = useApp((s) => s.player);
   const route = useApp((s) => s.route);
@@ -328,7 +346,6 @@ function GlobalPlayer() {
     error: "Couldn't play",
     buffering: "Buffering…",
   };
-  const pct = p.duration ? Math.min(100, (p.position / p.duration) * 100) : 0;
   return (
     <section className="sticky bottom-0 z-20 flex flex-wrap items-center gap-3 border-t bg-background px-4 py-2 pb-[calc(0.5rem+var(--safe-bottom))]" aria-label={`Player: ${p.owner.label}`}>
       {p.status === "error" ? (
@@ -343,7 +360,7 @@ function GlobalPlayer() {
         <p className="text-xs tabular-nums text-muted-foreground">
           {statusText[p.status]} · {fmtClock(p.position)} / {fmtClock(p.duration)} · {p.speed}×{p.texts ? "" : " · Simulated audio"}
         </p>
-        <Progress value={pct} className="mt-1" />
+        <SmoothProgress position={p.position} duration={p.duration} playing={p.status === "playing"} speed={p.speed} />
       </div>
       <Button type="button" variant="ghost" onClick={() => go(p.owner.route)}>{p.owner.kind === "episode" ? "Return to episode" : p.owner.kind === "exercise" ? "Return to practice" : "Return to source"}</Button>
       <Button type="button" variant="ghost" size="icon" aria-label={`Stop ${p.owner.label}`} onClick={stopPlayback}>{<Square aria-hidden />}</Button>

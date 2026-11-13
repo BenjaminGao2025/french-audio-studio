@@ -60,6 +60,20 @@ export async function register(email: string, password: string, inviteCode = "")
   return res.user;
 }
 
+/** Which sign-in methods the server offers; Google shows only when it has a client ID. */
+export const authOptions = () => apiFetch<{ google_client_id: string | null }>("/api/auth/options", { noAuthRedirect: true });
+
+/** Signs in with the ID token from Google's button. A new email needs an invite code, as with sign-up. */
+export async function googleSignIn(credential: string, inviteCode = ""): Promise<AuthUser> {
+  const res = await apiFetch<AuthResponse>("/api/auth/google", {
+    body: { credential, invite_code: inviteCode },
+    noAuthRedirect: true,
+  });
+  setToken(res.token);
+  setSession({ status: "in", user: res.user });
+  return res.user;
+}
+
 /** Resolves the session on load: no token or a token the server rejects → out; network trouble → error. */
 export async function loadMe(): Promise<SessionStatus> {
   if (!getToken()) {
@@ -97,6 +111,7 @@ export interface Device {
   current: boolean;
 }
 
-export const listDevices = () => apiFetch<{ devices: Device[]; max_devices: number }>("/api/auth/devices");
+/** max_devices is null when the account has no device limit. */
+export const listDevices = () => apiFetch<{ devices: Device[]; max_devices: number | null }>("/api/auth/devices");
 
 export const signOutDevice = (id: string) => apiFetch<{ success: boolean }>(`/api/auth/devices/${encodeURIComponent(id)}`, { method: "DELETE" });

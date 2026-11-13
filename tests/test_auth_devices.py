@@ -87,3 +87,94 @@ class DeviceLimitTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class NoDeviceLimitTests(unittest.TestCase):
+    setUp = DeviceLimitTests.setUp
+    _login = DeviceLimitTests._login
+    _me = DeviceLimitTests._me
+
+    def test_device_limit_zero_keeps_every_device(self):
+        with auth_db.connect() as conn:
+            conn.execute("INSERT INTO user_device_limits (user_id, device_limit) SELECT id, 0 FROM users WHERE email = ?", (self.email,))
+        tokens = [self._login() for _ in range(6)]
+        for token in tokens:
+            self.assertEqual(self._me(token).status_code, 200)
+        devices = self.client.get("/api/auth/devices", headers={"Authorization": f"Bearer {tokens[-1]}"}).json()
+        self.assertIsNone(devices["max_devices"])
+        self.assertEqual(len(devices["devices"]), 7)
+
+    def test_device_limit_can_be_raised(self):
+        with auth_db.connect() as conn:
+            conn.execute("INSERT INTO user_device_limits (user_id, device_limit) SELECT id, 5 FROM users WHERE email = ?", (self.email,))
+        tokens = [self._login() for _ in range(5)]
+        self.assertEqual(self._me(tokens[0]).status_code, 200)
+        self.assertEqual(self.client.get("/api/auth/devices", headers={"Authorization": f"Bearer {tokens[0]}"}).json()["max_devices"], 5)
+        self._login()
+        self.assertEqual(self._me(tokens[0]).status_code, 401)
+
+
+class GoogleSignInTests(unittest.TestCase):
+    CLIENT = "test-client.apps.googleusercontent.com"
+
+    def setUp(self):
+        self.client = TestClient(tts_service.app)
+        self.email = f"google_{uuid.uuid4().hex[:10]}@example.com"
+        self._client_id = routers.auth.GOOGLE_CLIENT_ID
+        self._tokeninfo = routers.auth._google_tokeninfo
+        routers.auth.GOOGLE_CLIENT_ID = self.CLIENT
+        self.info = {
+            "aud": self.CLIENT,
+            "iss": "https://accounts.google.com",
+            "email": self.email,
+            "email_verified": "true",
+            "exp": str(int(__import__("time").time()) + 600),
+        }
+
+        async def fake(credential):
+            return dict(self.info) if credential == "good" else {}
+
+        routers.auth._google_tokeninfo = fake
+
+    def tearDown(self):
+        routers.auth.GOOGLE_CLIENT_ID = self._client_id
+        routers.auth._google_tokeninfo = self._tokeninfo
+
+    def _google(self, credential="good", invite=""):
+        return self.client.post("/api/auth/google", json={"credential": credential, "invite_code": invite}, headers={"user-agent": PHONE_UA})
+
+    def test_options_name_the_client(self):
+        self.assertEqual(self.client.get("/api/auth/options").json(), {"google_client_id": self.CLIENT})
+
+    def test_existing_account_signs_in_by_email(self):
+        auth_db.register_user(self.email, "password123")
+        self.info["email"] = self.email.upper()
+        response = self._google()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["user"]["email"], self.email)
+        self.assertEqual(self.client.get("/api/auth/me", headers={"Authorization": f"Bearer {response.json()['token']}"}).status_code, 200)
+
+    def test_new_email_needs_an_invite(self):
+        self.addCleanup(setattr, auth_db, "ALLOW_REGISTRATION", auth_db.ALLOW_REGISTRATION)
+        auth_db.ALLOW_REGISTRATION = False
+        response = self._google()
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("invite code", response.json()["detail"]["message"])
+        code = auth_db.create_invite("google-test", 1)["code"]
+        response = self._google(invite=code)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["user"]["email"], self.email)
+
+    def test_rejects_tokens_not_meant_for_this_site(self):
+        auth_db.register_user(self.email, "password123")
+        for change in ({"aud": "someone-else"}, {"iss": "evil.example"}, {"email_verified": "false"}, {"exp": "1"}):
+            with self.subTest(change=change):
+                saved = dict(self.info)
+                self.info.update(change)
+                self.assertEqual(self._google().status_code, 400)
+                self.info = saved
+        self.assertEqual(self._google("forged").status_code, 400)
+
+    def test_hidden_without_a_client_id(self):
+        routers.auth.GOOGLE_CLIENT_ID = ""
+        self.assertEqual(self.client.get("/api/auth/options").json(), {"google_client_id": None})
+        self.assertEqual(self._google().status_code, 404)

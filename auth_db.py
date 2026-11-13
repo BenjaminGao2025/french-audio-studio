@@ -28,6 +28,7 @@ if len(AUTH_SECRET) < 32:
 ALLOW_REGISTRATION = os.getenv("ALLOW_REGISTRATION", "false").strip().lower() == "true"
 TRIAL_DAYS = 60  # New customers automatically receive 2 months (60 days) free
 MAX_DEVICES = 3  # Logging in on a fourth device signs out the one used least recently
+# user_device_limits: no row = MAX_DEVICES, 0 = no limit, n = n devices (set with `set-device-limit`).
 SESSION_TOUCH_SECONDS = 600  # How often last_seen_at is refreshed, to avoid a write per request
 
 
@@ -103,6 +104,10 @@ def init_db() -> None:
                 lemma TEXT NOT NULL,
                 text TEXT NOT NULL,
                 created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS user_device_limits (
+                user_id INTEGER PRIMARY KEY,
+                device_limit INTEGER NOT NULL
             );
             CREATE TABLE IF NOT EXISTS invite_codes (
                 code TEXT PRIMARY KEY,
@@ -213,8 +218,21 @@ def _now_iso() -> str:
     return datetime.datetime.utcnow().isoformat(timespec="seconds")
 
 
+def _device_limit(conn: sqlite3.Connection, user_id: int) -> int | None:
+    row = conn.execute("SELECT device_limit FROM user_device_limits WHERE user_id = ?", (user_id,)).fetchone()
+    if row is None:
+        return MAX_DEVICES
+    return None if row["device_limit"] <= 0 else int(row["device_limit"])
+
+
+def device_limit(user_id: int) -> int | None:
+    """How many devices this account may keep signed in; None means no limit."""
+    with connect() as conn:
+        return _device_limit(conn, user_id)
+
+
 def _start_session(user_id: int, device: str) -> str:
-    """Record a new signed-in device and sign out the least recently used beyond MAX_DEVICES."""
+    """Record a new signed-in device and sign out the least recently used beyond the account's limit."""
     session_id = uuid.uuid4().hex
     now = _now_iso()
     with connect() as conn:
@@ -222,7 +240,10 @@ def _start_session(user_id: int, device: str) -> str:
             "INSERT INTO sessions (id, user_id, device, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?)",
             (session_id, user_id, (device or "")[:120], now, now),
         )
-        # Keep the new session plus the most recently used others, up to MAX_DEVICES in all
+        limit = _device_limit(conn, user_id)
+        if limit is None:
+            return session_id
+        # Keep the new session plus the most recently used others, up to the limit in all
         conn.execute(
             """
             DELETE FROM sessions WHERE user_id = ? AND id != ? AND id NOT IN (
@@ -230,7 +251,7 @@ def _start_session(user_id: int, device: str) -> str:
                 ORDER BY last_seen_at DESC, rowid DESC LIMIT ?
             )
             """,
-            (user_id, session_id, user_id, session_id, MAX_DEVICES - 1),
+            (user_id, session_id, user_id, session_id, limit - 1),
         )
     return session_id
 
@@ -440,6 +461,22 @@ def login_user(email: str, password: str, device: str = "") -> dict[str, Any]:
     token = _generate_token(row["id"], clean_email, _start_session(row["id"], device))
     user_info = get_user_status(row["id"])
     return {"token": token, "user": user_info}
+
+
+def google_sign_in(email: str, device: str = "", invite_code: str | None = None) -> dict[str, Any]:
+    """Sign in with an email Google has verified. A new email needs the same invite as sign-up."""
+    clean_email = email.strip().lower()
+    with connect() as conn:
+        row = conn.execute("SELECT id FROM users WHERE email = ?", (clean_email,)).fetchone()
+    if row:
+        token = _generate_token(row["id"], clean_email, _start_session(row["id"], device))
+        return {"token": token, "user": get_user_status(row["id"])}
+    if not ALLOW_REGISTRATION and not _clean_invite(invite_code):
+        raise ValueError(
+            "No account uses this Google email yet. Choose “I have an invite code”, enter your code, then continue with Google."
+        )
+    # A Google-only account still needs a password hash: an unguessable one nobody knows.
+    return register_user(clean_email, secrets.token_urlsafe(32), device, invite_code)
 
 
 def get_user_status(user_id: int) -> dict[str, Any] | None:
@@ -689,6 +726,8 @@ def _admin_cli(argv: list[str]) -> None:
     """Owner maintenance commands, e.g. inside the container:
     python auth_db.py set-password you@example.com
     python auth_db.py set-plan you@example.com pro
+    python auth_db.py set-email you@example.com new@example.com
+    python auth_db.py set-device-limit you@example.com 0   (0 = no limit, default = 3)
     python auth_db.py claim-anonymous-history you@example.com
     python auth_db.py list-waitlist
     python auth_db.py create-invite --label xhs-live [--max-uses 50]
@@ -703,6 +742,12 @@ def _admin_cli(argv: list[str]) -> None:
     plan_parser = sub.add_parser("set-plan")
     plan_parser.add_argument("email")
     plan_parser.add_argument("plan", choices=["trial", "pro"])
+    email_parser = sub.add_parser("set-email")
+    email_parser.add_argument("email")
+    email_parser.add_argument("new_email")
+    limit_parser = sub.add_parser("set-device-limit")
+    limit_parser.add_argument("email")
+    limit_parser.add_argument("limit", help="0 for no limit, 'default' for the standard limit")
     sub.add_parser("claim-anonymous-history").add_argument("email")
     sub.add_parser("list-waitlist")
     invite_parser = sub.add_parser("create-invite")
@@ -753,6 +798,32 @@ def _admin_cli(argv: list[str]) -> None:
         elif args.command == "set-plan":
             conn.execute("UPDATE users SET plan = ? WHERE id = ?", (args.plan, user_id))
             print(f"Plan set to {args.plan}.")
+        elif args.command == "set-email":
+            new_email = args.new_email.strip().lower()
+            if not re.match(r"^[^@]+@[^@]+\.[^@]+$", new_email):
+                raise SystemExit("Enter a valid email address.")
+            taken = conn.execute("SELECT id FROM users WHERE email = ? AND id != ?", (new_email, user_id)).fetchone()
+            if taken:
+                raise SystemExit(f"{new_email} already belongs to another account.")
+            conn.execute("UPDATE users SET email = ? WHERE id = ?", (new_email, user_id))
+            print(f"Email changed to {new_email}. Signed-in devices stay signed in.")
+        elif args.command == "set-device-limit":
+            if args.limit == "default":
+                value = None
+            elif args.limit.isdigit():
+                value = int(args.limit)
+            else:
+                raise SystemExit("Limit must be a whole number (0 = no limit) or 'default'.")
+            if value is None:
+                conn.execute("DELETE FROM user_device_limits WHERE user_id = ?", (user_id,))
+            else:
+                conn.execute(
+                    "INSERT INTO user_device_limits (user_id, device_limit) VALUES (?, ?) "
+                    "ON CONFLICT(user_id) DO UPDATE SET device_limit = excluded.device_limit",
+                    (user_id, value),
+                )
+            shown = "the default" if value is None else ("no limit" if value == 0 else str(value))
+            print(f"Device limit set to {shown}.")
         elif args.command == "claim-anonymous-history":
             cursor = conn.execute(
                 "UPDATE history_records SET user_id = ? WHERE user_id IS NULL OR user_id = 0",

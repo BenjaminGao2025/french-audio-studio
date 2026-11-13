@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import os
+import time
+
+import httpx
 from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
@@ -20,6 +24,10 @@ from web_common import (
 
 router = APIRouter()
 
+# Sign in with Google shows only when this OAuth client ID (type "Web application") is set.
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "").strip()
+GOOGLE_ISSUERS = {"accounts.google.com", "https://accounts.google.com"}
+
 
 class AuthRequest(BaseModel):
     email: str
@@ -28,6 +36,34 @@ class AuthRequest(BaseModel):
 
 class RegisterRequest(AuthRequest):
     invite_code: str = ""
+
+
+class GoogleRequest(BaseModel):
+    credential: str
+    invite_code: str = ""
+
+
+async def _google_tokeninfo(credential: str) -> dict:
+    """Google checks the ID token's signature and expiry; we check it was issued for this site."""
+    async with httpx.AsyncClient(timeout=10) as client:
+        response = await client.get("https://oauth2.googleapis.com/tokeninfo", params={"id_token": credential})
+    if response.status_code != 200:
+        return {}
+    return response.json()
+
+
+def _verified_google_email(info: dict) -> str | None:
+    if not GOOGLE_CLIENT_ID or info.get("aud") != GOOGLE_CLIENT_ID or info.get("iss") not in GOOGLE_ISSUERS:
+        return None
+    if str(info.get("email_verified", "")).lower() != "true":
+        return None
+    try:
+        if int(info.get("exp", 0)) <= time.time():
+            return None
+    except (TypeError, ValueError):
+        return None
+    email = info.get("email")
+    return email if isinstance(email, str) and email else None
 
 
 def _auth_response(payload: dict, request: Request) -> JSONResponse:
@@ -95,6 +131,33 @@ async def login_account(req: AuthRequest, request: Request):
         raise HTTPException(status_code=400, detail={"message": str(e)})
 
 
+@router.get("/api/auth/options")
+async def auth_options():
+    return {"google_client_id": GOOGLE_CLIENT_ID or None}
+
+
+@router.post("/api/auth/google")
+async def google_login(req: GoogleRequest, request: Request):
+    if not GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=404, detail={"message": "Sign in with Google isn’t set up."})
+    rate_limit(f"ip:{client_ip(request)}", "auth_ip")
+    if not req.credential or len(req.credential) > 4096:
+        raise HTTPException(status_code=400, detail={"message": "Google sign-in didn’t finish. Please try again."})
+    try:
+        info = await _google_tokeninfo(req.credential)
+    except httpx.HTTPError:
+        raise HTTPException(status_code=502, detail={"message": "Couldn’t reach Google. Please try again."})
+    email = _verified_google_email(info)
+    if not email:
+        raise HTTPException(status_code=400, detail={"message": "Google couldn’t confirm this account. Please try again."})
+    device = _device_label(request.headers.get("user-agent", ""))
+    try:
+        account = await run_in_threadpool(auth_db.google_sign_in, email, device, req.invite_code.strip() or None)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail={"message": str(e)})
+    return _auth_response(account, request)
+
+
 @router.post("/api/auth/session")
 async def refresh_session(request: Request, authorization: str | None = Header(default=None)):
     """Turn an existing bearer token into the cookie that audio requests can carry."""
@@ -133,7 +196,7 @@ async def list_devices(request: Request, authorization: str | None = Header(defa
     user_id = _require_user_id(authorization, request)
     current = (auth_db.verify_token(token) or {}).get("sid")
     devices = [{**session, "current": session["id"] == current} for session in auth_db.list_sessions(user_id)]
-    return {"devices": devices, "max_devices": auth_db.MAX_DEVICES}
+    return {"devices": devices, "max_devices": auth_db.device_limit(user_id)}
 
 
 @router.delete("/api/auth/devices/{session_id}")
