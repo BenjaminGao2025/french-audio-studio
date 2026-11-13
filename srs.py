@@ -111,6 +111,13 @@ def init_db() -> None:
                 last_looked_at TEXT NOT NULL,
                 PRIMARY KEY (user_id, word)
             );
+            -- The lookup count when a saved word's importance last changed (save, choice or raise).
+            CREATE TABLE IF NOT EXISTS word_importance_base (
+                user_id INTEGER NOT NULL,
+                word TEXT NOT NULL,
+                lookups INTEGER NOT NULL,
+                PRIMARY KEY (user_id, word)
+            );
             """
         )
         columns = {row[1] for row in conn.execute("PRAGMA table_info(srs_cards)")}
@@ -130,6 +137,13 @@ def init_db() -> None:
             _merge_elided_keys(conn)
             _sync_word_importance(conn)
             conn.execute("INSERT INTO srs_migrations VALUES ('elision-keys-1.3.4')")
+        # 1.3.4-1.3.6 derived word importance with 3/5-lookup tiers and no manual choice. Once, treat every
+        # word as saved before its first lookup: 3 stars, one more per 5 lookups (5 → 4, 10 → 5).
+        if not conn.execute("SELECT 1 FROM srs_migrations WHERE name = 'importance-tiers-1.3.7'").fetchone():
+            _sync_word_importance(conn)
+            conn.execute("INSERT OR REPLACE INTO word_importance_base (user_id, word, lookups) "
+                         f"SELECT user_id, word, count - count % {LOOKUPS_PER_STAR} FROM word_lookup_counts")
+            conn.execute("INSERT INTO srs_migrations VALUES ('importance-tiers-1.3.7')")
         conn.commit()
     _initialized_db_paths.add(db_path)
 
@@ -229,7 +243,8 @@ def sentence_key(sentence: str) -> str:
 
 # Word lookup counts (Eudic-style "已查 N 次"): one row per user per normalized word.
 LOOKUP_DEBOUNCE_SECONDS = 5
-IMPORTANCE_FROM_LOOKUPS = ((5, 5), (3, 4))
+LOOKUPS_PER_STAR = 5  # a saved word gains one star per 5 lookups since its importance last changed
+AUTO_SAVE_LOOKUPS = 3  # the third counted lookup saves the word
 
 
 def _normalize_word_surface(word: str) -> str:
@@ -307,37 +322,25 @@ def _merge_elided_keys(conn: sqlite3.Connection) -> None:
 
 
 def importance_for_lookups(count: int) -> int:
-    """Saved-word importance: default 3, 3+ lookups → 4, 5+ → 5."""
-    for threshold, importance in IMPORTANCE_FROM_LOOKUPS:
-        if count >= threshold:
-            return importance
-    return DEFAULT_IMPORTANCE
+    """Importance of a word saved before its first lookup: 3, then one star per 5 lookups (5 → 4, 10 → 5)."""
+    return min(5, DEFAULT_IMPORTANCE + count // LOOKUPS_PER_STAR)
 
 
-def _sync_word_importance(
-    conn: sqlite3.Connection,
-    user_id: int | None = None,
-    ids: list[str] | None = None,
-    word: str | None = None,
-) -> int:
-    """Recompute existing word cards only. The migration uses all users; requests use one."""
-    scope = " WHERE user_id = ?" if user_id is not None else ""
-    params = (user_id,) if user_id is not None else ()
+def _mark_importance_change(conn: sqlite3.Connection, user_id: int, normalized: str) -> None:
+    """Restart the 5-lookup climb from the word's current lookup count."""
+    row = conn.execute("SELECT count FROM word_lookup_counts WHERE user_id = ? AND word = ?", (user_id, normalized)).fetchone()
+    conn.execute("INSERT OR REPLACE INTO word_importance_base (user_id, word, lookups) VALUES (?, ?, ?)",
+                 (user_id, normalized, int(row["count"]) if row else 0))
+
+
+def _sync_word_importance(conn: sqlite3.Connection) -> None:
+    """Reset every word card to its lookup tier. Migrations only: it overwrites manual choices."""
     counts = {(r["user_id"], r["word"]): r["count"] for r in conn.execute(
-        "SELECT user_id, word, count FROM word_lookup_counts" + scope, params)}
-    rows = conn.execute(
-        "SELECT id, user_id, target FROM srs_cards" + scope
-        + (" AND" if scope else " WHERE") + " mode IN ('cloze', 'recognize')", params,
-    ).fetchall()
-    updated = 0
-    for row in rows:
-        normalized = normalize_lookup_word(row["target"])
-        if (ids is not None and row["id"] not in ids) or (word is not None and normalized != word):
-            continue
-        conn.execute("UPDATE srs_cards SET importance = ? WHERE id = ?",
-                     (importance_for_lookups(counts.get((row["user_id"], normalized), 0)), row["id"]))
-        updated += 1
-    return updated
+        "SELECT user_id, word, count FROM word_lookup_counts")}
+    for row in conn.execute(
+            "SELECT id, user_id, target FROM srs_cards WHERE mode IN ('cloze', 'recognize')").fetchall():
+        tier = importance_for_lookups(counts.get((row["user_id"], normalize_lookup_word(row["target"])), 0))
+        conn.execute("UPDATE srs_cards SET importance = ? WHERE id = ?", (tier, row["id"]))
 
 
 def record_word_lookup(
@@ -388,21 +391,40 @@ def record_word_lookup(
         conn.commit()
 
     # Only a newly counted lookup can auto-save, never a suppressed reopen after unstar.
-    if incremented and count >= min(t for t, _ in IMPORTANCE_FROM_LOOKUPS):
+    if incremented and count >= AUTO_SAVE_LOOKUPS:
         with _connect() as conn:
             cards = conn.execute("SELECT id, target FROM srs_cards WHERE user_id = ? AND mode IN ('cloze', 'recognize')", (user_id,)).fetchall()
         if not any(normalize_lookup_word(c["target"]) == normalized for c in cards):
             add_note(user_id, sentence.strip() or word, translation_en=translation_en, translation_zh=translation_zh, modes=[],
                      targets=[{"text": word, "mode": "cloze", "exact_target": True}], auto_listen=False)
     with _connect() as conn:
-        if incremented:
-            _sync_word_importance(conn, user_id, word=normalized)
-        saved = any(normalize_lookup_word(r["target"]) == normalized for r in conn.execute(
-            "SELECT target FROM srs_cards WHERE user_id = ? AND mode IN ('cloze', 'recognize')", (user_id,)))
+        importance = _word_importance(conn, user_id, normalized)
+        # Saving gives 3 stars and the learner may choose another level; each 5 lookups after that adds one.
+        if incremented and 0 < importance < 5:
+            base = conn.execute("SELECT lookups FROM word_importance_base WHERE user_id = ? AND word = ?",
+                                (user_id, normalized)).fetchone()
+            if count - (int(base["lookups"]) if base else 0) >= LOOKUPS_PER_STAR:
+                importance += 1
+                for card_id in _word_card_ids(conn, user_id, normalized):
+                    conn.execute("UPDATE srs_cards SET importance = ? WHERE id = ?", (importance, card_id))
+                _mark_importance_change(conn, user_id, normalized)
         conn.commit()
-    return {"word": normalized, "count": count,
-            "importance": importance_for_lookups(count) if saved else 0,
-            "incremented": incremented}
+    return {"word": normalized, "count": count, "importance": importance, "incremented": incremented}
+
+
+def _word_card_ids(conn: sqlite3.Connection, user_id: int, normalized: str) -> list[str]:
+    return [r["id"] for r in conn.execute(
+        "SELECT id, target FROM srs_cards WHERE user_id = ? AND mode IN ('cloze', 'recognize')", (user_id,))
+        if normalize_lookup_word(r["target"]) == normalized]
+
+
+def _word_importance(conn: sqlite3.Connection, user_id: int, normalized: str) -> int:
+    """A saved word's importance (its highest card), or 0 when the word is not saved."""
+    ids = _word_card_ids(conn, user_id, normalized)
+    if not ids:
+        return 0
+    placeholders = ",".join("?" for _ in ids)
+    return conn.execute(f"SELECT MAX(importance) FROM srs_cards WHERE id IN ({placeholders})", ids).fetchone()[0]
 
 
 def target_in_sentence(sentence: str, target: str) -> bool:
@@ -714,12 +736,15 @@ def set_importance(user_id: int, card_ids: Iterable[str], importance: int) -> in
         return 0
     with _connect() as conn:
         placeholders = ",".join("?" for _ in ids)
-        # Word importance is derived; retain manual priority only for sentence/grammar cards.
+        # The learner's choice, for word cards too; the 5-lookup climb restarts from here.
         updated = conn.execute(
-            f"UPDATE srs_cards SET importance = ? WHERE user_id = ? AND id IN ({placeholders}) AND mode NOT IN ('cloze', 'recognize')",
+            f"UPDATE srs_cards SET importance = ? WHERE user_id = ? AND id IN ({placeholders})",
             (_clamp_importance(importance), user_id, *ids),
         ).rowcount
-        updated += _sync_word_importance(conn, user_id, ids)
+        for row in conn.execute(
+                f"SELECT DISTINCT target FROM srs_cards WHERE user_id = ? AND mode IN ('cloze', 'recognize') AND id IN ({placeholders})",
+                (user_id, *ids)).fetchall():
+            _mark_importance_change(conn, user_id, normalize_lookup_word(row["target"]))
         conn.commit()
     return updated
 
@@ -829,8 +854,12 @@ def add_note(
             if text and mode in ("cloze", "recognize", "grammar"):
                 importance = _clamp_importance(target.get("importance", DEFAULT_IMPORTANCE))
                 if mode in ("cloze", "recognize"):
-                    row = conn.execute("SELECT count FROM word_lookup_counts WHERE user_id = ? AND word = ?", (user_id, normalize_lookup_word(text))).fetchone()
-                    importance = importance_for_lookups(row["count"] if row else 0)
+                    # A word already in the deck keeps its importance; a newly saved word starts at 3.
+                    key = normalize_lookup_word(text)
+                    importance = _word_importance(conn, user_id, key)
+                    if not importance:
+                        importance = DEFAULT_IMPORTANCE
+                        _mark_importance_change(conn, user_id, key)
                 wanted.append((mode, text, _clean_meta(target.get("meta")), importance))
 
         if auto_listen and has_cloze and sentence_word_count(clean_sentence) <= 25:

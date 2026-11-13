@@ -27,7 +27,7 @@ class ElisionKeysTests(unittest.TestCase):
             for i, surface in enumerate(("l'homme", "homme", "l’homme")):
                 result = srs.record_word_lookup(1, surface, now=now + datetime.timedelta(seconds=i * 6), sentence="Il voit l'homme ici.")
             self.assertEqual(srs.lookup_counts(1), {"homme": 3})
-            self.assertEqual(result["importance"], 4)
+            self.assertEqual(result["importance"], 3)
             cards = srs.list_cards(1)
             self.assertEqual(len(cards), 1)
             self.assertEqual(cards[0]["target"], "l’homme")
@@ -167,7 +167,8 @@ class ElisionMigrationTests(unittest.TestCase):
             favorite = next(r for r in self.snapshot("word_favorites") if r["word"] == key)
             self.assertEqual(favorite["created_at"], min(r["first_looked_at"] for r in source))
         self.assertEqual(len(self.snapshot("srs_cards")), len(cards))
-        self.assertTrue(all(r["importance"] == 5 for r in self.snapshot("srs_cards")))
+        # homme's merged count is 1 + 2 + 3 = 6 lookups: the 5-9 tier.
+        self.assertTrue(all(r["importance"] == 4 for r in self.snapshot("srs_cards")))
         self.assertEqual([{k: v for k, v in r.items() if k != "importance"} for r in cards],
                          [{k: v for k, v in r.items() if k != "importance"}
                           for r in self.snapshot("srs_cards")])

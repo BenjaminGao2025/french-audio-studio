@@ -7,6 +7,24 @@ export const RELEASES = [
   {
     version: APP_VERSION,
     date: "2026-11-12",
+    changes: [
+      "Calmer Study page: one row for sentence navigation and More, quiet audio controls, Add to review as the main action.",
+      "Clear two-level tabs, and compact icon actions on each step.",
+      "The sidebar logo no longer touches the top edge.",
+    ],
+  },
+  {
+    version: "1.3.7",
+    date: "2026-11-12",
+    changes: [
+      "Saving a word gives it 3 stars. Tap the stars to choose 2–5; every 5 more lookups add a star. Existing words were recalculated once from their lookups.",
+      "Word card section titles stand out from their content.",
+      "Add a note with ⌘ Enter (Ctrl Enter on Windows).",
+    ],
+  },
+  {
+    version: "1.3.6",
+    date: "2026-11-12",
     changes: ["Steps and Step by step open first. Save individual steps for review.", "Compact word-by-word layout, phrase-specific context, and single audio playback.", "Answer checking splits words at punctuation, so a missing space cannot shift later words. The marks and score on screen now always match the saved result."],
   },
   {

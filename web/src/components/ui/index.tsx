@@ -10,7 +10,7 @@ import {
 import { createPortal } from "react-dom";
 import { ChevronRight, Loader2, Star, X } from "lucide-react";
 import { cn } from "cn";
-import { importanceFor, importanceLabel } from "../../lib/lookup";
+import { MIN_CHOSEN_IMPORTANCE, importanceFor, importanceLabel } from "../../lib/lookup";
 import { Button } from "./button";
 import {
   Dialog as ShadDialog,
@@ -350,22 +350,33 @@ export function Popover({
   );
 }
 
-export function Importance({ count, saved = false, lookups = "inline" }: { count: number; saved?: boolean; lookups?: "inline" | "muted" }) {
-  const n = importanceFor(count, saved);
+/** Importance stars. `value` is the stored level (else derived from lookups); `onChange` makes 2-5 choosable. */
+export function Importance({ count, saved = false, value, onChange, lookups = "inline" }: { count: number; saved?: boolean; value?: number; onChange?: (level: number) => void; lookups?: "inline" | "muted" }) {
+  const n = value ?? importanceFor(count, saved);
   const times = `${count} ${count === 1 ? "lookup" : "lookups"}`;
+  const star = (i: number) => <Star data-filled={i <= n} className={cn("size-4", i <= n ? "fill-current text-foreground" : "text-muted-foreground")} />;
   return (
-    <p className="flex flex-nowrap items-center gap-2">
-      <span className="inline-flex items-center gap-1" aria-hidden>
-        {[1, 2, 3, 4, 5].map((i) => (
-          <Star key={i} data-filled={i <= n} className={cn("size-4", i <= n ? "fill-current text-foreground" : "text-muted-foreground")} />
-        ))}
-      </span>
+    <div className="flex flex-wrap items-center gap-x-2">
+      {onChange ? (
+        <span role="radiogroup" aria-label="Importance" className="inline-flex items-center">
+          {[1, 2, 3, 4, 5].map((i) => i < MIN_CHOSEN_IMPORTANCE ? (
+            <span key={i} className="inline-flex size-11 items-center justify-center" aria-hidden>{star(i)}</span>
+          ) : (
+            <Button key={i} type="button" variant="ghost" size="icon" role="radio" aria-checked={i === n} aria-label={`Importance ${i} out of 5`}
+              className="size-11" onClick={() => i !== n && onChange(i)}>{star(i)}</Button>
+          ))}
+        </span>
+      ) : (
+        <span className="inline-flex items-center gap-1" aria-hidden>
+          {[1, 2, 3, 4, 5].map((i) => <span key={i}>{star(i)}</span>)}
+        </span>
+      )}
       <span className="text-sm text-muted-foreground">
-        <span className="sr-only">{importanceLabel(count, saved)}</span>
+        <span className="sr-only">{importanceLabel(count, saved, value)}</span>
         <span aria-hidden>{lookups === "muted" ? times : `Importance ${n}/5`}</span>
         {lookups !== "muted" && <span className="ml-2 text-xs text-muted-foreground">{times}</span>}
       </span>
-    </p>
+    </div>
   );
 }
 

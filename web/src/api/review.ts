@@ -131,6 +131,7 @@ export function toLibrary(cards: ServerCard[]): { sentences: LibSentence[]; card
         mastered: c.archived,
         favorite: false,
         lookups: 0,
+        importance: c.importance,
         saved: true,
         due: c.due,
         meaning: meta.meaning_zh || meta.meaning_en || c.note?.translation_zh || c.note?.translation_en || "",
@@ -241,6 +242,24 @@ export async function setFavorite(text: string, favorite: boolean): Promise<void
   } catch {
     set((s) => ({ favorites: { ...s.favorites, [k]: before } }));
     announce("Couldn’t save the favorite. Nothing changed.", true);
+  }
+}
+
+/** The learner's importance for a saved word: every card of the word gets it. */
+export async function setWordImportance(word: string, importance: number): Promise<void> {
+  const key = lookupKey(word);
+  const isWord = (c: LibCard) => c.mode === "cloze" || c.mode === "recognize" || (!c.mode && c.kind === "Fill-in");
+  const before = new Map(get().cards.filter((c) => isWord(c) && lookupKey(c.word ?? "") === key).map((c) => [c.id, c.importance]));
+  if (!before.size) return;
+  const apply = (value: (id: string) => number | undefined) =>
+    set((s) => ({ cards: s.cards.map((c) => (before.has(c.id) ? { ...c, importance: value(c.id) } : c)) }));
+  apply(() => importance);
+  try {
+    await apiFetch("/api/srs/importance", { body: { card_ids: [...before.keys()], importance } });
+    announce(`Importance set to ${importance} out of 5.`);
+  } catch {
+    apply((id) => before.get(id));
+    announce("Couldn’t save the importance. Nothing changed.", true);
   }
 }
 

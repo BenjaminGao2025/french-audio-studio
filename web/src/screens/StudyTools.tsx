@@ -10,7 +10,6 @@ import { gradeFeedback } from "../lib/feedback";
 import { build, FrText, type FrPick } from "../components/FrText";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger, Textarea } from "../components/ui";
 import { Toggle } from "../components/ui/toggle";
-import { ToggleGroup, ToggleGroupItem } from "../components/ui/toggle-group";
 import { StudyRecorder } from "../components/StudyRecorder";
 import { Button } from "../components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
@@ -28,32 +27,31 @@ export function StudyNavigation({ value, onChange }: { value: Tab; onChange: (ta
   const group = GROUPS.find((g) => g.tabs.some((t) => t.id === value)) ?? GROUPS[0];
   memory.current[group.id] = value;
   return (
-    <div className="flex flex-col gap-2">
-      <ToggleGroup
-        type="single"
-        variant="outline"
-        className="w-full"
-        aria-label="Tool group"
+    <div className="flex flex-col gap-3">
+      <Tabs
         value={group.id}
         onValueChange={(id) => {
           if (!id || id === group.id) return;
           onChange(memory.current[id] ?? GROUPS.find((g) => g.id === id)!.tabs[0].id);
         }}
       >
-        {GROUPS.map((g) => (
-          <ToggleGroupItem key={g.id} value={g.id} className="flex-1">
-            {g.title}
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
-      {group.id !== "check" && <Tabs value={value} onValueChange={(next) => onChange(next as Tab)}><TabsList aria-label={group.title} className="h-auto max-w-full flex-wrap justify-start">{(group.tabs.map((t) => ({ value: t.id, label: t.label }))).map((t) => (<TabsTrigger key={t.value} id={`learn-tab-${t.value}`} value={t.value}>{t.label}</TabsTrigger>))}</TabsList></Tabs>}
+        {/* Labels wrap rather than overlap on a 320 px screen. */}
+        <TabsList aria-label="Tool group" className="grid h-auto w-full grid-cols-3 items-stretch group-data-horizontal/tabs:h-auto">
+          {GROUPS.map((g) => (
+            <TabsTrigger key={g.id} id={`learn-group-${g.id}`} value={g.id} className="h-auto min-h-8 whitespace-normal py-1.5 leading-tight">
+              {g.title}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+      {group.id !== "check" && <Tabs value={value} onValueChange={(next) => onChange(next as Tab)}><TabsList variant="line" aria-label={group.title} className="h-auto max-w-full flex-wrap justify-start">{(group.tabs.map((t) => ({ value: t.id, label: t.label }))).map((t) => (<TabsTrigger key={t.value} id={`learn-tab-${t.value}`} value={t.value}>{t.label}</TabsTrigger>))}</TabsList></Tabs>}
     </div>
   );
 }
 
 export function StudyCheckTabs({ value, onChange }: { value: Tab; onChange: (tab: Tab) => void }) {
   return <Tabs value={value} onValueChange={(next) => onChange(next as Tab)}>
-    <TabsList aria-label="Check yourself" className="h-8">
+    <TabsList variant="line" aria-label="Check yourself" className="h-8">
       {GROUPS[2].tabs.map(t => <TabsTrigger key={t.id} id={`learn-tab-${t.id}`} value={t.id} className="px-2 text-xs sm:text-sm">{t.label}</TabsTrigger>)}
     </TabsList>
   </Tabs>;

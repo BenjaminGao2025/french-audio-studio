@@ -55,7 +55,9 @@ describe.each(["Recall", "Dictation"] as const)("%s exercise layout", kind => {
         </>);
       });
       const toolbar = host.querySelector('[aria-label="Exercise toolbar"]')!;
-      expect(host.querySelectorAll('[role="tablist"]')).toHaveLength(standalone ? 0 : 1);
+      // The Tool group tablist sits above the exercise; only the Check yourself tabs belong to the toolbar.
+      expect(host.querySelectorAll('[role="tablist"][aria-label="Tool group"]')).toHaveLength(standalone ? 0 : 1);
+      expect(host.querySelectorAll('[role="tablist"]:not([aria-label="Tool group"])')).toHaveLength(standalone ? 0 : 1);
       expect(Boolean(toolbar.querySelector('[role="tablist"]'))).toBe(!standalone);
       expect(toolbar.className.includes("justify-between")).toBe(!standalone);
       if (standalone) {

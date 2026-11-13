@@ -2,8 +2,8 @@ import { loadLibrary } from "./review";
 /* Word lookups: the offline dictionary entry (routers/tutor.py) and the per-user lookup count (routers/srs.py). */
 import { useSyncExternalStore } from "react";
 import { apiFetch } from "./client";
-import { set } from "../state/store";
-import { lookupKey } from "../lib/lookup";
+import { get, set } from "../state/store";
+import { lookupKey, wordImportance } from "../lib/lookup";
 
 export interface DictionaryEntry {
   token: string;
@@ -75,7 +75,8 @@ export async function recordLookup(word: string, context?: { fr: string; en: str
   counts = { ...counts, [lookupKey(word)]: res.count };
   listeners.forEach((l) => l());
   set(s => ({ lookups: { ...s.lookups, [lookupKey(word)]: { count: res.count, lastCounted: null } } }));
-  if (res.incremented && res.importance >= 4) await loadLibrary(true);
+  // A counted lookup can save the word (3rd) or raise its importance (5th, 10th): refresh the deck when it did.
+  if (res.incremented && res.importance !== wordImportance(get().cards, word)) await loadLibrary(true);
   return res;
 }
 

@@ -53,9 +53,21 @@ let host: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
 const wait = (ms: number) => act(() => new Promise((r) => setTimeout(r, ms)));
 const findButton = (text: string): HTMLButtonElement => {
-  const b = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((x) => x.textContent?.includes(text));
+  const b = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((x) => x.textContent?.includes(text) || x.getAttribute("aria-label") === text);
   if (!b) throw new Error(`No button with "${text}"`);
   return b;
+};
+/** Opens the sentence header's More menu and returns its items. */
+const openMore = async (): Promise<HTMLElement[]> => {
+  const trigger = host.querySelector<HTMLButtonElement>('button[aria-label="More sentence actions"]');
+  if (!trigger) throw new Error("No More sentence actions button");
+  await act(async () => trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+  return Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]'));
+};
+const menuItem = (items: HTMLElement[], text: string): HTMLElement => {
+  const item = items.find((x) => x.textContent?.trim() === text);
+  if (!item) throw new Error(`No menu item "${text}"`);
+  return item;
 };
 const headerWord = (word: string): HTMLElement => {
   const w = Array.from(host.querySelectorAll<HTMLElement>(".sentence-fr .fr-word")).find((x) => x.dataset.word === word);
@@ -388,7 +400,34 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(importance.querySelectorAll('[data-filled="true"]')).toHaveLength(0);
     expect(importance.querySelectorAll("svg.lucide-star")).toHaveLength(5);
     expect(importance.textContent).toContain("1 lookup");
-    expect(importance.textContent).toContain("Importance, 0 out of 5, based on 1 lookup.");
+    expect(importance.textContent).toContain("Importance, 0 out of 5. Looked up 1 time.");
+    // Not saved yet: nothing to rate, so the stars are not buttons.
+    expect(importance.querySelector('[role="radio"]')).toBeNull();
+  });
+
+  it("saves a word with 3 stars, lets the learner choose 2-5, and adds a star every 5 lookups after that", async () => {
+    fake.lookups.madame = 6;
+    await act(async () => root.render(<WordPanel sentence={SENTENCE} text="madame" onClose={() => {}} />));
+    await wait(150);
+    expect(host.querySelector('[aria-label="Saved"]')).toBeTruthy();
+    expect(host.querySelectorAll('.wp-importance [data-filled="true"]')).toHaveLength(3); // auto-saved at the 7th lookup
+    const radios = host.querySelectorAll<HTMLButtonElement>('.wp-importance [role="radio"]');
+    expect([...radios].map(r => r.getAttribute("aria-label"))).toEqual([2, 3, 4, 5].map(i => `Importance ${i} out of 5`));
+    expect(radios[1].getAttribute("aria-checked")).toBe("true");
+    await act(async () => radios[0].click());
+    await wait(50);
+    expect(host.querySelectorAll('.wp-importance [data-filled="true"]')).toHaveLength(2);
+    const call = fake.calls.filter(c => c.path === "/api/srs/importance").at(-1)!;
+    expect(call.body).toMatchObject({ importance: 2 });
+    expect(fake.srs.cards.filter(c => c.target === "madame").every(c => c.importance === 2)).toBe(true);
+    const filled: number[] = [];
+    for (let i = 0; i < 5; i++) { // lookups 8-12, each outside the repeat window
+      fake.lookupLast.madame = 0;
+      await act(async () => { await lookupApi.recordLookup("madame", SENTENCE); });
+      await wait(20);
+      filled.push(host.querySelectorAll('.wp-importance [data-filled="true"]').length);
+    }
+    expect(filled).toEqual([2, 2, 2, 2, 3]);
   });
 
   it("fills the deck star and three stars when saved", async () => {
@@ -407,7 +446,7 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(host.querySelector(".wp-importance")?.textContent).toContain("1 lookup");
   });
 
-  it.each([[2, 4], [4, 5]])("auto-saves on the next lookup after %i and shows %i stars", async (previous, stars) => {
+  it.each([[2, 3], [4, 3], [9, 3]])("auto-saves on the next lookup after %i and shows %i stars", async (previous, stars) => {
     fake.lookups.madame = previous;
     await act(async () => root.render(<WordPanel sentence={SENTENCE} text="madame" onClose={() => {}} />));
     await wait(150);
@@ -511,6 +550,31 @@ describe("Task B — Study word card, selection and steps", () => {
     await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Component words"] button')!.click());
     await wait(100);
     expect(fake.calls.filter(c => c.path === "/api/srs/lookups" && c.method === "POST").map(c => ({ word: (c.body as { word: string }).word }))).toEqual([{ word: "machine à laver" }, { word: "machine" }]);
+  });
+
+  it("adds a note with ⌘ Enter or Ctrl Enter, and plain Enter stays a new line", async () => {
+    await act(async () => root.render(<WordPanel sentence={SENTENCE} text="madame" onClose={() => {}} />));
+    await wait(100);
+    await act(async () => findButton("Notes").click());
+    await wait(100);
+    const area = host.querySelector<HTMLTextAreaElement>('[aria-label="Note text"]')!;
+    const type = async (value: string) => act(async () => { Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(area, value); area.dispatchEvent(new Event("input", { bubbles: true })); });
+    const press = async (init: KeyboardEventInit) => act(async () => { area.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, ...init })); });
+    await type("mépris\nscorn");
+    await press({});
+    await wait(100);
+    expect(fake.notes).toHaveLength(0);
+    await press({ metaKey: true });
+    await wait(150);
+    expect(fake.notes.map(n => n.text)).toEqual(["mépris\nscorn"]);
+    expect(area.value).toBe("");
+    await type("second");
+    await press({ ctrlKey: true });
+    await wait(150);
+    expect(fake.notes.map(n => n.text)).toEqual(["mépris\nscorn", "second"]);
+    await press({ metaKey: true }); // empty: nothing is sent
+    await wait(100);
+    expect(fake.notes).toHaveLength(2);
   });
 
   it("adds, edits and deletes multiple notes, and asks AI with sentence context", async () => {
@@ -630,16 +694,18 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(get().player!.texts).toEqual([STEP1]);
   });
 
-  it("no Playback scope control or 'Current step' concept is rendered", () => {
+  it("no Playback scope control or 'Current step' concept is rendered", async () => {
     const text = host.textContent ?? "";
     expect(text).not.toContain("Playback scope");
     expect(text).not.toContain("Current step");
     expect(document.querySelector('[aria-label="Playback scope"]')).toBeNull();
-    expect(findButton("Play all sentences")).toBeTruthy();
     expect(findButton("Play all steps")).toBeTruthy();
     expect(findButton("Play step 2")).toBeTruthy();
     expect(Array.from(document.querySelectorAll("button")).some((b) => b.textContent?.includes("Practise step"))).toBe(false);
     expect(Array.from(document.querySelectorAll("button")).some((b) => b.textContent === "Previous step" || b.textContent === "Next step")).toBe(false);
+    // Play all sentences moved from the player bar into the sentence header's More menu.
+    expect(Array.from(document.querySelectorAll("button")).some((b) => b.textContent?.includes("Play all sentences"))).toBe(false);
+    expect(menuItem(await openMore(), "Play all sentences")).toBeTruthy();
   });
 
   it("dictionary errors retry the real source and never request generated roots", async () => {
@@ -706,7 +772,7 @@ it.each(["en", "zh"])("uses exact phrase context in %s and clears it on a long p
 it("Steps Review saves one listen card, shares state and removes it", async () => {
   await act(async () => set(s => ({study:{...s.study,sentences:[{...SENTENCE, steps:[SENTENCE.steps[0], SENTENCE.steps[0]]}]}})));
   const row = host.querySelector("ol li")!;
-  const review = () => [...row.querySelectorAll("button")].find(b => /^(Review|In review)$/.test(b.textContent!))!;
+  const review = () => [...row.querySelectorAll("button")].find(b => /^(Review|In review)$/.test(b.getAttribute("aria-label") ?? ""))!;
   await act(async () => { review().click(); await new Promise(r => setTimeout(r, 100)); });
   const posts = fake.calls.filter(c => c.path === "/api/srs/notes");
   expect(posts).toHaveLength(1);
@@ -735,4 +801,80 @@ it("removes a pre-existing step listen card using lookup metadata before the lib
   await act(async () => { button.click(); await new Promise(r => setTimeout(r, 100)); });
   expect(button.getAttribute("aria-pressed")).toBe("false");
   expect(fake.srs.cards.filter(c => c.note?.sentence === STEP0 && c.mode === "listen")).toHaveLength(0);
+});
+
+describe("1.3.8 Study layout", () => {
+  const SECOND: StudySentence = { ...SENTENCE, id: "s-second", fr: "Nous avons pris un café.", en: "We had a coffee.", segments: [{ t: "Nous avons pris un café." }] };
+  const mouseDown = (el: Element) => act(async () => el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 })));
+  const tab = (list: Element, name: string) => {
+    const t = Array.from(list.querySelectorAll<HTMLElement>('[role="tab"]')).find((x) => x.textContent === name);
+    if (!t) throw new Error(`No tab "${name}"`);
+    return t;
+  };
+
+  it("the sentence header More menu plays and pauses all sentences like the old bar button", async () => {
+    await act(async () => set((s) => ({ study: { ...s.study, sentences: [SENTENCE, SECOND], index: 0 } })));
+    const header = host.querySelector("[data-sentence-header]")!;
+    expect(header.textContent).toContain("Sentence 1 of 2");
+    const prev = header.querySelector('button[aria-label="Previous sentence"]')!;
+    expect(prev.getAttribute("aria-disabled")).toBe("true");
+    expect(prev.textContent).toBe("This is the first sentence.");
+    expect(header.querySelector('button[aria-label="Next sentence"]')?.getAttribute("aria-disabled")).toBeNull();
+    expect(host.querySelector("[data-sentence-player]")?.querySelector('button[aria-label="Next sentence"]')).toBeNull();
+
+    await act(async () => menuItem(await openMore(), "Play all sentences").click());
+    expect(get().player?.owner.label).toBe("Study audio · All sentences");
+    expect(get().player?.texts).toEqual([FR, SECOND.fr]);
+    expect(get().player?.status).not.toBe("paused");
+
+    await act(async () => menuItem(await openMore(), "Pause all sentences").click());
+    expect(get().player?.status).toBe("paused");
+    expect(menuItem(await openMore(), "Play all sentences")).toBeTruthy();
+  });
+
+  it("level-1 navigation is a Tool group tablist and each group remembers its sub-tab", async () => {
+    const groups = host.querySelector('[role="tablist"][aria-label="Tool group"]')!;
+    expect(groups).toBeTruthy();
+    expect(Array.from(groups.querySelectorAll('[role="tab"]')).map((t) => t.textContent)).toEqual(["Understand", "Listen & speak", "Check yourself"]);
+    expect(tab(groups, "Listen & speak").getAttribute("aria-selected")).toBe("true");
+    expect(document.getElementById("learn-panel")?.getAttribute("aria-labelledby")).toBe("learn-tab-steps");
+    expect(document.getElementById("learn-tab-steps")?.getAttribute("role")).toBe("tab");
+
+    await mouseDown(tab(groups, "Understand"));
+    expect(get().study.tab).toBe("words");
+    await mouseDown(tab(host.querySelector('[role="tablist"][aria-label="Understand"]')!, "Grammar"));
+    expect(get().study.tab).toBe("grammar");
+    await mouseDown(tab(groups, "Listen & speak"));
+    expect(get().study.tab).toBe("steps");
+    await mouseDown(tab(groups, "Understand"));
+    expect(get().study.tab).toBe("grammar");
+    expect(tab(groups, "Understand").getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("a step row exposes compact icon actions with their names and state", async () => {
+    const row = host.querySelector("ol li")!;
+    const byName = (name: string) => row.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`);
+    for (const name of ["Play step 1", "Repeat this step", "Say this step", "Review"]) {
+      expect(byName(name)?.textContent).toBe("");
+      expect(byName(name)?.getAttribute("data-variant")).toBe("ghost");
+    }
+    expect(byName("Repeat this step")?.getAttribute("aria-pressed")).toBe("false");
+    expect(byName("Say this step")?.getAttribute("aria-expanded")).toBe("false");
+    expect(byName("Review")?.getAttribute("aria-pressed")).toBe("false");
+
+    await act(async () => byName("Play step 1")!.click());
+    expect(get().player?.texts).toEqual([STEP0]);
+    expect(byName("Pause step 1")).toBeTruthy();
+
+    await act(async () => byName("Repeat this step")!.click());
+    expect(get().player?.repeat).toBe(true);
+    expect(byName("Repeat this step")?.getAttribute("aria-pressed")).toBe("true");
+
+    await act(async () => byName("Say this step")!.click());
+    expect(byName("Close recorder")?.getAttribute("aria-expanded")).toBe("true");
+    expect(row.querySelector('[aria-label="Step shadowing"]')).toBeTruthy();
+
+    await act(async () => { byName("Review")!.click(); await new Promise((r) => setTimeout(r, 100)); });
+    expect(byName("In review")?.getAttribute("aria-pressed")).toBe("true");
+  });
 });

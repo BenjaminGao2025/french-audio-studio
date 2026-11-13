@@ -409,14 +409,15 @@ describe("Task C — Saved as a table", () => {
     expect(store.get().cards.map(c => c.id)).toEqual(["keep-listen", "keep-speak", "keep-other-word"]);
     expect(host.querySelector('[data-card-id="star-word"]')).toBeNull();
   });
-  it("uses deck membership and the 3/5 lookup thresholds for dots and filters", async () => {
+  it("shows each word's stored importance (lookup tier or the learner's choice) and filters on it", async () => {
     fake.delay = 0;
     const template = fake.srs.cards[0];
     fake.srs.cards = [
-      ...["chat", "chien", "oiseau"].map((target, i) => ({ ...template, id: `tier-${i}`, mode: "cloze" as const, target, archived: false })),
-      { ...template, id: "recall-fallback", mode: "recognize", target: "ancien", archived: false },
+      ...([["chat", 3], ["chien", 4], ["oiseau", 5]] as const).map(([target, importance], i) => ({ ...template, id: `tier-${i}`, mode: "cloze" as const, target, importance, archived: false })),
+      { ...template, id: "recall-fallback", mode: "recognize", target: "ancien", importance: 5, archived: false },
     ];
-    fake.lookups = { chat: 1, chien: 3, oiseau: 5, ancien: 10 };
+    // chien was looked up only twice but the learner rated it 4; the stored value wins.
+    fake.lookups = { chat: 1, chien: 2, oiseau: 12, ancien: 10 };
     await act(async () => { store.resetDemo(); await loadLibrary(true); root.render(<ReviewScreen sub="saved" />); });
     await wait(50);
     for (const [id, dots] of [["tier-0", 3], ["tier-1", 4], ["tier-2", 5], ["recall-fallback", 5]] as const) {
