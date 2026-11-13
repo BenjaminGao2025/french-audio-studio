@@ -253,7 +253,6 @@ function useAllSentences() {
 function StudyPlayer({ practising, addReview }: { practising: boolean; addReview: ReactNode }) {
   const study = useApp((s) => s.study);
   const p = useApp((s) => s.player);
-  const addRef = useRef<HTMLDivElement>(null);
   const label = `Sentence ${study.index + 1}`;
   const sentenceLabel = SENTENCE_LABEL(study.index + 1);
   // Only this header's own playback drives its controls; a step / all-steps playback is separate.
@@ -312,8 +311,9 @@ function StudyPlayer({ practising, addReview }: { practising: boolean; addReview
             <TooltipContent>Repeat</TooltipContent>
           </Tooltip>
         </div>
-        <div ref={addRef} className="ml-auto hidden shrink-0 @[600px]:block">{addReview}</div>
-        <div className="ml-auto shrink-0 @[600px]:hidden">
+        {/* The page's one primary action stays visible at every width. */}
+        <div className="ml-auto shrink-0">{addReview}</div>
+        <div className="shrink-0 @[600px]:hidden">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button type="button" variant="ghost" size="icon" aria-label="More playback controls">
@@ -331,7 +331,6 @@ function StudyPlayer({ practising, addReview }: { practising: boolean; addReview
               </DropdownMenuRadioGroup>
               <DropdownMenuSeparator />
               <DropdownMenuCheckboxItem checked={repeatOn} onCheckedChange={() => toggleRepeat()}>Repeat</DropdownMenuCheckboxItem>
-              <DropdownMenuItem onSelect={() => addRef.current?.querySelector("button")?.click()}>Add to review</DropdownMenuItem>
               {errored && <DropdownMenuItem onSelect={() => retryPlayback()}>Retry</DropdownMenuItem>}
             </DropdownMenuContent>
           </DropdownMenu>

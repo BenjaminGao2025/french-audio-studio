@@ -35,9 +35,10 @@ export function StudyNavigation({ value, onChange }: { value: Tab; onChange: (ta
           onChange(memory.current[id] ?? GROUPS.find((g) => g.id === id)!.tabs[0].id);
         }}
       >
-        <TabsList aria-label="Tool group" className="grid w-full grid-cols-3">
+        {/* Labels wrap rather than overlap on a 320 px screen. */}
+        <TabsList aria-label="Tool group" className="grid h-auto w-full grid-cols-3 items-stretch group-data-horizontal/tabs:h-auto">
           {GROUPS.map((g) => (
-            <TabsTrigger key={g.id} id={`learn-group-${g.id}`} value={g.id}>
+            <TabsTrigger key={g.id} id={`learn-group-${g.id}`} value={g.id} className="h-auto min-h-8 whitespace-normal py-1.5 leading-tight">
               {g.title}
             </TabsTrigger>
           ))}
