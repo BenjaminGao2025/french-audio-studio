@@ -667,6 +667,34 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(document.querySelector(".wp-headword")?.textContent).toBe("madame");
   });
 
+  it("the desktop word card can be dragged by its grip and moved with the arrow keys", async () => {
+    await act(async () => headerWord("madame").click());
+    const grip = document.querySelector<HTMLButtonElement>('button[aria-label="Move word card"]')!;
+    const card = document.querySelector<HTMLElement>('[data-slot="popover-content"]')!;
+    expect(grip).toBeTruthy();
+    // jsdom has no layout: place the card at (200, 200), 400×300, moved by its translate.
+    card.getBoundingClientRect = () => {
+      const [x = 0, y = 0] = card.style.translate.split(" ").map(parseFloat);
+      return new DOMRect(200 + x, 200 + y, 400, 300);
+    };
+    const pointer = (type: string, x: number, y: number) => grip.dispatchEvent(new MouseEvent(type, { bubbles: true, button: 0, clientX: x, clientY: y }));
+    await act(async () => { pointer("pointerdown", 100, 100); });
+    await act(async () => { pointer("pointermove", 150, 140); });
+    await act(async () => { pointer("pointerup", 150, 140); });
+    expect(card.style.translate).toBe("50px 40px");
+    // After the drag ends, moving the pointer does nothing.
+    await act(async () => { pointer("pointermove", 300, 300); });
+    expect(card.style.translate).toBe("50px 40px");
+    await act(async () => { grip.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })); });
+    expect(card.style.translate).toBe("50px 64px");
+    // The card stays 8px inside the window (jsdom: 1024×768).
+    await act(async () => { pointer("pointerdown", 0, 0); });
+    await act(async () => { pointer("pointermove", 5000, -5000); });
+    await act(async () => { pointer("pointerup", 5000, -5000); });
+    expect(card.style.translate).toBe(`${window.innerWidth - 8 - 600}px -192px`);
+    expect(document.querySelector(".wp-headword")?.textContent).toBe("madame");
+  });
+
   it("a second tap on the same word keeps the card open, and a tap outside the text still closes it", async () => {
     const tap = async (el: Element) => {
       await act(async () => {
