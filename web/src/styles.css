@@ -20,8 +20,10 @@
   --foreground: #2a2622;
   --card: #fbf8f2;
   --card-foreground: #2a2622;
-  --popover: #fbf8f2;
+  --popover: #fffdf9;
   --popover-foreground: #2a2622;
+  --shadow-pop: 0 10px 28px -8px rgb(42 38 34 / 0.22), 0 2px 6px rgb(42 38 34 / 0.08);
+  --shadow-modal: 0 24px 56px -12px rgb(42 38 34 / 0.32), 0 4px 12px rgb(42 38 34 / 0.1);
   --primary: #2f4634;
   --primary-foreground: #f7f4ee;
   --secondary: #e8e2d6;
@@ -103,8 +105,10 @@
   --text: #d5deea;
   --card: #1b2430;
   --card-foreground: #d5deea;
-  --popover: #1b2430;
+  --popover: #212b39;
   --popover-foreground: #d5deea;
+  --shadow-pop: 0 14px 36px -6px rgb(0 0 0 / 0.6), 0 2px 8px rgb(0 0 0 / 0.45);
+  --shadow-modal: 0 28px 64px -12px rgb(0 0 0 / 0.7), 0 4px 14px rgb(0 0 0 / 0.5);
   --primary: #91b5e6;
   --primary-foreground: #141a23;
   --secondary: #202b38;
