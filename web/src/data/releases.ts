@@ -8,6 +8,13 @@ export const RELEASES = [
     version: APP_VERSION,
     date: "2026-11-13",
     changes: [
+      "The app now records which screens you use, for how long, and its main buttons, so it can be improved around how you study. This stays on our own server for 180 days and never includes what you type (see Privacy).",
+    ],
+  },
+  {
+    version: "1.3.9",
+    date: "2026-11-13",
+    changes: [
       "Tapping the same word again keeps its word card open.",
       "A dictation or recall answer with every word right gets a short celebration.",
       "Open in History goes straight to the analysis in Study.",

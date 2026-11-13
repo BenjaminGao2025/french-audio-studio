@@ -25,6 +25,7 @@ import { Button } from "../components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
 import { ToggleGroup, ToggleGroupItem } from "../components/ui/toggle-group";
 import { cn } from "cn";
+import { slug, track } from "../lib/track";
 
 /* ---------------- session helpers ---------------- */
 
@@ -191,6 +192,7 @@ export function submitAnswer(key: string) {
       patchUI(key, qk, { phase: "graded" });
       const a = get().attempts.find((x) => x.id === attemptId)!;
       if (!a.answerKnown) gradeFeedback(r.correct);
+      track("check_answer", { screen: "exercise", kind: slug(String(kind)), correct: r.correct, answer_known: Boolean(a.answerKnown) });
       announce(a.answerKnown ? "Checked. Recorded as answer known." : r.correct ? "Correct." : `Not quite. ${plural(res.issues.length, "difference")}.`);
       if (!r.correct) requestAnimationFrame(() => document.getElementById(`ex-result-${key}`)?.focus());
     })

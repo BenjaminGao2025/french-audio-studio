@@ -38,6 +38,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Separator } from "../components/ui/separator";
 import { toast } from "sonner";
 import { cn } from "cn";
+import { track } from "../lib/track";
 
 /** Design reference states set this so Due today shows their sample queue instead of loading the learner's. */
 export const SAMPLE_QUEUE = "sample-queue";
@@ -467,6 +468,7 @@ function ReviewSession() {
   const reveal = (extra: Partial<ReviewUI> = {}) => {
     if (!card || revealed) return;
     patch({ revealed: true, ...extra });
+    track("reveal_answer", { screen: "review", mode });
     if (mode === "speak" || mode === "cloze" || mode === "grammar") sayFrench(cardSpeech(card));
   };
 
@@ -481,6 +483,7 @@ function ReviewSession() {
     const hintUsed = Boolean(u.hinted || u.hint);
     const sugg: 1 | 2 | 3 = !result.correct ? 1 : hintUsed ? 2 : 3;
     gradeFeedback(result.correct, { pronunciation: result.correct && typed });
+    track("check_answer", { screen: "review", mode, correct: result.correct, hint: hintUsed });
     patch({ revealed: true, result, suggested: sugg, answer: u.draft, emptyError: false });
     if (result.correct && typed) sayFrench(card.target, 1, "fr-CA-JeanNeural");
     announce(result.correct ? "Correct. Pick how well you remembered." : "Not quite. Pick how well you remembered.");

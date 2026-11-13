@@ -183,6 +183,12 @@ docker exec tts-service python scripts/prune_outputs.py --apply      # 执行（
 docker exec tts-service python scripts/backup_db.py --label manual  # 手动备份
 ```
 
+使用记录（第一方，只存在 `users.db` 的 `ui_events` 表，保留 180 天，不记录输入的文字）：
+
+```bash
+docker exec tts-service python scripts/usage_report.py --email you@example.com --days 30   # 页面时长、常用操作、漏斗、报错
+```
+
 请先检查预览并备份，再执行清理。`python auth_db.py --help` 查看密码、套餐、邀请码及候补名单等管理命令。
 
 ---

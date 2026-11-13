@@ -224,6 +224,7 @@ let seq = 0;
 function route(method: string, url: URL, body: Record<string, unknown>): Response {
   const p = url.pathname;
   if (p === "/api/auth/session") return new Response(null, { status: 204 });
+  if (p === "/api/events") return new Response(null, { status: 204 });
   if (p === "/api/dictation/items") {
     const id = `item-${++seq}`;
     fake.items.set(id, { sentence: String(body.sentence), build_up: (body.build_up as { fr: string }[]) ?? [] });

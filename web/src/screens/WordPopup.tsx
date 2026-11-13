@@ -27,6 +27,7 @@ import { Input } from "../components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent } from "../components/ui/popover";
 import { lookupKey, wordImportance, wordIsSaved } from "../lib/lookup";
 import { announce, get, patchStudy, sayFrench, useApp } from "../state/store";
+import { track } from "../lib/track";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger, Importance, Skeleton, Spinner, useAppWidth } from "../components/ui";
 import { Button } from "../components/ui/button";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "../components/ui/drawer";
@@ -138,6 +139,7 @@ function WordPanelContent({
       Math.abs(span[0] - sourceStart) < Math.abs(spans[best][0] - sourceStart) ? i : best, 0);
     setStack(prev => [...prev, { word, surface: word, occurrence: nextOccurrence }]);
     recordLookup(word, sentence).catch(() => undefined);
+    track("word_tap", { nested: true });
   };
   const french = (value: string, className = "text-sm") => <FrText text={value} className={className} onPick={p => drill(p.text)} />;
   const [dict, setDict] = useState<DictionaryEntry | null>(null);
@@ -211,6 +213,7 @@ function WordPanelContent({
     const openKey = JSON.stringify([sentence.id, text, wordIndex]);
     if (!compact && countedOpen.current !== openKey) {
       countedOpen.current = openKey;
+      track("word_tap", { nested: false });
       recordLookup(text, sentence).catch(() => undefined);
     }
     if (!compact && wordIndex !== undefined) pick(sentence.id, wordIndex);
@@ -381,6 +384,11 @@ export function Ask({ sentence, word }: { sentence: StudySentence; word: string 
 /** Desktop floats at the original selection; Radix handles collision, Escape and outside dismissal. */
 export function WordOverlay({ label, anchor, onClose, children }: { label: string; anchor?: HTMLElement; onClose: () => void; children: ReactNode }) {
   const desktop = useAppWidth() >= 768;
+  // Usage: how long a word card stays open (it stays mounted while the learner taps other words).
+  useEffect(() => {
+    const opened = Date.now();
+    return () => track("word_card_close", { seconds: Math.round((Date.now() - opened) / 1000) });
+  }, []);
   const focusWord = (event: Event) => { event.preventDefault(); requestAnimationFrame(() => document.querySelector<HTMLElement>(".word-card [data-autofocus]")?.focus()); };
   // A tap on French text picks a word itself; dismissing here first made a second tap on the same word close the card.
   const keepForWordTap = (event: Event) => { if (event.target instanceof Element && event.target.closest(".fr-text")) event.preventDefault(); };
