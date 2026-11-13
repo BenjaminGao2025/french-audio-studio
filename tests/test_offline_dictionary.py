@@ -45,6 +45,7 @@ class OfflineDictionaryTests(unittest.TestCase):
                 ("aller", "aller", "verb", "Verbe", "", "a.le", ["Se déplacer."], []),
                 ("manger", "manger", "verb", "Verbe", "", "mɑ̃.ʒe", ["Consommer un aliment."], []),
                 ("irons", "irons", "verb", "Forme de verbe", "", "i.ʁɔ̃", ["Forme de aller."], ["aller"]),
+                ("œil", "œil", "noun", "Nom commun", "m", "œj", ["Organe de la vue."], []),
             ]
             for row in rows:
                 conn.execute(
@@ -58,6 +59,20 @@ class OfflineDictionaryTests(unittest.TestCase):
                     ("réservé", "réservé", "ADJ", "m", "s", 2, ""),
                     ("au", "au", "ART:def", "m", "s", 100, ""),
                     ("vais", "aller", "VER", "", "", 50, "ind:pre:1s;"),
+                    ("tout", "tout", "ADV", "", "", 1639, ""),
+                    ("tout", "tout", "ADJ", "m", "s", 797, ""),
+                    ("tous", "tout", "ADJ", "m", "p", 916, ""),
+                    ("toute", "tout", "ADJ", "f", "s", 602, ""),
+                    ("toutes", "tout", "ADJ", "f", "p", 535, ""),
+                    ("touts", "tout", "NOM", "m", "p", 0.1, ""),
+                    ("facile", "facile", "ADJ", "", "s", 153, ""),
+                    ("faciles", "facile", "ADJ", "", "p", 10, ""),
+                    ("table", "table", "NOM", "f", "s", 341, ""),
+                    ("tables", "table", "NOM", "f", "p", 38, ""),
+                    ("oeil", "oeil", "NOM", "m", "s", 278, ""),
+                    ("oeils", "oeil", "NOM", "m", "p", 0.41, ""),
+                    ("yeux", "oeil", "NOM", "m", "p", 955, ""),
+                    ("réservée", "réserver", "VER", "f", "s", 5, "par:pas;"),
                 ],
             )
         self.env = patch.dict(os.environ, {"FRENCH_DICTIONARY_PATH": str(self.path), "ENGLISH_DICTIONARY_PATH": ""})
@@ -322,6 +337,46 @@ class OfflineDictionaryTests(unittest.TestCase):
             self.assertRaises(dictionary.DictionaryUnavailable),
         ):
             dictionary.lookup("manger")
+
+    def forms(self, word, pos=""):
+        result = dictionary.word_forms(word, pos)
+        return result and (result["lemma"], result["kind"],
+                           {row["gender"]: [(c["forms"], c["current"]) for c in row["cells"]] for row in result["rows"]})
+
+    def test_forms_table_marks_the_clicked_form(self):
+        dictionary._forms.cache_clear()
+        expected = {"m": [(["tout"], False), (["tous"], True)], "f": [(["toute"], False), (["toutes"], False)]}
+        self.assertEqual(self.forms("tous"), ("tout", "adjective", expected))
+        # An adverb or pronoun reading still shows the adjective family, never the rare noun "touts".
+        self.assertEqual(self.forms("Tous", "pronoun"), ("tout", "adjective", expected))
+        self.assertEqual(self.forms("facile"), ("facile", "adjective", {"mf": [(["facile"], True), (["faciles"], False)]}))
+        self.assertEqual(self.forms("réservée", "verb")[1], "past participle")
+
+    def test_forms_skip_plain_nouns_and_keep_irregular_ones(self):
+        dictionary._forms.cache_clear()
+        self.assertIsNone(self.forms("table"))
+        # Rare oeils is dropped beside yeux, and Lexique's oe spelling becomes œ.
+        self.assertEqual(self.forms("yeux"), ("œil", "noun", {"m": [(["œil"], False), (["yeux"], True)]}))
+        self.assertEqual(self.forms("œil")[2]["m"][0], (["œil"], True))
+        self.assertIsNone(self.forms("vais"))
+        self.assertIsNone(self.forms("unknownzzz"))
+
+    def test_forms_closed_determiners_follow_the_sentence_role(self):
+        self.assertEqual(self.forms("l’")[2], {"m": [(["le", "l'"], True), (["les"], False)], "f": [(["la", "l'"], True), (["les"], False)]})
+        self.assertEqual(self.forms("cet")[0:2], ("ce", "determiner"))
+        self.assertEqual(self.forms("notre")[2], {"mf": [(["notre"], True), (["nos"], False)]})
+        # Object pronoun les / leur and des (= de + les) get no determiner table.
+        self.assertIsNone(self.forms("les", "pronoun"))
+        self.assertIsNone(self.forms("leur", "pron"))
+        self.assertIsNone(self.forms("des"))
+
+    def test_api_lookup_carries_forms_only_when_there_are_some(self):
+        client = TestClient(tts_service.app)
+        headers = testenv.session_headers()
+        self.assertEqual(client.get("/api/lookup", params={"word": "tous"}, headers=headers).json()["forms"]["lemma"], "tout")
+        self.assertNotIn("forms", client.get("/api/lookup", params={"word": "aller"}, headers=headers).json())
+        with patch.dict(os.environ, {"FRENCH_DICTIONARY_PATH": str(self.path) + ".missing"}):
+            self.assertIsNone(dictionary.word_forms("tous"))
 
     def test_api_reads_without_upstream_credentials_or_generated_fallback(self):
         client = TestClient(tts_service.app)

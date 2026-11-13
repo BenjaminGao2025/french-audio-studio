@@ -330,3 +330,99 @@ def _lookup(path, inode, mtime, size, word, surface, pos):
             selection_version=SELECTION_VERSION,
         )
         return result
+
+
+# Forms table: how one word changes with gender (m/f) and number (singular/plural).
+# Lexique gives each of these determiners its own lemma, so their paradigms are listed here.
+CLOSED_FORMS = (
+    ("article", {"ms": ("le", "l'"), "fs": ("la", "l'"), "mp": ("les",), "fp": ("les",)}),
+    ("article", {"ms": ("un",), "fs": ("une",), "mp": ("des",), "fp": ("des",)}),
+    ("determiner", {"ms": ("ce", "cet"), "fs": ("cette",), "mp": ("ces",), "fp": ("ces",)}),
+    ("determiner", {"ms": ("mon",), "fs": ("ma", "mon"), "mp": ("mes",), "fp": ("mes",)}),
+    ("determiner", {"ms": ("ton",), "fs": ("ta", "ton"), "mp": ("tes",), "fp": ("tes",)}),
+    ("determiner", {"ms": ("son",), "fs": ("sa", "son"), "mp": ("ses",), "fp": ("ses",)}),
+    ("determiner", {"ms": ("notre",), "fs": ("notre",), "mp": ("nos",), "fp": ("nos",)}),
+    ("determiner", {"ms": ("votre",), "fs": ("votre",), "mp": ("vos",), "fp": ("vos",)}),
+    ("determiner", {"ms": ("leur",), "fs": ("leur",), "mp": ("leurs",), "fp": ("leurs",)}),
+    ("determiner", {"ms": ("quel",), "fs": ("quelle",), "mp": ("quels",), "fp": ("quelles",)}),
+    ("determiner", {"ms": ("aucun",), "fs": ("aucune",)}),
+)
+# "des" is usually de + les, and these readings never take the determiner tables.
+CLOSED_NO_TRIGGER = {"des"}
+NOT_DETERMINER = ("pron", "noun", "verb", "adv", "prep", "conj", "intj", "interj")
+INFLECTING = {"ADJ": "adjective", "NOM": "noun", "VER": "past participle"}
+
+
+def _table(lemma, kind, cells, word):
+    """Rows m / f (or one m & f row when both are the same), each with singular and plural forms."""
+    rows = [{"gender": g, "cells": [{"number": n, "forms": list(cells.get(g + n, ())),
+                                      "current": word in cells.get(g + n, ())} for n in "sp"]}
+            for g in "mf" if cells.get(g + "s") or cells.get(g + "p")]
+    if len(rows) == 2 and rows[0]["cells"] == rows[1]["cells"]:
+        rows = [dict(rows[0], gender="mf")]
+    if len({f for c in cells.values() for f in c}) < 2:
+        return None
+    return {"lemma": lemma, "kind": kind, "rows": rows}
+
+
+def word_forms(word: str, pos: str = ""):
+    """Gender / number forms of a clicked word from Lexique, or None. Never raises: it only adds to a lookup."""
+    word = normalize(word).replace("l’", "l'")
+    if not word or len(word) > 40 or " " in word:
+        return None
+    hint = canonical_pos(pos) if pos else ""
+    if word not in CLOSED_NO_TRIGGER and not hint.startswith(NOT_DETERMINER):
+        for kind, cells in CLOSED_FORMS:
+            if any(word in forms for forms in cells.values()):
+                return _table(cells["ms"][0], kind, cells, word)
+    p = index_path()
+    if not p:
+        return None
+    try:
+        st = p.stat()
+        return copy.deepcopy(_forms(str(p), st.st_ino, st.st_mtime_ns, st.st_size, word, hint))
+    except (OSError, sqlite3.Error, ValueError, KeyError, TypeError):
+        return None
+
+
+@functools.lru_cache(maxsize=2048)
+def _forms(path, inode, mtime, size, word, hint):
+    query = word.replace("œ", "oe")  # Lexique spells œil as oeil
+    with closing(sqlite3.connect(Path(path).as_uri() + "?mode=ro&immutable=1", uri=True)) as conn:
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA query_only=ON")
+        participle = lambda r: r["pos"] != "VER" or "par:pas" in (r["info"] or "")
+        rows = [r for r in conn.execute("SELECT * FROM lexique WHERE word=?", (query,))
+                if r["pos"] in INFLECTING and participle(r)]
+        if not rows:
+            return None
+        want = {"adj": "ADJ", "noun": "NOM", "verb": "VER"}.get(hint)
+        top = min(rows, key=lambda r: (bool(want) and r["pos"] != want, -float(r["frequency"] or 0)))
+        found = [r for r in conn.execute("SELECT * FROM lexique WHERE lemma=? AND pos=?", (top["lemma"], top["pos"]))
+                 if participle(r)]
+        # Lexique writes œ as oe (oeil, coeur); use the œ spelling when Wiktionnaire has it.
+        spelled = {}
+        for value in {r["word"] for r in found} | {top["lemma"]}:
+            ligature = value.replace("oe", "œ")
+            spelled[value] = ligature if "oe" in value and conn.execute(
+                "SELECT 1 FROM entries WHERE word=? LIMIT 1", (ligature,)).fetchone() else value
+    word = word.replace("oe", "œ") if spelled.get(word) == word.replace("oe", "œ") else word
+    cells: dict[str, list[tuple[float, str]]] = {}
+    for r in found:
+        form = spelled[r["word"]]
+        for g in (r["gender"],) if r["gender"] in ("m", "f") else ("m", "f"):
+            for n in (r["number"],) if r["number"] in ("s", "p") else ("s", "p"):
+                cells.setdefault(g + n, []).append((float(r["frequency"] or 0), form))
+    # Rare spellings (oeils next to yeux) are noise beside a common form in the same cell.
+    clean = {}
+    for key, items in cells.items():
+        items.sort(key=lambda x: -x[0])
+        best = items[0][0]
+        clean[key] = tuple(dict.fromkeys(f for freq, f in items if f == items[0][1] or freq >= max(1.0, best * 0.05)))
+    if top["pos"] == "NOM":
+        # A noun with one gender and a plain -s plural needs no table.
+        genders = {k[0] for k in clean}
+        plural_s = all(set(clean.get(g + "p", ())) <= {f + "s" for f in clean.get(g + "s", ())} for g in genders)
+        if len(genders) == 1 and plural_s:
+            return None
+    return _table(spelled[top["lemma"]], INFLECTING[top["pos"]], clean, word)

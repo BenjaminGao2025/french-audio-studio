@@ -15,6 +15,7 @@ import {
   type EtymologyResponse,
   type WordContextHints,
   type WordContextResult,
+  type WordForms,
 } from "../api/lookup";
 import { loadLibrary, setWordImportance } from "../api/review";
 import { WordDeckStar } from "../components/WordDeckStar";
@@ -29,6 +30,7 @@ import { lookupKey, wordImportance, wordIsSaved } from "../lib/lookup";
 import { announce, get, patchStudy, sayFrench, useApp } from "../state/store";
 import { track } from "../lib/track";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger, Importance, Skeleton, Spinner, useAppWidth } from "../components/ui";
+import { cn } from "cn";
 import { Button } from "../components/ui/button";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "../components/ui/drawer";
 
@@ -125,7 +127,7 @@ function WordPanelContent({
   useEffect(() => {
     if (compact) return;
     const el = headword.current;
-    const scroller = el?.closest<HTMLElement>('[data-slot="popover-content"]') ?? el?.closest(".word-card")?.parentElement;
+    const scroller = el?.closest(".word-card")?.parentElement;
     if (scroller) scroller.scrollTop = 0;
     el?.focus({ preventScroll: true });
   }, [shown, compact]);
@@ -263,14 +265,17 @@ function WordPanelContent({
             {tooLong ? (
               <p className="text-sm text-muted-foreground">Select a word or a short phrase</p>
             ) : contextNote || chineseMeaning ? (
-              <>
-                <p className="wp-definition text-sm font-normal text-foreground" lang={language}><MarkedExplanation text={[chineseMeaning, contextNote].filter(Boolean).join(language === "zh" ? "。 " : " ").replace(/。。/g, "。")} onWord={drill} /></p>
+              <div className="wp-meaning flex flex-col gap-1 rounded-md border-l-2 border-primary bg-muted/60 px-3 py-2">
+                <p className="wp-definition text-sm font-normal text-foreground" lang={language}>
+                  {chineseMeaning && <span className="wp-gloss block text-base font-semibold">{chineseMeaning}</span>}
+                  {contextNote && <MarkedExplanation text={contextNote} onWord={drill} />}
+                </p>
                 {meaning && !plain(contextNote.replace(/[⟦⟧]/g, "")).includes(plain(meaning)) && <p className="text-sm text-muted-foreground" lang="en">{meaning}</p>}
-              </>
+              </div>
             ) : ctxSt === "loading" || (contextResult && contextResult.key !== contextKey) ? (
               <><Spinner label="Finding the meaning…" /><Skeleton lines={1} /></>
             ) : meaning || (ctxSt !== "error" && dictionaryMeaning) ? (
-              <div className="flex flex-col gap-2"><p className="wp-definition text-sm">{meaning || dictionaryMeaning}</p><p className="text-xs text-muted-foreground">{meaning ? "Sentence explanation unavailable" : "Dictionary meaning"}</p>{ctxSt === "error" && <Button type="button" variant="outline" onClick={loadCtx}>Retry</Button>}</div>
+              <div className="flex flex-col gap-2"><p className="wp-definition rounded-md border-l-2 border-primary bg-muted/60 px-3 py-2 text-sm">{meaning || dictionaryMeaning}</p><p className="text-xs text-muted-foreground">{meaning ? "Sentence explanation unavailable" : "Dictionary meaning"}</p>{ctxSt === "error" && <Button type="button" variant="outline" onClick={loadCtx}>Retry</Button>}</div>
             ) : ctxSt === "error" ? (
               <div className="flex flex-col gap-2"><p className="text-sm text-muted-foreground">Couldn’t load the meaning in this sentence.</p><Button type="button" variant="outline" onClick={loadCtx}>Retry</Button></div>
             ) : (
@@ -279,6 +284,8 @@ function WordPanelContent({
 
         </Module>
 
+        {dictSt === "ready" && dict?.forms && <Module key={`forms-${shown}`} title="Forms" defaultOpen><FormsTable forms={dict.forms} /></Module>}
+
         <Module key={`dictionary-${sentence.id}-${shown}`} title="Dictionary" defaultOpen>
             {dictSt === "loading" && <Spinner label="Loading dictionary…" />}
             {dictSt === "error" && (
@@ -286,9 +293,9 @@ function WordPanelContent({
             )}
             {dictSt === "ready" && dict && <DictionaryResult result={dict} onWord={drill} />}
         </Module>
-        {!compact && <><Module key={`origin-${shown}`} title="Word origin"><Origin key={shown} word={shown} lemma={dict?.lemma || shown} onWord={drill} /></Module>
-        <Module key={`ask-${shown}`} title="Ask AI"><Ask key={shown} sentence={sentence} word={shown} /></Module>
-        <Module key={`notes-${shown}`} title="Notes"><WordNotes key={shown} word={shown} /></Module></>}
+        {!compact && <><Module key={`origin-${shown}`} title="Word origin" quiet><Origin key={shown} word={shown} lemma={dict?.lemma || shown} onWord={drill} /></Module>
+        <Module key={`ask-${shown}`} title="Ask AI" quiet><Ask key={shown} sentence={sentence} word={shown} /></Module>
+        <Module key={`notes-${shown}`} title="Notes" quiet><WordNotes key={shown} word={shown} /></Module></>}
       </div>
       {compact && <WordNotes key={shown} word={shown} compact />}
 
@@ -318,7 +325,7 @@ function DictionaryResult({ result, onWord }: { result: DictionaryEntry; onWord:
     {result.match_type === "related" && <p className="text-sm text-muted-foreground">Related: <French value={result.related || ""} onWord={onWord} /></p>}
     {primaryFrench && <DictEntry entry={entries[0]} onWord={onWord} />}
     {entries.filter(e => e.language === "en").map((entry, index) => <DictEntry key={index} entry={entry} onWord={onWord} />)}
-    {entries.some((e, i) => e.language !== "en" && !(primaryFrench && i === 0)) && <Module title="French definitions" inner>{entries.filter((e, i) => e.language !== "en" && !(primaryFrench && i === 0)).map((entry, index) => <DictEntry key={index} entry={entry} onWord={onWord} />)}</Module>}
+    {entries.some((e, i) => e.language !== "en" && !(primaryFrench && i === 0)) && <Module title="French definitions" inner quiet>{entries.filter((e, i) => e.language !== "en" && !(primaryFrench && i === 0)).map((entry, index) => <DictEntry key={index} entry={entry} onWord={onWord} />)}</Module>}
     <p className="wp-attribution text-xs text-muted-foreground" title={[result.attribution, result.changes].filter(Boolean).join(" ")}>
       <a href={entries[0].source_url} target="_blank" rel="noopener noreferrer">Source: Wiktionary (CC BY-SA)</a>
     </p>
@@ -337,7 +344,7 @@ function DictEntry({ entry, onWord }: { entry: NonNullable<DictionaryEntry["entr
         <French value={entry.lemma} onWord={onWord} />
         <span className="text-muted-foreground"> {(entry.gender === "m" || entry.gender === "masculine") ? "masculine " : (entry.gender === "f" || entry.gender === "feminine") ? "feminine " : ""}{entry.pos} </span><Phonetic word={entry.lemma} ipa={entryIpa} />
       </p>
-      <ol className="wp-senses list-decimal space-y-1 pl-5 text-sm" lang={entry.language ?? "fr"}>
+      <ol className="wp-senses list-decimal space-y-1 pl-5 text-sm marker:text-muted-foreground" lang={entry.language ?? "fr"}>
         {shown.map((sense, i) => <li key={i}>{entry.language === "en" ? sense : <French value={sense} onWord={onWord} />}</li>)}
       </ol>
       {rest.length > 0 && !open && (
@@ -353,11 +360,34 @@ function French({ value, onWord, language = "fr" }: { value: string; onWord: (wo
   return <span lang={language}>{value.split(/([\p{L}\p{N}’'-]+)/u).map((part, i) => /\p{L}/u.test(part) ? <Button key={i} variant="link" className="inline h-auto whitespace-normal p-0 font-normal text-inherit" onClick={() => onWord(part)}>{part}</Button> : part)}</span>;
 }
 
-function Module({ title, defaultOpen = false, inner = false, children }: { title: string; defaultOpen?: boolean; inner?: boolean; children: ReactNode }) {
+/** quiet: an optional extra (origin, Ask AI, notes) whose title steps back behind the word's meaning. */
+const GENDER = { m: "Masculine", f: "Feminine", mf: "Both genders" } as const;
+
+/** tout / tous / toute / toutes: the form used in this sentence is highlighted; tap a form to hear it. */
+function FormsTable({ forms }: { forms: WordForms }) {
+  return <div className="flex flex-col gap-1">
+    <p className="text-xs text-muted-foreground"><span lang="fr" className="font-serif text-sm text-foreground">{forms.lemma}</span> · {forms.kind}</p>
+    <table className="wp-forms w-full border-collapse text-sm">
+      <caption className="sr-only">Forms of {forms.lemma}</caption>
+      <thead><tr><td className="w-0" /><th scope="col" className="px-2 text-left text-xs font-normal text-muted-foreground">Singular</th><th scope="col" className="px-2 text-left text-xs font-normal text-muted-foreground">Plural</th></tr></thead>
+      <tbody>{forms.rows.map(row => <tr key={row.gender} className="border-t first:border-t-0">
+        <th scope="row" className="whitespace-nowrap py-0.5 pr-3 text-left text-xs font-normal text-muted-foreground">{GENDER[row.gender]}</th>
+        {row.cells.map(cell => <td key={cell.number} className="py-0.5" aria-current={cell.current || undefined}>
+          <div className={cn("flex flex-wrap items-center rounded-md", cell.current && "wp-form-current bg-accent text-accent-foreground")}>
+            {cell.forms.length ? cell.forms.map(form => <Button key={form} type="button" variant="ghost" lang="fr" title="Hear it" className={cn("h-11 px-2 font-serif text-base", cell.current && "font-semibold hover:bg-primary/10")} onClick={() => sayFrench(form)}>{form}</Button>) : <span className="px-2 text-muted-foreground">—</span>}
+            {cell.current && <span className="sr-only">(in this sentence)</span>}
+          </div>
+        </td>)}
+      </tr>)}</tbody>
+    </table>
+  </div>;
+}
+
+function Module({ title, defaultOpen = false, inner = false, quiet = false, children }: { title: string; defaultOpen?: boolean; inner?: boolean; quiet?: boolean; children: ReactNode }) {
   return <section aria-label={title} className={inner ? "rounded-md bg-muted/50 px-3" : ""}>
     <Collapsible defaultOpen={defaultOpen}>
       {/* Section title outranks its content: same size as the body, heavier, full colour; the chevron stays quiet. */}
-      <h3><CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between gap-2 text-sm font-semibold text-foreground">
+      <h3><CollapsibleTrigger className={cn("flex min-h-11 w-full items-center justify-between gap-2 text-sm", quiet ? "font-medium text-muted-foreground hover:text-foreground" : "font-semibold text-foreground")}>
         {title}<ChevronDown className="size-4 text-muted-foreground" aria-hidden />
       </CollapsibleTrigger></h3>
       <CollapsibleContent className="flex flex-col gap-3 pb-3 text-sm font-normal text-foreground">{children}</CollapsibleContent>
@@ -400,7 +430,9 @@ export function WordOverlay({ label, anchor, onClose, children }: { label: strin
   // The learner can drag the card off the sentence; the offset stays while they tap other words.
   // No transition: duration-100 would otherwise animate translate and lag behind the pointer.
   const [offset, setOffset] = useState({ x: 0, y: 0 });
-  if (desktop) return <Popover open onOpenChange={open => { if (!open) onClose(); }}><PopoverAnchor virtualRef={{ current: { getBoundingClientRect: () => (anchor?.closest(".sentence-fr") ?? anchor?.closest("[lang=fr]") ?? anchor)?.getBoundingClientRect() ?? new DOMRect(100, 100, 1, 1) } }} /><PopoverContent aria-label={label} align="start" side="bottom" sideOffset={16} avoidCollisions sticky="always" collisionPadding={16} onOpenAutoFocus={focusWord} onInteractOutside={keepForWordTap} style={{ translate: `${offset.x}px ${offset.y}px`, transitionProperty: "none" }} className="w-[28rem] max-w-[calc(100vw-2rem)] max-h-[min(80vh,var(--radix-popover-content-available-height))] overflow-y-auto p-4"><MoveHandle offset={offset} onMove={setOffset} />{children}</PopoverContent></Popover>;
+  // A size the learner dragged is remembered for the next card; the room below the word still caps the height.
+  const [size, setSize] = useState<Size | null>(savedSize);
+  if (desktop) return <Popover open onOpenChange={open => { if (!open) onClose(); }}><PopoverAnchor virtualRef={{ current: { getBoundingClientRect: () => (anchor?.closest(".sentence-fr") ?? anchor?.closest("[lang=fr]") ?? anchor)?.getBoundingClientRect() ?? new DOMRect(100, 100, 1, 1) } }} /><PopoverContent aria-label={label} align="start" side="bottom" sideOffset={16} avoidCollisions sticky="always" collisionPadding={16} onOpenAutoFocus={focusWord} onInteractOutside={keepForWordTap} style={{ translate: `${offset.x}px ${offset.y}px`, transitionProperty: "none", ...(size && { width: size.w, height: size.h, maxHeight: "var(--radix-popover-content-available-height)" }) }} className="w-[28rem] max-w-[calc(100vw-2rem)] max-h-[min(80vh,var(--radix-popover-content-available-height))] gap-0 overflow-hidden p-0"><MoveHandle offset={offset} onMove={setOffset} /><div className="wp-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-1">{children}</div><div className="flex h-5 shrink-0 justify-end"><ResizeHandle onResize={setSize} /></div></PopoverContent></Popover>;
   return <Drawer open modal={false} onOpenChange={open => { if (!open) onClose(); }}><DrawerContent className="max-h-[85vh] gap-4" onOpenAutoFocus={focusWord} onInteractOutside={keepForWordTap} aria-describedby={undefined}><DrawerHeader className="sr-only"><DrawerTitle>{label}</DrawerTitle></DrawerHeader><div className="overflow-y-auto p-4">{children}</div></DrawerContent></Drawer>;
 }
 
@@ -428,7 +460,7 @@ function MoveHandle({ offset, onMove }: { offset: Offset; onMove: (offset: Offse
     type="button"
     aria-label="Move word card"
     title="Drag to move"
-    className="wp-move sticky -top-4 z-10 -mx-4 -mt-4 -mb-3 flex h-6 shrink-0 cursor-grab touch-none select-none items-center justify-center bg-popover text-muted-foreground hover:text-foreground active:cursor-grabbing"
+    className="wp-move flex h-6 shrink-0 cursor-grab touch-none select-none items-center justify-center text-muted-foreground hover:text-foreground active:cursor-grabbing"
     onPointerDown={e => {
       if (e.button !== 0) return;
       e.preventDefault();
@@ -448,4 +480,66 @@ function MoveHandle({ offset, onMove }: { offset: Offset; onMove: (offset: Offse
       onMove(moved(card(e.currentTarget), offset, step[0], step[1]));
     }}
   ><GripHorizontal className="size-4" aria-hidden /></button>;
+}
+
+type Size = { w: number; h: number };
+const SIZE_KEY = "frenchStudio.wordCardSize";
+const MIN_W = 320, MIN_H = 240, SIZE_STEP = 24;
+
+function savedSize(): Size | null {
+  try {
+    const value = JSON.parse(localStorage.getItem(SIZE_KEY) ?? "null");
+    return value && Number.isFinite(value.w) && Number.isFinite(value.h) ? { w: Math.max(MIN_W, value.w), h: Math.max(MIN_H, value.h) } : null;
+  } catch { return null; }
+}
+
+function storeSize(size: Size | null) {
+  try { if (size) localStorage.setItem(SIZE_KEY, JSON.stringify(size)); else localStorage.removeItem(SIZE_KEY); } catch { /* private mode: the size lasts for this card */ }
+}
+
+/** Size after growing by (dw, dh), kept inside the window and below the room Radix leaves under the word, so the card never flips. */
+function resized(card: HTMLElement, start: Size, dw: number, dh: number): Size {
+  const r = card.getBoundingClientRect();
+  const maxW = Math.max(MIN_W, window.innerWidth - 16 - r.left);
+  const maxH = Math.max(MIN_H, Number.parseFloat(getComputedStyle(card).getPropertyValue("--radix-popover-content-available-height")) || window.innerHeight - 16 - r.top);
+  return { w: Math.round(Math.min(Math.max(start.w + dw, MIN_W), maxW)), h: Math.round(Math.min(Math.max(start.h + dh, MIN_H), maxH)) };
+}
+
+/** Bottom-right corner of the desktop word card: drag to resize, arrow keys too; double-click returns to the default size. */
+function ResizeHandle({ onResize }: { onResize: (size: Size | null) => void }) {
+  const drag = useRef<{ x: number; y: number; start: Size; last: Size } | null>(null);
+  const card = (el: Element) => (el.closest<HTMLElement>('[data-slot="popover-content"]') ?? el) as HTMLElement;
+  const current = (el: HTMLElement): Size => { const r = el.getBoundingClientRect(); return { w: r.width, h: r.height }; };
+  const keys: Record<string, [number, number]> = { ArrowLeft: [-SIZE_STEP, 0], ArrowRight: [SIZE_STEP, 0], ArrowUp: [0, -SIZE_STEP], ArrowDown: [0, SIZE_STEP] };
+  return <button
+    type="button"
+    aria-label="Resize word card"
+    title="Drag to resize · double-click to reset"
+    className="wp-resize flex size-5 cursor-nwse-resize touch-none select-none items-end justify-end p-1 text-muted-foreground hover:text-foreground"
+    onPointerDown={e => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+      const start = current(card(e.currentTarget));
+      drag.current = { x: e.clientX, y: e.clientY, start, last: start };
+    }}
+    onPointerMove={e => {
+      const d = drag.current;
+      if (!d) return;
+      d.last = resized(card(e.currentTarget), d.start, e.clientX - d.x, e.clientY - d.y);
+      onResize(d.last);
+    }}
+    onPointerUp={() => { if (drag.current) storeSize(drag.current.last); drag.current = null; }}
+    onPointerCancel={() => { drag.current = null; }}
+    onDoubleClick={() => { storeSize(null); onResize(null); }}
+    onKeyDown={e => {
+      const step = keys[e.key];
+      if (!step) return;
+      e.preventDefault();
+      const el = card(e.currentTarget);
+      const next = resized(el, current(el), step[0], step[1]);
+      storeSize(next);
+      onResize(next);
+    }}
+  ><svg viewBox="0 0 10 10" className="size-2.5" aria-hidden><path d="M9 1 1 9M9 5 5 9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /></svg></button>;
 }

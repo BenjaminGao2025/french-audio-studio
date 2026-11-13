@@ -10,6 +10,17 @@ sentence · AI** section shows an English explanation specific to the sentence. 
 and origin notes are no longer offered in this card.
 Historical review snapshots remain unchanged and are labeled “Saved meaning”, not Dictionary.
 
+## Forms table
+
+`/api/lookup` adds `forms` when a word changes with gender and number (`offline_dictionary.word_forms`):
+the lemma, its kind (adjective, noun, past participle, article, determiner) and rows m / f / mf with
+singular and plural forms, `current` marking the clicked form. Adjectives, irregular or two-gender nouns
+and past participles come from the Lexique rows of the same lemma and part of speech (nouns with one
+gender and a plain -s plural get none; rare spellings beside a common one are dropped; Lexique's `oe`
+becomes `œ` when Wiktionnaire has that spelling). Articles and determiners are listed in `CLOSED_FORMS`
+because Lexique gives each form its own lemma; `des` and a pronoun reading never trigger them. A failure
+only omits `forms`, never the lookup.
+
 ## Data and attribution
 
 - Definitions and IPA: Wiktionnaire contributors, extracted by Tatu Ylonen / Kaikki (Wiktextract).

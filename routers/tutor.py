@@ -408,7 +408,10 @@ async def lookup_word(
     if not clean or any(ord(c) < 32 for c in word):
         raise HTTPException(status_code=400, detail={"message": "Enter a word to look up."})
     rate_limit(user_id, "dictionary")
-    return await request_word_lookup(word.strip(), pos=pos)
+    result = await request_word_lookup(word.strip(), pos=pos)
+    # The word card's forms table (tout / tous / toute / toutes) rides along with the lookup.
+    forms = await run_in_threadpool(offline_dictionary.word_forms, word.strip(), pos)
+    return {**result, "forms": forms} if forms else result
 
 
 class EtymologyRequest(BaseModel):
