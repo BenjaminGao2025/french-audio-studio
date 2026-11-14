@@ -1,18 +1,33 @@
 import { useState } from "react";
+import { ArrowRight } from "lucide-react";
 import { APP_VERSION, RELEASES } from "../data/releases";
 import { Dialog, useNarrow } from "./ui";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 
-export function VersionInfo({ className = "" }: { className?: string }) {
+export function VersionInfo() {
   const [open, setOpen] = useState(false);
   const narrow = useNarrow();
   return (
     <>
-      <Button type="button" variant="ghost" aria-label={`Version ${APP_VERSION} — What’s new`} aria-haspopup="dialog" className={`h-8 px-2 text-xs text-muted-foreground ${className}`} onClick={() => setOpen(true)}>v{APP_VERSION}</Button>
+      <Card aria-labelledby="about-h">
+        <CardHeader><CardTitle id="about-h">About</CardTitle></CardHeader>
+        <CardContent>
+          <div className="divide-y overflow-hidden rounded-lg border">
+            <dl className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+              <dt className="font-medium">Version</dt>
+              <dd className="text-sm tabular-nums text-muted-foreground">{APP_VERSION}</dd>
+            </dl>
+            <Button type="button" variant="ghost" aria-haspopup="dialog" className="h-auto min-h-11 w-full justify-between rounded-none px-4 py-3" onClick={() => setOpen(true)}>
+              What’s new<ArrowRight aria-hidden />
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
       {open && (
         <Dialog title="What’s new" sheet={narrow} onClose={() => setOpen(false)}>
-          <div className="flex flex-col gap-6">
+          <div className={`flex flex-col gap-6 ${narrow ? "" : "max-h-[60dvh] overflow-y-auto"}`}>
             {RELEASES.map((release, index) => (
               <section className="flex flex-col gap-2" key={release.version} aria-labelledby={`release-${release.version}`}>
                 <div className="flex flex-wrap items-center gap-2">
@@ -26,7 +41,7 @@ export function VersionInfo({ className = "" }: { className?: string }) {
               </section>
             ))}
           </div>
-          <Button type="button" variant="outline" onClick={() => setOpen(false)}>Close</Button>
+          <Button type="button" variant="outline" className="min-h-11" onClick={() => setOpen(false)}>Close</Button>
         </Dialog>
       )}
     </>

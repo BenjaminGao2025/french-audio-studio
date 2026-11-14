@@ -8,6 +8,14 @@ export const RELEASES = [
     version: APP_VERSION,
     date: "2026-11-14",
     changes: [
+      "Find the app version and What’s new in Settings → About. Version numbers no longer appear in the sidebar or practice header.",
+      "The desktop update history scrolls within the window, keeping its title and close buttons visible.",
+    ],
+  },
+  {
+    version: "1.3.26",
+    date: "2026-11-14",
+    changes: [
       "Tap a verb such as suis, laissais or allées and the word card shows its Conjugation: Présent next to the tense in your sentence, your form highlighted, forms that sound the same, and every other tense under All tenses. Tap any form to hear it.",
     ],
   },
