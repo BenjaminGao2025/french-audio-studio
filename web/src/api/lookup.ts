@@ -12,6 +12,19 @@ export interface WordForms {
   rows: { gender: "m" | "f" | "mf"; cells: { number: "s" | "p"; forms: string[]; current: boolean }[] }[];
 }
 
+/** A verb's conjugation (conjugation.py); current marks the clicked form, focus its tense. */
+export interface ConjugationCell { person: number; pronoun: string; form: string; say: string; ipa: string; current: boolean }
+export interface WordConjugation {
+  lemma: string;
+  aux: "avoir" | "être" | "both";
+  focus: string;
+  role: string;
+  participles: { present: string; past: string };
+  tenses: { key: string; label: string; written: boolean; cells: ConjugationCell[] }[];
+  also?: string;
+  source_url?: string;
+}
+
 export interface DictionaryEntry {
   token: string;
   lemma: string;
@@ -41,6 +54,7 @@ export interface DictionaryEntry {
   license_url?: string;
   changes?: string;
   forms?: WordForms;
+  conjugation?: WordConjugation;
 }
 
 const entries = new Map<string, Promise<DictionaryEntry>>();

@@ -13,8 +13,10 @@ services:
       MAX_TEXT_CHARS: "15000"
       FRENCH_DICTIONARY_PATH: /app/dictionary/french.sqlite
       ENGLISH_DICTIONARY_PATH: /app/dictionary/english-french.sqlite
+      CONJUGATION_PATH: /app/dictionary/conjugation.sqlite
     volumes:
       - ./outputs:/app/outputs
       - ./models:/app/models:ro
       - /home/mgacai/tts-dictionary-data/french-v1.sqlite:/app/dictionary/french.sqlite:ro
       - /home/mgacai/tts-dictionary-data/english-french-v1.sqlite:/app/dictionary/english-french.sqlite:ro
+      - /home/mgacai/tts-dictionary-data/conjugation-v1.sqlite:/app/dictionary/conjugation.sqlite:ro

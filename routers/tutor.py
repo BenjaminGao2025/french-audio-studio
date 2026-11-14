@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 import auth_db
+import conjugation
 import offline_dictionary
 import phrase_context
 import srs
@@ -420,7 +421,14 @@ async def lookup_word(
     result = await request_word_lookup(word.strip(), pos=pos)
     # The word card's forms table (tout / tous / toute / toutes) rides along with the lookup.
     forms = await run_in_threadpool(offline_dictionary.word_forms, word.strip(), pos)
-    return {**result, "forms": forms} if forms else result
+    extra = {"forms": forms} if forms else {}
+    # Without a sentence hint, only a verb reading gets a table: été (summer) is not être.
+    found_pos = offline_dictionary.canonical_pos(result.get("pos") or "")
+    if pos or found_pos in ("", "verb"):
+        table = await run_in_threadpool(conjugation.conjugation, word.strip(), pos, result.get("lemma") or "")
+        if table:
+            extra["conjugation"] = table
+    return {**result, **extra}
 
 
 class EtymologyRequest(BaseModel):

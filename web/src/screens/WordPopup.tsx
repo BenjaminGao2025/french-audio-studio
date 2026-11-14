@@ -23,6 +23,7 @@ import { Phonetic } from "../components/Phonetic";
 import type { StudySentence } from "../data/fixtures";
 import { askQuestion } from "../api/learning";
 import { WordNotes } from "./WordNotes";
+import { ConjugationTable } from "./ConjugationTable";
 import { findContextSpans, FrText } from "../components/FrText";
 import { Input } from "../components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent } from "../components/ui/popover";
@@ -285,6 +286,8 @@ function WordPanelContent({
         </Module>
 
         {dictSt === "ready" && dict?.forms && <Module key={`forms-${shown}`} title="Forms" defaultOpen><FormsTable forms={dict.forms} /></Module>}
+        {/* A participle has both tables; the gender forms stay open, the verb folds away. */}
+        {dictSt === "ready" && dict?.conjugation && <Module key={`conjugation-${shown}`} title="Conjugation" defaultOpen={!dict.forms}><ConjugationTable conjugation={dict.conjugation} word={shown} /></Module>}
 
         <Module key={`dictionary-${sentence.id}-${shown}`} title="Dictionary" defaultOpen>
             {dictSt === "loading" && <Spinner label="Loading dictionary…" />}

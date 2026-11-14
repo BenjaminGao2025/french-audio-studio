@@ -21,6 +21,30 @@ becomes `œ` when Wiktionnaire has that spelling). Articles and determiners are 
 because Lexique gives each form its own lemma; `des` and a pronoun reading never trigger them. A failure
 only omits `forms`, never the lookup.
 
+## Conjugation table
+
+`/api/lookup` adds `conjugation` (`conjugation.py`) when the clicked word is a verb form: the sentence's
+part of speech says verb, or there is none and the dictionary's reading is a verb or unknown (so `été`
+the noun never opens `être`). The lemma is the dictionary's when it owns the form, else the most frequent
+verb in Lexique (`suis` → `être`, not `suivre`). Agreed participles (`allées`) fall back to `allé`.
+Simple tenses and participles come from the index; Passé composé and Plus-que-parfait are the auxiliary's
+Présent / Imparfait plus the past participle, with `(e)` / `(e)s` agreement for `être` verbs. Verbs listed
+with both auxiliaries (`monter`, `passer`) show `avoir` and name the `être` form. `focus` is the tense of the
+clicked form; `current` marks its cells. A missing or unreadable index only omits `conjugation`.
+
+The index is built from the English-Wiktionary Kaikki file below (each verb's plain conjugation block;
+reflexive blocks and missing forms are skipped) with Lexique lemma frequency, and is mounted read-only at
+`/app/dictionary/conjugation.sqlite` (`CONJUGATION_PATH`). Same attribution and license as the
+English-gloss index (CC BY-SA 4.0; English Wiktionary contributors, Tatu Ylonen / Kaikki) plus Lexique 3.83.
+The current build holds 7,300 verbs and 355,309 forms (a cell can keep two spellings, paie / paye); its manifest records the Lexique cross-check.
+
+```sh
+python3 scripts/build_conjugation.py \
+  --raw /home/mgacai/polish-1.2-out/dict-build/kaikki.org-dictionary-French.jsonl \
+  --lexique /home/mgacai/tts-dictionary-data/Lexique383.tsv \
+  --output /home/mgacai/tts-dictionary-data/conjugation-next.sqlite
+```
+
 ## Data and attribution
 
 - Definitions and IPA: Wiktionnaire contributors, extracted by Tatu Ylonen / Kaikki (Wiktextract).
