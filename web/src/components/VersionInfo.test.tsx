@@ -21,7 +21,10 @@ describe("version and update history", () => {
     try {
       await act(async () => root.render(<WidthContext.Provider value={width}><VersionInfo /></WidthContext.Provider>));
       const trigger = host.querySelector<HTMLButtonElement>("button")!;
-      expect(trigger.textContent).toBe(`v${version}`);
+      expect(host.querySelector("#about-h")?.textContent).toBe("About");
+      expect(host.querySelector("dt")?.textContent).toBe("Version");
+      expect(host.querySelector("dd")?.textContent).toBe(version);
+      expect(trigger.textContent).toBe("What’s new");
       expect(document.querySelector('[role="dialog"]')).toBeNull();
       trigger.focus();
       await act(async () => trigger.click());
@@ -37,6 +40,8 @@ describe("version and update history", () => {
         document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
       });
       expect(document.querySelector('[role="dialog"]')).toBeNull();
+      await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+      expect(document.activeElement).toBe(trigger);
     } finally {
       await act(async () => root.unmount());
       host.remove();

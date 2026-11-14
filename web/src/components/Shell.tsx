@@ -22,14 +22,12 @@ import {
 } from "../state/store";
 import { WidthContext } from "./ui";
 import { Brand } from "./Brand";
-import { VersionInfo } from "./VersionInfo";
 import { useUpdatePrompt } from "../lib/updateCheck";
 import { Progress } from "./ui/progress";
 import { Toaster } from "./ui/sonner";
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarHeader,
@@ -114,7 +112,7 @@ function AppSidebar() {
       <SidebarHeader className="pt-[calc(0.5rem+var(--safe-top))]">
         <Brand />
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="pb-safe">
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -144,9 +142,6 @@ function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="pb-safe">
-        <VersionInfo className="group-data-[collapsible=icon]:hidden" />
-      </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   );
@@ -220,7 +215,6 @@ export function Shell({ children }: { children: ReactNode }) {
             )}
             <div className="ml-auto flex items-center gap-2">
               {studying && !focused && <Button type="button" variant="ghost" onClick={() => go("study/new")}><Plus aria-hidden />New text</Button>}
-              {focused && path !== "review/session" && <VersionInfo />}
               <AccountSlot />
             </div>
           </header>

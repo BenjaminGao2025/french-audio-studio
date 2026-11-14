@@ -6,6 +6,7 @@ import { type Device, listDevices, logout, signOutDevice, useSession } from "../
 import { loginUrl } from "../api/client";
 import { saveReviewSettings } from "../api/review";
 import { initials } from "../components/Shell";
+import { VersionInfo } from "../components/VersionInfo";
 import { SPEEDS, announce, get, go, routeUrl, set, setDailyNew, setPlaybackPrefs, setSessionSize, stopPlayback, useApp } from "../state/store";
 import { fmtWhen } from "../api/history";
 import { Checkbox, Dialog, PageHead, Spinner, pageFrame } from "../components/ui";
@@ -197,6 +198,7 @@ export function SettingsScreen({ sub }: { sub?: string }) {
             <Button type="button" variant="outline" onClick={() => go("progress/devices")}>Devices and background listening{<ArrowRight aria-hidden />}</Button>
           </CardContent>
         </Card>
+        <VersionInfo />
       </div>
       {signOut && <SignOutDialog onClose={() => { setSignOut(false); if (get().route.includes("signout")) history.replaceState(null, "", routeUrl("settings/account")); }} />}
     </div>
