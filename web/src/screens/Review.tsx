@@ -169,7 +169,7 @@ export function ReviewScreen({ sub }: { sub: string }) {
     return (
       <div className="review-focus flex w-full flex-1 flex-col pb-4 md:pb-8">
         <h1 className="sr-only" tabIndex={-1} data-page-title>Review</h1>
-        <ReviewSession />
+        <ReviewSessionEntry />
       </div>
     );
   }
@@ -391,6 +391,34 @@ function DueToday() {
 
 /* ---------------- SCR-REV-02 ---------------- */
 
+/** A refreshed session has no in-memory card list: load the learner's queue before showing a card. */
+function ReviewSessionEntry() {
+  const sessionCards = useApp((s) => s.review.sessionCards);
+  const sample = useApp((s) => Boolean(s.ss[SAMPLE_QUEUE] || s.ss["SCR-REV-02"]));
+  const [error, setError] = useState<string | null>(null);
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    if (sessionCards !== null || sample) return;
+    let live = true;
+    setError(null);
+    loadQueue().then(() => {
+      if (!live) return;
+      set((s) => {
+        const plan = planSession(s.queue, { sessionSize: s.sessionSize, dailyNew: s.dailyNew, newUsed: s.newUsed, done: s.review.done });
+        return { review: { ...s.review, phase: plan.cards.length ? "active" : "complete", index: 0, completed: 0, allowance: plan.newCount, sessionCards: plan.cards } };
+      });
+    }).catch((e) => live && setError(errText(e) || "The server didn’t respond."));
+    return () => { live = false; };
+  }, [sessionCards, sample, n]);
+  if (sessionCards !== null || sample) return <ReviewSession />;
+  if (error !== null) return (
+    <div className="mx-auto w-full max-w-xl">
+      <Alert variant="destructive" role="alert"><AlertTitle>Today’s cards didn’t load</AlertTitle><AlertDescription>{error}<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={() => setN(x => x + 1)}>Retry</Button></div></AlertDescription></Alert>
+    </div>
+  );
+  return <div className="mx-auto w-full max-w-xl"><Spinner label="Loading today’s cards…" /></div>;
+}
+
 function PlayButton({ onClick, prominent = false }: { onClick: () => void; prominent?: boolean }) {
   return (
     <Button type="button" variant="outline" size={prominent ? "lg" : "icon"} aria-label="Play" className={prominent ? undefined : "shrink-0"} onClick={onClick}>
@@ -541,10 +569,13 @@ function ReviewSession() {
   };
 
   const rate = (rating: 1 | 2 | 3 | 4) => {
-    if (!card || !revealed || u.rateBusy || u.rated || mastering.current) return;
+    const current = get().reviewUi[curId] ?? u;
+    if (!card || !revealed || current.rateBusy || current.rated || mastering.current) return;
+    if (current.requestId && current.submittedRating !== rating) return;
+    const requestId = current.requestId ?? crypto.randomUUID();
     if (!typed) gradeFeedback(rating > 1);
-    patch({ rateBusy: true, techfail: false });
-    rateCard(card.id, rating, { answer: u.answer, durationMs: Date.now() - shownAt.current })
+    patch({ rateBusy: true, techfail: false, requestId, submittedRating: rating });
+    rateCard(card.id, rating, { answer: u.answer, durationMs: Date.now() - shownAt.current, requestId })
       .then((saved) => {
         patch({ rateBusy: false, rated: true, nextDue: saved.due });
         announce(`Rated ${RATINGS.find((r) => r.value === rating)?.label}.`);
@@ -776,7 +807,7 @@ function ReviewSession() {
             </div>
         )}
         {revealed && u.techfail && (
-          <Alert variant="destructive" role="alert"><AlertTitle>Saving your rating failed</AlertTitle><AlertDescription>This is not a wrong answer. Your answer is kept and nothing was recorded.<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={() => rate((suggested ?? 3) as 1 | 2 | 3 | 4)}>Retry</Button></div></AlertDescription></Alert>
+          <Alert variant="destructive" role="alert"><AlertTitle>Saving your rating failed</AlertTitle><AlertDescription>This is not a wrong answer. Your answer is kept. Retry to confirm your rating.<div className="mt-3 flex flex-wrap items-center gap-2"><Button type="button" variant="outline" onClick={() => rate(u.submittedRating ?? (suggested ?? 3) as 1 | 2 | 3 | 4)}>Retry</Button></div></AlertDescription></Alert>
         )}
           </CardContent>
           <CardFooter className="flex-col items-stretch gap-3 border-t">
@@ -792,7 +823,7 @@ function ReviewSession() {
                   {RATINGS.map((r) => {
                     const text = intervalText(r.value);
                     const suggestedThis = r.value === suggestedGrade;
-                    const busy = Boolean(u.rateBusy || u.rated);
+                    const busy = Boolean(u.rateBusy || u.rated || u.techfail);
                     return (
                       <Button
                         type="button"

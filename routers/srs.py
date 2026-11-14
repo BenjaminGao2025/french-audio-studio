@@ -52,6 +52,7 @@ MAX_REVIEW_DURATION_MS = 3_600_000
 
 
 class SrsReviewRequest(BaseModel):
+    request_id: str | None = Field(default=None, min_length=1, max_length=100, pattern=r"^[A-Za-z0-9_-]+$")
     rating: int = Field(ge=1, le=4)
     duration_ms: int | None = Field(default=None, ge=0)  # capped below; a card left open for hours must still save
     score: int | None = Field(default=None, ge=0, le=100)
@@ -260,12 +261,19 @@ def srs_review_card(
     user_id = _require_user_id(authorization)
     try:
         duration_ms = None if req.duration_ms is None else min(req.duration_ms, MAX_REVIEW_DURATION_MS)
-        card = srs.review_card(user_id, card_id, req.rating, duration_ms, req.score, req.answer)
+        card = srs.review_card(
+            user_id, card_id, req.rating, duration_ms, req.score, req.answer, request_id=req.request_id
+        )
     except KeyError:
         raise HTTPException(status_code=404, detail={"message": "卡片不存在。"})
-    coach.record(user_id, "review", f"{coach.date_for(user_id)}:{card_id}", {"rating": req.rating}, 0)
-    # Kill feed for the review page: XP, combo, first blood and the new totals
-    card["game"] = game.review_feedback(user_id, req.tz_offset)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail={"code": "review_conflict", "message": str(exc)}) from exc
+    # A saved rating must not appear to fail because supplementary feedback is unavailable.
+    try:
+        coach.record(user_id, "review", f"{coach.date_for(user_id)}:{card_id}", {"rating": req.rating}, 0)
+        card["game"] = game.review_feedback(user_id, req.tz_offset)
+    except Exception:
+        logger.exception("Could not build supplementary review feedback")
     return card
 
 

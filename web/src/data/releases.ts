@@ -6,6 +6,15 @@ export const APP_VERSION = version;
 export const RELEASES = [
   {
     version: APP_VERSION,
+    date: "2026-11-13",
+    changes: [
+      "Refreshing a review session loads your real cards and progress. Sample cards stay in the design reference.",
+      "Retrying a rating saves it once, even if the response was lost. The next learning step is a separate review.",
+      "Recall and Dictation can retry when their sentence list fails to load.",
+    ],
+  },
+  {
+    version: "1.3.23",
     date: "2026-11-14",
     changes: [
       "The word card's Forms table is tidier: even columns, one line under each row, a small highlight on the form in your sentence, and a note on what it shows.",

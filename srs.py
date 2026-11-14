@@ -129,6 +129,14 @@ def init_db() -> None:
         settings_columns = {row[1] for row in conn.execute("PRAGMA table_info(srs_settings)")}
         if "session_size" not in settings_columns:
             conn.execute("ALTER TABLE srs_settings ADD COLUMN session_size INTEGER")
+        review_columns = {row[1] for row in conn.execute("PRAGMA table_info(srs_reviews)")}
+        for column in ("request_id", "response_json"):
+            if column not in review_columns:
+                conn.execute(f"ALTER TABLE srs_reviews ADD COLUMN {column} TEXT")
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_srs_reviews_request "
+            "ON srs_reviews(user_id, request_id) WHERE request_id IS NOT NULL"
+        )
         conn.execute("CREATE TABLE IF NOT EXISTS srs_migrations (name TEXT PRIMARY KEY)")
         if not conn.execute("SELECT 1 FROM srs_migrations WHERE name = 'importance-1.3.4'").fetchone():
             _sync_word_importance(conn)
@@ -1119,12 +1127,25 @@ def review_card(
     score: int | None = None,
     answer: str | None = None,
     now: datetime.datetime | None = None,
+    *,
+    request_id: str | None = None,
 ) -> dict[str, Any]:
     now = now or _now()
     with _connect() as conn:
+        # Serialize the read/schedule/write sequence, including concurrent retries.
+        conn.execute("BEGIN IMMEDIATE")
         row = conn.execute("SELECT * FROM srs_cards WHERE id = ? AND user_id = ?", (card_id, user_id)).fetchone()
         if not row:
             raise KeyError(card_id)
+        if request_id:
+            previous = conn.execute(
+                "SELECT card_id, rating, response_json FROM srs_reviews WHERE user_id = ? AND request_id = ?",
+                (user_id, request_id),
+            ).fetchone()
+            if previous:
+                if previous["card_id"] != card_id or previous["rating"] != rating:
+                    raise ValueError("This review request was already used for a different card or rating.")
+                return json.loads(previous["response_json"])
         card = Card.from_dict(json.loads(row["fsrs_json"]))
         was_new = card.last_review is None
         next_card, _ = SCHEDULER.review_card(card, Rating(rating), now)
@@ -1132,11 +1153,13 @@ def review_card(
             "UPDATE srs_cards SET fsrs_json = ?, due = ?, is_new = 0 WHERE id = ?",
             (json.dumps(next_card.to_dict()), _iso(next_card.due), card_id),
         )
+        updated = conn.execute(_CARD_WITH_NOTE_SQL + " AND c.id = ?", (user_id, card_id)).fetchone()
+        result = _card_payload(updated, now, with_preview=True)
         conn.execute(
             """
             INSERT INTO srs_reviews (card_id, note_id, user_id, rating, was_new, reviewed_at,
-                                     duration_ms, score, answer)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                     duration_ms, score, answer, request_id, response_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 card_id,
@@ -1148,11 +1171,12 @@ def review_card(
                 duration_ms,
                 score,
                 (answer or "")[:500] or None,
+                request_id,
+                json.dumps(result, ensure_ascii=False) if request_id else None,
             ),
         )
         conn.commit()
-        updated = conn.execute(_CARD_WITH_NOTE_SQL + " AND c.id = ?", (user_id, card_id)).fetchone()
-    return _card_payload(updated, now, with_preview=True)
+    return result
 
 
 def list_cards(user_id: int, query: str = "", limit: int = 500) -> list[dict[str, Any]]:
