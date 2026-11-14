@@ -60,7 +60,7 @@ export function PlaybackSeek({ player, position, duration, onSeek }: {
     <Slider
       min={0}
       max={Math.max(1, duration)}
-      step={0.01}
+      step={1}
       value={[shown]}
       aria-label="Position in the episode"
       aria-valuetext={`${fmtClock(shown)} of ${fmtClock(duration)}`}

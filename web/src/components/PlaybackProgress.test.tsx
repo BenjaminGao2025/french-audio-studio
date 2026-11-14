@@ -79,9 +79,9 @@ it("pause, seek, restart and a different player snap immediately and cancel old 
   await render(null); expect(shown()).toBe(0); expect(frames.size).toBe(0);
 });
 
-it("keyboard seeking keeps fractional precision", async () => {
+it("keyboard seeking retains one-second increments while visual progress stays fractional", async () => {
   player = { ...player, status: "paused" };
   await render();
   await act(async () => host.querySelector('[role="slider"]')!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })));
-  expect(onSeek).toHaveBeenCalledWith(2.01);
+  expect(onSeek).toHaveBeenCalledWith(3);
 });
