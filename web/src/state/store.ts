@@ -409,8 +409,8 @@ export function go(route: string, opts: { focus?: boolean; keepDemo?: boolean } 
 export function focusHeading() {
   requestAnimationFrame(() => {
     const h = document.querySelector<HTMLElement>("[data-page-title]");
-    // Review typing takes priority over the deferred navigation heading focus.
-    const answer = get().route === "review/session" ? document.getElementById("rev-input") : null;
+    // Answer typing takes priority over the deferred navigation heading focus.
+    const answer = get().route === "review/session" ? document.getElementById("rev-input") : document.querySelector<HTMLTextAreaElement>(".exercise textarea:not([readonly])");
     (answer ?? h)?.focus({ preventScroll: false });
   });
 }

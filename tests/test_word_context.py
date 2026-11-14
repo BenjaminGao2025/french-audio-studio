@@ -48,6 +48,12 @@ def _user_message(post_chat) -> str:
 
 
 class OccurrenceTests(unittest.TestCase):
+    def test_cited_elided_expressions_match_shared_fixture(self):
+        for case in FIXTURES["context_spans"]:
+            with self.subTest(case=case):
+                spans = word_context.context_spans(case["word"], case["sentence"])
+                self.assertEqual([list(span) for span in spans], case["spans"])
+
     def test_absent_lemma_has_no_surface_span(self):
         sentence = "Ces insectes sont nuisibles."
         self.assertEqual(word_context.word_spans("nuisible", sentence), [])
@@ -189,6 +195,33 @@ class EndpointTests(unittest.TestCase):
             json={"sentence": sentence, "word": word, "language": "zh", **extra},
             headers=self.headers if headers is None else headers,
         )
+
+    def test_cited_until_phrase_explains_the_actual_elision_in_both_languages(self):
+        sentence = "Tout homme étant présumé innocent jusqu'à ce qu'il soit déclaré coupable."
+        for language in ("en", "zh"):
+            with self.subTest(language=language):
+                answer = {"meaning_en": "until", "why_en": "⟦jusqu'à ce que⟧ means until. Before ⟦il⟧, ⟦que⟧ becomes ⟦qu'⟧.",
+                          "why_zh": "⟦jusqu'à ce que⟧ 表示直到，⟦que⟧ 在 ⟦il⟧ 前省音。"}
+                with mock.patch("services.ai.post_chat", return_value=_reply(answer)) as chat:
+                    response = self._post(sentence, "jusqu'à ce que", language=language)
+                    self.assertEqual(response.status_code, 200, response.text)
+                    self.assertIn("⟦jusqu'à ce qu'⟧il", _user_message(chat))
+                    self.assertIn("Target expression (before elision): jusqu'à ce que", _user_message(chat))
+                    self.assertNotIn("Target cited base form", _user_message(chat))
+                    self.assertTrue(self._post(sentence, "jusqu'à ce que", language=language).json()["cached"])
+                    self.assertEqual(chat.call_count, 1)
+
+    def test_mixed_literal_and_elided_occurrences_select_the_requested_surface(self):
+        sentence = "J'attends jusqu'à ce qu'il parte, puis jusqu'à ce que tu reviennes."
+        for occurrence, marked in ((0, "⟦jusqu'à ce qu'⟧il"), (1, "⟦jusqu'à ce que⟧ tu")):
+            with mock.patch("services.ai.post_chat", return_value=_reply(TON_SAC)) as chat:
+                response = self._post(sentence, "jusqu'à ce que", occurrence=occurrence)
+                self.assertEqual(response.status_code, 200, response.text)
+                self.assertIn(marked, _user_message(chat))
+                self.assertEqual("Target expression (before elision)" in _user_message(chat), occurrence == 0)
+        with mock.patch("services.ai.post_chat") as chat:
+            self.assertEqual(self._post(sentence, "jusqu'à ce que", occurrence=2).status_code, 422)
+            chat.assert_not_called()
 
     def test_cited_avoir_and_surface_ont_have_distinct_contexts_and_caches(self):
         sentence = "Les représentants ont résolu d'exposer les droits."

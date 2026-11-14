@@ -145,6 +145,24 @@ export function findWordSpans(text: string, word: string): [number, number][] {
   return spans;
 }
 
+/** Context lookups also match a cited que / expression ending in que to its elided qu' surface. */
+export function findContextSpans(text: string, word: string): [number, number][] {
+  const spans = findWordSpans(text, word);
+  const fold = (s: string) => s.normalize("NFC").replace(/[’ʼ]/g, "'").toLocaleLowerCase("fr");
+  const want = fold(word.trim().replace(/\s+/g, " "));
+  const have = fold(text);
+  if ((want !== "que" && !want.endsWith(" que")) || have.length !== text.length) return spans;
+  const surface = want.slice(0, -1) + "'";
+  let at = have.indexOf(surface);
+  while (at !== -1) {
+    const end = at + surface.length;
+    const before = at ? have[at - 1] : "";
+    if (!/[\p{L}\p{N}_\p{M}']/u.test(before) && /[aeiouyàâäéèêëîïôöùûüÿœæh]/u.test(have[end] ?? "")) spans.push([at, end]);
+    at = have.indexOf(surface, at + 1);
+  }
+  return spans.sort((a, b) => a[0] - b[0]);
+}
+
 /** The exact substring of the sentence covered by the first and last touched word spans. */
 export function selectionText(full: string, first: { pos: number; text: string }, last: { pos: number; text: string }): string {
   return full.slice(first.pos, last.pos + last.text.length).trim();
@@ -182,7 +200,7 @@ export function FrText({
 
   const occurrenceOf = useCallback(
     (value: string, pos: number): number => {
-      const spans = findWordSpans(full, value);
+      const spans = findContextSpans(full, value);
       const idx = spans.findIndex(([start]) => start === pos);
       if (idx >= 0) return idx;
       return spans.filter(([start]) => start < pos).length;

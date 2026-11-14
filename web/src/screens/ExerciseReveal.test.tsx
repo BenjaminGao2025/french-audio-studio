@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { gradeAttempt } from "../api/dictation";
 import type { PracticeItem } from "../data/fixtures";
-import { get, resetDemo, set } from "../state/store";
+import { focusHeading, get, resetDemo, set } from "../state/store";
 import { ensureSession, Exercise, submitAnswer } from "./Exercise";
 import { RunScreen } from "./Launcher";
 import { StudyCheckTabs, StudyNavigation } from "./StudyTools";
@@ -254,6 +254,39 @@ describe.each(["Recall", "Dictation"] as const)("%s result", kind => {
       expect([...actions.querySelectorAll("button")].map(el => el.textContent)).toEqual(["Try again", "Done — return to Study"]);
       expect(host.textContent).not.toContain("See attempts in History");
     });
+  });
+});
+
+describe.each(["Recall", "Dictation"] as const)("%s answer focus", kind => {
+  const fixture: PracticeItem[] = [{ id: "focus-input", fr: "Tout homme est innocent.", en: "Every man is innocent.", label: "Sentence",
+    steps: [{ fr: "Tout homme", en: "Every man" }, { fr: "Tout homme est innocent.", en: "Every man is innocent." }] }];
+  const settleFocus = () => act(() => new Promise(resolve => setTimeout(resolve, 40)));
+  it.each(["whole", "step"] as const)("starts ready to type in %s mode and refocuses after scope or step changes", async mode => {
+    ensureSession("answer-focus", kind, "Current sentence", fixture);
+    set(s => ({ exercises: { ...s.exercises, "answer-focus": { ...s.exercises["answer-focus"], mode } } }));
+    await act(async () => root.render(<Exercise sessionKey="answer-focus" kind={kind} source="Current sentence" items={fixture} onDone={() => {}} />));
+    await settleFocus();
+    const input = host.querySelector("textarea")!;
+    expect(document.activeElement).toBe(input);
+    expect(input.readOnly).toBe(false);
+    focusHeading();
+    await settleFocus();
+    expect(document.activeElement).toBe(input);
+    const scope = [...host.querySelectorAll("button")].find(button => button.textContent === (mode === "whole" ? "Step by step" : "Whole sentence"))!;
+    await act(async () => { scope.focus(); scope.click(); });
+    await settleFocus();
+    expect(document.activeElement).toBe(input);
+    await act(async () => {
+      scope.focus();
+      set(s => ({ exercises: { ...s.exercises, "answer-focus": { ...s.exercises["answer-focus"], mode: "step", steps: { 0: 1 } } } }));
+    });
+    await settleFocus();
+    expect(document.activeElement).toBe(input);
+    // A background re-render must leave the learner free to use other controls.
+    scope.focus();
+    await act(async () => set(s => ({ exercises: { ...s.exercises, "answer-focus": { ...s.exercises["answer-focus"], drafts: { "0:step:1": "Tout" } } } })));
+    await settleFocus();
+    expect(document.activeElement).toBe(scope);
   });
 });
 

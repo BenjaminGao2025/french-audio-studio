@@ -23,7 +23,7 @@ import { Phonetic } from "../components/Phonetic";
 import type { StudySentence } from "../data/fixtures";
 import { askQuestion } from "../api/learning";
 import { WordNotes } from "./WordNotes";
-import { findWordSpans, FrText } from "../components/FrText";
+import { findContextSpans, FrText } from "../components/FrText";
 import { Input } from "../components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent } from "../components/ui/popover";
 import { lookupKey, wordImportance, wordIsSaved } from "../lib/lookup";
@@ -140,8 +140,8 @@ function WordPanelContent({
     if (lookupKey(word) === lookupKey(shown)) return;
     sayFrench(word);
     // Explanation links have no sentence offset: choose the occurrence nearest the current one.
-    const sourceStart = findWordSpans(contextFr, contextWord)[contextOccurrence]?.[0] ?? 0;
-    const spans = findWordSpans(contextFr, word);
+    const sourceStart = findContextSpans(contextFr, contextWord)[contextOccurrence]?.[0] ?? 0;
+    const spans = findContextSpans(contextFr, word);
     const nextOccurrence = spans.reduce((best, span, i) =>
       Math.abs(span[0] - sourceStart) < Math.abs(spans[best][0] - sourceStart) ? i : best, 0);
     setStack(prev => [...prev, { word, surface: word, occurrence: nextOccurrence }]);

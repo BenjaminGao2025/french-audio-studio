@@ -619,9 +619,12 @@ async def _compute_word_context(
     request: WordContextRequest,
     api_key: str,
 ) -> dict:
+    literal = span in word_context.word_spans(word, sentence)
+    elided = not literal and span in word_context.context_spans(word, sentence)
     payload = word_context.ai_payload(
         ai.AGY_MODEL, sentence, span, request.translation_zh, request.hints.model_dump(),
-        language=request.language, cited_word=word if not word_context.word_spans(word, sentence) else "",
+        language=request.language, cited_word=word if not literal and not elided else "",
+        elided_word=word if elided else "",
     )
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     async with httpx.AsyncClient(timeout=30.0) as client:
@@ -651,7 +654,7 @@ async def word_context_for(
     word = word_context.clean_word(request.word)
     if not sentence or not word:
         raise HTTPException(status_code=422, detail={"code": "word_context_invalid", "message": "请提供句子和单词"})
-    spans = word_context.word_spans(word, sentence)
+    spans = word_context.context_spans(word, sentence)
     span = spans[request.occurrence] if request.occurrence < len(spans) else None
     if not spans and request.occurrence == 0:
         span = await run_in_threadpool(word_context.related_lemma_span, word, sentence)

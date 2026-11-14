@@ -273,5 +273,130 @@
    "value": "un deux trois quatre cinq",
    "clean": ""
   }
+ ],
+ "context_spans": [
+  {
+   "word": "jusqu'à ce que",
+   "sentence": "Tout homme étant présumé innocent jusqu'à ce qu'il soit déclaré coupable.",
+   "spans": [
+    [
+     34,
+     48
+    ]
+   ]
+  },
+  {
+   "word": "jusqu’à ce que",
+   "sentence": "Il attend jusqu’à ce qu’elle revienne.",
+   "spans": [
+    [
+     10,
+     24
+    ]
+   ]
+  },
+  {
+   "word": "jusqu'à ce que",
+   "sentence": "J'attends jusqu'à ce qu'il parte, puis jusqu'à ce que tu reviennes.",
+   "spans": [
+    [
+     10,
+     24
+    ],
+    [
+     39,
+     53
+    ]
+   ]
+  },
+  {
+   "word": "que",
+   "sentence": "Je sais qu'il vient et que tu pars.",
+   "spans": [
+    [
+     8,
+     11
+    ],
+    [
+     23,
+     26
+    ]
+   ]
+  },
+  {
+   "word": "parce que",
+   "sentence": "Il vient parce qu’il veut aider.",
+   "spans": [
+    [
+     9,
+     18
+    ]
+   ]
+  },
+  {
+   "word": "est-ce que",
+   "sentence": "Est-ce qu'elle arrive ?",
+   "spans": [
+    [
+     0,
+     10
+    ]
+   ]
+  },
+  {
+   "word": "ce que",
+   "sentence": "CE QU’IL DIT.",
+   "spans": [
+    [
+     0,
+     6
+    ]
+   ]
+  },
+  {
+   "word": "jusqu'à ce que",
+   "sentence": "Il attend jusqu'à ce que tu reviennes.",
+   "spans": [
+    [
+     10,
+     24
+    ]
+   ]
+  },
+  {
+   "word": "jusqu'à ce que",
+   "sentence": "Tout homme est présumé innocent.",
+   "spans": []
+  },
+  {
+   "word": "ce que",
+   "sentence": "L'espace qu'il voit.",
+   "spans": []
+  },
+  {
+   "word": "que",
+   "sentence": "Unqu'il arrive.",
+   "spans": []
+  },
+  {
+   "word": "que",
+   "sentence": "Il dit qu'bonjour.",
+   "spans": []
+  },
+  {
+   "word": "que",
+   "sentence": "Il dit qu'.",
+   "spans": []
+  },
+  {
+   "word": "ton",
+   "sentence": "Prends ton sac.",
+   "spans": [
+    [
+     7,
+     10
+    ]
+   ]
+  }
  ]
 }

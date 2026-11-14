@@ -269,6 +269,13 @@ export function Exercise({
     return () => { document.removeEventListener("keydown", down, true); document.removeEventListener("keyup", up, true); window.removeEventListener("blur", blur); };
   }, []);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const focusQuestion = sess ? questionKey(sess) : "";
+  const focusPhase = sess?.ui[focusQuestion]?.phase ?? "answering";
+  useEffect(() => {
+    if (!sess || focusPhase !== "answering") return;
+    const frame = requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }));
+    return () => cancelAnimationFrame(frame);
+  }, [sessionKey, focusQuestion, focusPhase]); // eslint-disable-line react-hooks/exhaustive-deps
   const [localPick, setLocalPick] = useState<FrPick | null>(null);
   const narrow = useNarrow();
   const handlePick = onPick ?? ((p: FrPick) => setLocalPick(p));
@@ -307,7 +314,6 @@ export function Exercise({
       patchSession(sessionKey, { index: sess.index + 1, steps: { ...sess.steps, [sess.index + 1]: 0 } });
       announce(`Question ${sess.index + 2} of ${sess.items.length}.`);
     }
-    requestAnimationFrame(() => document.getElementById(`ex-q-${sessionKey}`)?.focus());
   };
   const tryAgain = () => {
     // A completed attempt followed by Try again creates a new attempt.
