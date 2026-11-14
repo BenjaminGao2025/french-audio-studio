@@ -145,6 +145,12 @@ class ConjugationTests(unittest.TestCase):
             self.assertEqual((result["lemma"], result["role"], result["focus"]), ("aller", "past participle", ""))
         self.assertEqual(conjugation.conjugation("laisser")["role"], "infinitive")
 
+    def test_plain_word_types_from_the_sentence_analysis(self):
+        for pos in ("action word form", "action word", "verb", "AUX", "auxiliary verb", "word"):
+            self.assertEqual(conjugation.conjugation("suis", pos)["lemma"], "être", pos)
+        for pos in ("naming word", "describing word", "small linking word", "small pointer word", "adverb", "pronoun"):
+            self.assertIsNone(conjugation.conjugation("suis", pos), pos)
+
     def test_non_verbs_and_missing_index_are_hidden(self):
         self.assertIsNone(conjugation.conjugation("été", "NOUN"))
         self.assertIsNone(conjugation.conjugation("table"))
@@ -161,6 +167,8 @@ class ConjugationTests(unittest.TestCase):
             self.assertEqual(body["conjugation"]["lemma"], "être")
             self.assertNotIn("conjugation", client.get("/api/lookup", params={"word": "suis", "pos": "NOUN"},
                                                        headers=headers).json())
+            self.assertEqual(client.get("/api/lookup", params={"word": "suis", "pos": "action word form"},
+                                        headers=headers).json()["conjugation"]["lemma"], "être")
         summer = {"lemma": "été", "pos": "noun", "entries": []}
         with patch("routers.tutor.request_word_lookup", AsyncMock(return_value=summer)):
             self.assertNotIn("conjugation", client.get("/api/lookup", params={"word": "été"}, headers=headers).json())
