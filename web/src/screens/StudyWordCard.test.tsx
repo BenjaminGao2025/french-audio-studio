@@ -789,6 +789,12 @@ describe("Task B — Study word card, selection and steps", () => {
     await act(async () => { pointer("pointerup", 560, 500); });
     expect([card.style.width, card.style.height]).toEqual(["508px", "400px"]);
     expect(JSON.parse(localStorage.getItem("frenchStudio.wordCardSize")!)).toEqual({ w: 508, h: 400 });
+    // Vertical growth is not capped by Radix's old space below the word.
+    card.style.setProperty("--radix-popover-content-available-height", "400px");
+    await act(async () => { pointer("pointerdown", 560, 500); });
+    await act(async () => { pointer("pointermove", 560, 600); });
+    await act(async () => { pointer("pointerup", 560, 600); });
+    expect([card.style.width, card.style.height]).toEqual(["508px", "500px"]);
     // Never smaller than 320×240.
     await act(async () => { pointer("pointerdown", 0, 0); });
     await act(async () => { pointer("pointermove", -2000, -2000); });
@@ -796,6 +802,8 @@ describe("Task B — Study word card, selection and steps", () => {
     expect([card.style.width, card.style.height]).toEqual(["320px", "240px"]);
     await act(async () => { corner.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })); });
     expect(card.style.width).toBe("344px");
+    await act(async () => { corner.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })); });
+    expect(card.style.height).toBe("264px");
     await act(async () => { corner.dispatchEvent(new MouseEvent("dblclick", { bubbles: true })); });
     expect(card.style.width).toBe("");
     expect(localStorage.getItem("frenchStudio.wordCardSize")).toBeNull();

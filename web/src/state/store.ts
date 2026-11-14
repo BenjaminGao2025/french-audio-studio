@@ -576,6 +576,11 @@ let playerSeq = 0;
 
 let audioHandle: AudioHandle | null = null;
 
+/** Visual progress reads the media clock locally; it must not write 60 times a second to app state. */
+export function readPlaybackPosition(id: number): number | null {
+  return get().player?.id === id && audioHandle ? audioHandle.getPosition() : null;
+}
+
 function stopAudio() {
   audioHandle?.stop();
   audioHandle = null;

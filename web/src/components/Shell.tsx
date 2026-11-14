@@ -24,6 +24,7 @@ import { WidthContext } from "./ui";
 import { Brand } from "./Brand";
 import { useUpdatePrompt } from "../lib/updateCheck";
 import { Progress } from "./ui/progress";
+import { PlaybackProgress } from "./PlaybackProgress";
 import { Toaster } from "./ui/sonner";
 import {
   Sidebar,
@@ -308,24 +309,6 @@ function SyncIndicator({ sync, offline }: { sync: string; offline: boolean }) {
   );
 }
 
-/* The audio element reports its time only a few times a second; between reports the bar
-   keeps moving at the playback speed, so it glides instead of stepping. */
-function SmoothProgress({ position, duration, playing, speed }: { position: number; duration: number; playing: boolean; speed: number }) {
-  const [shown, setShown] = useState(position);
-  useEffect(() => {
-    setShown(position);
-    if (!playing || !duration) return;
-    const start = performance.now();
-    let frame = requestAnimationFrame(function tick(now) {
-      setShown(Math.min(duration, position + ((now - start) / 1000) * (speed || 1)));
-      frame = requestAnimationFrame(tick);
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [position, duration, playing, speed]);
-  const pct = duration ? Math.min(100, (shown / duration) * 100) : 0;
-  return <Progress value={pct} className="mt-1 [&_[data-slot=progress-indicator]]:transition-none" />;
-}
-
 function GlobalPlayer() {
   const p = useApp((s) => s.player);
   const route = useApp((s) => s.route);
@@ -354,7 +337,7 @@ function GlobalPlayer() {
         <p className="text-xs tabular-nums text-muted-foreground">
           {statusText[p.status]} · {fmtClock(p.position)} / {fmtClock(p.duration)} · {p.speed}×{p.texts ? "" : " · Simulated audio"}
         </p>
-        <SmoothProgress position={p.position} duration={p.duration} playing={p.status === "playing"} speed={p.speed} />
+        <PlaybackProgress player={p} className="mt-1" aria-label="Playback progress" />
       </div>
       <Button type="button" variant="ghost" onClick={() => go(p.owner.route)}>{p.owner.kind === "episode" ? "Return to episode" : p.owner.kind === "exercise" ? "Return to practice" : "Return to source"}</Button>
       <Button type="button" variant="ghost" size="icon" aria-label={`Stop ${p.owner.label}`} onClick={stopPlayback}>{<Square aria-hidden />}</Button>
