@@ -7,6 +7,8 @@ export interface FeedbackPrefs {
   volume: number;
   spoken: boolean;
   animation: boolean;
+  /** Recall and Dictation read the French aloud once after a correct answer. */
+  readAnswer: boolean;
 }
 
 export const FEEDBACK_KEY = "frenchStudio.feedback";
@@ -16,6 +18,7 @@ export const DEFAULT_FEEDBACK: FeedbackPrefs = {
   volume: 0.7,
   spoken: false,
   animation: true,
+  readAnswer: true,
 };
 
 const SPOKEN_PRAISE = "Excellent !";
@@ -51,6 +54,7 @@ function readPrefs(): FeedbackPrefs {
       volume: clampVolume(typeof raw.volume === "number" ? raw.volume : DEFAULT_FEEDBACK.volume),
       spoken: typeof raw.spoken === "boolean" ? raw.spoken : DEFAULT_FEEDBACK.spoken,
       animation: raw.animation !== false,
+      readAnswer: raw.readAnswer !== false,
     };
   } catch {
     return { ...DEFAULT_FEEDBACK };
@@ -82,6 +86,7 @@ export function saveFeedback(patch: Partial<FeedbackPrefs>) {
     volume: patch.volume !== undefined ? clampVolume(patch.volume) : prev.volume,
     spoken: patch.spoken ?? prev.spoken,
     animation: patch.animation ?? prev.animation,
+    readAnswer: patch.readAnswer ?? prev.readAnswer,
   };
   cached = next;
   try {
@@ -201,24 +206,27 @@ function speakPraise(volume: number): Promise<void> {
 /**
  * Record the outcome, then play audio feedback without awaiting audio.
  * Answer-known checks should not call this: they are not an independent result.
+ * Returns roughly how long the sound lasts (ms), so speech can wait for it.
  */
-export function gradeFeedback(correct: boolean, options: { pronunciation?: boolean; perfect?: boolean } = {}) {
+export function gradeFeedback(correct: boolean, options: { pronunciation?: boolean; perfect?: boolean } = {}): number {
   const event = noteOutcome(correct);
   const prefs = feedbackPrefs();
-  if (!prefs.sound || !gestured) return;
+  if (!prefs.sound || !gestured) return 0;
   if (!correct) {
     chime(196, prefs.volume * 0.45, 140);
-    return;
+    return 140;
   }
   if (event.milestone === 5 && prefs.spoken && !options.pronunciation) {
     void speakPraise(prefs.volume).catch(() => chime(880, prefs.volume, 280));
-    return;
+    return 1000;
   }
   if (options.perfect) {
     fanfare(prefs.volume);
-    return;
+    return FANFARE_MS;
   }
-  chime(pitchFor(event.streak), prefs.volume, event.milestone === 10 ? 420 : 260);
+  const ms = event.milestone === 10 ? 420 : 260;
+  chime(pitchFor(event.streak), prefs.volume, ms);
+  return ms;
 }
 
 /** A practice repetition reuses the soft chime without changing the review streak. */

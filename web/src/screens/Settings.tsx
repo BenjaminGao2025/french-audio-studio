@@ -289,6 +289,12 @@ function FeedbackSettings() {
         </li>
         <li>
           <label className="flex min-h-11 w-full items-center justify-between gap-4 py-2">
+            <span>Read correct answers aloud</span>
+            <Switch checked={prefs.readAnswer} onCheckedChange={(on) => saveFeedback({ readAnswer: on })} aria-label="Read correct answers aloud" />
+          </label>
+        </li>
+        <li>
+          <label className="flex min-h-11 w-full items-center justify-between gap-4 py-2">
             <span>Animation</span>
             <Switch checked={prefs.animation} onCheckedChange={(on) => saveFeedback({ animation: on })} aria-label="Animation" />
           </label>

@@ -6,6 +6,14 @@ export const APP_VERSION = version;
 export const RELEASES = [
   {
     version: APP_VERSION,
+    date: "2026-11-14",
+    changes: [
+      "Recall and Dictation read the French aloud once after a correct answer, right after the praise sound. Turn it off in Settings → Read correct answers aloud.",
+      "Ask AI on a word card: a short question such as 啥意思 is now answered about that word, not the whole sentence.",
+    ],
+  },
+  {
+    version: "1.3.21",
     date: "2026-11-13",
     changes: [
       "The word card has a Forms table: tap tous and see tout, tous, toute and toutes, with the form in your sentence highlighted. Tap a form to hear it.",
