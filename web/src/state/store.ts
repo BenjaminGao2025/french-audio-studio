@@ -148,6 +148,9 @@ export interface ReviewUI {
   techfail?: boolean;
   /** A rating was recorded on the server. */
   rated?: boolean;
+  /** Stable for retries of one presentation; a later learning step gets a fresh id. */
+  requestId?: string;
+  submittedRating?: 1 | 2 | 3 | 4;
 }
 
 export interface MasteryAction {
@@ -273,14 +276,14 @@ function loadPlaybackPrefs(): { speed: number; repeat: boolean } {
 
 /* ---------------- initial state ---------------- */
 
-function initialState(): AppState {
-  const { sentences, cards } = buildLibrary();
+function initialState(demo = false): AppState {
+  const { sentences, cards } = demo ? buildLibrary() : { sentences: [], cards: [] };
   const lookups: Record<string, LookupCounter> = {};
-  for (const [k, count] of Object.entries(LOOKUP_FIXTURES)) lookups[k] = { count, lastCounted: null };
+  if (demo) for (const [k, count] of Object.entries(LOOKUP_FIXTURES)) lookups[k] = { count, lastCounted: null };
   const snapshots: Record<string, DictEntry> = {};
-  for (const k of CACHED_KEYS) snapshots[k] = DICTIONARY[k];
+  if (demo) for (const k of CACHED_KEYS) snapshots[k] = DICTIONARY[k];
   const saved: Record<string, boolean> = {};
-  for (const id of PRESAVED_CARD_IDS) saved[id] = true;
+  if (demo) for (const id of PRESAVED_CARD_IDS) saved[id] = true;
   return {
     auth: "in",
     signIn: "idle",
@@ -319,7 +322,7 @@ function initialState(): AppState {
     cards,
     libFilters: { q: "", savedOnly: false, mastered: "hide", minImportance: 0, favoritesOnly: false },
     queue: buildQueue(sentences, cards, lookups),
-    review: { phase: "summary", index: 0, completed: 0, introduced: {}, done: {}, removedNew: 0, allowance: 31, sessionCards: null },
+    review: { phase: "summary", index: 0, completed: 0, introduced: {}, done: {}, removedNew: 0, allowance: demo ? 31 : 0, sessionCards: null },
     reviewUi: {},
     dailyNew: 40,
     newUsed: 0,
@@ -328,8 +331,8 @@ function initialState(): AppState {
     exercises: {},
     attempts: [],
     activeRun: null,
-    history: { analyses: HISTORY_ANALYSES, audio: HISTORY_AUDIO, attempts: HISTORY_ATTEMPTS },
-    audioStats: { todaySeconds: 18 * 60, weekSeconds: 3 * 3600 + 25 * 60, lifetimeHours: 125, last28Hours: 14 },
+    history: demo ? { analyses: HISTORY_ANALYSES, audio: HISTORY_AUDIO, attempts: HISTORY_ATTEMPTS } : { analyses: [], audio: [], attempts: [] },
+    audioStats: demo ? { todaySeconds: 18 * 60, weekSeconds: 3 * 3600 + 25 * 60, lifetimeHours: 125, last28Hours: 14 } : { todaySeconds: 0, weekSeconds: 0, lifetimeHours: 0, last28Hours: 0 },
     settings: { ...loadPlaybackPrefs(), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC" },
     episodePositions: {},
     drafts: {},
@@ -505,7 +508,7 @@ let demoEpoch = 0;
 export function resetDemo() {
   demoEpoch++;
   const keep = get();
-  state = { ...initialState(), frame: keep.frame, macWidth: keep.macWidth, route: "study" };
+  state = { ...initialState(true), frame: keep.frame, macWidth: keep.macWidth, route: "study" };
   listeners.forEach((l) => l());
   history.replaceState(null, "", routeUrl("study"));
   announce("Demo reset. Fictional session data restored to the starting point.");

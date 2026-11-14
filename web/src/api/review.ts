@@ -192,10 +192,10 @@ export function ratingFor(r: { correct: boolean; hinted?: boolean; answerKnown?:
 }
 
 /** Records one review on the server; the server reschedules the card. */
-export async function rateCard(cardId: string, rating: 1 | 2 | 3 | 4, opts: { answer?: string; durationMs?: number } = {}) {
+export async function rateCard(cardId: string, rating: 1 | 2 | 3 | 4, opts: { answer?: string; durationMs?: number; requestId?: string } = {}) {
   const card = await apiFetch<ServerCard>(`/api/srs/cards/${encodeURIComponent(cardId)}/review`, {
     // The server caps answer time at one hour; a card left open longer must still save.
-    body: { rating, answer: opts.answer, duration_ms: opts.durationMs == null ? undefined : Math.min(Math.max(0, Math.round(opts.durationMs)), 3_600_000), tz_offset: tz() },
+    body: { request_id: opts.requestId ?? crypto.randomUUID(), rating, answer: opts.answer, duration_ms: opts.durationMs == null ? undefined : Math.min(Math.max(0, Math.round(opts.durationMs)), 3_600_000), tz_offset: tz() },
   });
   set((s) => ({ cards: s.cards.map((c) => (c.id === cardId ? { ...c, status: STATUS[card.state] ?? c.status } : c)) }));
   return card;

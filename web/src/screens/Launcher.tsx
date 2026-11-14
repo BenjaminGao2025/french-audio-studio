@@ -63,7 +63,7 @@ export function Launcher({ kind }: { kind: "Recall" | "Dictation" }) {
     announce(`Starting ${kind}.`);
     go("study/run");
   };
-  const emptyReason = !items.length
+  const emptyReason = effectivePhase !== "error" && !items.length
     ? src === "choose"
       ? "Choose at least one sentence."
       : src === "last"
