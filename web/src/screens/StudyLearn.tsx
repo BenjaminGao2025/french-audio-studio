@@ -1,3 +1,4 @@
+import { PlaybackProgress } from "../components/PlaybackProgress";
 import { StepReview } from "../components/StepReview";
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { ChevronLeft, ChevronRight, Mic, MoreHorizontal, Pause, Play, Repeat, RotateCcw, History as HistoryIcon, Plus, Check, Loader2 } from "lucide-react";
@@ -19,7 +20,7 @@ import {
   updatePlayer,
   useApp,
 } from "../state/store";
-import { Card, CardContent, Checkbox, Dialog, Popover, Progress, Skeleton, Spinner, pageFrame, useNarrow } from "../components/ui";
+import { Card, CardContent, Checkbox, Dialog, Popover, Skeleton, Spinner, pageFrame, useNarrow } from "../components/ui";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "../components/ui/dropdown-menu";
 import { Toggle } from "../components/ui/toggle";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../components/ui/tooltip";
@@ -298,13 +299,12 @@ function StudyPlayer({ practising, addReview, sentenceActions }: { practising: b
   const setSpeed = (v: string) => (mine ? updatePlayer({ speed: Number(v) }) : set((st) => ({ settings: { ...st.settings, speed: Number(v) } })));
   const repeatOn = mine?.repeat ?? false;
   const toggleRepeat = () => (mine ? updatePlayer({ repeat: !mine.repeat }) : set((st) => ({ settings: { ...st.settings, repeat: !st.settings.repeat } })));
-  const pct = mine && mine.duration ? Math.min(100, (mine.position / mine.duration) * 100) : 0;
   const timeLabel = `${fmtClock(mine?.position ?? 0)} / ${fmtClock(mine?.duration ?? dur(wanted))}`;
   return (
     <div className="flex w-full min-w-0 flex-col gap-2 border-t pt-3">
       <div ref={rowRef} data-sentence-player className="@container flex w-full min-w-0 flex-nowrap items-center gap-2 overflow-x-auto">
         <Button type="button" variant="secondary" size="icon" aria-disabled={loading || undefined} aria-busy={loading || undefined} aria-label={`${playing ? "Pause" : errored ? "Retry" : "Play"} ${label}`} className={cn("shrink-0", loading ? "opacity-50" : "")} onClick={(event) => { if (loading) { event.preventDefault(); return; } toggle(); }}>{loading ? <Loader2 className="animate-spin" aria-hidden /> : (playing ? <Pause aria-hidden /> : errored ? <RotateCcw aria-hidden /> : <Play aria-hidden />)}</Button>
-        <Progress value={pct} className="hidden w-28 shrink-0 @[520px]:flex" aria-label={`${statusText}. ${fmtClock(mine?.position ?? 0)} of ${fmtClock(mine?.duration ?? dur(wanted))}`} />
+        <PlaybackProgress player={mine} className="hidden w-28 shrink-0 @[520px]:flex" aria-label={`${statusText}. ${fmtClock(mine?.position ?? 0)} of ${fmtClock(mine?.duration ?? dur(wanted))}`} />
         <span className="hidden shrink-0 whitespace-nowrap text-sm tabular-nums text-muted-foreground @[520px]:inline">{timeLabel}</span>
         <div className="hidden shrink-0 @[600px]:block">
           <Select value={speed} onValueChange={setSpeed}><SelectTrigger size="sm" aria-label={"Speed"} className="border-transparent bg-transparent shadow-none hover:bg-muted dark:bg-transparent dark:hover:bg-muted/50"><SelectValue /></SelectTrigger><SelectContent>{([0.75, 1, 1.25, 1.5, 2].map((v) => ({ value: String(v), label: `${v}×` }))).map((o) => (<SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>))}</SelectContent></Select>

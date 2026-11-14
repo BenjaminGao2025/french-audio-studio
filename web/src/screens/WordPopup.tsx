@@ -439,9 +439,18 @@ export function WordOverlay({ label, anchor, onClose, children }: { label: strin
   // The learner can drag the card off the sentence; the offset stays while they tap other words.
   // No transition: duration-100 would otherwise animate translate and lag behind the pointer.
   const [offset, setOffset] = useState({ x: 0, y: 0 });
-  // A size the learner dragged is remembered for the next card; the room below the word still caps the height.
+  // Pin the current top-left when resizing, so Radix does not flip or cap vertical growth at the original word.
   const [size, setSize] = useState<Size | null>(savedSize);
-  if (desktop) return <Popover open onOpenChange={open => { if (!open) onClose(); }}><PopoverAnchor virtualRef={{ current: { getBoundingClientRect: () => (anchor?.closest(".sentence-fr") ?? anchor?.closest("[lang=fr]") ?? anchor)?.getBoundingClientRect() ?? new DOMRect(100, 100, 1, 1) } }} /><PopoverContent aria-label={label} align="start" side="bottom" sideOffset={16} avoidCollisions sticky="always" collisionPadding={16} onOpenAutoFocus={focusWord} onInteractOutside={keepForWordTap} style={{ translate: `${offset.x}px ${offset.y}px`, transitionProperty: "none", ...(size && { width: size.w, height: size.h, maxHeight: "var(--radix-popover-content-available-height)" }) }} className="w-[28rem] max-w-[calc(100vw-2rem)] max-h-[min(80vh,var(--radix-popover-content-available-height))] gap-0 overflow-hidden p-0"><MoveHandle offset={offset} onMove={setOffset} /><div className="wp-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-1">{children}</div><div className="flex h-5 shrink-0 justify-end"><ResizeHandle onResize={setSize} /></div></PopoverContent></Popover>;
+  const [origin, setOrigin] = useState<Offset | null>(null);
+  const resize = (next: Size | null, card?: HTMLElement) => {
+    if (next && !origin && card) {
+      const rect = card.getBoundingClientRect();
+      setOrigin({ x: rect.left - offset.x, y: rect.top - offset.y });
+    }
+    if (!next) setOrigin(null);
+    setSize(next);
+  };
+  if (desktop) return <Popover open onOpenChange={open => { if (!open) onClose(); }}><PopoverAnchor virtualRef={{ current: { getBoundingClientRect: () => origin ? new DOMRect(origin.x, origin.y, 0, 0) : (anchor?.closest(".sentence-fr") ?? anchor?.closest("[lang=fr]") ?? anchor)?.getBoundingClientRect() ?? new DOMRect(100, 100, 1, 1) } }} /><PopoverContent aria-label={label} align="start" side="bottom" sideOffset={origin ? 0 : 16} avoidCollisions={!origin} sticky="always" collisionPadding={16} onOpenAutoFocus={focusWord} onInteractOutside={keepForWordTap} style={{ translate: `${offset.x}px ${offset.y}px`, transitionProperty: "none", ...(size && { width: size.w, height: size.h, maxHeight: origin ? "calc(100dvh - 16px)" : "var(--radix-popover-content-available-height)" }) }} className="w-[28rem] max-w-[calc(100vw-2rem)] max-h-[min(80vh,var(--radix-popover-content-available-height))] gap-0 overflow-hidden p-0"><MoveHandle offset={offset} onMove={setOffset} /><div className="wp-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-1">{children}</div><div className="flex h-11 shrink-0 justify-end"><ResizeHandle onResize={resize} /></div></PopoverContent></Popover>;
   return <Drawer open modal={false} onOpenChange={open => { if (!open) onClose(); }}><DrawerContent className="max-h-[85vh] gap-4" onOpenAutoFocus={focusWord} onInteractOutside={keepForWordTap} aria-describedby={undefined}><DrawerHeader className="sr-only"><DrawerTitle>{label}</DrawerTitle></DrawerHeader><div className="overflow-y-auto p-4">{children}</div></DrawerContent></Drawer>;
 }
 
@@ -506,16 +515,16 @@ function storeSize(size: Size | null) {
   try { if (size) localStorage.setItem(SIZE_KEY, JSON.stringify(size)); else localStorage.removeItem(SIZE_KEY); } catch { /* private mode: the size lasts for this card */ }
 }
 
-/** Size after growing by (dw, dh), kept inside the window and below the room Radix leaves under the word, so the card never flips. */
+/** Both axes are limited by the visible window, independently of the original word anchor. */
 function resized(card: HTMLElement, start: Size, dw: number, dh: number): Size {
   const r = card.getBoundingClientRect();
   const maxW = Math.max(MIN_W, window.innerWidth - 16 - r.left);
-  const maxH = Math.max(MIN_H, Number.parseFloat(getComputedStyle(card).getPropertyValue("--radix-popover-content-available-height")) || window.innerHeight - 16 - r.top);
-  return { w: Math.round(Math.min(Math.max(start.w + dw, MIN_W), maxW)), h: Math.round(Math.min(Math.max(start.h + dh, MIN_H), maxH)) };
+  const maxH = Math.max(1, window.innerHeight - 16 - r.top);
+  return { w: Math.round(Math.min(Math.max(start.w + dw, MIN_W), maxW)), h: Math.round(Math.min(Math.max(start.h + dh, Math.min(MIN_H, maxH)), maxH)) };
 }
 
 /** Bottom-right corner of the desktop word card: drag to resize, arrow keys too; double-click returns to the default size. */
-function ResizeHandle({ onResize }: { onResize: (size: Size | null) => void }) {
+function ResizeHandle({ onResize }: { onResize: (size: Size | null, card?: HTMLElement) => void }) {
   const drag = useRef<{ x: number; y: number; start: Size; last: Size } | null>(null);
   const card = (el: Element) => (el.closest<HTMLElement>('[data-slot="popover-content"]') ?? el) as HTMLElement;
   const current = (el: HTMLElement): Size => { const r = el.getBoundingClientRect(); return { w: r.width, h: r.height }; };
@@ -523,8 +532,8 @@ function ResizeHandle({ onResize }: { onResize: (size: Size | null) => void }) {
   return <button
     type="button"
     aria-label="Resize word card"
-    title="Drag to resize · double-click to reset"
-    className="wp-resize flex size-5 cursor-nwse-resize touch-none select-none items-end justify-end p-1 text-muted-foreground hover:text-foreground"
+    title="Drag left/right and up/down to resize · double-click to reset"
+    className="wp-resize flex size-11 cursor-nwse-resize touch-none select-none items-end justify-end p-1 text-muted-foreground hover:text-foreground"
     onPointerDown={e => {
       if (e.button !== 0) return;
       e.preventDefault();
@@ -536,7 +545,7 @@ function ResizeHandle({ onResize }: { onResize: (size: Size | null) => void }) {
       const d = drag.current;
       if (!d) return;
       d.last = resized(card(e.currentTarget), d.start, e.clientX - d.x, e.clientY - d.y);
-      onResize(d.last);
+      onResize(d.last, card(e.currentTarget));
     }}
     onPointerUp={() => { if (drag.current) storeSize(drag.current.last); drag.current = null; }}
     onPointerCancel={() => { drag.current = null; }}
@@ -548,7 +557,7 @@ function ResizeHandle({ onResize }: { onResize: (size: Size | null) => void }) {
       const el = card(e.currentTarget);
       const next = resized(el, current(el), step[0], step[1]);
       storeSize(next);
-      onResize(next);
+      onResize(next, el);
     }}
   ><svg viewBox="0 0 10 10" className="size-2.5" aria-hidden><path d="M9 1 1 9M9 5 5 9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /></svg></button>;
 }

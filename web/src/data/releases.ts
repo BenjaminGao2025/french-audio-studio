@@ -6,6 +6,14 @@ export const APP_VERSION = version;
 export const RELEASES = [
   {
     version: APP_VERSION,
+    date: "2026-11-14",
+    changes: [
+      "Playback bars in Study, episodes and the mini-player move smoothly with the real audio clock, including fractional seconds and speed changes.",
+      "Resize a word card both horizontally and vertically. Its top-left stays in place while resizing, and its dimensions are remembered. Double-click the corner to reset.",
+    ],
+  },
+  {
+    version: "1.3.28",
     date: "2026-11-13",
     changes: [
       "Every 100% Recall and Dictation answer celebrates with sparks and a short fanfare, including answers checked after revealing the French. Answer-known statistics stay separate.",

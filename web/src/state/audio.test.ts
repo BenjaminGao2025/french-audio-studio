@@ -4,15 +4,14 @@ import { playTexts, playUrl, speakOnce } from "./audio";
 import { get, resetDemo, sayFrench, startPlayback, stopPlayback } from "./store";
 
 const elements: FakeAudio[] = [];
-class FakeAudio {
-  src = ""; playbackRate = 1; currentTime = 0; playing = false;
-  constructor() { elements.push(this); }
+class FakeAudio extends EventTarget {
+  src = ""; playbackRate = 1; currentTime = 0; duration = 10; playing = false;
+  constructor() { super(); elements.push(this); }
   play = vi.fn(async () => { this.playing = true; });
   pause = vi.fn(() => { this.playing = false; });
   load() {}
   removeAttribute() { this.src = ""; }
   getAttribute() { return this.src; }
-  addEventListener() {}
 }
 const events = { onPlaying: vi.fn(), onProgress: vi.fn(), onEnded: vi.fn(), onError: vi.fn() };
 const flush = async () => { await new Promise(r => setTimeout(r, 0)); };
@@ -49,5 +48,29 @@ it("pause before initial load prevents late autoplay", async () => {
   expect(audio.play).not.toHaveBeenCalled();
   handle.resume(); await flush();
   expect(audio.play).toHaveBeenCalledTimes(1);
+  handle.stop();
+});
+
+it.each(["texts", "url"])("%s progress reads the current media time between sparse browser events", async kind => {
+  setup();
+  const handle = kind === "texts" ? playTexts(["Bonjour", "Salut"], 1, events) : playUrl("/clip", 1, 0, events);
+  await flush();
+  const audio = elements.at(-1)!;
+  audio.dispatchEvent(new Event("loadedmetadata"));
+  audio.currentTime = 1.037;
+  expect(handle.getPosition()).toBeCloseTo(1.037);
+  audio.currentTime = 1.053;
+  expect(handle.getPosition()).toBeCloseTo(1.053);
+  if (kind === "texts") {
+    audio.currentTime = 0;
+    audio.dispatchEvent(new Event("ended"));
+    audio.currentTime = 0.25;
+    expect(handle.getPosition()).toBeCloseTo(10.25);
+  } else {
+    handle.seek(4.125);
+    expect(handle.getPosition()).toBeCloseTo(4.125);
+    handle.restart();
+    expect(handle.getPosition()).toBe(0);
+  }
   handle.stop();
 });

@@ -86,6 +86,8 @@ export interface ClipEvents {
 }
 
 export interface AudioHandle {
+  /** Read the real media clock without waiting for a timeupdate event. */
+  getPosition: () => number;
   pause: () => void;
   resume: () => void;
   restart: () => void;
@@ -130,6 +132,7 @@ export function playTexts(texts: string[], speed: number, ev: ClipEvents): Audio
   ensureAudioSession().then(() => !stopped && load(0));
 
   return {
+    getPosition: position,
     pause: () => { paused = true; audio.pause(); },
     resume: () => {
       claimPlayback(cancel);
@@ -162,7 +165,8 @@ export function playUrl(url: string, speed: number, startAt: number, ev: ClipEve
   const cancel = () => { stopped = true; audio.pause(); };
   claimPlayback(cancel);
   let pendingSeek = startAt;
-  const report = () => ev.onProgress(audio.currentTime || 0, Number.isFinite(audio.duration) ? audio.duration : 0);
+  const position = () => audio.currentTime || 0;
+  const report = () => ev.onProgress(position(), Number.isFinite(audio.duration) ? audio.duration : 0);
   audio.addEventListener("loadedmetadata", () => {
     if (pendingSeek > 0 && Number.isFinite(audio.duration)) audio.currentTime = Math.min(pendingSeek, Math.max(0, audio.duration - 1));
     pendingSeek = 0;
@@ -184,6 +188,7 @@ export function playUrl(url: string, speed: number, startAt: number, ev: ClipEve
   };
   ensureAudioSession().then(start);
   return {
+    getPosition: position,
     pause: () => { paused = true; audio.pause(); },
     resume: () => {
       claimPlayback(cancel);

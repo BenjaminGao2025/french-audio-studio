@@ -20,7 +20,7 @@ import { audioJumped } from "../api/time";
 import { fmtClock } from "../lib/format";
 import { announce, go, retryPlayback, startPlayback, stopPlayback, updatePlayer, useApp } from "../state/store";
 import { Dialog, Input, PageHead, Skeleton, Spinner, pageFrame } from "../components/ui";
-import { Slider } from "../components/ui/slider";
+import { PlaybackSeek } from "../components/PlaybackProgress";
 import { BackTo } from "./Practice";
 import { Button } from "../components/ui/button";
 import { Alert, AlertTitle, AlertDescription } from "../components/ui/alert";
@@ -333,15 +333,7 @@ function Player({ e }: { e: ServerEpisode }) {
             <div className="min-w-0 flex-1 flex flex-col gap-1" style={{ minWidth: 180 }}>
               <span className="font-medium">{statusText}</span>
               <span className="text-sm text-muted-foreground tabular-nums">{fmtClock(position)} / {fmtClock(duration)}</span>
-              <Slider
-                min={0}
-                max={Math.max(1, Math.round(duration))}
-                step={1}
-                value={[Math.round(position)]}
-                aria-label="Position in the episode"
-                aria-valuetext={`${fmtClock(position)} of ${fmtClock(duration)}`}
-                onValueChange={([v]) => seek(v)}
-              />
+              <PlaybackSeek player={mine} position={position} duration={duration} onSeek={seek} />
             </div>
             <div className="flex flex-wrap items-center gap-2 gap-2">
               <Button type="button" variant="ghost" aria-label="Back 15 seconds" className="h-8 px-2 text-sm" onClick={() => seek(position - 15)}>−15 s</Button>
