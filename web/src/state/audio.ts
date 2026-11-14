@@ -111,7 +111,7 @@ export function playTexts(texts: string[], speed: number, ev: ClipEvents): Audio
     index = i;
     audio.src = ttsUrl(texts[i]);
     audio.playbackRate = speed;
-    audio.play().catch(() => !stopped && ev.onError());
+    audio.play()?.catch(() => !stopped && ev.onError());
   };
   audio.addEventListener("loadedmetadata", () => {
     if (Number.isFinite(audio.duration) && audio.duration > 0) durations[index] = audio.duration;
@@ -136,7 +136,7 @@ export function playTexts(texts: string[], speed: number, ev: ClipEvents): Audio
       stopped = false;
       paused = false;
       if (!audio.getAttribute("src")) { ensureAudioSession().then(() => !stopped && !paused && load(index)); return; }
-      audio.play().catch(() => !stopped && ev.onError());
+      audio.play()?.catch(() => !stopped && ev.onError());
     },
     restart: () => { claimPlayback(cancel); stopped = false; paused = false; load(0); },
     setSpeed: (s) => {
@@ -180,7 +180,7 @@ export function playUrl(url: string, speed: number, startAt: number, ev: ClipEve
     if (stopped || paused) return;
     audio.src = url;
     audio.playbackRate = speed;
-    audio.play().catch(() => !stopped && ev.onError());
+    audio.play()?.catch(() => !stopped && ev.onError());
   };
   ensureAudioSession().then(start);
   return {
@@ -190,13 +190,13 @@ export function playUrl(url: string, speed: number, startAt: number, ev: ClipEve
       stopped = false;
       paused = false;
       if (!audio.getAttribute("src")) { ensureAudioSession().then(() => !stopped && !paused && start()); return; }
-      audio.play().catch(() => !stopped && ev.onError());
+      audio.play()?.catch(() => !stopped && ev.onError());
     },
     restart: () => {
       claimPlayback(cancel); stopped = false; paused = false;
       if (!audio.getAttribute("src")) { ensureAudioSession().then(start); return; }
       audio.currentTime = 0;
-      audio.play().catch(() => !stopped && ev.onError());
+      audio.play()?.catch(() => !stopped && ev.onError());
     },
     setSpeed: (s) => {
       speed = s;
