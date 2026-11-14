@@ -3,7 +3,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode 
 import { Lightbulb, Eye, Play, Turtle, RotateCcw, Loader2, Sparkles, X } from "lucide-react";
 import type { PracticeItem, StudySentence } from "../data/fixtures";
 import { grade } from "../lib/grading";
-import { gradeFeedback } from "../lib/feedback";
+import { feedbackPrefs, gradeFeedback } from "../lib/feedback";
 import { plural } from "../lib/format";
 import {
   announce,
@@ -194,9 +194,10 @@ export function submitAnswer(key: string) {
       });
       patchUI(key, qk, { phase: "graded" });
       const a = get().attempts.find((x) => x.id === attemptId)!;
-      if (!a.answerKnown) gradeFeedback(r.correct, { perfect: r.correct && res.accuracy === 100 });
+      const soundMs = a.answerKnown ? 0 : gradeFeedback(r.correct, { perfect: r.correct && res.accuracy === 100 });
       track("check_answer", { screen: "exercise", kind: slug(String(kind)), correct: r.correct, answer_known: Boolean(a.answerKnown) });
       announce(a.answerKnown ? "Checked. Recorded as answer known." : r.correct ? "Correct." : `Not quite. ${plural(res.issues.length, "difference")}.`);
+      if (r.correct && !a.answerKnown && feedbackPrefs().readAnswer) readAnswerAloud(key, qk, attemptId, target.fr, soundMs);
       if (!r.correct) requestAnimationFrame(() => document.getElementById(`ex-result-${key}`)?.focus());
     }, (err) => {
       // Only a request that did not come back is a technical failure.
@@ -212,6 +213,22 @@ export function submitAnswer(key: string) {
         announce("Checking didn’t finish. This is not a wrong answer. Your answer is kept.", true);
       }
     });
+}
+
+/** After a correct answer, hear it once: it starts when the praise sound ends, and only if the learner is still on that answer. */
+function readAnswerAloud(key: string, qk: string, attemptId: string, fr: string, afterMs: number) {
+  window.setTimeout(() => {
+    const sess = get().exercises[key];
+    if (!sess || questionKey(sess) !== qk || sess.ui[qk]?.attemptId !== attemptId || sess.ui[qk]?.phase !== "graded") return;
+    // Never cut off an episode or other audio the learner started.
+    const p = get().player;
+    if (p && p.owner.kind !== "exercise" && (p.status === "playing" || p.status === "loading")) return;
+    try {
+      startPlayback({ kind: "exercise", label: "Practice audio", route: get().route }, Math.max(1, fr.length / 13), { speed: 1, repeat: false, texts: [fr], quiet: true });
+    } catch {
+      /* hearing it is a bonus; the result stays on screen */
+    }
+  }, afterMs + 150);
 }
 
 /* ---------------- Exercise ---------------- */

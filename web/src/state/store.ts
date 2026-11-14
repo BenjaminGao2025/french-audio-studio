@@ -581,7 +581,8 @@ function stopAudio() {
 export function startPlayback(
   owner: PlayerOwner,
   duration: number,
-  opts: { scope?: PlayerState["scope"]; position?: number; speed?: number; repeat?: boolean; texts?: string[]; src?: string } = {},
+  /** quiet: playback nobody asked for (read-aloud after a correct answer) just stops if the browser blocks it, with no error. */
+  opts: { scope?: PlayerState["scope"]; position?: number; speed?: number; repeat?: boolean; texts?: string[]; src?: string; quiet?: boolean } = {},
 ) {
   const prev = get().player;
   if (prev) commitAudio(prev);
@@ -624,6 +625,11 @@ export function startPlayback(
       },
       onError: () => {
         if (!mine()) return;
+        if (opts.quiet) {
+          stopAudio();
+          set(() => ({ player: null }));
+          return;
+        }
         set((s) => ({ player: { ...s.player!, status: "error" } }));
         announce("Audio couldn’t play.", true);
       },

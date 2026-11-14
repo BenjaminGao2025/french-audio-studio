@@ -30,7 +30,16 @@ describe("practice feedback", () => {
   it("persists sound, volume, spoken praise and animation on this device", () => {
     saveFeedback({ sound: false, volume: 0.25, spoken: false, animation: false });
     resetFeedbackState();
-    expect(loadFeedback()).toEqual({ sound: false, volume: 0.25, spoken: false, animation: false });
+    expect(loadFeedback()).toEqual({ sound: false, volume: 0.25, spoken: false, animation: false, readAnswer: true });
+  });
+
+  it("reads correct answers aloud by default and remembers turning it off", () => {
+    expect(DEFAULT_FEEDBACK.readAnswer).toBe(true);
+    localStorage.setItem(FEEDBACK_KEY, JSON.stringify({ sound: true }));
+    expect(loadFeedback().readAnswer).toBe(true);
+    saveFeedback({ readAnswer: false });
+    resetFeedbackState();
+    expect(loadFeedback().readAnswer).toBe(false);
   });
 
   it("uses the default for an unset spoken field and preserves explicit true", () => {
