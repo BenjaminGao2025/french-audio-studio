@@ -3,7 +3,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode 
 import { Lightbulb, Eye, Play, Turtle, RotateCcw, Loader2, Sparkles, X } from "lucide-react";
 import type { PracticeItem, StudySentence } from "../data/fixtures";
 import { grade } from "../lib/grading";
-import { feedbackPrefs, gradeFeedback } from "../lib/feedback";
+import { animationOn, feedbackPrefs, gradeFeedback } from "../lib/feedback";
 import { plural } from "../lib/format";
 import {
   announce,
@@ -194,7 +194,7 @@ export function submitAnswer(key: string) {
       });
       patchUI(key, qk, { phase: "graded" });
       const a = get().attempts.find((x) => x.id === attemptId)!;
-      const soundMs = a.answerKnown ? 0 : gradeFeedback(r.correct, { perfect: r.correct && res.accuracy === 100 });
+      const soundMs = gradeFeedback(r.correct, { perfect: r.correct && res.accuracy === 100, answerKnown: a.answerKnown });
       track("check_answer", { screen: "exercise", kind: slug(String(kind)), correct: r.correct, answer_known: Boolean(a.answerKnown) });
       announce(a.answerKnown ? "Checked. Recorded as answer known." : r.correct ? "Correct." : `Not quite. ${plural(res.issues.length, "difference")}.`);
       if (r.correct && !a.answerKnown && feedbackPrefs().readAnswer) readAnswerAloud(key, qk, attemptId, target.fr, soundMs);
@@ -530,8 +530,9 @@ function Result({
 }) {
   const r = attempt.result!;
   const correct = attempt.outcome === "correct";
-  // Every word spelled right on your own: a short, quiet celebration (motion is skipped with reduced motion).
-  const perfect = correct && !attempt.answerKnown && r.accuracy === 100;
+  // Celebrate every full score; answer-known stays separate in labels and session statistics.
+  const perfect = correct && r.accuracy === 100;
+  const animatePerfect = perfect && animationOn();
   const nextRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!correct) return;
@@ -553,8 +554,8 @@ function Result({
       <div id={`ex-result-${sessionKey}`} tabIndex={-1} className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-4">
           <div className="relative">
-            <p key={attempt.id} className={cn("text-4xl font-semibold tabular-nums", perfect && "perfect-score")} aria-label={`Score: ${r.accuracy}%`}>{r.accuracy}%</p>
-            {perfect && <PerfectBurst key={`${attempt.id}-burst`} />}
+            <p key={attempt.id} className={cn("text-4xl font-semibold tabular-nums", perfect && "text-success", animatePerfect && "perfect-score")} aria-label={`Score: ${r.accuracy}%`}>{r.accuracy}%</p>
+            {animatePerfect && <PerfectBurst key={`${attempt.id}-burst`} />}
           </div>
           <div>
             <p className="font-medium">{attempt.answerKnown ? "Answer known" : perfect ? <span className="perfect-label inline-flex items-center gap-1.5"><Sparkles aria-hidden className="size-4" />{attempt.hinted ? "Perfect · hint used" : "Perfect spelling"}</span> : correct ? attempt.hinted ? "Correct · hint used" : "Correct" : "Not quite"}</p>
@@ -565,7 +566,7 @@ function Result({
           {r.alignment.map((word, i) => (
             <Fragment key={i}>
               {i > 0 && !/['’]$/.test(r.alignment[i - 1].given ?? r.alignment[i - 1].expected ?? "") && " "}
-              <span data-mark={word.mark} className={word.mark === "different" || word.mark === "accent" ? "inline-block max-w-full" : perfect ? "perfect-word" : undefined} style={perfect ? { "--i": i } as React.CSSProperties : undefined}>
+              <span data-mark={word.mark} className={word.mark === "different" || word.mark === "accent" ? "inline-block max-w-full" : animatePerfect ? "perfect-word" : undefined} style={animatePerfect ? { "--i": i } as React.CSSProperties : undefined}>
                 {word.mark === "ok" ? word.given : word.mark === "missing" ? (
                   <span className="text-destructive font-medium underline underline-offset-4" aria-label={`Missing word: ${word.expected}`}>{word.expected}</span>
                 ) : (

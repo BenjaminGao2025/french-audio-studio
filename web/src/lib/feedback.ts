@@ -205,27 +205,28 @@ function speakPraise(volume: number): Promise<void> {
 
 /**
  * Record the outcome, then play audio feedback without awaiting audio.
- * Answer-known checks should not call this: they are not an independent result.
+ * Answer-known checks can celebrate perfect spelling without changing the independent-answer streak.
  * Returns roughly how long the sound lasts (ms), so speech can wait for it.
  */
-export function gradeFeedback(correct: boolean, options: { pronunciation?: boolean; perfect?: boolean } = {}): number {
-  const event = noteOutcome(correct);
+export function gradeFeedback(correct: boolean, options: { pronunciation?: boolean; perfect?: boolean; answerKnown?: boolean } = {}): number {
+  const event = options.answerKnown ? null : noteOutcome(correct);
   const prefs = feedbackPrefs();
+  if (options.answerKnown && !options.perfect) return 0;
   if (!prefs.sound || !gestured) return 0;
   if (!correct) {
     chime(196, prefs.volume * 0.45, 140);
     return 140;
   }
-  if (event.milestone === 5 && prefs.spoken && !options.pronunciation) {
-    void speakPraise(prefs.volume).catch(() => chime(880, prefs.volume, 280));
-    return 1000;
-  }
   if (options.perfect) {
     fanfare(prefs.volume);
     return FANFARE_MS;
   }
-  const ms = event.milestone === 10 ? 420 : 260;
-  chime(pitchFor(event.streak), prefs.volume, ms);
+  if (event?.milestone === 5 && prefs.spoken && !options.pronunciation) {
+    void speakPraise(prefs.volume).catch(() => chime(880, prefs.volume, 280));
+    return 1000;
+  }
+  const ms = event?.milestone === 10 ? 420 : 260;
+  chime(pitchFor(event?.streak ?? 0), prefs.volume, ms);
   return ms;
 }
 

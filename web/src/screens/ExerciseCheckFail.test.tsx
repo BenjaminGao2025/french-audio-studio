@@ -8,7 +8,10 @@ import { get, resetDemo, set } from "../state/store";
 import { ensureSession, Exercise, submitAnswer } from "./Exercise";
 
 vi.mock("../api/dictation", () => ({ gradeAttempt: vi.fn() }));
-vi.mock("../lib/feedback", () => ({ gradeFeedback: vi.fn(() => { throw new Error("audio glitch"); }) }));
+vi.mock("../lib/feedback", async (original) => ({
+  ...(await original<typeof import("../lib/feedback")>()),
+  gradeFeedback: vi.fn(() => { throw new Error("audio glitch"); }),
+}));
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

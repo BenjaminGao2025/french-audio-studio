@@ -107,6 +107,28 @@ describe("perfect answer sound", () => {
     const run = starts.slice(0, 4).map((t) => Math.min(...notes.filter((n) => n.start === t).map((n) => n.freq)));
     expect(run).toEqual([...run].sort((a, b) => a - b));
     expect(new Set(run).size).toBe(4);
+
+    const independentStreak = currentStreak();
+    const fanfareNotes = notes.length;
+    notes.length = 0;
+    expect(gradeFeedback(true, { perfect: true, answerKnown: true })).toBe(FANFARE_MS);
+    expect(notes).toHaveLength(fanfareNotes);
+    expect(currentStreak()).toBe(independentStreak);
+    notes.length = 0;
+    expect(gradeFeedback(false, { answerKnown: true })).toBe(0);
+    expect(notes).toHaveLength(0);
+    expect(currentStreak()).toBe(independentStreak);
+
+    saveFeedback({ sound: false });
+    expect(gradeFeedback(true, { perfect: true, answerKnown: true })).toBe(0);
+    expect(notes).toHaveLength(0);
+
+    resetFeedbackState();
+    saveFeedback({ sound: true, spoken: true });
+    for (let i = 0; i < 4; i++) noteOutcome(true);
+    expect(gradeFeedback(true, { perfect: true })).toBe(FANFARE_MS);
+    expect(notes).toHaveLength(fanfareNotes);
+    expect(currentStreak()).toBe(5);
     vi.unstubAllGlobals();
   });
 });
