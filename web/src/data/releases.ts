@@ -8,6 +8,13 @@ export const RELEASES = [
     version: APP_VERSION,
     date: "2026-11-14",
     changes: [
+      "The word card's Forms table is tidier: even columns, one line under each row, a small highlight on the form in your sentence, and a note on what it shows.",
+    ],
+  },
+  {
+    version: "1.3.22",
+    date: "2026-11-14",
+    changes: [
       "Recall and Dictation read the French aloud once after a correct answer, right after the praise sound. Turn it off in Settings → Read correct answers aloud.",
       "Ask AI on a word card: a short question such as 啥意思 is now answered about that word, not the whole sentence.",
     ],

@@ -364,22 +364,28 @@ function French({ value, onWord, language = "fr" }: { value: string; onWord: (wo
 const GENDER = { m: "Masculine", f: "Feminine", mf: "Both genders" } as const;
 
 /** tout / tous / toute / toutes: the form used in this sentence is highlighted; tap a form to hear it. */
+// One grid: a fixed label column and two equal columns; header text, words and dashes share one left edge (0.625rem).
+// The form in this sentence gets a pill that hugs the word, not a box filling the cell.
 function FormsTable({ forms }: { forms: WordForms }) {
-  return <div className="flex flex-col gap-1">
-    <p className="text-xs text-muted-foreground"><span lang="fr" className="font-serif text-sm text-foreground">{forms.lemma}</span> · {forms.kind}</p>
-    <table className="wp-forms w-full border-collapse text-sm">
+  return <div className="flex flex-col gap-2">
+    <p className="text-sm text-muted-foreground"><span lang="fr" className="font-serif text-foreground">{forms.lemma}</span> · {forms.kind}</p>
+    <table className="wp-forms w-full table-fixed border-collapse">
       <caption className="sr-only">Forms of {forms.lemma}</caption>
-      <thead><tr><td className="w-0" /><th scope="col" className="px-2 text-left text-xs font-normal text-muted-foreground">Singular</th><th scope="col" className="px-2 text-left text-xs font-normal text-muted-foreground">Plural</th></tr></thead>
-      <tbody>{forms.rows.map(row => <tr key={row.gender} className="border-t first:border-t-0">
-        <th scope="row" className="whitespace-nowrap py-0.5 pr-3 text-left text-xs font-normal text-muted-foreground">{GENDER[row.gender]}</th>
-        {row.cells.map(cell => <td key={cell.number} className="py-0.5" aria-current={cell.current || undefined}>
-          <div className={cn("flex flex-wrap items-center rounded-md", cell.current && "wp-form-current bg-accent text-accent-foreground")}>
-            {cell.forms.length ? cell.forms.map(form => <Button key={form} type="button" variant="ghost" lang="fr" title="Hear it" className={cn("h-11 px-2 font-serif text-base", cell.current && "font-semibold hover:bg-primary/10")} onClick={() => sayFrench(form)}>{form}</Button>) : <span className="px-2 text-muted-foreground">—</span>}
+      <colgroup><col className="w-20" /><col /><col /></colgroup>
+      <thead><tr className="border-b"><td /><th scope="col" className="px-2.5 pb-1.5 text-left text-xs font-normal text-muted-foreground">Singular</th><th scope="col" className="px-2.5 pb-1.5 text-left text-xs font-normal text-muted-foreground">Plural</th></tr></thead>
+      <tbody>{forms.rows.map(row => <tr key={row.gender} className="border-b last:border-b-0">
+        <th scope="row" className="text-left align-middle text-xs font-normal text-muted-foreground">{GENDER[row.gender]}</th>
+        {row.cells.map(cell => <td key={cell.number} className="align-middle" aria-current={cell.current || undefined}>
+          <div className="flex flex-wrap items-center">
+            {cell.forms.length ? cell.forms.map(form => <Button key={form} type="button" variant="ghost" lang="fr" title="Hear it" className="h-11 min-w-0 px-1 font-serif text-base font-normal" onClick={() => sayFrench(form)}>
+              <span className={cn("truncate rounded-md px-1.5 py-0.5", cell.current && "wp-form-current bg-accent font-semibold text-accent-foreground")}>{form}</span>
+            </Button>) : <span className="px-2.5 text-muted-foreground">—</span>}
             {cell.current && <span className="sr-only">(in this sentence)</span>}
           </div>
         </td>)}
       </tr>)}</tbody>
     </table>
+    <p className="text-xs text-muted-foreground">Highlighted: the form in this sentence. Tap any form to hear it.</p>
   </div>;
 }
 
