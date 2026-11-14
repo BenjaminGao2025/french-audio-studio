@@ -735,6 +735,37 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(say).toHaveBeenCalledWith("toutes");
   });
 
+  it("the conjugation table opens on Présent plus the tapped tense, marks the form, and keeps the rest folded", async () => {
+    const cell = (person: number, pronoun: string, form: string, current = false, ipa = "") =>
+      ({ person, pronoun, form, say: pronoun.endsWith("'") ? pronoun + form : `${pronoun} ${form}`.trim(), ipa, current });
+    vi.spyOn(lookupApi, "lookupWord").mockResolvedValue({
+      token: "laisse", lemma: "laisser", pos: "verb", phonetic: "", explanation_cn: "", explanation_en: "",
+      entries: [{ lemma: "laisser", pos: "verb", phonetic: "", language: "en", senses: ["to leave"], source_url: "", history_url: "" }],
+      conjugation: { lemma: "laisser", aux: "avoir", focus: "imperfect", role: "", participles: { present: "laissant", past: "laissé" }, tenses: [
+        { key: "present", label: "Présent", written: false, cells: [cell(1, "je", "laisse", false, "lɛs"), cell(2, "tu", "laisses", false, "lɛs")] },
+        { key: "passe_compose", label: "Passé composé", written: false, cells: [cell(1, "j'", "ai laissé")] },
+        { key: "imperfect", label: "Imparfait", written: false, cells: [cell(1, "je", "laissais", true, "lɛ.sɛ"), cell(2, "tu", "laissais", true, "lɛ.sɛ"), cell(3, "il", "laissait", false, "lɛ.sɛ")] },
+        { key: "simple_past", label: "Passé simple", written: true, cells: [cell(1, "je", "laissai")] },
+      ] },
+    });
+    const say = vi.spyOn(store, "sayFrench");
+    await act(async () => root.render(<WordPanel sentence={SENTENCE} text="laissais" onClose={() => {}} />));
+    await wait(20);
+    const section = host.querySelector('section[aria-label="Conjugation"]')!;
+    expect(section).toBeTruthy();
+    expect(section.textContent).toContain("laissais → laisser · Imparfait · je / tu");
+    const open = Array.from(section.querySelectorAll('[role="group"]')).map(g => g.getAttribute("aria-label"));
+    expect(open).toEqual(["Présent", "Imparfait"]);
+    expect(Array.from(section.querySelectorAll('[aria-current="true"]')).map(b => b.textContent)).toEqual(["je laissais(in this sentence)", "tu laissais(in this sentence)"]);
+    expect(section.textContent).toContain("Sound the same: laissais · laissait");
+    say.mockClear();
+    await act(async () => Array.from(section.querySelectorAll<HTMLButtonElement>("button[lang=fr]")).find(b => b.textContent === "il laissait")!.click());
+    expect(say).toHaveBeenCalledWith("il laissait");
+    await act(async () => findButton("All tenses").click());
+    const all = Array.from(section.querySelectorAll('[role="group"] h4')).map(h => h.textContent);
+    expect(all).toEqual(["Présent", "Imparfait", "Passé composé", "Passé simple · written"]);
+  });
+
   it("a word without forms has no Forms section, and the extras sit quieter than the meaning", async () => {
     await act(async () => root.render(<WordPanel sentence={SENTENCE} text="madame" onClose={() => {}} />));
     await wait(20);
