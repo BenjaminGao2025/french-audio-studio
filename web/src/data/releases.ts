@@ -8,6 +8,14 @@ export const RELEASES = [
     version: APP_VERSION,
     date: "2026-11-13",
     changes: [
+      "In this sentence understands elided expressions: jusqu'à ce que can be looked up in jusqu'à ce qu'il.",
+      "Recall and Dictation focus the answer box when you enter a question or change steps, so you can type straight away.",
+    ],
+  },
+  {
+    version: "1.3.24",
+    date: "2026-11-13",
+    changes: [
       "Refreshing a review session loads your real cards and progress. Sample cards stay in the design reference.",
       "Retrying a rating saves it once, even if the response was lost. The next learning step is a separate review.",
       "Recall and Dictation can retry when their sentence list fails to load.",

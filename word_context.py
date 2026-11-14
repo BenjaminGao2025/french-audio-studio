@@ -27,7 +27,7 @@ import offline_dictionary
 import phrase_context
 
 # Part of every cache key: bump it when the prompt or the cleaning rules change.
-VERSION = 6
+VERSION = 7
 SENTENCE_MAX_CHARS = phrase_context.SENTENCE_MAX_CHARS
 TRANSLATION_MAX_CHARS = 600
 WORD_MAX_CHARS = 40
@@ -87,6 +87,25 @@ def word_spans(word: str, sentence: str) -> list[tuple[int, int]]:
             spans.append((at, end))
         at = have.find(want, at + 1)
     return spans
+
+
+def context_spans(word: str, sentence: str) -> list[tuple[int, int]]:
+    """Literal occurrences plus que → qu' in a cited word or expression, in sentence order.
+
+    A cited ``jusqu'à ce que`` can refer to ``jusqu'à ce qu'il`` without inventing a
+    dictionary relation. The marked surface stops at the apostrophe, before ``il``.
+    """
+    spans = word_spans(word, sentence)
+    want = " ".join(_fold_case(word).split())
+    have = _fold_case(sentence)
+    if (want != "que" and not want.endswith(" que")) or len(have) != len(sentence):
+        return spans
+    pattern = re.escape(want[:-1] + "'") + r"(?=[aeiouyàâäéèêëîïôöùûüÿœæh])"
+    for match in re.finditer(pattern, have):
+        before = sentence[match.start() - 1] if match.start() else ""
+        if not before or not (_is_word_char(before) or before in APOSTROPHES):
+            spans.append(match.span())
+    return sorted(set(spans))
 
 
 # Guaranteed even when no dictionary index is installed. Other lemmas need dictionary evidence.
@@ -277,6 +296,7 @@ def system_prompt(language: str) -> str:
 def ai_payload(
     model: str, sentence: str, span: tuple[int, int], translation_zh: str = "", hints: dict | None = None, language: str = "en",
     cited_word: str = "",
+    elided_word: str = "",
 ) -> dict:
     notes = clean_hints(hints)
     translation = phrase_context.clean_text(translation_zh, TRANSLATION_MAX_CHARS)
@@ -287,7 +307,14 @@ def ai_payload(
     known = [f"{key}: {value}" for key, value in notes.items() if value]
     lines.append("Notes from the sentence analysis (may be incomplete): " + ("; ".join(known) if known else "(none)"))
     prompt = system_prompt(language)
-    if cited_word:
+    if elided_word:
+        prompt += (
+            "\nThe target expression is cited before elision. In the marked surface, que is shortened to qu' "
+            "before the following vowel or silent h. Explain the expression's meaning here and this elision. "
+            "Refer to the actual following word; do not treat the target as an absent verb lemma."
+        )
+        lines.insert(0, f"Target expression (before elision): {elided_word}")
+    elif cited_word:
         prompt += (
             "\nFor this request the target is the cited base form, which is ABSENT from the sentence. "
             "The marked sentence token is only evidence of its relation to the target. "

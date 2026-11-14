@@ -163,6 +163,21 @@ describe("Task B — Study word card, selection and steps", () => {
     expect(host.querySelector(".wp-headword")?.textContent).toBe("ont");
   });
 
+  it.each([0, 1])("opens the nearest until-expression, including elided occurrences (%s)", async occurrence => {
+    const sentence: StudySentence = { ...SENTENCE, fr: "J'attends jusqu'à ce qu'il parte, puis jusqu'à ce que tu reviennes." };
+    const context = vi.spyOn(lookupApi, "wordContext").mockImplementation(async ({ word }) => ({
+      context: { meaning_en: "until", meaning_zh: "", why_zh: "", why_en: word === "ce"
+        ? "Part of ⟦jusqu'à ce que⟧."
+        : "This expression means until the following event." }, state: "ready",
+    }));
+    await act(async () => root.render(<WordPanel sentence={sentence} text="ce" occurrence={occurrence} onClose={() => {}} />));
+    const phrase = host.querySelector<HTMLButtonElement>('[aria-label="In this sentence"] button[lang="fr"]')!;
+    await act(async () => phrase.click());
+    expect(context.mock.calls.at(-1)?.[0]).toMatchObject({ word: "jusqu'à ce que", sentence: sentence.fr, occurrence });
+    expect(host.querySelector('[aria-label="In this sentence"]')?.textContent).toContain("until the following event");
+    expect(host.textContent).not.toContain("Couldn’t load the meaning");
+  });
+
   it.each(["marked explanation", "base form"])("gives avoir its own sentence context via %s", async source => {
     const sentence: StudySentence = { ...SENTENCE, fr: "Les représentants ont résolu d'exposer les droits." };
     vi.spyOn(lookupApi, "lookupWord").mockImplementation(async token => ({
