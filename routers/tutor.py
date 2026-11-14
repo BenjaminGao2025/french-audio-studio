@@ -251,15 +251,24 @@ def _ask_payload(request: AskRequest) -> dict:
     reference = "\n".join(
         f"- {g.title}: {g.explanation}".strip() for g in request.grammar_points if g.title or g.explanation
     )
+    word = request.word.strip()
+    # A bare "啥意思" asked from a word card is about that word, not the whole sentence.
+    word_rule = (
+        f"- If the question names nothing else (e.g. '啥意思', 'what does it mean?', 'why?'), "
+        f"it is about the open word {word}: say what {word} means and does in this sentence. "
+        "Do not translate or explain the whole sentence.\n"
+        "- If it names something else (another word, an English phrase, the whole sentence), "
+        "answer about that instead.\n"
+    ) if word else ""
     system = (
         "You are a patient French tutor. The learner is A1–A2 in French, native language Chinese.\n"
         f"They are studying this sentence: {request.sentence}\n"
         f"Chinese translation: {request.translation_zh or '(none)'}\n"
         f"English translation: {request.translation_en or '(none)'}\n"
-        f"The word card is open on: {request.word or '(none)'} (context only, not the assumed subject).\n"
+        f"The word card is open on: {request.word or '(none)'}\n"
         f"Notes they have seen:\n{reference or '(none)'}\n\n"
-        "Answer the user's actual question first and directly. The open French word is context, "
-        "not necessarily what they are asking about.\n"
+        "Answer the user's actual question first and directly.\n"
+        f"{word_rule}"
         "- If they ask about an English word or phrase in the translation, define that English first. "
         "For example, 'to set forth' means to formally state or present. "
         "Only then link it to the French word or sentence if it helps.\n"

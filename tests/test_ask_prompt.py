@@ -84,7 +84,8 @@ def test_english_gloss_question_keeps_raw_question_and_structured_context():
     )
     system = payload["messages"][0]["content"]
     assert "English translation: The representatives decided to set forth the plan." in system
-    assert "The word card is open on: d'exposer (context only, not the assumed subject)" in system
+    assert "The word card is open on: d'exposer\n" in system
+    assert "If it names something else (another word, an English phrase" in system
     assert "'to set forth' means to formally state or present" in system
     assert "Only then link it to the French word or sentence if it helps" in system
     assert payload["messages"][-1] == {"role": "user", "content": question}
@@ -115,6 +116,13 @@ def test_context_is_optional_for_existing_sentence_ask_clients():
     system = _system()
     assert "The word card is open on: (none)" in system
     assert "English translation: (none)" in system
+    assert "it is about the open word" not in system
+
+
+def test_a_bare_question_from_a_word_card_is_about_that_word():
+    system = _payload(sentence="Nul homme ne peut être accusé, arrêté ni détenu.", word="détenu", question="啥意思")["messages"][0]["content"]
+    assert "it is about the open word détenu: say what détenu means and does in this sentence" in system
+    assert "Do not translate or explain the whole sentence" in system
 
 
 def test_explanation_language_rejects_unsupported_values():
