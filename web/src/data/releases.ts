@@ -6,6 +6,14 @@ export const APP_VERSION = version;
 export const RELEASES = [
   {
     version: APP_VERSION,
+    date: "2026-11-13",
+    changes: [
+      "Every 100% Recall and Dictation answer celebrates with sparks and a short fanfare, including answers checked after revealing the French. Answer-known statistics stay separate.",
+      "Celebrations respect your Sound and Animation settings and reduced motion preference.",
+    ],
+  },
+  {
+    version: "1.3.27",
     date: "2026-11-14",
     changes: [
       "Find the app version and What’s new in Settings → About. Version numbers no longer appear in the sidebar or practice header.",
