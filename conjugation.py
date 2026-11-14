@@ -41,6 +41,19 @@ CLITIC = re.compile(r"^(?:j|n|m|t|s|l|c|qu)'")
 INVERTED = re.compile(r"(?:-t)?-(?:je|tu|il|elle|on|nous|vous|ils|elles|moi|toi|le|la|les|lui|leur|y|en)$")
 
 
+# The sentence analysis labels words in plain English ("action word form", "naming word"); older
+# results and the dictionary use "verb", "AUX", "noun". Only a clearly non-verb label hides the table.
+NOT_VERB = ("naming word", "describing word", "pointer word", "linking word", "noun", "adj", "adv", "pron",
+            "det", "article", "prep", "conj", "intj")
+
+
+def _verb_hint(pos):
+    p = canonical_pos(pos)
+    if "action word" in p or ("verb" in p and "adverb" not in p):
+        return True
+    return not any(k in p for k in NOT_VERB)
+
+
 def _elides(word, lemma):
     return word.startswith(VOWELS) or (word.startswith("h") and lemma not in ASPIRATED)
 
@@ -63,8 +76,7 @@ def _join(pronoun, form):
 def conjugation(word: str, pos: str = "", lemma: str = ""):
     """The conjugation of a clicked verb form, or None when it is not a known verb form."""
     word = INVERTED.sub("", CLITIC.sub("", normalize(word)))
-    hint = canonical_pos(pos) if pos else ""
-    if not word or len(word) > 40 or " " in word or (hint and hint != "verb"):
+    if not word or len(word) > 40 or " " in word or (pos and not _verb_hint(pos)):
         return None
     p = index_path(ENV)
     if not p:
